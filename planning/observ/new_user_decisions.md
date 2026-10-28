@@ -6,7 +6,7 @@
  FILE:    new_user_decisions.md
  SOURCE:  interactive session, 2026-10-27, branch install_scripts
  STATUS:  DRAFT
- UPDATED: 2026-10-27
+ UPDATED: 2026-10-28
  CONTACT: Jeff Nye
 ```
 
@@ -34,15 +34,16 @@ NU-1   No Makefile or script finds a project tool on PATH. rtl/Vars.mk
        runs dtc from PATH, but only to simulate; the project runs only
        spike-dasm, which does not.
 NU-2   Every tool is installed per clone under $RVA_ROOT/tools (bin, etc,
-       share, lib, include), with no sudo. The one exception is the
+       share, lib, include; Rust for the Surfer build in rust), with no
+       sudo. The one exception is the
        Embecosm toolchain, which may be a shared install (NU-14).
 NU-3   The scripts never run sudo and never install a system package.
        Under build_tools.sh a missing apt package stops the run before
        any tool is built, with one apt command for all of them (NU-10).
        A check script run alone prints its own apt command and does not
-       build its tool. Rust is not a prerequisite: it needs no sudo, so
-       check_surfer.sh installs it per clone (NU-17). Users are assumed to
-       have sudo to run that command (decided 2026-10-27).
+       build its tool. Users are assumed to have sudo to run the apt
+       command (decided 2026-10-27). Rust is not a prerequisite: it needs
+       no sudo, so check_surfer.sh installs it per clone (NU-17).
 NU-4   Each tool is pinned to one version, and each check script tests
        the installed tool against that pin, before and after a build.
        A tool at the right version is not rebuilt.
@@ -150,8 +151,8 @@ NU-10  tools/build_tools.sh [--check] [TOOL...] covers verilator, spike,
        so the user answers any question in the first seconds and the
        builds then run unattended (decided 2026-10-27; before, each tool
        was checked and built in turn, so the Embecosm question and a
-       missing package were found only after about 30 minutes
-       of builds):
+       missing package or Rust were found only after about 30 minutes of
+       builds):
        1. Check. Each check_<tool>.sh runs report-only, with PACINO_PLAN
           set so it omits its "Build X with" hint (check_lib.sh
           build_hint). check_embecosm.sh runs with --ask (NU-14). Each
@@ -265,8 +266,10 @@ NU-17  Surfer is installed as tools/bin/surfer. rtl/core/frontend/bpu/
        ~/.cargo is neither used nor changed. Decided 2026-10-27: Rust
        had been a user-installed prerequisite (rustup into ~/.cargo,
        editing ~/.bashrc and ~/.profile), so a user without it was
-       stopped (NU-10) for something that needs no sudo. tools/rust is
-       not tracked.
+       stopped (NU-10) for something that needs no sudo. apt cannot
+       supply it: Ubuntu 22.04's newest is 1.91 (rustc-1.91; rustc is
+       1.75), and Surfer v0.7.0 needs 1.92. tools/rust is not
+       tracked.
 
 ---
 
@@ -340,11 +343,11 @@ command to install it (NU-3, NU-10):
   4. ./tools/regress.sh
 When a package is missing the run stops in seconds, before any build,
 and the Embecosm answer is kept for the second run. Rust is installed
-by the script (NU-17). The
-pip packages (tools/requirements.txt) are checked by no script and are
-needed only for the docs site, tools/gen_doc_placeholders.py and
-ticfinder; nothing under rtl/, examples/ or tools/regress.sh imports
-them. A user who skips them is not told when they are later needed.
+by the script (NU-17). The pip packages (tools/requirements.txt) are
+checked by no script and are needed only for the docs site,
+tools/gen_doc_placeholders.py and ticfinder; nothing under rtl/,
+examples/ or tools/regress.sh imports them. A user who skips them is
+not told when they are later needed.
 
 Adding a tool:
   - a pin and a [tool] group in tools/apt-requirements.txt for its build
@@ -398,7 +401,7 @@ NU-UN-4  The new-user test on a fresh account (new_user.md, account
          have (fixed, NU-14); the Embecosm question and missing Rust
          came only after the long builds (fixed, NU-10); the server
          closed the download after 34 MB (retry added, NU-14); Rust was
-       a user prerequisite (now installed per clone, NU-17). Those
+         a user prerequisite (now installed per clone, NU-17). Those
          runs used the scripts as pushed before the fixes; the test is
          to be repeated from a new account.
 NU-UN-5  The full regression has not been run since VERILATOR_COVERAGE,

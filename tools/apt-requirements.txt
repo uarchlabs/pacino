@@ -37,7 +37,8 @@ libboost-regex-dev
 libboost-system-dev
 
 # [surfer]
-# Rust is not a package here; check_surfer.sh installs it into tools/rust.
+# Rust is not listed: Ubuntu 22.04's newest is 1.91 and Surfer v0.7.0
+# needs 1.92, so check_surfer.sh installs 1.95.0 into tools/rust.
 build-essential
 pkg-config
 libssl-dev

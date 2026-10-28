@@ -57,9 +57,9 @@ tools/build_tools.sh    # if an apt package is missing it stops in
 
 The only question, about the Embecosm toolchain, comes in the first
 seconds; the builds then run without input. Rust, for Surfer, is
-installed by the script into `tools/rust`. The Python packages in `tools/requirements.txt`
-are not checked by any script; they are needed only for the docs site,
-`tools/gen_doc_placeholders.py` and ticfinder.
+installed by the script into `tools/rust`. The Python packages in
+`tools/requirements.txt` are not checked by any script; they are needed
+only for the docs site, `tools/gen_doc_placeholders.py` and ticfinder.
 
 ## Clone pacino
 Clone with submodules
@@ -134,7 +134,7 @@ This builds the project tools into `$RVA_ROOT/tools/bin`, the paths
 |-----------|------------|------------------------------------------------|
 | Verilator | 5.048      | `tools/verilator` submodule                    |
 | Spike     | 1.1.1-dev  | `tools/spike` submodule (commit 20feb9c2)      |
-| Surfer    | v0.7.0     | gitlab.com/surfer-project/surfer, cloned into `tools/surfer` |
+| Surfer    | v0.7.0     | gitlab.com/surfer-project/surfer, cloned into `tools/surfer`; built with Rust 1.95.0, which the script installs into `tools/rust` |
 | lcov      | v1.15      | github.com/linux-test-project/lcov, cloned into `tools/lcov`; `genhtml` for the coverage reports |
 | fst2vcd   | GTKWave v3.3.104 | github.com/gtkwave/gtkwave, cloned into `tools/gtkwave`; only `fst2vcd` is built |
 

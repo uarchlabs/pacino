@@ -20,7 +20,7 @@
 | check_spdx.py           | license header check |
 | check_spike.sh          | check/build spike |
 | check_spike_decode.py   | use spike_oracle.csv check for decode support |
-| check_surfer.sh         | check/build surfer |
+| check_surfer.sh         | check/build surfer; installs Rust into rust/ |
 | check_verilator.sh      | check/build verilator |
 | cov_table.py            | emits BPU coverage tables |
 | create_docs_stubs.sh    | populate empty doc tree |
@@ -37,14 +37,16 @@
 | lib                     | tools library |
 | local.mk                | not tracked; EMBECOSM_BIN saved by check_embecosm.sh |
 | make_context.sh         | disposable |
-| Makefile                | spike build |
+| Makefile                | rva23_insn_ref/rva23_ext_test with Embecosm riscv32 gcc; spike_all decode check |
 | mk_pkg.sh               | disposable |
 | README.md               | ... |
 | regress.sh              | git hook regression script |
 | requirements.txt        | required Python packages (pip) |
 | rename_mcf.py           | disposable |
+| riscv-embecosm-embedded-ubuntu2204-20250309 | not tracked; Embecosm toolchain, when installed into tools/ |
 | riscv-opcodes           | submodule |
 | run_tf.sh               | ticfinder util |
+| rust                    | not tracked; Rust for the Surfer build, installed by check_surfer.sh |
 | run_time.py             | capture time for runtime in prompts |
 | rva23_ext_test          | RVA23 compliance support |
 | rva23_ext_test.c        | RVA23 compliance support |
@@ -67,17 +69,16 @@
 ## build_tools.sh
 
 Checks Verilator 5.048, Spike 1.1.1-dev, Surfer v0.7.0, lcov v1.15 and
-fst2vcd (GTKWave v3.3.104) in `tools/bin`
-and builds any that is missing or at the wrong version. It also checks
-the Embecosm toolchain in `EMBECOSM_BIN` (`rtl/Vars.mk`). When that is
-missing it asks for the bin directory of an existing install, or
-downloads the release into `tools/`, and saves the answer in
-`tools/local.mk`. It checks everything and asks that one question
-first, in a few seconds, then builds unattended. It installs no system
-packages: when one is missing it stops before any build and prints one
-apt command for all of them. Rust, for Surfer, it installs into
-`tools/rust`. See "Build the tools" in
-the top-level README.md.
+fst2vcd (GTKWave v3.3.104) in `tools/bin` and builds any that is missing
+or at the wrong version. It also checks the Embecosm toolchain in
+`EMBECOSM_BIN` (`rtl/Vars.mk`). When that is missing it asks for the bin
+directory of an existing install, or downloads the release into
+`tools/`, and saves the answer in `tools/local.mk`. It checks everything
+and asks that one question first, in a few seconds, then builds
+unattended. It installs no system packages: when one is missing it stops
+before any build and prints one apt command for all of them. Rust, for
+Surfer, it installs into `tools/rust`. See "Build the tools" in the
+top-level README.md.
 
 Every run is logged to `logs/pacino_setup_YYYY-MM-DD_N.log` (N counts
 the runs that day): a header with the date, user, host, OS, git branch
@@ -86,7 +87,7 @@ tracked.
 
 ```bash
 tools/build_tools.sh                  # check, build what is needed
-tools/build_tools.sh --check          # report only
+tools/build_tools.sh --check          # phase 1 only, asks nothing
 tools/build_tools.sh spike            # one tool
 tools/check_spike.sh [--build]        # the per-tool script it runs
 tools/check_embecosm.sh --ask         # ask and save only (phase 1)
