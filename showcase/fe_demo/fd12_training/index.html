@@ -2414,6 +2414,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6493,6 +6515,104 @@ ftb_update, bp_cluster_p0. Look at:</p>
   before it <code>u_npc.h3_ftb_upd</code> is high, <code>u_npc.w_hold</code> is high and
   <code>ftq_pred_val_p0</code> is low: the withheld p0 request.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>20</td>
+<td>first p0 request withheld for an FTB update</td>
+<td><code>ftq_pred_val_p0</code></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>u_npc.h3_ftb_upd</code>), the cycle before the</td>
+<td>low</td>
+</tr>
+<tr>
+<td></td>
+<td>update</td>
+<td></td>
+</tr>
+<tr>
+<td>21</td>
+<td>first resolution from the backend</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>bkend_ftq_rsv_val</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>21</td>
+<td>first uBTB update (<code>w_ubtb_upd_u0.[0].valid</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>21</td>
+<td>first FTB update (<code>ftb_upd_valid_u0</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>21</td>
+<td>first loop predictor, TAGE and SC updates, from</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>one conditional</td>
+<td></td>
+</tr>
+<tr>
+<td>66</td>
+<td>first ITTAGE update: the indirect jump</td>
+<td></td>
+</tr>
+<tr>
+<td>78</td>
+<td>first RAS commit (<code>w_ras_commit_val</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>168</td>
+<td>the beq placed in an occupied slot</td>
+<td>the only one</td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>rsv_plc_occ</code>): the always-taken beq's loop</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>predictor, TAGE and SC updates are suppressed</td>
+<td></td>
+</tr>
+<tr>
+<td>454</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

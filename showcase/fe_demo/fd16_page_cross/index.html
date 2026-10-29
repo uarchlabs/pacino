@@ -2526,6 +2526,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6449,6 +6471,84 @@ itlb, ifu_l1i, decode. Look at:</p>
   <code>itlb_ifu_cause</code> (IT-6), valid with a fault, is 1 instruction access
   fault, 12 instruction page fault, 20 instruction guest-page fault.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>S-mode, Sv39</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>46</td>
+<td>walk for VPN 0x80010, the first page of the</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>crossing block</td>
+<td></td>
+</tr>
+<tr>
+<td>70</td>
+<td>walk for VPN 0x80011, the second page</td>
+<td></td>
+</tr>
+<tr>
+<td>93</td>
+<td>L1I request for 0x8100_0FC0, the line of the</td>
+<td>first page</td>
+</tr>
+<tr>
+<td></td>
+<td>block's start</td>
+<td></td>
+</tr>
+<tr>
+<td>94</td>
+<td>the translation queue entry of the block at</td>
+<td>counted</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8001_0FF0 popped with two translations:</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>xq_cross</code> 1, PPN 0x81000 and 0x81205</td>
+<td></td>
+</tr>
+<tr>
+<td>94</td>
+<td>L1I request for 0x8120_5000, the second page's</td>
+<td>second page</td>
+</tr>
+<tr>
+<td></td>
+<td>first line</td>
+<td></td>
+</tr>
+<tr>
+<td>112</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

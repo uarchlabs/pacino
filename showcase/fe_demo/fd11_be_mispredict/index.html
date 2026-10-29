@@ -2386,6 +2386,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6469,6 +6491,99 @@ S=fd11_be_mispredict</code> opens in Surfer. Look at:</p>
   <code>ras_restore_val</code> with <code>ras_restore_snapshot.tosr</code>, <code>.tosw</code>, <code>.bos</code>.</li>
 <li>bp_cluster_p0 group: the next <code>ftq_pred_pc_p0</code> is the redirect PC.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>19</td>
+<td>first history rollback (<code>ftq_rollback_val</code>),</td>
+<td>a predecode</td>
+</tr>
+<tr>
+<td></td>
+<td>with its RAS restore (<code>ras_restore_val</code>)</td>
+<td>redirect</td>
+</tr>
+<tr>
+<td>20</td>
+<td>first misprediction of A taken; redirect to</td>
+<td>pass 0, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0010</td>
+<td></td>
+</tr>
+<tr>
+<td>49</td>
+<td>the return mispredicted; redirect to 0x8000_0014</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>53</td>
+<td>fetch restarts at 0x8000_0014: the FTQ presents</td>
+<td><code>ftq_ifu_start_pc</code></td>
+</tr>
+<tr>
+<td></td>
+<td>a block from the redirect address to the IFU</td>
+<td></td>
+</tr>
+<tr>
+<td>60</td>
+<td>the back edge mispredicted, cold; redirect to</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0008</td>
+<td></td>
+</tr>
+<tr>
+<td>86</td>
+<td>first misprediction of A not taken; redirect to</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_000E</td>
+<td></td>
+</tr>
+<tr>
+<td>471</td>
+<td>the loop exits: the back edge falls through, a</td>
+<td>pass 31, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>misprediction; redirect to 0x8000_001A</td>
+<td></td>
+</tr>
+<tr>
+<td>480</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd11_be_mispredict.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd11_be_mispredict.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

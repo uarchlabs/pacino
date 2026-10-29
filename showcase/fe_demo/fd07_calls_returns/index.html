@@ -2274,6 +2274,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6494,6 +6516,94 @@ S=fd07_calls_returns</code> opens in Surfer. Look at:</p>
 <li>ras_commit group: <code>ras_commit_val</code>, <code>csp</code>, <code>commit_top_addr</code> change
   as calls and returns retire.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>40</td>
+<td>first RAS commit (<code>w_ras_commit_val</code>): a retired</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>call reaches the commit stack</td>
+<td></td>
+</tr>
+<tr>
+<td>128</td>
+<td>first RAS push at p2: a call presented to the</td>
+<td><code>w_ras_pred_val_p2</code></td>
+</tr>
+<tr>
+<td></td>
+<td>RAS</td>
+<td></td>
+</tr>
+<tr>
+<td>131</td>
+<td>entry 1's recursion count reads 1</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>spec_rctr.[1]</code>): the first compressed</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>recursive call</td>
+<td></td>
+</tr>
+<tr>
+<td>137</td>
+<td>entry 1's count reaches 4, one step every two</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>cycles</td>
+<td></td>
+</tr>
+<tr>
+<td>162</td>
+<td>first return predicted from the RAS at p2:</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>pred_src</code> PRED_RAS, accepted by the FTQ</td>
+<td></td>
+</tr>
+<tr>
+<td>256</td>
+<td>first RETURN_CALL at p2, presented to the RAS</td>
+<td>coroutine switch</td>
+</tr>
+<tr>
+<td>694</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

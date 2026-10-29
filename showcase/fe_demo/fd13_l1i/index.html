@@ -2442,6 +2442,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6486,6 +6508,89 @@ opens in Surfer. Groups: clock, ftq_ifu, ifu_l1i, l1i. Look at:</p>
   set in cycles with no request taken; the monitor counts it only with
   <code>u_mshr.accept</code>.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>5</td>
+<td>first L1I miss (<code>b_mis_valid</code>), the cold line</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000</td>
+<td></td>
+</tr>
+<tr>
+<td>26</td>
+<td>first L1I hit (<code>b_rsp_valid</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>151</td>
+<td>the invalidate is done (<code>l1i_ifu_inv_done</code>): the</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>FENCE.I has made every line invalid</td>
+<td></td>
+</tr>
+<tr>
+<td>154</td>
+<td>the restart after the FENCE.I: a backend</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_0030, the next instruction</td>
+<td></td>
+</tr>
+<tr>
+<td>176</td>
+<td>the fourth call found at F3 after the restart;</td>
+<td>the last</td>
+</tr>
+<tr>
+<td></td>
+<td>predecode redirect to 0x8000_0830, X+0x30</td>
+<td></td>
+</tr>
+<tr>
+<td>183</td>
+<td>the merge: the predicted block at X requests</td>
+<td>the one merge</td>
+</tr>
+<tr>
+<td></td>
+<td>line X while its miss is in flight (<code>mrg_hit</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>214</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd13_l1i.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd13_l1i.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

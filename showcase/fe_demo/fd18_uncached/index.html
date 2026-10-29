@@ -2582,6 +2582,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6499,6 +6521,99 @@ S=fd18_uncached</code> opens in Surfer. Look at:</p>
   <code>e_val</code>, <code>l1i_mem_a_valid</code> and <code>l1i_mem_d_valid</code>, and no
   <code>b_fil_valid</code> for the 0x8120_3xxx or 0x8120_4xxx lines.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>S-mode, Sv39</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>111</td>
+<td>first uncached request: the first block on page</td>
+<td>NC page</td>
+</tr>
+<tr>
+<td></td>
+<td>u asks the L1I for line 0x8120_3000</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>ifu_l1i_req_uncached</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>126</td>
+<td>first uncached block closed after one</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>instruction: F3 ends it (<code>ifu_ftq_uc_end</code>), and</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>the next entry starts at the next instruction</td>
+<td></td>
+</tr>
+<tr>
+<td>306</td>
+<td>first request for 0x8120_3200, the loop at</td>
+<td>NC page</td>
+</tr>
+<tr>
+<td></td>
+<td>u+0x200</td>
+<td></td>
+</tr>
+<tr>
+<td>555</td>
+<td>first request for 0x8120_3400, the function at</td>
+<td>NC page</td>
+</tr>
+<tr>
+<td></td>
+<td>u+0x400</td>
+<td></td>
+</tr>
+<tr>
+<td>647</td>
+<td>first uncached request from the IO page, line</td>
+<td>IO page</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8120_4000</td>
+<td></td>
+</tr>
+<tr>
+<td>772</td>
+<td>last uncached request</td>
+<td>the 38th</td>
+</tr>
+<tr>
+<td>797</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

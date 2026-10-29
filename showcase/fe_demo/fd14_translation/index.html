@@ -2470,6 +2470,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6478,6 +6500,99 @@ walker, walker_mem. Look at:</p>
 <li><code>itlb_ifu_cause</code> (IT-6), valid with a fault: 1 instruction access
     fault, 12 instruction page fault, 20 instruction guest-page fault.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>S-mode, Sv39</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>4</td>
+<td>first walk: VPN 0x80000, the reset page,</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>single-stage (<code>itlb_l2t_v</code> 0)</td>
+<td></td>
+</tr>
+<tr>
+<td>46</td>
+<td>walk for C: VPN 0x80010, single-stage</td>
+<td></td>
+</tr>
+<tr>
+<td>67</td>
+<td>the CAS: the walker sets the A bit of C's leaf</td>
+<td>paddr 0x8F00_9080</td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>ptw_mem_req_op</code> 1)</td>
+<td></td>
+</tr>
+<tr>
+<td>73</td>
+<td>the walk for C answers PPN 0x81000</td>
+<td>status 0, hit</td>
+</tr>
+<tr>
+<td>91</td>
+<td>first nested walk: VPN 0x80010 with <code>itlb_l2t_v</code></td>
+<td>wrong path</td>
+</tr>
+<tr>
+<td></td>
+<td>1, for a fetch younger than the ecall</td>
+<td></td>
+</tr>
+<tr>
+<td>92</td>
+<td>the ecall's trap redirect to V, 0x8005_0000</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>168</td>
+<td>the nested walk for C ends with a fault, cause</td>
+<td>status 1</td>
+</tr>
+<tr>
+<td></td>
+<td>12; nothing delivers it</td>
+<td></td>
+</tr>
+<tr>
+<td>170</td>
+<td>walk for V: VPN 0x80050, nested</td>
+<td></td>
+</tr>
+<tr>
+<td>267</td>
+<td>the walk for V answers PPN 0x81600</td>
+<td>status 0, hit</td>
+</tr>
+<tr>
+<td>285</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd14_translation.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd14_translation.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

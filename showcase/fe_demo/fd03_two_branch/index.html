@@ -2162,6 +2162,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6480,6 +6502,84 @@ S=fd03_two_branch</code> opens in Surfer. Look at:</p>
   COND) at its own <code>pos</code>, <code>pred_src</code> PRED_TAGE.</li>
 <li>group <code>ftq</code>: <code>w_ok_pred_p1</code> and <code>w_ok_slot_p2</code> accepting them.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>83</td>
+<td>first p1 prediction for X with both slots valid,</td>
+<td>uBTB, X</td>
+</tr>
+<tr>
+<td></td>
+<td>accepted by the FTQ</td>
+<td>0x8000_0400</td>
+</tr>
+<tr>
+<td>84</td>
+<td>first p2 group for X with both slots: X.c1 at</td>
+<td>accepted, FTB</td>
+</tr>
+<tr>
+<td></td>
+<td>position 1 and X.c2 at position 4, both</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>conditionals</td>
+<td></td>
+</tr>
+<tr>
+<td>107</td>
+<td>first p2 group for Y with both slots: Y.c1 at</td>
+<td>accepted, FTB, Y</td>
+</tr>
+<tr>
+<td></td>
+<td>position 1 and Y.c2 at position 4, both</td>
+<td>0x8000_0440</td>
+</tr>
+<tr>
+<td></td>
+<td>conditionals</td>
+<td></td>
+</tr>
+<tr>
+<td>529</td>
+<td>back edge falls through, a misprediction;</td>
+<td>pass 23</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_0014</td>
+<td></td>
+</tr>
+<tr>
+<td>539</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd03_two_branch.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd03_two_branch.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

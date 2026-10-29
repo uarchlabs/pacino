@@ -2302,6 +2302,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6460,6 +6482,84 @@ S=fd08_indirect</code> opens in Surfer. Look at:</p>
 <li><code>bpu_redir_p2.[0]</code> with <code>w_ok_redir_p2</code>: a p2 redirect, the p2
   target differing from the block's p1 prediction.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>20</td>
+<td>first misprediction of J; redirect to tb,</td>
+<td>pass 0, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0480</td>
+<td></td>
+</tr>
+<tr>
+<td>260</td>
+<td>first ITTAGE tagged hit at p2 (<code>ittage_hit</code>)</td>
+<td>slot 0</td>
+</tr>
+<tr>
+<td>260</td>
+<td>first target of K from ITTAGE: the call's slot</td>
+<td>accepted by the</td>
+</tr>
+<tr>
+<td></td>
+<td>at p2 has <code>pred_src</code> PRED_ITTAGE</td>
+<td>FTQ</td>
+</tr>
+<tr>
+<td>267</td>
+<td>first target of J from ITTAGE: the jump's slot</td>
+<td>accepted by the</td>
+</tr>
+<tr>
+<td></td>
+<td>at p2 has <code>pred_src</code> PRED_ITTAGE</td>
+<td>FTQ</td>
+</tr>
+<tr>
+<td>1138</td>
+<td>the loop exits: its last conditional taken on</td>
+<td>pass 39, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>the last pass, a misprediction; redirect to</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0516</td>
+<td></td>
+</tr>
+<tr>
+<td>1147</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

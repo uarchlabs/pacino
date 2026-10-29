@@ -2190,6 +2190,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6490,6 +6512,84 @@ S=fd04_p2_override</code> opens in Surfer. Look at:</p>
 <li>group <code>bp_cluster_p0</code>: the next <code>ftq_pred_pc_p0</code> is the redirect
   target.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>182</td>
+<td>first p2 redirect, from b[0] to b[1]</td>
+<td>accepted by the</td>
+</tr>
+<tr>
+<td></td>
+<td>(0x8000_1800): the FTB successor differs from</td>
+<td>FTQ</td>
+</tr>
+<tr>
+<td></td>
+<td>the p1 successor</td>
+<td></td>
+</tr>
+<tr>
+<td>193</td>
+<td>first p2 redirect to 0x8000_480A: b[7]'s</td>
+<td>from b[7]</td>
+</tr>
+<tr>
+<td></td>
+<td>conditional predicted taken at p2</td>
+<td></td>
+</tr>
+<tr>
+<td>293</td>
+<td>first p2 redirect to the jal, 0x8000_4806: the</td>
+<td>from b[7]</td>
+</tr>
+<tr>
+<td></td>
+<td>end of the FTB entry for b[7] after the split</td>
+<td></td>
+</tr>
+<tr>
+<td>513</td>
+<td>the chain exits: b[7]'s conditional taken on the</td>
+<td>pass 15, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>last pass, a misprediction; redirect to</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_480A</td>
+<td></td>
+</tr>
+<tr>
+<td>522</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

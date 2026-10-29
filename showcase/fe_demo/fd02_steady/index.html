@@ -2134,6 +2134,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6452,6 +6474,79 @@ S=fd02_steady</code> opens in Surfer. Look at:</p>
   one block per bundle. The group shows the first lane's PC only
   (DOC-006).</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>1</td>
+<td>first p1 prediction the FTQ accepts; one in</td>
+<td>uBTB miss, the</td>
+</tr>
+<tr>
+<td></td>
+<td>every cycle from here to the end of the run</td>
+<td>next 32-byte block</td>
+</tr>
+<tr>
+<td>18</td>
+<td>first full decode bundle, the block at</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000: all eight lanes of <code>pd_out</code> valid</td>
+<td></td>
+</tr>
+<tr>
+<td>20</td>
+<td>second full bundle, the block at 0x8000_0020;</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>one full bundle in every cycle from here to cyc</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>82</td>
+<td></td>
+</tr>
+<tr>
+<td>83</td>
+<td>the halt block reaches decode, one instruction</td>
+<td>0x8000_0800</td>
+</tr>
+<tr>
+<td></td>
+<td>in lane 0</td>
+<td></td>
+</tr>
+<tr>
+<td>84</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd02_steady.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd02_steady.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

@@ -2358,6 +2358,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6464,6 +6486,109 @@ S=fd10_pd_redirect</code> opens in Surfer. Look at:</p>
   chain's blocks are predicted taken and no writeback for them carries
   <code>ifu_ftq_mis_val</code>.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>19</td>
+<td>first predecode redirect: the jal at top + 2,</td>
+<td>pass 0</td>
+</tr>
+<tr>
+<td></td>
+<td>found at F3, to T(0), 0x8000_0200</td>
+<td></td>
+</tr>
+<tr>
+<td>165</td>
+<td>the 13th predecode redirect: the jal of T(11),</td>
+<td>pass 0</td>
+</tr>
+<tr>
+<td></td>
+<td>to 0x8000_0108</td>
+<td></td>
+</tr>
+<tr>
+<td>175</td>
+<td>a predecode redirect to 0x8000_0116, the halt's</td>
+<td>not counted</td>
+</tr>
+<tr>
+<td></td>
+<td>jal fetched past the cold back edge; the</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>backend's redirect takes the next request, so</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>the monitor does not count it</td>
+<td></td>
+</tr>
+<tr>
+<td>176</td>
+<td>the back edge mispredicted, cold; redirect to</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0008</td>
+<td></td>
+</tr>
+<tr>
+<td>186</td>
+<td>last predecode redirect: the jal at top + 2</td>
+<td>pass 1, the 14th</td>
+</tr>
+<tr>
+<td></td>
+<td>again, to 0x8000_0200, in the block that starts</td>
+<td>counted</td>
+</tr>
+<tr>
+<td></td>
+<td>at top</td>
+<td></td>
+</tr>
+<tr>
+<td>246</td>
+<td>back edge falls through, a misprediction;</td>
+<td>pass 2, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_010E</td>
+<td></td>
+</tr>
+<tr>
+<td>255</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd10_pd_redirect.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd10_pd_redirect.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

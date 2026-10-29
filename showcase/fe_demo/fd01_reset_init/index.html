@@ -2106,6 +2106,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6482,6 +6504,89 @@ S=fd01_reset_init</code> opens in Surfer. Look at:</p>
   (0x80000000) while held, and <code>u_npc.w_hold</code> high from cyc 0 to
   2048.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ withholds</td>
+<td>full init walk</td>
+</tr>
+<tr>
+<td></td>
+<td>its p0 request (<code>u_npc.w_hold</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>1</td>
+<td>the three table walks start at address 0; the</td>
+<td>each <code>u_sram_init</code></td>
+</tr>
+<tr>
+<td></td>
+<td>RAS reset is done (<code>ras_rst_done</code>)</td>
+<td>in INIT, <code>waddr</code> 0</td>
+</tr>
+<tr>
+<td>513</td>
+<td>ITTAGE ready (<code>bpu_ittage_rdy</code>)</td>
+<td>512 entries</td>
+</tr>
+<tr>
+<td>1025</td>
+<td>SC ready (<code>bpu_sc_ready</code>)</td>
+<td>1024 entries</td>
+</tr>
+<tr>
+<td>2049</td>
+<td>TAGE ready (<code>bpu_tage_rdy</code>), the last of the</td>
+<td>2048 entries</td>
+</tr>
+<tr>
+<td></td>
+<td>three; the FTQ makes its first p0 request in the</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>2050</td>
+<td>first p1 prediction the FTQ accepts</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>w_ok_pred_p1</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>2051</td>
+<td>first TAGE and ITTAGE responses at p2</td>
+<td></td>
+</tr>
+<tr>
+<td>2052</td>
+<td>first SC response at p3</td>
+<td></td>
+</tr>
+<tr>
+<td>8086</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

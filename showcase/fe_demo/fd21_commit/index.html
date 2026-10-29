@@ -2666,6 +2666,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6462,6 +6484,84 @@ S=fd21_commit</code> opens in Surfer. Look at:</p>
 <li>ras group: the speculative pointers <code>tosr</code> and <code>tosw</code>, which move at
   prediction time, ahead of the commit stack.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>40</td>
+<td>first commit watermark from the backend</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>bkend_ftq_commit_val</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>40</td>
+<td>the commit pointer first moves</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>w_commit_step_val</code>), one entry per cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>40</td>
+<td>first RAS commit of a call (<code>ras_commit_br_type</code></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>DIRECT_CALL)</td>
+<td></td>
+</tr>
+<tr>
+<td>62</td>
+<td>the commit stack reaches depth 2 (<code>u_ras.csp</code>)</td>
+<td>main, f</td>
+</tr>
+<tr>
+<td>62</td>
+<td>first RAS commit of a return</td>
+<td></td>
+</tr>
+<tr>
+<td>204</td>
+<td>back edge falls through, a misprediction;</td>
+<td>pass 5, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_0026</td>
+<td></td>
+</tr>
+<tr>
+<td>214</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

@@ -2610,6 +2610,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6493,6 +6515,134 @@ S=fd19_fencei_cbo</code> opens in Surfer. Look at, around cycles 71-79 and
   <code>u_maint.r_st</code> (M_DRAIN, M_CLEAR, M_DONE), both in the maintenance
   group.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>71</td>
+<td>the FENCE.I reaches the L1I: it takes the</td>
+<td><code>mt_busy_any</code> 0</td>
+</tr>
+<tr>
+<td></td>
+<td>invalidate of every line (<code>ifu_l1i_inv_all</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>74</td>
+<td>first invalidate done (<code>l1i_ifu_inv_done</code>)</td>
+<td>after M_DRAIN,</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td>M_CLEAR</td>
+</tr>
+<tr>
+<td>75</td>
+<td>first maintenance acknowledgement</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>(<code>ifu_cmt_maint_ack</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>77</td>
+<td>the restart after the FENCE.I: a backend</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_0024, cause RC_REPLAY</td>
+<td></td>
+</tr>
+<tr>
+<td>79</td>
+<td>fetch starts at 0x8000_0024, the next</td>
+<td><code>ftq_ifu_start_pc</code></td>
+</tr>
+<tr>
+<td></td>
+<td>instruction</td>
+<td></td>
+</tr>
+<tr>
+<td>174</td>
+<td>the branch at 0x8000_0040 mispredicted; redirect</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>to 0x8000_0046, the cbo.inval</td>
+<td></td>
+</tr>
+<tr>
+<td>184</td>
+<td>the cbo.inval reaches the L1I: it takes the</td>
+<td><code>mt_busy_line</code> 0</td>
+</tr>
+<tr>
+<td></td>
+<td>invalidate of line 0x8000_0C40</td>
+<td></td>
+</tr>
+<tr>
+<td>187</td>
+<td>second invalidate done</td>
+<td></td>
+</tr>
+<tr>
+<td>188</td>
+<td>second maintenance acknowledgement</td>
+<td></td>
+</tr>
+<tr>
+<td>190</td>
+<td>the restart after the cbo.inval: a backend</td>
+<td>backend</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_004A, cause RC_REPLAY</td>
+<td></td>
+</tr>
+<tr>
+<td>192</td>
+<td>fetch starts at 0x8000_004A, the next</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>instruction</td>
+<td></td>
+</tr>
+<tr>
+<td>235</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

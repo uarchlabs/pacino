@@ -2638,6 +2638,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6456,6 +6478,79 @@ S=fd20_backpressure</code> opens in Surfer. Look at:</p>
 <li><code>u_ibuf.r_count</code> in the ibuf group, the occupancy the ready is
   computed from: 52 at cyc 71, when <code>ibuf_ifu_rdy</code> first refuses.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>18</td>
+<td>decode first holds a bundle: <code>pd_out.[0].valid</code></td>
+<td>decode stall</td>
+</tr>
+<tr>
+<td></td>
+<td>with <code>dec_ibuf_rdy</code> low</td>
+<td></td>
+</tr>
+<tr>
+<td>71</td>
+<td>the instruction buffer first refuses the IFU:</td>
+<td>buffer full</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ifu_ibuf_val</code> with <code>ibuf_ifu_rdy</code> low,</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>r_count</code> 52</td>
+<td></td>
+</tr>
+<tr>
+<td>138</td>
+<td>the FTQ first full (<code>ftq_full</code>); the p0 request</td>
+<td>FTQ full</td>
+</tr>
+<tr>
+<td></td>
+<td>is withheld</td>
+<td></td>
+</tr>
+<tr>
+<td>526</td>
+<td>back edge falls through, a misprediction;</td>
+<td>pass 39, backend</td>
+</tr>
+<tr>
+<td></td>
+<td>redirect to 0x8000_004A</td>
+<td></td>
+</tr>
+<tr>
+<td>537</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

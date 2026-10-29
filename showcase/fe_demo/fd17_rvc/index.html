@@ -2554,6 +2554,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6470,6 +6492,64 @@ opens in Surfer. Look at:</p>
   (<code>u_ifu.u_f3.r_strad_val</code>, <code>r_strad_pc</code>, <code>r_strad_idx</code>): set at
   cycle 21 with <code>r_strad_pc</code> 0x8000_0040.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>fast init</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>21</td>
+<td>the straddling instruction reaches decode: lane</td>
+<td><code>r_strad_val</code></td>
+</tr>
+<tr>
+<td></td>
+<td>4, the 32-bit addi at 0x8000_003E, position 15;</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>the straddle register holds 0x8000_0040</td>
+<td></td>
+</tr>
+<tr>
+<td>22</td>
+<td>the next bundle starts on its tail: lane 0 at</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0042, position 1</td>
+<td></td>
+</tr>
+<tr>
+<td>28</td>
+<td>first fetch of fn, 0x8000_0400, after the c.jalr</td>
+<td><code>ftq_ifu_start_pc</code></td>
+</tr>
+<tr>
+<td>198</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>

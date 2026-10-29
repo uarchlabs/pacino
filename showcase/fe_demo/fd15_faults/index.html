@@ -2498,6 +2498,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6322,6 +6333,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#6-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -6493,6 +6515,119 @@ ifu_fault, decode, backend. Look at:</p>
 <li><code>itlb_l2t_priv</code> (IL-3d): 0 U, 1 S; with <code>itlb_l2t_v</code> it is the
     effective privilege. 2 (reserved) and 3 (M) are never presented.</li>
 </ul>
+<hr />
+<h2 id="6-events">6. Events<a class="headerlink" href="#6-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ requests</td>
+<td>S-mode, Sv39</td>
+</tr>
+<tr>
+<td></td>
+<td>0x8000_0000 the same cycle</td>
+<td></td>
+</tr>
+<tr>
+<td>90</td>
+<td>walk for VPN 0x80400, the page of tgt(0),</td>
+<td>nothing mapped</td>
+</tr>
+<tr>
+<td></td>
+<td>single-stage</td>
+<td></td>
+</tr>
+<tr>
+<td>104</td>
+<td>the walker answers a page fault, cause 12</td>
+<td>status 1</td>
+</tr>
+<tr>
+<td>108</td>
+<td>the page fault reaches decode: lane 0 at</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8040_0010, <code>fault_cause</code> IFU_FAULT_PAGE</td>
+<td></td>
+</tr>
+<tr>
+<td>166</td>
+<td>walk for VPN 0x80600, the page of tgt(1)</td>
+<td></td>
+</tr>
+<tr>
+<td>187</td>
+<td>the walker answers a hit, PPN 0x81400; the</td>
+<td>status 0</td>
+</tr>
+<tr>
+<td></td>
+<td>ITLB's PMP check refuses it</td>
+<td></td>
+</tr>
+<tr>
+<td>191</td>
+<td>the access fault reaches decode: lane 0 at</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8060_0010, IFU_FAULT_ACCESS</td>
+<td></td>
+</tr>
+<tr>
+<td>202</td>
+<td>the ecall's trap redirect to V, 0x8005_0000</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>399</td>
+<td>walk for VPN 0x80800, the page of tgt(2), with</td>
+<td>nested</td>
+</tr>
+<tr>
+<td></td>
+<td><code>itlb_l2t_v</code> 1</td>
+<td></td>
+</tr>
+<tr>
+<td>490</td>
+<td>the walker answers cause 20, a guest-page fault:</td>
+<td>status 1</td>
+</tr>
+<tr>
+<td></td>
+<td>the G-stage does not map GPA 0x2000_0000</td>
+<td></td>
+</tr>
+<tr>
+<td>494</td>
+<td>the third fault reaches decode: lane 0 at</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>0x8080_0010, IFU_FAULT_GUEST_PAGE</td>
+<td></td>
+</tr>
+<tr>
+<td>700</td>
+<td>the run ends</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd15_faults.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd15_faults.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
