@@ -235,6 +235,7 @@ examples/fe_demo/obj_fe_demo_2slot/
 examples/fe_demo/pub/
 rtl/core/frontend/bpu/obj1_ras/
 
+tools/tests/__pycache__/
 # --------------------------------------------------------------------
 # docs
 site/

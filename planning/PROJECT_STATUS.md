@@ -16,6 +16,72 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-082: record corrections and regression progress (PA-direct).
+
+Record corrections, no task (Jeff):
+  TD#179: FD-13 and FD-23 were brought to the BP-140 tree by DOC-007.
+  Module Status: a cachegen_decisions.md row.
+  Open Items 7 (Verilator upgrade, BP-126) and 10 (README tools
+    documentation, the 2026-10-28 new-user work) closed.
+  PROJECT_CORE.md Tools Status: the Spike row no longer points at
+    TOOLS-002 as open. Repository Layout: examples/ is run by
+    tools/regress_demo.sh; misc/ listed.
+  Tools Status: the IA status line is .claude/statusline.sh at the
+    repo root (Jeff).
+  Module Status: rows for pacino_cache.md and
+    misc/ras_theory_of_operation.md, the latter marked stale (raised in
+    handoff-081 and handoff-082; not yet tasked).
+DOC-011 WRITTEN, not yet issued: misc/ras_theory_of_operation.md
+  brought to the RTL after BP-138 to BP-140, and the scenario
+  descriptions that show the RAS checked against it (Jeff). The task
+  after B11 (event labels, FD-1 exact readies) becomes DOC-012.
+Regression progress (Jeff's request, edited by the PA, tested on a
+  scratch tree): tools/regress.sh prints a line as each target
+  finishes, with the count done, the elapsed time, the result and an
+  estimate of the time left from the target times of the last run,
+  kept in .git/regress_times. tools/regress_demo.sh prints a line per
+  model build and per scenario.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md.
+
+Next free: BP-141, SYS-003, DOC-012, INFRA-014, TOOLS-007, TD#194.
+
+---
+## Session-082, after DOC-010: the real-publish guards.
+
+DOC-010 COMPLETE (Jeff). 8m12s active, 23m13s wall; 14% context. Task
+file written by the PA.
+  regress.sh 274 targets PASS. regress_demo.sh 24 of 24 PASS, events
+    checked 210 of 210. tools/tests: 55 pass (36 from DOC-008 unchanged,
+    19 new); three mutants of the checks each fail the new tests.
+  Built: publish_waves.py checks the tag with git on every real
+    publish, including --tag T --commit C, and refuses a --commit that
+    is not HEAD under --tag or --untagged (SR-10); a real publish
+    refuses changed or untracked files under rtl/ or examples/fe_demo/,
+    naming each, and warns on changes elsewhere (SR-9a). A dry run is
+    unchanged.
+  Found and fixed: git() stripped its output, so the first porcelain
+    entry lost its leading space and " M rtl/a.sv" escaped the rtl/
+    check. The stand-in git now answers by whole call as well as by
+    subcommand.
+  Open for Jeff: tools/tests/ is untracked, so DOC-008's tests and
+    DOC-010's are not committed; run the IA's real-git commands in
+    prompts/DOC-010.md, which also confirm that build output under
+    rtl/ and examples/fe_demo/ is gitignored; the
+    examples/fe_demo/README.md header (SOURCE DOC-008, DOC-010).
+  Permissions after the settings change: 16 of 36 tool calls asked
+    (DOC-009: 129 of 196). No prompt for a cd prefix. The rest were
+    multi-line commands writing scratch files through heredocs, the
+    regression runs, and /cntx's reads of ~/.claude.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, showcase_release_decisions.md (SR-9a,
+SR-10).
+
+Next free: BP-141, SYS-003, DOC-011, INFRA-014, TOOLS-007, TD#194.
+
+---
 ## Session-082, after DOC-009: the demonstration regression and events.
 
 DOC-009 COMPLETE (Jeff). 2h15m active, 14h08m wall clock: 129
@@ -4034,6 +4100,17 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (TD#78).                         |
 |                         |             |                   | Session-081: IC-RAS-07, 10, 11   |
 |                         |             |                   | (BP-138).                        |
+| ras_theory_of           | Draft       | --                | misc/. Added session-079         |
+| _operation.md           |             |                   | (BP-134). A descriptive          |
+|                         |             |                   | companion to the RAS records,    |
+|                         |             |                   | which win on conflict. STALE: a  |
+|                         |             |                   | simple circular buffer (4.1 and  |
+|                         |             |                   | 4.3 call the linked array        |
+|                         |             |                   | rejected), s-stage notation,     |
+|                         |             |                   | VA_WIDTH 40, the pred_pc+32      |
+|                         |             |                   | two-slot model and its bypass, a |
+|                         |             |                   | three-way JALR split; no BP-140  |
+|                         |             |                   | BOS rule (handoff-082).          |
 | ras.sv                  | Complete    | tb_ras            | RTL BP-062, tb BP-063.           |
 |                         |             |                   | sim_ras 87/0.                    |
 |                         |             |                   | TD #78 pinned, TD #79 deferred.  |
@@ -4304,6 +4381,18 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | PROPOSED; CSR-U1 (custom CSR     |
 |                         |             |                   | names), CSR-U2 (hardware         |
 |                         |             |                   | delivery) open.                  |
+| cachegen_decisions.md   | Draft       | --                | Created session-074. What pacino |
+|                         |             |                   | needs from cachegen, all pacino  |
+|                         |             |                   | caches: pacino drives, cachegen  |
+|                         |             |                   | follows (CG-4, CG-5, CG-D1).     |
+| pacino_cache.md         | Draft       | --                | Generated by cgen 0.1.0, dated;  |
+|                         |             |                   | planning/arch. A snapshot of the |
+|                         |             |                   | cachegen output: parameters,     |
+|                         |             |                   | interfaces, emitted files. Not a |
+|                         |             |                   | decision record; not cited       |
+|                         |             |                   | (PROJECT_CORE inventory). L1I    |
+|                         |             |                   | mshrs 16, mshr_targets 4 (Jeff,  |
+|                         |             |                   | 2026-10-24).                     |
 | fe_decisions.md         | Draft       | --                | Created session-062. Front-end   |
 |                         |             |                   | theory of operation. SESSION-064:|
 |                         |             |                   | RAS top of stack corrected to p0 |
@@ -6431,8 +6520,8 @@ numbers are issued from one sequence across both tables.
 |     |          | shape (2 + 1 leaves one field unused at two slots and    |
 |     |          | two at one, 47,104 / 94,208 bits of the FTB); training   |
 |     |          | at resolve or commit; per-start occupancy on compiled    |
-|     |          | benchmarks. fe_demo FD-13 and FD-23 proofs fail on the   |
-|     |          | BP-140 tree: the next DOC task (Jeff).                   |
+|     |          | benchmarks. fe_demo FD-13 and FD-23, which failed on the |
+|     |          | BP-140 tree, were brought to it by DOC-007.              |
 | 180 | tools    | OPEN, VERIFICATION. tools/cov_table.py's tage and bpu    |
 |     |          | rows list tage.sv only; since BP-132 the TAGE            |
 |     |          | arbitration lines are in tage_arb.sv, so TAGE coverage   |
@@ -6696,12 +6785,9 @@ numbers are issued from one sequence across both tables.
 | 5        | TAGE full validation plan               | Complete            |
 | 6        | BP code coverage plan: CE-01            | Complete            |
 |          | through CE-06 all closed                |                     |
-| 7        | Verilator upgrade to post-covergroup    | Upgraded to 5.048.  |
-|          | release                                 | Covergroup #7099    |
-|          |                                         | re-check pending.   |
-|          |                                         | DONE BP-126: 5.048  |
-|          |                                         | ignores covergroups |
-|          |                                         | (TD#38).            |
+| 7        | Verilator upgrade to post-covergroup    | CLOSED BP-126:      |
+|          | release                                 | 5.048, which ignores|
+|          |                                         | covergroups (TD#38).|
 | 8        | Investigate mutation testing            | STANDING PRACTICE.  |
 |          |                                         | BP-083, BP-086,     |
 |          |                                         | BP-090, BP-091,     |
@@ -6718,9 +6804,14 @@ numbers are issued from one sequence across both tables.
 |          |                                         | requirement.        |
 | 9        | Research verible-verilog-format for SV  | Planned             |
 |          | formatting.                             |                     |
-| 10       | README update: document tools/bin       | Pending             |
-|          | layout and build instructions for       |                     |
-|          | Verilator and Spike.                    |                     |
+| 10       | README update: document tools/bin       | CLOSED 2026-10-28:  |
+|          | layout and build instructions for       | README.md Quick     |
+|          | Verilator and Spike.                    | start and the tools |
+|          |                                         | table, built by     |
+|          |                                         | tools/build_tools.sh|
+|          |                                         | (new_user_decisions |
+|          |                                         | .md NU-10, NU-14 to |
+|          |                                         | NU-17).             |
 | 11       | tb_bp_cluster and its tests             | DONE session-064.   |
 |          |                                         | 973 checks, groups  |
 |          |                                         | A-H, 258/258 lines. |

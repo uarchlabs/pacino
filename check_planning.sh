@@ -148,6 +148,10 @@
 # Updated after DOC-009, session-082 (PROJECT_STATUS.md,
 # fe_demo_tb_decisions.md, new_user_decisions.md), and for the
 # run-from-root rule (CLAUDE.md, PROJECT_STATUS.md).
+# Updated after DOC-010, session-082 (PROJECT_STATUS.md,
+# showcase_release_decisions.md), and for the Write-tool rule
+# (CLAUDE.md). Updated for the record corrections, session-082
+# (PROJECT_STATUS.md, PROJECT_CORE.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -169,10 +173,10 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   9017d3c80014
-PLAN  PROJECT_STATUS.md                 053db03651bd
+PLAN  PROJECT_CORE.md                   bfd51475d3cd
+PLAN  PROJECT_STATUS.md                 4e6774429712
 
-UNKN  CLAUDE.md                         faad7c6b313e
+UNKN  CLAUDE.md                         625e50425ef6
 
 ARCH  bp_arb_spec.md                    667b1c205dff
 ARCH  bp_cluster.md                     187952e94e30
@@ -226,25 +230,24 @@ INTF  ftq_backend_interfaces.md   1c425156a6e7
 INTF  ftq_bpu_interfaces.md       ec5b5e653a4e
 INTF  ftq_ifu_interfaces.md       2cecf4e55ced
 INTF  ifu_ibuf_interfaces.md      ab4d4051748b
-INTF  itlb_ifu_interfaces.md            ab489f6db489
-INTF  itlb_l2tlb_interfaces.md          31ca2847e5a3
-INTF  ptw_mem_interfaces.md            053eb7faf457
-INTF  ittage_interfaces.md              9217c9322080
-INTF  l1i_ifu_interfaces.md             3fb484b495e3
-INTF  loop_pred_interfaces.md           f1eb16c7ce58
-INTF  ras_interfaces.md                 25711cada66b
-INTF  sc_interfaces.md                  7936cbf21f43
-INTF  sc_table_interfaces.md            b442b10dab0f
-INTF  tage_interfaces.md                80e89e517207
+INTF  itlb_ifu_interfaces.md      ab489f6db489
+INTF  itlb_l2tlb_interfaces.md    31ca2847e5a3
+INTF  ptw_mem_interfaces.md       053eb7faf457
+INTF  ittage_interfaces.md        9217c9322080
+INTF  l1i_ifu_interfaces.md       3fb484b495e3
+INTF  loop_pred_interfaces.md     f1eb16c7ce58
+INTF  ras_interfaces.md           25711cada66b
+INTF  sc_interfaces.md            7936cbf21f43
+INTF  sc_table_interfaces.md      b442b10dab0f
+INTF  tage_interfaces.md          80e89e517207
 INTF  ubtb_interfaces.md          a8e591bbeda2
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            7a55ae56d56a
-SHOW  showcase_release_decisions.md  5ab166f5ee29
+SHOW  showcase_release_decisions.md   c95e204e27c3
 
-MISC  ras_theory_of_operation.md      d4e71726f007
-
+MISC  ras_theory_of_operation.md      75158ae995ed
 EOF
 
 match=0; differ=0; missing=0; bad=0; total=0

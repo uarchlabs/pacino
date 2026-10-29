@@ -6,7 +6,7 @@
  FILE:    showcase_release_decisions.md
  SOURCE:  session-082
  STATUS:  DRAFT
- UPDATED: 2026-10-28
+ UPDATED: 2026-10-29
  CONTACT: Jeff Nye
 ```
 
@@ -71,12 +71,16 @@ SR-9   tools/publish_waves.py publishes only a commit at an fe-* tag.
 SR-9a  A real publish is refused when a tracked file under rtl/ or
        examples/fe_demo/ differs from the commit published, or an
        untracked file that git does not ignore is present there (Jeff,
-       session-082). A dry run warns instead.
+       session-082). A dry run warns instead. The check reads git status
+       --porcelain=v1 -z --no-renames --untracked-files=all and names
+       each file it refuses on; a change outside rtl/ and
+       examples/fe_demo/ warns (DOC-010).
 SR-10  The tag and the commit can be given to publish_waves.py as
        arguments, and a dry run given both makes no git call. A real
        publish always checks with git that the tag is annotated and
        names HEAD, whether or not they are given, and refuses a given
-       commit that is not HEAD (Jeff, session-082). Looking them up with
+       commit that is not HEAD, under --tag or --untagged (Jeff,
+       session-082; DOC-010). Looking them up with
        git is the default when they are not given. A dry run builds and
        checks everything and pushes nothing.
 
@@ -115,4 +119,6 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
               the manifest keys; SR-9a a dirty tree refuses a real
               publish; SR-10 a real publish always checks the tag with
               git (Jeff); SR-12 the digest version.
+  2026-10-29  session-082, after DOC-010. SR-9a the status form and
+              the outside-change warning; SR-10 --untagged.
 ```

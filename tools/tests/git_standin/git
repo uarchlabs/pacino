@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# git -- a stand-in for git (DOC-008). Put this directory first on PATH:
+# every call is appended to $GIT_STANDIN_LOG, one JSON list of the
+# arguments per line, and the call exits 1 with nothing on stdout.
+#
+# $GIT_STANDIN_ANSWERS, when set, is a JSON file mapping a git call to the
+# stdout it prints, with exit 0. A key is either the whole call after any
+# -C <dir>, its arguments joined by single spaces (DOC-010), or its
+# subcommand, the first of those arguments; the whole call is looked up
+# first. A call it does not map still exits 1. It lets a test drive
+# tools/publish_waves.py's lookup without a repository.
+
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+log = os.environ.get("GIT_STANDIN_LOG")
+if log:
+    with open(log, "a") as f:
+        f.write(json.dumps(args) + "\n")
+
+i = 0
+while i < len(args) and args[i] == "-C":
+    i += 2
+sub = args[i] if i < len(args) else ""
+call = " ".join(args[i:])
+
+answers = os.environ.get("GIT_STANDIN_ANSWERS")
+if answers:
+    with open(answers) as f:
+        table = json.load(f)
+    for key in (call, sub):
+        if key in table:
+            sys.stdout.write(table[key])
+            sys.exit(0)
+print(f"git stand-in: refused {' '.join(args)}", file=sys.stderr)
+sys.exit(1)

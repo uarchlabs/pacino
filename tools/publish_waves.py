@@ -16,13 +16,14 @@
 #   tools/publish_waves.py [--published FILE]
 #       publish HEAD, which must be at an annotated fe-* tag (SR-9)
 #   tools/publish_waves.py --tag fe-1.0.0 --commit <sha> [...]
-#       take the tag and its commit from the arguments; no git lookup
-#       (SR-10). The tree must hold that commit: nothing checks it
+#       the tag and its commit as arguments. A dry run takes them as
+#       given, with no git lookup (SR-10); a publish checks them (below)
 #   tools/publish_waves.py --tag fe-1.0.0 [...]
 #       look up the tag's commit with git; HEAD must be that commit
 #   tools/publish_waves.py --untagged [--commit <sha>] [...]
-#       the override: publish HEAD, or <sha>, and record the tag as
-#       untagged (SR-9)
+#       the override: record the tag as untagged (SR-9). A publish
+#       publishes HEAD and refuses a <sha> that is not HEAD; a dry run
+#       given <sha> records it with no git lookup
 #   --dry-run [--out DIR]
 #       build and check everything, write the files that would be pushed
 #       into DIR (default examples/fe_demo/out/publish_dry_run/), push
@@ -41,9 +42,20 @@
 # anything, unless HEAD is at an annotated fe-* tag; with more than one,
 # the latest (SR-4) is recorded.
 #
+# A PUBLISH (no --dry-run) checks with git, whatever the arguments, and
+# refuses before building anything when (SR-9a, SR-10):
+#   - the tag is not annotated or does not name HEAD, or a given --commit
+#     is not HEAD (the commit published is always HEAD)
+#   - a tracked file under rtl/ or examples/fe_demo/ differs from HEAD, or
+#     an untracked file there is not ignored; read from
+#       git status --porcelain=v1 -z --no-renames --untracked-files=all
+#     a change elsewhere in the tree only warns
+# A dry run warns on any uncommitted change (git status --porcelain) and
+# goes on.
+#
 # STEPS:
 #   1. resolve the tag and the commit; refuse when there is no tag and no
-#      override
+#      override, and, for a publish, on a tag check or a dirty tree
 #   2. refuse to run if RVA_ROOT is set and is not this repo's root
 #   3. read --published, when given
 #   4. make -C examples/fe_demo scenarios; stop on any failure
@@ -125,17 +137,20 @@ def die(msg):
     sys.exit(1)
 
 
-def run(cmd, cwd=None, capture=False, env=None):
+def run(cmd, cwd=None, capture=False, env=None, strip=True):
     r = subprocess.run(cmd, cwd=cwd, env=env, text=True,
                        stdout=subprocess.PIPE if capture else None)
     if r.returncode != 0:
         die(f"failed ({r.returncode}): {' '.join(cmd)}")
-    return r.stdout.strip() if capture else None
+    if not capture:
+        return None
+    return r.stdout.strip() if strip else r.stdout
 
 
-def git(*args):
-    """git in this repo, from PATH; its output, stripped."""
-    return run(["git", "-C", ROOT, *args], capture=True)
+def git(*args, strip=True):
+    """git in this repo, from PATH; its output, stripped unless strip is
+    False (porcelain status starts with a significant space)."""
+    return run(["git", "-C", ROOT, *args], capture=True, strip=strip)
 
 
 def warn_dirty(commit):
@@ -144,14 +159,84 @@ def warn_dirty(commit):
               f" manifest records {commit[:12]}")
 
 
+# The directories a publish's waveforms are built from (SR-9a), and the
+# status form read for them: one NUL-terminated "XY path" entry per
+# changed or untracked file, paths from the repo root, unquoted; each
+# untracked file listed (not its directory); ignored files left out.
+GUARDED = ("rtl/", "examples/fe_demo/")
+STATUS = ("status", "--porcelain=v1", "-z", "--no-renames",
+          "--untracked-files=all")
+WARN_LIST = 10
+
+
+def status_entries(out):
+    """[(XY, path)] of git status --porcelain=v1 -z output. A rename or
+    copy entry (not produced under --no-renames) is followed by its source
+    path, which is listed too."""
+    fields = out.split("\0")
+    entries = []
+    i = 0
+    while i < len(fields):
+        f = fields[i]
+        i += 1
+        if len(f) < 4:
+            continue
+        xy = f[:2]
+        entries.append((xy, f[3:]))
+        if xy[0] in "RC" and i < len(fields):
+            entries.append((xy, fields[i]))
+            i += 1
+    return entries
+
+
+def refuse_dirty(commit):
+    """A publish: refuses when a tracked file under rtl/ or
+    examples/fe_demo/ differs from commit (HEAD), or an untracked file
+    there is not ignored (SR-9a); warns on a change anywhere else."""
+    entries = status_entries(git(*STATUS, strip=False))
+    inside = [e for e in entries if e[1].startswith(GUARDED)]
+    outside = [e for e in entries if not e[1].startswith(GUARDED)]
+    if inside:
+        die(f"{len(inside)} file(s) under rtl/ or examples/fe_demo/ differ"
+            f" from HEAD {commit[:12]} or are untracked (SR-9a).\n"
+            f"  Nothing was built or pushed. Commit, remove or ignore them,"
+            f" or use --dry-run:\n"
+            + "\n".join(f"    {xy} {path}" for xy, path in inside))
+    if outside:
+        print(f"[warning]    {len(outside)} uncommitted change(s) outside"
+              f" rtl/ and examples/fe_demo/; the manifest records"
+              f" {commit[:12]}")
+        for xy, path in outside[:WARN_LIST]:
+            print(f"    {xy} {path}")
+        if len(outside) > WARN_LIST:
+            print(f"    ... and {len(outside) - WARN_LIST} more")
+
+
+def check_tree(commit, real):
+    """A publish refuses a dirty rtl/ or examples/fe_demo/; a dry run
+    warns on any uncommitted change."""
+    if real:
+        refuse_dirty(commit)
+    else:
+        warn_dirty(commit)
+
+
+def check_given(given, head):
+    """A publish publishes HEAD: a given --commit must be it (SR-10)."""
+    if given is not None and given != head:
+        die(f"--commit {given} is not HEAD {head} (SR-10).\n"
+            f"  A publish builds and publishes HEAD. Nothing was built or"
+            f" pushed. Check out\n  {given[:12]}, or give HEAD's sha.")
+
+
 # ---------------------------------------------------------------------
 # The tag gate (SR-9, SR-10)
 # ---------------------------------------------------------------------
-def lookup_head_tag():
+def lookup_head_tag(real):
     """HEAD and the latest annotated release tag at it; refuses when it
     has none. for-each-ref --points-at matches an annotated tag by the
     commit it names; objecttype is tag for an annotated tag and commit
-    for a lightweight one."""
+    for a lightweight one. real: a publish, not a dry run."""
     head = git("rev-parse", "--verify", "HEAD^{commit}")
     refs = git("for-each-ref", "--points-at", head,
                "--format=%(objecttype) %(refname:strip=2)", "refs/tags/fe-*")
@@ -167,31 +252,35 @@ def lookup_head_tag():
               f" fe-<major>.<minor>.<patch> tag; ignored")
     if not annotated:
         die(f"HEAD {head[:12]} is at no annotated fe-<major>.<minor>.<patch>"
-            f" tag (SR-9).\n  Nothing was built or pushed. Tag it, give"
-            f" --tag and --commit, or pass\n  --untagged to publish it as"
-            f" untagged.")
-    warn_dirty(head)
+            f" tag (SR-9).\n  Nothing was built or pushed. Tag it, or pass"
+            f" --untagged to publish it as\n  untagged; a dry run may give"
+            f" --tag and --commit instead.")
+    check_tree(head, real)
     return fe_release.latest_tag(annotated), head
 
 
-def lookup_tag(tag):
-    """The commit an annotated release tag names; HEAD must be it."""
+def lookup_tag(tag, real, given=None):
+    """The commit an annotated release tag names; HEAD must be it, and
+    so must given, the --commit of a publish."""
     typ = git("cat-file", "-t", f"refs/tags/{tag}")
     if typ != "tag":
         die(f"{tag} is a lightweight tag; a release tag is annotated (SR-1)")
     commit = git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
     head = git("rev-parse", "--verify", "HEAD^{commit}")
+    check_given(given, head)
     if head != commit:
         die(f"{tag} names {commit[:12]}, but HEAD is {head[:12]}; check out"
             f" the tag first")
-    warn_dirty(commit)
+    check_tree(commit, real)
     return commit
 
 
 def resolve(args):
     """(tag, commit) from the arguments, or from git when they do not
     give both. Refuses, before anything is built, when there is no tag
-    and no override."""
+    and no override. A publish always checks with git that the tag is
+    annotated and names HEAD, and that the tree is clean (SR-9a, SR-10);
+    only a dry run takes --commit without a git call."""
     if args.tag is not None and not fe_release.parse_tag(args.tag):
         die(f"{args.tag} is not a release tag: fe-<major>.<minor>.<patch>,"
             f" decimal fields, no leading zero (SR-1)")
@@ -199,21 +288,23 @@ def resolve(args):
         die(f"--commit {args.commit} is not a full 40-character sha")
     if args.untagged and args.tag is not None:
         die("--untagged and --tag together; give one")
+    real = not args.dry_run
     if args.untagged:
-        if args.commit is not None:
+        if args.commit is not None and not real:
             return UNTAGGED, args.commit
         head = git("rev-parse", "--verify", "HEAD^{commit}")
-        warn_dirty(head)
+        check_given(args.commit, head)
+        check_tree(head, real)
         return UNTAGGED, head
-    if args.tag is not None and args.commit is not None:
+    if args.tag is not None and args.commit is not None and not real:
         return args.tag, args.commit
-    if args.commit is not None:
+    if args.tag is None and args.commit is not None:
         die(f"--commit {args.commit[:12]} without --tag (SR-9). Nothing was"
             f" built or pushed.\n  Give --tag, or pass --untagged to"
             f" publish it as untagged.")
     if args.tag is not None:
-        return args.tag, lookup_tag(args.tag)
-    return lookup_head_tag()
+        return args.tag, lookup_tag(args.tag, real, args.commit)
+    return lookup_head_tag(real)
 
 
 def check_rva_root():
@@ -439,8 +530,8 @@ def main():
                                  " to uarchlabs/pacino-waves.")
     ap.add_argument("--tag", help="the fe-<major>.<minor>.<patch> tag to"
                     " record")
-    ap.add_argument("--commit", help="the full sha the tag names; with --tag,"
-                    " no git lookup")
+    ap.add_argument("--commit", help="the full sha the tag names; with --tag"
+                    " and --dry-run, no git lookup; a publish requires HEAD")
     ap.add_argument("--untagged", action="store_true",
                     help="override: publish a commit at no tag, recorded as"
                     " untagged")

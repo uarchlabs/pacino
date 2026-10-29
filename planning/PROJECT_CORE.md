@@ -381,8 +381,10 @@ Claude Code proposes (subject to Jeff review):
                   fe_qaa.md
   docs/           sessions.json, decomposition logs, backend
                   stubs; generated documentation
-  examples/       demonstration testbenches, outside the
-                  regression: fe_demo/
+  examples/       demonstration testbenches: fe_demo/, run by
+                  tools/regress_demo.sh, not tools/regress.sh
+  misc/           notes outside the planning record:
+                  ras_theory_of_operation.md
   rtl/            see Project Structure in CLAUDE.md
   tools/          tools/bin install dir, riscv-opcodes submodule
 ```
@@ -640,8 +642,10 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |            |                                |                                   | verilator_coverage, same      |
 |            |                                |                                   | version, beside it            |
 |            |                                |                                   | (VERILATOR_COVERAGE).         |
-| Spike      | 1.1.1-dev (tools/spike         | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
-|            | submodule)                     |                                   | issue.                        |
+| Spike      | 1.1.1-dev (tools/spike         | $(RVA_ROOT)/tools/bin/spike       | SPIKE in rtl/Vars.mk; the     |
+|            | submodule)                     |                                   | project runs spike-dasm only  |
+|            |                                |                                   | (NU-1). TOOLS-002's ISA string|
+|            |                                |                                   | follow-ons closed session-075.|
 | Surfer     | v0.7.0-35 (commit 010b840)     | $(RVA_ROOT)/tools/bin/surfer      | The one waveform viewer. Built|
 |            |                                |                                   | by build_tools.sh with Rust   |
 |            |                                |                                   | 1.95.0 in tools/rust. The     |

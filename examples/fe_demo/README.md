@@ -468,7 +468,8 @@ Steps, in order, from the repository root:
      differs from the published one: its description must match the
      new waveform before the release goes out.
 
-  5. Publish the waveforms:
+  5. Publish the waveforms, with HEAD still at the tag and rtl/ and
+     examples/fe_demo/ clean (below):
        tools/publish_waves.py --published /tmp/published.json
      Then https://uarchlabs.github.io/pacino-waves/manifest.json has
      "tag": "fe-1.0.0" once GitHub Pages has updated.
@@ -485,7 +486,21 @@ Steps, in order, from the repository root:
 The waveforms go out before the tag is pushed, so the pages never name
 a tag whose waveforms are not yet published. Without a tag the script
 refuses; --untagged publishes HEAD and records the tag as untagged
-(SR-9). --tag and --commit give the tag and its commit without a git
-lookup (SR-10). tools/publish_waves.py --help lists the options, and
-its header documents every key of manifest.json, the digest and the
+(SR-9).
+
+A publish (step 5) builds and publishes HEAD, and needs two things,
+checked with git before anything is built, whatever the arguments:
+
+- HEAD at the tag: the tag is annotated and names HEAD, and a --commit
+  given is HEAD (SR-10). Under --untagged the commit is HEAD, and a
+  --commit given that is not HEAD is refused.
+- A clean rtl/ and examples/fe_demo/: no tracked file there differs
+  from HEAD, and no untracked file there is outside .gitignore
+  (SR-9a). The refusal names each file. A change elsewhere in the tree
+  is listed as a warning and does not stop the publish.
+
+A dry run (step 4) refuses neither: it warns on uncommitted changes,
+and given --tag and --commit it takes them as given with no git call
+(SR-10). tools/publish_waves.py --help lists the options, and its
+header documents every key of manifest.json, the digest and the
 staleness report.
