@@ -27,6 +27,11 @@
 #   - prints one line per scenario, with its events checked <n> of <m>
 #     from its result line (FDT-10), and the totals
 #
+# Progress: as each model build and each scenario finishes, one line
+# shows the count done of the total, the time since the start (NNmNNs),
+# the result, the name and its own time:
+#   [ 5/26]  0m41s PASS fd03_two_branch 1s
+#
 # A scenario PASSES when its make call exits 0 and its log holds its
 # -I: <scenario>: PASS, result line. Failures are compared with
 # ROOT/tools/known_failures_demo.txt (a missing file is empty, and the
@@ -103,6 +108,19 @@ else
   KNOWN_STATE="no tools/known_failures_demo.txt: treated as empty"
 fi
 
+# -- progress: one line per model built and per scenario run
+N_SCEN=$(wc -w <<< "$SCENS")
+N_STEPS=$((N_SCEN + 2))
+N_DONE=0
+progress() {
+  local now
+  now=$(( $(date +%s) - T_ALL0 ))
+  N_DONE=$((N_DONE + 1))
+  printf "[%${#N_STEPS}d/%d] %2dm%02ds %s %s %ss\n" "$N_DONE" "$N_STEPS" \
+    $((now / 60)) $((now % 60)) "$1" "$2" "$3"
+}
+echo "regress_demo: building 2 models, then $N_SCEN scenarios"
+
 # -- build each model once, from this tree
 declare -A BUILT=()
 BUILD_LINES=()
@@ -123,6 +141,7 @@ for m in "$VTB1" "$VTB2"; do
   fi
   BUILD_LINES+=("$(printf '  %-10s %-22s rc=%-3s warn=%-2s %4ss' \
     "$res" "$m" "$rc" "$warns" "$secs")")
+  progress "$res" "$m" "$secs"
 done
 
 # -- run every scenario on its model, one at a time
@@ -182,6 +201,7 @@ for s in $SCENS; do
   fi
   SUMMARY+=("$(printf '  %-10s %-20s slots=%s rc=%-3s events %-7s %4ss' \
     "$result" "$s" "$slots" "$rc" "$ev" "$secs")")
+  progress "$result" "$s" "$secs"
 done
 
 # A listed entry whose scenario did not run is stale.
@@ -192,7 +212,6 @@ for key in "${!KNOWN_TD[@]}"; do
 done
 
 T_ALL=$(( $(date +%s) - T_ALL0 ))
-N_SCEN=$(wc -w <<< "$SCENS")
 
 echo
 echo "=================================================================="

@@ -42,17 +42,17 @@
 # than three fields, is reported as malformed and waives nothing.
 #
 # Progress: as each target finishes, one line shows the count done of
-# the total, the time since the start, the target's own result and time,
-# an estimate of the time left, and each unfinished Makefile's count:
-#   [137/274] 4m12s PASS bpu cov_tage 38s | left ~5m10s | fe_top 31/84
+# the total, the time since the start (NNmNNs), the target's result,
+# Makefile directory name, name and time, and an estimate of the time
+# left:
+#   [137/274]  4m12s PASS bpu cov_tage 38s | left ~5m10s
 # The result there is make's exit and the log's %Warning lines only; the
 # summary applies tools/known_failures.txt. The estimate comes from each
 # target's time in earlier runs, kept in .git/regress_times (outside the
 # tracked tree, so the pass record is unaffected): for each unfinished
 # Makefile, the times of its targets not yet done, less the time the
 # current one has run, and the largest of those; with fewer jobs than
-# unfinished Makefiles, at least their sum shared over the jobs. The list
-# after it shows at most four Makefiles, those with the most time left.
+# unfinished Makefiles, at least their sum shared over the jobs.
 # A target with no earlier time counts at the mean of the known ones;
 # with no history at all the estimate is shown as "left ?".
 #
@@ -369,12 +369,17 @@ dur() {
   else echo "${s}s"; fi
 }
 
+# 125 -> " 2m05s": the elapsed column, six wide up to 99m59s
+stamp() {
+  printf '%2dm%02ds' $(($1 / 60)) $(($1 % 60))
+}
+
 # One progress line, after target $2 of Makefile $1 finished with rc $3
 # in $4 seconds. Reads only the files the jobs write in LOG_DIR, so it is
 # safe to call from any job; the line is printed with one printf.
 progress() {
   local i=$1 t=$2 rc=$3 secs=$4 now ndone res j left mf_left n nd
-  local tt start ran e unknown=0 parts="" total=0 n_mf=0 rows=
+  local tt start ran e unknown=0 total=0 n_mf=0
   now=$(date +%s)
   ndone=$(find "$LOG_DIR" -maxdepth 1 -name '*.res' | wc -l)
   if [ "$rc" -eq 0 ] && ! grep -q '^%Warning' \
@@ -405,20 +410,15 @@ progress() {
     fi
     [ "$mf_left" -gt "$left" ] && left=$mf_left
     total=$((total + mf_left)); n_mf=$((n_mf + 1))
-    rows+="$mf_left ${MF_REL[$j]##*/} $nd/$n"$'\n'
   done
   # With fewer jobs than unfinished Makefiles, the work left shared over
   # the jobs can exceed the longest Makefile.
   [ "$n_mf" -gt "$N_JOBS" ] && [ $((total / N_JOBS)) -gt "$left" ] && \
     left=$((total / N_JOBS))
   if [ "$unknown" -eq 1 ]; then left="?"; else left="~$(dur "$left")"; fi
-  # The unfinished Makefiles, most time left first, at most four.
-  parts=$(sort -k1,1nr <<< "$rows" | awk 'NF { n++; if (n <= 4)
-    printf " %s %s", $2, $3 } END { if (n > 4) printf " +%d more", n - 4 }')
-  [ -n "$parts" ] || parts=" none"
-  printf '[%d/%d] %s %s %s %s %s | left %s |%s\n' "$ndone" "$N_TOTAL" \
-    "$(dur $((now - T_ALL0)))" "$res" "${MF_REL[$i]##*/}" "$t" \
-    "$(dur "$secs")" "$left" "$parts"
+  printf '[%d/%d] %s %s %s %s %s | left %s\n' "$ndone" "$N_TOTAL" \
+    "$(stamp $((now - T_ALL0)))" "$res" "${MF_REL[$i]##*/}" "$t" \
+    "$(dur "$secs")" "$left"
 }
 
 run_makefile() {
