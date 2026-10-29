@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-29
  CONTACT: Jeff Nye
 ```
 
@@ -335,8 +335,12 @@ only decrement a recursion count sets TOSR to the popped entry's
 nos. TOSW, BOS, the sentinel, the three-pointer snapshot and the
 restore of 4.3 are unchanged, and restore stays exact while the
 buffer has not wrapped, since TOSW only advances and a wrong-path
-push never overwrites a live entry. The p3 repair follows the link
-(undo-pop restores the pre-op TOSR; missed pop follows nos).
+push never overwrites a live entry. Exact for the pointers and the
+stored addresses and links: a recursion count changed in place on the
+wrong path is array data and is not restored (ras.sv:335-343,
+413-421). No tb_ras case covers it (TD#194, DOC-011). The p3
+repair follows the link (undo-pop restores the pre-op TOSR; missed
+pop follows nos).
 Rejected: pushing at TOSR+1 and dropping TOSW, which matches the
 session-050 wording but loses exact restore and rewrites the
 snapshot, sentinel and overflow rules. Cost 16 x 4 = 64 bits.
@@ -367,7 +371,8 @@ Pointers (all RAS_PTR_BITS wide, $clog2(RAS_SPEC_ENTRIES)=4b):
   TOSW  -- Top Of Stack Write: next free allocation slot
   BOS   -- Bottom Of Stack: boundary of committed state
 
-Push: write ret_addr, rctr and nos = TOSR to the TOSW slot,
+Push: write ret_addr, rctr and nos = TOSR (BOS on the sentinel
+      skip) to the TOSW slot,
       with bot = 1 when the stack is empty or on the sentinel
       skip. TOSR = TOSW.
       TOSW advances to next slot. The BOS index is a permanent
@@ -411,7 +416,10 @@ Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 so that empty (TOSR == BOS) is never aliased by a full stack.
 
 Full condition: TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES). 15
-entries live, one push remaining. Overflow (wrap) condition:
+slots allocated beyond BOS since BOS last moved, one push
+remaining. A pop does not retreat TOSW, so fewer entries may be
+live (tb_ras TC-44; DOC-011; this read "15 entries live").
+Overflow (wrap) condition:
 the next push finds TOSW == BOS and takes the sentinel skip.
 No fault is raised and no error signal is asserted.
 
@@ -708,9 +716,14 @@ slot 1 is reached. With 6.1 corrected, both slots are in the
 same block, so this applies to every combination below.
 
 NONE OF THE FIVE COMBINATIONS CAN OCCUR. They are retained, not
-deleted, because 6.3 and 6.4 describe logic that may exist in
-the RTL and would now be dead. Confirming that is an RTL task,
-not a documentation one.
+deleted, because 6.3 and 6.4 describe logic in the RTL. CONFIRMED
+DOC-011: ras.sv evaluates the slots in one scan, and a later slot's
+pop reads the working top the earlier slot's push left (ras.sv:224-226,
+679), so the combinations work at module level (tb_ras TC-04..TC-07,
+TC-11). There is no separate type-gated path. bp_cluster gives RAS
+types only to the single jump field, one slot per block
+(bp_cluster.sv:993-1046), so the integrated front end does not reach
+them. This read "Confirming that is an RTL task".
 
 THE ONE REAL TWO-OPERATION CASE IS NOT AMONG THEM. A JALR whose
 `rd` and `rs1` are both link registers and are not equal is a
@@ -767,7 +780,9 @@ The five combinations the RAS must handle in a single cycle:
 ### 6.3  Same-cycle bypass (SUPERSEDED session-069)
 
 The case this serves, slot0=call with slot1=return, cannot occur
-under 6.2. If the bypass exists in the RTL it is dead logic.
+under 6.2. The bypass is the scan's working top of stack, not a
+separate path; it works at module level and bp_cluster does not reach
+it (6.2, DOC-011).
 
 The slot0=call, slot1=return case requires a bypass path.
 The return address pushed by slot0 is forwarded directly to
@@ -1082,4 +1097,9 @@ Commit stack pointer width:
   2026-10-19  session-081, after BP-140. 3.2, 3.3, 4.5: a RETURN
               commit whose snapshot is an empty stack leaves BOS
               (provisional, accepted by Jeff). 3.2: four rules.
+  2026-10-29  session-082, after DOC-011. 3.2: the push link on the
+              sentinel skip; the full condition counts allocations;
+              a wrong-path recursion count is not restored (TD#194).
+              6.2, 6.3: the bypass confirmed in the RTL, unreachable
+              from bp_cluster.
 ```

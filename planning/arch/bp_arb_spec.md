@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-10-29
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -715,9 +715,10 @@ on a mispredicted path.
 #### Snapshot and restore
 
 RAS state (TOSR, TOSW, BOS -- defined in bp_ras_snapshot_t in
-bp_structs_pkg.sv, each RAS_PTR_BITS=4b wide) must be
-checkpointed into the FTQ entry at the time of the prediction
-that consumed or produced the RAS state.  On a redirect the RAS
+bp_structs_pkg.sv, each RAS_PTR_BITS=4b wide) is checkpointed into
+the FTQ entry of every valid p2 block, from the state after both
+slots (this read "at the time of the prediction that consumed or
+produced the RAS state"; DOC-011).  On a redirect the RAS
 is restored from the FTQ snapshot of THE ENTRY THE REDIRECT NAMES
 BY ITS INDEX, including when _self marks that entry squashed
 (ftq_backend_interfaces.md 5 D2, ras_decisions.md 3.2, 4.3 and
@@ -735,9 +736,12 @@ snapshot retirement.  See ras_decisions.md section 4.
 
 #### Commit
 
-On commit the FTQ snapshot for the retiring entry is released.
-No RAM write occurs.  The RAS stack pointer advances as
-speculative state is confirmed.
+On commit the RAS commit stack is updated: a register-file write at
+CSP for a call, and CSP moves. BOS moves to the committing entry's
+snapshot TOSR, except a RETURN whose snapshot is an empty stack
+(ras_decisions.md 3.3, 4.5). This read "the FTQ snapshot for the
+retiring entry is released. No RAM write occurs" (DOC-011;
+ras.sv:833-848).
 
 #### Open items
 
@@ -1008,3 +1012,7 @@ task file, not here.
 
   2026-10-14  session-080, after BP-135. 4.5: sim_bp_cluster_init
               reaches H2b from the ports.
+
+  2026-10-29  session-082, after DOC-011. 7.2: the snapshot is
+              written for every valid p2 block; the commit updates the
+              commit stack and BOS.

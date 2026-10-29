@@ -16,6 +16,42 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-082, after DOC-011: the RAS theory of operation.
+
+DOC-011 COMPLETE (Jeff). 20m03s active; 40% context. Task file written
+by the PA. misc/ras_theory_of_operation.md brought to the RTL after
+BP-138 to BP-140 under the task's waiver: 45 changes, each checked
+against ras.sv, tb_ras.sv, the packages or bp_cluster.sv. The linked
+stack and the session-075 ruling that reversed session-050; slot
+formation after BP-139/140; the four BOS rules; VA_WIDTH 41;
+TC-01..TC-44; p-stages throughout. ticfinder 0 on changed lines.
+  regress.sh 274 targets PASS. regress_demo.sh 24 of 24, events 210 of
+    210. lint_ras PASS; sim_ras 264/0.
+  Found: a wrong-path recursion count is not restored by a redirect
+    (TD#194); the same-cycle bypass works at module level and
+    bp_cluster cannot reach it; six stale RTL comments (TD#195); the
+    seven figures the document references are not in misc/.
+  Scenario check: nine files describe the RAS; four statements
+    disagree with the RTL (D1 fd24_call_slot1.md 114-117, D2
+    fd07_calls_returns.md 172-173, D3 fd07 152-153, D4
+    demo_explainer.md 295, 306), for B11. Descriptions unchanged.
+  INSTRUCTION NOT FOLLOWED: one git command, inside a seven-part
+    format check; the ask rule matched it and the prompt was approved
+    (transcript, rule:localSettings). The rule is now deny (Jeff).
+  Applied (PA, the IA's P1 to P10): ras_decisions.md 3.2 (the push
+    link on the sentinel skip, the full condition, the wrong-path
+    count), 6.2 and 6.3 (the bypass confirmed); ras_interfaces.md 1,
+    2, IC-RAS-04, 06, 09, 9.2, 10; bp_arb_spec.md 7.2 (snapshot,
+    commit).
+  OPENED: TD#194, TD#195.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ras_decisions.md, ras_interfaces.md,
+bp_arb_spec.md, ras_theory_of_operation.md (by DOC-011).
+
+Next free: BP-141, SYS-003, DOC-012, INFRA-014, TOOLS-007, TD#196.
+
+---
 ## Session-082: record corrections and regression progress (PA-direct).
 
 Record corrections, no task (Jeff):
@@ -4103,14 +4139,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | ras_theory_of           | Draft       | --                | misc/. Added session-079         |
 | _operation.md           |             |                   | (BP-134). A descriptive          |
 |                         |             |                   | companion to the RAS records,    |
-|                         |             |                   | which win on conflict. STALE: a  |
-|                         |             |                   | simple circular buffer (4.1 and  |
-|                         |             |                   | 4.3 call the linked array        |
-|                         |             |                   | rejected), s-stage notation,     |
-|                         |             |                   | VA_WIDTH 40, the pred_pc+32      |
-|                         |             |                   | two-slot model and its bypass, a |
-|                         |             |                   | three-way JALR split; no BP-140  |
-|                         |             |                   | BOS rule (handoff-082).          |
+|                         |             |                   | which win on conflict. Brought   |
+|                         |             |                   | to the RTL by DOC-011. Its seven |
+|                         |             |                   | figures are not in misc/; the    |
+|                         |             |                   | image links are broken.          |
 | ras.sv                  | Complete    | tb_ras            | RTL BP-062, tb BP-063.           |
 |                         |             |                   | sim_ras 87/0.                    |
 |                         |             |                   | TD #78 pinned, TD #79 deferred.  |
@@ -6759,6 +6791,25 @@ numbers are issued from one sequence across both tables.
 |     |          | these as uBTB misses; they are hits with the allocation  |
 |     |          | end. Separate from TD#191, the uBTB organisation. Opened |
 |     |          | session-081 (Jeff).                                      |
+| 194 | bpu      | OPEN, PERFORMANCE. A WRONG-PATH RECURSION COUNT IS NOT   |
+|     |          | RESTORED. A redirect restores the RAS pointers from the  |
+|     |          | snapshot; a recursion count incremented or decremented   |
+|     |          | in place on the wrong path is array data and keeps its   |
+|     |          | wrong-path value (ras.sv:335-343, 413-421, 808-811). No  |
+|     |          | tb_ras case restores across such a change. A candidate   |
+|     |          | for fd07's unexplained count of 4 (fd07_calls_returns.md |
+|     |          | 154-159), not traced. Needs a tb_ras case, then a ruling |
+|     |          | on a fix. For the next BP task that edits ras.sv. Found  |
+|     |          | by DOC-011; opened session-082 (Jeff).                   |
+| 195 | bpu      | OPEN, CLEANUP. STALE RAS COMMENTS IN THE RTL, none       |
+|     |          | functional (DOC-011): ras.sv:23 "planning docs use       |
+|     |          | equivalent s-stage"; ras.sv:80 "RAS-3 OPEN" (closed,     |
+|     |          | ras_decisions.md 4.4); ras.sv:264 "Three rules" before   |
+|     |          | four; tb_ras.sv:12 "TC-01 .. TC-43" (TC-44 exists);      |
+|     |          | bp_defines_pkg.sv:552-553 and bp_structs_pkg.sv:144-146  |
+|     |          | "Simple circular buffer" (linked since BP-120). For the  |
+|     |          | next BP task that edits those files. Opened session-082  |
+|     |          | (Jeff).                                                  |
 
 ---
 

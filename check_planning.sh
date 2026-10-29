@@ -151,7 +151,9 @@
 # Updated after DOC-010, session-082 (PROJECT_STATUS.md,
 # showcase_release_decisions.md), and for the Write-tool rule
 # (CLAUDE.md). Updated for the record corrections, session-082
-# (PROJECT_STATUS.md, PROJECT_CORE.md).
+# (PROJECT_STATUS.md, PROJECT_CORE.md). Updated after DOC-011,
+# session-082 (PROJECT_STATUS.md, ras_decisions.md, ras_interfaces.md,
+# bp_arb_spec.md, and ras_theory_of_operation.md as DOC-011 wrote it).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -174,11 +176,11 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   bfd51475d3cd
-PLAN  PROJECT_STATUS.md                 4e6774429712
+PLAN  PROJECT_STATUS.md                 a099d6392524
 
 UNKN  CLAUDE.md                         625e50425ef6
 
-ARCH  bp_arb_spec.md                    667b1c205dff
+ARCH  bp_arb_spec.md                    e948ad56ba7e
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
@@ -195,7 +197,7 @@ ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  1edb8b57f003
-ARCH  ras_decisions.md                  cbb679faf964
+ARCH  ras_decisions.md                  95ffb6dd75f9
 ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
 ARCH  sram_init.md                      d6cefefe7fc5
@@ -236,7 +238,7 @@ INTF  ptw_mem_interfaces.md       053eb7faf457
 INTF  ittage_interfaces.md        9217c9322080
 INTF  l1i_ifu_interfaces.md       3fb484b495e3
 INTF  loop_pred_interfaces.md     f1eb16c7ce58
-INTF  ras_interfaces.md           25711cada66b
+INTF  ras_interfaces.md           04d09778d761
 INTF  sc_interfaces.md            7936cbf21f43
 INTF  sc_table_interfaces.md      b442b10dab0f
 INTF  tage_interfaces.md          80e89e517207

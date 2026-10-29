@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-29
  CONTACT: Jeff Nye
 ```
 
@@ -36,8 +36,9 @@ Single module ras.sv owns:
   block (FE-11, ras_decisions.md 6.2, SUPERSEDED session-069).
   This read "for both prediction slots in a single cycle".
 - Same-cycle bypass for slot0=call, slot1=return. THAT CASE CANNOT
-  OCCUR under FE-11; if the logic is in the RTL it is dead
-  (ras_decisions.md 6.3, IC-RAS-04). Session-070.
+  OCCUR under FE-11. The bypass is the scan's working top of stack;
+  it works at module level and bp_cluster does not reach it
+  (ras_decisions.md 6.2, 6.3, IC-RAS-04; DOC-011).
 - Recursion counter management
 - p0 TOS read, an input the cluster registers for the p1
   prediction (fe_decisions.md 2.2). Not itself a prediction
@@ -75,7 +76,6 @@ widths, or counter widths.
   RAS_COMMIT_PTR_BITS -- commit pointer width
                          $clog2(RAS_COMMIT_ENTRIES) = 5b
   RAS_ADDR_WIDTH      -- return address width = VA_WIDTH = 41b
-                         (40b until TD#122 lands in the RTL)
 
 ---
 
@@ -332,10 +332,11 @@ case.
 
 THE CASE CANNOT OCCUR. slot0=call with slot1=return needs two RAS
 operations in one block, which FE-11 excludes (ras_decisions.md
-6.2 and 6.3, SUPERSEDED session-069). If the bypass exists in the
-RTL it is dead logic; confirming that is an RTL task. This read
-"The bypass is always present in the RTL" as a live requirement.
-Session-070.
+6.2 and 6.3, SUPERSEDED session-069). CONFIRMED DOC-011: there is no
+separate type-gated path; slot 1's pop reads the working top of stack
+slot 0's push left (ras.sv:224-226, 679), tested at module level by
+tb_ras TC-06. bp_cluster does not reach it. This read "confirming
+that is an RTL task".
 
 ### IC-RAS-05: Recursion counter
 
@@ -360,7 +361,9 @@ single-push rule above is unaffected. Session-070.
 ### IC-RAS-06: Speculative stack overflow
 
 TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES) is the FULL condition:
-15 entries live, one push remaining. The next push finds
+15 slots allocated beyond BOS since BOS last moved, one push
+remaining. A pop does not retreat TOSW, so fewer entries may be
+live (tb_ras TC-44). The next push finds
 TOSW == BOS, takes the sentinel skip, and wraps. No error
 signal is asserted.
 
@@ -413,6 +416,10 @@ push/pop is applied.
 
 Only pointer state is restored. Circular buffer data is
 not cleared. See ras_decisions.md section 4.3.
+
+The p3 repair of that cycle is dropped as well: no array write and
+no pointer move. The p2 operation is registered as none for p3
+(ras.sv:808-831, 855; DOC-011).
 
 bp_cluster does not assert the restore for its own p2 or p3
 redirect (ras_decisions.md 4.3, BP-121 D9).
@@ -574,11 +581,11 @@ The following signals are combinational in p2:
 
   ras_br_type_p2[0]  ->  push/pop decision slot 0
                      ->  TOSR/TOSW update (slot 0)
-                     ->  bypass detect
   ras_br_type_p2[1]  ->  push/pop decision slot 1
                      ->  TOSR/TOSW update (slot 1, uses
                          post-slot-0 pointer state)
-                     ->  ras_pop_addr_p2[1] (bypass or array)
+                     ->  ras_pop_addr_p2[1] (working top of
+                         stack, ras.sv:679)
   post-slot-0 state  ->  ras_snapshot_p2[0]
   post-slot-1 state  ->  ras_snapshot_p2[1]
 
@@ -597,6 +604,8 @@ On rstn deassert (active low, synchronous):
     (ras_decisions.md 3.3; the count since BP-126).
   - All rctr fields reset to 0.
   - All ret_addr fields in both stacks reset to 0.
+  - nos and bot of every speculative entry, and the p2->p3 repair
+    registers, reset to 0 (ras.sv:785-803).
   - ras_pop_valid_p2 and ras_tos_valid_p0 deassert on
     the first cycle after reset.
 
@@ -731,3 +740,10 @@ On rstn deassert (active low, synchronous):
 
   2026-10-19  session-081, after BP-140. IC-RAS-10: a RETURN commit
               whose snapshot is an empty stack leaves BOS.
+
+  2026-10-29  session-082, after DOC-011. 1, IC-RAS-04, 9.2: the
+              bypass is the scan's working state, unreachable from
+              bp_cluster. 2: the TD#122 note removed. IC-RAS-06: the
+              full condition counts allocations. IC-RAS-09: the repair
+              is dropped in a restore cycle. 10: nos, bot and the
+              repair registers reset.
