@@ -108,11 +108,18 @@ production-quality outputs.
 - When writing Results Capture, write only within the
   :: RESULTS:START :: :: RESULTS:END :: markers. Do not
   modify any content outside these markers.
-  The sole exception is the Model header field, 
-  which the IA populates per "Model Reporting in Task Files" below.
+  The exceptions are the header fields Model, Run time, Ctx % and
+  Resume sha, and the region between :: CONTEXT:START :: and
+  :: CONTEXT:END ::, populated per "Model Reporting in Task Files"
+  below.
 - No default permission is allowed for git commands unless expressed
   in the task file. Unless permission has been granted the IA
   must ask for permission before proceeding.
+- Run every command from the repo root. Do not prefix a command with
+  cd to an absolute path; name files by paths relative to the root,
+  and use make -C <dir> or a subshell ( cd <dir> && ... ) only where
+  a tool must run in another directory. Scratch files go in the
+  session's scratchpad directory.
 - Results Capture content must be ASCII only. No Unicode.
 - Final console output should avoid non-ASCII if possible.
   This is a preference but not a hard requirement.
@@ -131,8 +138,10 @@ production-quality outputs.
   level in this format:
     | Model | <model-name> <effort-level> |
   Example: claude-sonnet-4-6 normal
-- Ctx % is captured manually by Jeff. Do not attempt to
-  populate it programmatically.
+- Run time, Ctx % and Resume sha, and the region between
+  :: CONTEXT:START :: and :: CONTEXT:END ::, are written only by the
+  /cntx command, after the task has finished, as that command
+  describes. The IA does not write them while working the task.
 - Model reporting applies to both automated and manual
   task sessions.
 
@@ -205,6 +214,12 @@ important. It must be defines first then structs
 - A new lint, sim or cov target must be added to REGRESS_TARGETS in
   its Makefile, or to REGRESS_EXCLUDE with a reason. regress.sh fails
   on any target in neither list.
+- THE DEMONSTRATION REGRESSION IS tools/regress_demo.sh. It runs the
+  examples/fe_demo scenarios and gates no push. A DOC task that
+  changes examples/fe_demo/ runs it, and a failing scenario not in
+  tools/known_failures_demo.txt blocks Status: complete. A task that
+  changes rtl/ runs it and reports its failing scenarios; they do not
+  block that task. The IA never edits tools/known_failures_demo.txt.
 
 ## Verification - self-contained tests (no test debt)
 

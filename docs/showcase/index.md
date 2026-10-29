@@ -10,6 +10,13 @@ architecture pages and the planning documents.
 
 ## <span style="color: var(--md-accent-fg-color)">Release 01: Frontend Demo</span>
 
+<!-- RELEASE_BEGIN -->
+**Local preview of the branch.** The Showcase pages here are the working
+tree's examples/fe_demo/docs/, through the docs/showcase/fe_demo symlink,
+not a release. The hosted waveforms the Open links load are the last
+published release and may not match them.
+<!-- RELEASE_END -->
+
 Twenty-four short programs run on the Pacino frontend, `fe_top`, with
 testbench models of the backend, the page table walker and memory. Each
 scenario shows one behavior: prediction and override, the predictors,

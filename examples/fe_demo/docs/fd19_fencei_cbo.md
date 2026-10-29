@@ -175,3 +175,33 @@ S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 71-79 and
 - `mt_busy_line`, which decides the cbo.inval drain, and the L1I's
   `u_maint.r_st` (M_DRAIN, M_CLEAR, M_DONE), both in the maintenance
   group.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 71  | the FENCE.I reaches the L1I: it takes the        | `mt_busy_any` 0    |
+|     | invalidate of every line (`ifu_l1i_inv_all`)     |                    |
+| 74  | first invalidate done (`l1i_ifu_inv_done`)       | after M_DRAIN,     |
+|     |                                                  | M_CLEAR            |
+| 75  | first maintenance acknowledgement                |                    |
+|     | (`ifu_cmt_maint_ack`)                            |                    |
+| 77  | the restart after the FENCE.I: a backend         | backend            |
+|     | redirect to 0x8000_0024, cause RC_REPLAY         |                    |
+| 79  | fetch starts at 0x8000_0024, the next            | `ftq_ifu_start_pc` |
+|     | instruction                                      |                    |
+| 174 | the branch at 0x8000_0040 mispredicted; redirect | backend            |
+|     | to 0x8000_0046, the cbo.inval                    |                    |
+| 184 | the cbo.inval reaches the L1I: it takes the      | `mt_busy_line` 0   |
+|     | invalidate of line 0x8000_0C40                   |                    |
+| 187 | second invalidate done                           |                    |
+| 188 | second maintenance acknowledgement               |                    |
+| 190 | the restart after the cbo.inval: a backend       | backend            |
+|     | redirect to 0x8000_004A, cause RC_REPLAY         |                    |
+| 192 | fetch starts at 0x8000_004A, the next            |                    |
+|     | instruction                                      |                    |
+| 235 | the run ends                                     |                    |

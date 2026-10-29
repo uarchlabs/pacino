@@ -142,3 +142,23 @@ S=fd21_commit` opens in Surfer. Look at:
   `commit_top_valid` and `commit_top_addr` (+0x20, f+0x20, f+0x40).
 - ras group: the speculative pointers `tosr` and `tosw`, which move at
   prediction time, ahead of the commit stack.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 40  | first commit watermark from the backend          | backend            |
+|     | (`bkend_ftq_commit_val`)                         |                    |
+| 40  | the commit pointer first moves                   |                    |
+|     | (`w_commit_step_val`), one entry per cycle       |                    |
+| 40  | first RAS commit of a call (`ras_commit_br_type` |                    |
+|     | DIRECT_CALL)                                     |                    |
+| 62  | the commit stack reaches depth 2 (`u_ras.csp`)   | main, f            |
+| 62  | first RAS commit of a return                     |                    |
+| 204 | back edge falls through, a misprediction;        | pass 5, backend    |
+|     | redirect to 0x8000_0026                          |                    |
+| 214 | the run ends                                     |                    |

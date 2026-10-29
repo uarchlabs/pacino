@@ -4,9 +4,9 @@
 # Front-End Demonstration Testbench
 ```
  FILE:    README.md
- SOURCE:  DOC-001, DOC-002, DOC-003, DOC-006, DOC-007
+ SOURCE:  DOC-001, DOC-002, DOC-003, DOC-006, DOC-007, DOC-009
  STATUS:  WORKING
- UPDATED: 2026-10-19
+ UPDATED: 2026-10-29
  CONTACT: Jeff Nye
 ```
 
@@ -16,7 +16,8 @@ planning/showcase/fe_demo_scenarios.md (FD-1 to FD-24); the testbench is
 planning/testbenches/fe_demo_tb_decisions.md (FDT-N).
 
 This is a demonstration, not a verification testbench. It is not part
-of tools/regress.sh.
+of tools/regress.sh; tools/regress_demo.sh, the demonstration
+regression, runs it (FDT-2, section 2).
 
 ---
 
@@ -49,11 +50,13 @@ second slot does and run on the two-slot model, obj_fe_demo_2slot/
 
 The backend still compares every retired instruction with the
 program's executed stream, so a run whose stream does not retire says
-so. Each run then checks its scenario's proof from RTL signals and
-prints one result line (FDT-10):
+so. Each run then checks its scenario's proof from RTL signals, and the
+events of its description's event table (FDT-10c, below), and prints
+one result line (FDT-10):
 
 ```
-  -I: fd04_p2_override: PASS, p2 redirects 49, cyc 522
+  -I: fd04_p2_override: PASS, p2 redirects 49, events checked 6 of 6,
+      cyc 522
 ```
 
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
@@ -64,7 +67,7 @@ after a comma and continues on lines indented four spaces (FDT-10a):
 
 ```
   -I: fd09_tage: PASS, tagged-provider predictions 188, allocations 59,
-      T0 by use_alt_on_na 22, cyc 1364
+      T0 by use_alt_on_na 22, events checked 15 of 15, cyc 1364
 ```
 
 A passing run prints nothing else. The shared models print their own
@@ -72,6 +75,23 @@ A passing run prints nothing else. The shared models print their own
 lines after a FAIL. docs/demo_explainer.md explains the program
 writer, the expected stream, the backend model, the result line and
 `cyc`.
+
+THE EVENT CHECKS (FDT-10c, DOC-009). Every description, docs/fdNN_*.md,
+has an Events section with a table of the scenario's events, one row
+per event with its cyc. The program of the scenario checks each event:
+a condition on signals of the run, written for that event in
+programs/fdNN_*.svh, whose first cycle is compared with the row's cyc.
+Every event is checked for order; cyc 0, the release of reset, must
+match exactly, and any other cycle must fall within plus or minus a
+tenth of its value, and at least 8 cycles. A row and its check are
+matched by the row's marker label (FDT-12c), so a changed row, a row
+with no check or a check with no row fails the run, and each failed
+check prints an `-E:` line naming the row. The expected values come
+from the descriptions: waves/mk_sucl.py --svh writes the tables into
+each model's directory before the compile, and a changed description
+rebuilds the models. `events checked <n> of <m>` in the result line
+counts the rows with a condition (n) of the rows in the table (m).
+`+EVDUMP` prints, after the result line, the cycle each check saw.
 
 Files here:
 
@@ -81,16 +101,20 @@ Files here:
   tb/fe_demo_mon.svh       the monitors the proofs read
   tb/fe_demo_lib.svh       start and end of a run, address map, helpers
   tb/fe_demo_proofs.svh    the proofs
+  tb/fe_demo_events.svh    the event checks (FDT-10c)
   tb/fe_demo_finish.cpp    the simulator's $finish without its message
   programs/fdNN_*.svh      one program per scenario; its header holds
                            its shows / program / waveform / trace /
-                           proof entry (FD-0b)
+                           proof entry (FD-0b); its event checks follow
+                           the program
   waves/fdNN_*.sucl        one Surfer command file per scenario
   waves/fe_demo_sigs.py    the signal lists of the command files, built
                            for the slot count of the FST, the format
                            table, and the FST reader
   waves/mk_sucl.py         writes the command files from each
-                           scenario's FST and description event table
+                           scenario's FST and description event table,
+                           and with --svh the event tables for the
+                           models (FDT-10c)
   waves/chk_sucl.py        loads each command file in Surfer and checks
                            what it shows against fe_demo_sigs.py, FDT-12a
                            and FDT-12c
@@ -99,6 +123,8 @@ Files here:
   docs/fdNN_*.md           one description per scenario
   docs/fe_top_connectivity.md
                            the fe_top connectivity inventory
+  ../../tools/regress_demo.sh
+                           the demonstration regression (FDT-2)
   obj_fe_demo/             the one-slot model, not committed
   obj_fe_demo_2slot/       the two-slot model, not committed
   out/<scenario>/          run output, not committed
@@ -115,13 +141,38 @@ From examples/fe_demo:
   make scenarios            every scenario in FD order, stopping at
                             the first FAIL
   make -k scenarios         every scenario, whatever fails
-  make build                both models only (about 4 minutes each)
+  make build                both models only (about 10 to 25 seconds
+                            each, DOC-009)
   make clean                the models and out/
   make view S=fd04_p2_override
                             open the run in Surfer
   make                      the targets, the scenarios and the slot
                             count of the model each runs on
+  make scenario_list        the scenarios, the 2-slot ones and the
+                            models, for tools/regress_demo.sh
 ```
+
+THE DEMONSTRATION REGRESSION (FDT-2, FDT-2a). From the repository root,
+with no arguments:
+
+```
+  ./tools/regress_demo.sh
+```
+
+It builds each model once from the tree it runs in (make -B), runs
+every scenario on its model, one at a time, and prints one line per
+scenario with its events checked and the totals; about a minute. It
+exits non-zero on a failing scenario not listed in
+tools/known_failures_demo.txt, a file in the format of
+tools/known_failures.txt (`examples/fe_demo <scenario> TD#<n>
+<description>`) that Jeff alone edits; a missing file is empty, and the
+summary says so. As tools/regress.sh does for a listed target, a listed
+scenario that passes, or one that did not run, also fails the run. It
+gates no push and records no pass, and makes no git call. A DOC task
+that changes examples/fe_demo/ ends by running it, and a failing
+scenario not listed blocks its completion; a task that changes rtl/
+runs it and reports each failing scenario. `tools/regress_demo.sh
+<root>` runs it on a scratch copy of the tree.
 
 A run writes out/<scenario>/<scenario>.fst and .log, whichever model
 runs it. make view builds the scenario's model if needed and runs the
@@ -175,13 +226,16 @@ Every format comes from the table FORMATS in waves/fe_demo_sigs.py
 
 A signal the table does not match stops waves/mk_sucl.py.
 
-A scenario whose description is in the five-section form (FDT-13)
-also has one marker per event of its event table (a row with a cyc
-value), named c<cyc>_<label>, and opens with the view at the first
-marker (FDT-12c). Today those are fd09_tage and the three scenarios
-of FD-22 to FD-24; docs/fd09_tage.md has an introduction section ahead
-of the five, which the scripts allow. The other scenarios open on the
-whole run.
+Every scenario also has one marker per event of its description's
+event table (a row with a cyc value), named c<cyc>_<label>, and opens
+with the view at the first marker (FDT-12c). The table is the one of
+the description's level-2 section headed Events, with or without a
+section number, in the five-section form (FDT-13) or not (DOC-009):
+section 4 of fd09_tage and FD-22 to FD-24, section 6 of the others. A
+description that cites a cycle as cyc <n> with no Events section, or an
+Events table the script cannot read, stops waves/mk_sucl.py with the
+file and line; one with neither has no markers and opens on the whole
+run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
@@ -375,3 +429,63 @@ group, at 0x8000_0016, with the jump in slot 0, from cyc 98.
 `bpu_slot_p2.[0]` and the call in `.[1]`, with
 `w_ras_pred_val_p2.[1]`; `u_ras.tosr` and `tosw` move and the return
 address 0x8000_0014 is written; from cyc 90.
+
+---
+
+## 4. Release
+
+A showcase release is an annotated tag fe-<major>.<minor>.<patch>
+(planning/showcase/showcase_release_decisions.md SR-1); Jeff applies
+every tag by hand (SR-2). The Showcase pages and the hosted waveforms
+show the commit of one tag (SR-5): the CI docs build takes the pages
+from examples/fe_demo/docs/ at the latest tag (SR-4, SR-6), and
+tools/publish_waves.py publishes the waveforms of the commit at a tag
+and records the tag in pacino-waves/manifest.json (SR-9).
+
+Steps, in order, from the repository root:
+
+```
+  1. Bring main to the release state and push it: the RTL, the
+     descriptions and their event checks, and the .sucl files
+     (section 2). The commit must hold .github/workflows/docs.yml
+     with the fe-* tag trigger: a tag push runs the workflow file
+     of the tag's commit.
+
+  2. Tag that commit, annotated, with HEAD at it:
+       git tag -a fe-1.0.0 -m "fe-1.0.0: <one line>"
+
+  3. Fetch the published manifest for the staleness report:
+       curl -fsSL -o /tmp/published.json \
+         https://uarchlabs.github.io/pacino-waves/manifest.json
+
+  4. Dry run: checks HEAD is at the tag, runs every scenario, computes
+     the digests, reports each scenario against the published
+     manifest, and writes the files it would push into
+     examples/fe_demo/out/publish_dry_run/:
+       tools/publish_waves.py --dry-run --published /tmp/published.json
+     A patch release (no RTL change) reports every scenario
+     unchanged. A scenario reported changed has a waveform that
+     differs from the published one: its description must match the
+     new waveform before the release goes out.
+
+  5. Publish the waveforms:
+       tools/publish_waves.py --published /tmp/published.json
+     Then https://uarchlabs.github.io/pacino-waves/manifest.json has
+     "tag": "fe-1.0.0" once GitHub Pages has updated.
+
+  6. Push the tag. The docs workflow rebuilds the site with the
+     Showcase pages of the tag:
+       git push origin fe-1.0.0
+
+  7. Check the Showcase landing page: it reads "Release fe-1.0.0" and
+     links the tag, a scenario's "Source of this page" link is at
+     blob/fe-1.0.0/, and its Open waveform link loads the waveform.
+```
+
+The waveforms go out before the tag is pushed, so the pages never name
+a tag whose waveforms are not yet published. Without a tag the script
+refuses; --untagged publishes HEAD and records the tag as untagged
+(SR-9). --tag and --commit give the tag and its commit without a git
+lookup (SR-10). tools/publish_waves.py --help lists the options, and
+its header documents every key of manifest.json, the digest and the
+staleness report.

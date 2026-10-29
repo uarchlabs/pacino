@@ -5,7 +5,8 @@
 #
 # tools/run_time.py <session transcript .jsonl>
 #
-# Wall-clock run time of the LAST /run task in a Claude Code session.
+# Run time of the LAST /run task in a Claude Code session, active and
+# wall clock.
 #   start: the user entry holding <command-name>/run</command-name>
 #   end:   the last assistant entry before the next prompt the user
 #          typed. Background-task notifications, system reminders,
@@ -13,7 +14,16 @@
 #          the model's own ScheduleWakeup) and the /run expansion (same
 #          timestamp as start) are not prompts, so time spent waiting on
 #          a regression is counted.
-# Prints: Run time: <1h.10m.6s> (<start> -> <end>, /run <ID>)
+#   active: the sum of the durationMs of the system turn_duration
+#          entries Claude Code writes at the end of each turn, from start
+#          to end. Claude Code leaves out of a turn's duration the time it
+#          is blocked on a permission prompt, so time waiting on the user
+#          is not counted. Nor is a background job (a regression run with
+#          run_in_background) while no turn is running.
+#   wall:  end - start, as before.
+# Prints: Run time: <active> active, <wall> wall (<start> -> <end>,
+#         /run <ID>)
+# The first field is the header's Run time.
 # Exits 1 when the file is unreadable or holds no /run.
 import json, re, sys
 from datetime import datetime
@@ -51,6 +61,8 @@ m = re.search(r'<command-args>(.*?)</command-args>', text(E[start]))
 task = m.group(1).strip() if m else '?'
 t0 = E[start]['timestamp']
 t1 = None
+active_ms = 0
+turns = 0
 for e in E[start + 1:]:
     if e.get('type') == 'user' and e.get('timestamp') != t0:
         if e.get('turnOrigin') == 'scheduled' or 'scheduledTaskId' in e:
@@ -61,8 +73,14 @@ for e in E[start + 1:]:
             break
     if e.get('type') == 'assistant':
         t1 = e['timestamp']
+    if e.get('type') == 'system' and e.get('subtype') == 'turn_duration':
+        active_ms += int(e.get('durationMs') or 0)
+        turns += 1
 if t1 is None:
     sys.exit('run_time: /run %s has no assistant reply' % task)
+if turns == 0:
+    sys.exit('run_time: /run %s has no turn_duration entry; the turn may'
+             ' still be running' % task)
 
 
 def hms(s):
@@ -78,5 +96,5 @@ def clock(s):
 
 
 d = int((ts(t1) - ts(t0)).total_seconds())
-print('Run time: %s (%s -> %s, /run %s)'
-      % (hms(d), clock(t0), clock(t1), task))
+print('Run time: %s active, %s wall (%s -> %s, /run %s)'
+      % (hms(active_ms // 1000), hms(d), clock(t0), clock(t1), task))

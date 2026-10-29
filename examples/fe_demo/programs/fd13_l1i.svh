@@ -69,3 +69,38 @@
     W.mixed(3);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd13_l1i.md, in table order. X is
+  // 0x8000_0800; the block at X+0x30 is 0x8000_0830; the FENCE.I at
+  // 0x8000_002C, the restart at 0x8000_0030. The backend's redirect is
+  // driven by the testbench: late.
+  // =================================================================
+  localparam logic [VA_WIDTH-1:0] FD13_X = RESET_VECTOR + VA_WIDTH'('h800);
+
+  function automatic void fd13_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_L1I_miss", EV_WINDOW);
+    evt_def("first_L1I_hit", EV_WINDOW);
+    evt_def("the_invalidate_is_done", EV_WINDOW);
+    evt_def("the_restart_after_the_FENCEI", EV_WINDOW, 1);
+    evt_def("the_fourth_call_found_at_F3", EV_WINDOW, 0, 1);
+    evt_def("the_merge", EV_WINDOW);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd13_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = dut.u_l1i.b_mis_valid[0] || dut.u_l1i.b_mis_valid[1];
+    e[2] = dut.u_l1i.b_rsp_valid[0] || dut.u_l1i.b_rsp_valid[1];
+    e[3] = dut.l1i_ifu_inv_done;
+    e[4] = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h30));
+    // The last predecode redirect to X+0x30: the fourth call.
+    e[5] = ev_pd_redir(FD13_X + VA_WIDTH'('h30));
+    // As the monitor's n_l1i_merge.
+    e[6] = dut.u_l1i.u_mshr.accept && dut.u_l1i.u_mshr.mrg_hit;
+    return e;
+  endfunction

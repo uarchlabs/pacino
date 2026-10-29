@@ -42,3 +42,45 @@
     W.mixed(3);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd01_reset_init.md, in table order. Every
+  // condition is on registers of the design or logic they drive.
+  // =================================================================
+  function automatic void fd01_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("the_three_table_walks_start_at", EV_WINDOW);
+    evt_def("ITTAGE_ready", EV_WINDOW);
+    evt_def("SC_ready", EV_WINDOW);
+    evt_def("TAGE_ready", EV_WINDOW);
+    evt_def("first_p1_prediction_the_FTQ_accepts", EV_WINDOW);
+    evt_def("first_TAGE_and_ITTAGE_responses_at", EV_WINDOW);
+    evt_def("first_SC_response_at_p3", EV_WINDOW);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd01_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    // Out of reset with the p0 request withheld.
+    e[0] = !dut.ftq_pred_val_p0 && dut.u_ftq.u_npc.w_hold;
+    // Each sram_init in INIT (2'b10) writing address 0, and the RAS
+    // reset done.
+    e[1] = (2'(dut.u_bpu.u_tage.u_sram_init.state) == 2'b10) &&
+           (dut.u_bpu.u_tage.u_sram_init.waddr == '0) &&
+           (2'(dut.u_bpu.u_ittage.u_sram_init.state) == 2'b10) &&
+           (dut.u_bpu.u_ittage.u_sram_init.waddr == '0) &&
+           (2'(dut.u_bpu.u_sc.u_sram_init.state) == 2'b10) &&
+           (dut.u_bpu.u_sc.u_sram_init.waddr == '0) &&
+           dut.u_bpu.u_ras.ras_rst_done;
+    e[2] = dut.bpu_ittage_rdy;
+    e[3] = dut.bpu_sc_ready;
+    // The last ready, with the first p0 request in the same cycle.
+    e[4] = dut.bpu_tage_rdy && dut.ftq_pred_val_p0;
+    e[5] = dut.u_ftq.w_ok_pred_p1;
+    e[6] = (dut.u_bpu.w_tage_pred_rdy_p2 != '0) &&
+           (dut.u_bpu.w_ittage_pred_rdy_p2 != '0);
+    e[7] = dut.u_bpu.w_sc_pred_rdy_p3 != '0;
+    return e;
+  endfunction

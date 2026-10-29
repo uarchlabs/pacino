@@ -145,3 +145,27 @@ S=fd06_loop_pred` opens in Surfer. Look at:
 - `bkend_ftq_redir_val` is absent from this command file; the three
   early exit mispredicts show as `w_redir_val` in the ftq group.
 - `pd_out.[0]`: the retirement stream at decode.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 49  | first inner exit mispredicted; redirect to       | backend            |
+|     | 0x8000_001A                                      |                    |
+| 116 | the loop predictor learns the trip count:        | `w_lp_pred_p2.[0]` |
+|     | `lp_past_itr` reads 8                            |                    |
+| 248 | confidence reaches 3 (`lp_conf`), the level at   |                    |
+|     | which the loop predictor is trusted              |                    |
+| 256 | first p1 slot from the loop predictor            |                    |
+|     | (`pred_src` PRED_LOOP), accepted by the FTQ      |                    |
+| 257 | the loop predictor first trusted at p2           |                    |
+|     | (`lp_pred_is_loop`); the slot is PRED_LOOP       |                    |
+| 259 | first exit predicted not taken, by the loop      | block 0x8000_000E  |
+|     | predictor: I's slot at p2, PRED_LOOP, `taken` 0  |                    |
+| 429 | outer loop falls through, a misprediction;       | pass 15, backend   |
+|     | redirect to 0x8000_0024                          |                    |
+| 439 | the run ends                                     |                    |

@@ -55,3 +55,40 @@
     W.mixed(3);
     demo_go(80000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd08_indirect.md, in table order. J is the
+  // jalr at top + 8 (0x8000_0010), to ta 0x8000_0400 or tb 0x8000_0480;
+  // K the jalr call at 0x8000_0508, to fa 0x8000_0600 or fb
+  // 0x8000_0680; the loop exit's target 0x8000_0516. One slot. The
+  // backend's redirects are driven by the testbench: late.
+  // =================================================================
+  function automatic void fd08_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_misprediction_of_J", EV_WINDOW, 1);
+    evt_def("first_ITTAGE_tagged_hit_at_p2", EV_WINDOW);
+    evt_def("first_target_of_K_from_ITTAGE", EV_WINDOW);
+    evt_def("first_target_of_J_from_ITTAGE", EV_WINDOW);
+    evt_def("the_loop_exits", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd08_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = ev_redir(RESET_VECTOR + VA_WIDTH'('h480));
+    e[2] = dut.u_bpu.w_ittage_pred_rdy_p2[0] &&
+           dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_hit;
+    e[3] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+           dut.bpu_slot_p2[0].slot_valid &&
+           (dut.bpu_slot_p2[0].br_type == INDIRECT_CALL) &&
+           (dut.bpu_slot_p2[0].pred_src == PRED_ITTAGE);
+    e[4] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+           dut.bpu_slot_p2[0].slot_valid &&
+           (dut.bpu_slot_p2[0].br_type == INDIRECT_NONRET) &&
+           (dut.bpu_slot_p2[0].pred_src == PRED_ITTAGE);
+    e[5] = ev_redir(RESET_VECTOR + VA_WIDTH'('h516));
+    return e;
+  endfunction

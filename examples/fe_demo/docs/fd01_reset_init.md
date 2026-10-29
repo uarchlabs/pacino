@@ -162,3 +162,24 @@ S=fd01_reset_init` opens in Surfer. Look at:
 - group `bp_cluster_p0`: `ftq_pred_pc_p0` at `RESET_VECTOR`
   (0x80000000) while held, and `u_npc.w_hold` high from cyc 0 to
   2048.
+
+---
+
+## 6. Events
+
+| cyc  | Event                                            | Other              |
+|------|--------------------------------------------------|--------------------|
+| 0    | reset released (`tb.rstn`); the FTQ withholds    | full init walk     |
+|      | its p0 request (`u_npc.w_hold`)                  |                    |
+| 1    | the three table walks start at address 0; the    | each `u_sram_init` |
+|      | RAS reset is done (`ras_rst_done`)               | in INIT, `waddr` 0 |
+| 513  | ITTAGE ready (`bpu_ittage_rdy`)                  | 512 entries        |
+| 1025 | SC ready (`bpu_sc_ready`)                        | 1024 entries       |
+| 2049 | TAGE ready (`bpu_tage_rdy`), the last of the     | 2048 entries       |
+|      | three; the FTQ makes its first p0 request in the |                    |
+|      | same cycle                                       |                    |
+| 2050 | first p1 prediction the FTQ accepts              |                    |
+|      | (`w_ok_pred_p1`)                                 |                    |
+| 2051 | first TAGE and ITTAGE responses at p2            |                    |
+| 2052 | first SC response at p3                          |                    |
+| 8086 | the run ends                                     |                    |

@@ -577,6 +577,9 @@ planning/
   showcase/
     fe_demo_scenarios.md     front-end demonstration scenarios.
                              Owns FD-N, FD-UN
+    showcase_release_decisions.md  frontend release tags and the one
+                             state of the Showcase pages and hosted
+                             waveforms. Owns SR-N, SR-UN
   observ/
     fe_trace_decisions.md    trace events, operation identity and
                              the text format. Owns TR-N, TR-UN
@@ -732,6 +735,15 @@ current session, and a figure written here goes stale.
 
 A new unit gets a Makefile under rtl/ with REGRESS_TARGETS and
 REGRESS_EXCLUDE; regress.sh picks it up with no other change.
+
+THE DEMONSTRATION REGRESSION IS tools/regress_demo.sh (session-082,
+DOC-009). It runs the examples/fe_demo scenarios, each of which
+checks the events its description documents, so a change that moves
+a documented event fails its scenario. It is separate from
+regress.sh so that drift in the descriptions never blocks RTL work:
+it gates no push, and only a DOC task is blocked by it.
+tools/known_failures_demo.txt is its waiver list, Jeff's alone.
+fe_demo_tb_decisions.md FDT-2 and FDT-2a are the rule.
 
 ### A package edit is a cross-unit change
 EVERY TARGET IN THE bpu AND ftq UNITS COMPILES bp_defines_pkg.sv

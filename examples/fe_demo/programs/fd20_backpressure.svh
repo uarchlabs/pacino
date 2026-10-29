@@ -32,3 +32,34 @@
     W.mixed(3);
     demo_go(80000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd20_backpressure.md, in table order. The
+  // epilogue after the back edge is top + 66, 0x8000_004A. The
+  // decode stall reads dec_ibuf_rdy, which the backend drives; the
+  // monitor's n_dec_stall reads the same at the edge, so that check is
+  // not late. The backend's redirect is late.
+  // =================================================================
+  function automatic void fd20_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("decode_first_holds_a_bundle", EV_WINDOW);
+    evt_def("the_instruction_buffer_first_refuses_the", EV_WINDOW);
+    evt_def("the_FTQ_first_full", EV_WINDOW);
+    evt_def("back_edge_falls_through", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd20_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = pd_out[0].valid && !dec_ibuf_rdy;
+    // The ibuf refuses the IFU's block, at the occupancy the ready is
+    // computed from.
+    e[2] = dut.ifu_ibuf_val && !dut.ibuf_ifu_rdy &&
+           (dut.u_ibuf.r_count == 52);
+    e[3] = ftq_full && !dut.ftq_pred_val_p0;
+    e[4] = ev_redir(RESET_VECTOR + VA_WIDTH'('h4A));
+    return e;
+  endfunction

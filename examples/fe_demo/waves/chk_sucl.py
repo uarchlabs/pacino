@@ -5,7 +5,7 @@
 #
 # chk_sucl.py -- check that each waves/<scenario>.sucl loads in Surfer
 # and shows what fe_demo_sigs.py, FDT-12a and FDT-12c call for (DOC-002,
-# DOC-004, DOC-006)
+# DOC-004, DOC-006, DOC-009)
 #
 # Usage, from examples/fe_demo, after the scenarios have run:
 #   python3 waves/chk_sucl.py [scenario ...]
@@ -34,11 +34,12 @@
 #   - formats: fe_demo_sigs.fmt, the table FORMATS (DOC-006), given the
 #     enum marks read here from the FST header; a signal no row
 #     matches fails the file
-#   - markers: one per event of docs/<s>.md section 4 when the
-#     description is in the FDT-13 form, none otherwise; in table order,
-#     each named c<cyc>_<label>, at a time where the FST has tb.cyc equal
-#     to <cyc> with tb.rstn high and did not have it just before
-#     (FDT-12c)
+#   - markers: one per event of the table of docs/<s>.md's level-2
+#     section headed Events, with or without a section number, in or out
+#     of the FDT-13 form (DOC-009), none when it has no such section; in
+#     table order, each named c<cyc>_<label>, at a time where the FST has
+#     tb.cyc equal to <cyc> with tb.rstn high and did not have it just
+#     before (FDT-12c)
 #   - the view: zoomed in and holding the first marker; the whole run
 #     when there are no markers
 import os
@@ -57,8 +58,6 @@ RVA_ROOT = os.environ.get('RVA_ROOT',
                           os.path.join(HERE, '..', '..', '..'))
 SURFER = os.environ.get('SURFER',
                         os.path.join(RVA_ROOT, 'tools', 'bin', 'surfer'))
-FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
-        '4. Events']
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 
@@ -85,21 +84,19 @@ def enum_paths(fst):
     return paths
 
 
-# The cyc values of the events in docs/<s>.md section 4, in table
-# order; [] when the description is absent or not in the FDT-13 form.
+# The cyc values of the events in docs/<s>.md's Events section (its
+# level-2 heading "Events", numbered or not; FDT-12c, DOC-009), in table
+# order, up to the next level-1 or level-2 heading; [] when the
+# description is absent or has no such section.
 def event_cycs(scen):
     path = os.path.join(DOCS, scen + '.md')
     if not os.path.exists(path):
         return []
     text = open(path).read()
-    heads = re.findall(r'^## (.*?)\s*$', text, re.M)
-    # A leading 0. Introduction is allowed (DOC-007, PROVISIONAL; as
-    # mk_sucl.py).
-    if heads[:1] == ['0. Introduction']:
-        heads = heads[1:]
-    if heads not in (FORM, FORM + ['5. Notes']):
+    m = re.search(r'^## (?:\d+\. )?Events\s*$', text, re.M)
+    if not m:
         return []
-    sec = text.split('\n## 4. Events')[1].split('\n## ')[0]
+    sec = re.split(r'^#{1,2} ', text[m.end():], maxsplit=1, flags=re.M)[0]
     return [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', sec, re.M)]
 
 

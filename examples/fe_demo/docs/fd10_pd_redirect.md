@@ -145,3 +145,28 @@ S=fd10_pd_redirect` opens in Surfer. Look at:
 - Compare cycles 19-165 (first pass) with the second pass, where the
   chain's blocks are predicted taken and no writeback for them carries
   `ifu_ftq_mis_val`.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 19  | first predecode redirect: the jal at top + 2,    | pass 0             |
+|     | found at F3, to T(0), 0x8000_0200                |                    |
+| 165 | the 13th predecode redirect: the jal of T(11),   | pass 0             |
+|     | to 0x8000_0108                                   |                    |
+| 175 | a predecode redirect to 0x8000_0116, the halt's  | not counted        |
+|     | jal fetched past the cold back edge; the         |                    |
+|     | backend's redirect takes the next request, so    |                    |
+|     | the monitor does not count it                    |                    |
+| 176 | the back edge mispredicted, cold; redirect to    | backend            |
+|     | 0x8000_0008                                      |                    |
+| 186 | last predecode redirect: the jal at top + 2      | pass 1, the 14th   |
+|     | again, to 0x8000_0200, in the block that starts  | counted            |
+|     | at top                                           |                    |
+| 246 | back edge falls through, a misprediction;        | pass 2, backend    |
+|     | redirect to 0x8000_010E                          |                    |
+| 255 | the run ends                                     |                    |

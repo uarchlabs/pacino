@@ -180,4 +180,14 @@ item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
 item_unfocus
-zoom_fit
+# markers, from docs/fd18_uncached.md section 6
+marker_set c0_reset_released 36
+marker_set c111_first_uncached_request 1145
+marker_set c126_first_uncached_block_closed_after_one 1295
+marker_set c306_first_request_for_0x8120_3200 3095
+marker_set c555_first_request_for_0x8120_3400 5585
+marker_set c647_first_uncached_request_from_the_IO 6505
+marker_set c772_last_uncached_request 7755
+marker_set c797_the_run_ends 8005
+item_unfocus
+zoom_to 16 336

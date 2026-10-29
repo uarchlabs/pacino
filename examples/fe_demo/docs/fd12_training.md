@@ -173,3 +173,27 @@ ftb_update, bp_cluster_p0. Look at:
 - `ftb_upd_valid_u0` with `ftb_upd_pc_u0`: an FTB update; in the cycle
   before it `u_npc.h3_ftb_upd` is high, `u_npc.w_hold` is high and
   `ftq_pred_val_p0` is low: the withheld p0 request.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 20  | first p0 request withheld for an FTB update      | `ftq_pred_val_p0`  |
+|     | (`u_npc.h3_ftb_upd`), the cycle before the       | low                |
+|     | update                                           |                    |
+| 21  | first resolution from the backend                |                    |
+|     | (`bkend_ftq_rsv_val`)                            |                    |
+| 21  | first uBTB update (`w_ubtb_upd_u0.[0].valid`)    |                    |
+| 21  | first FTB update (`ftb_upd_valid_u0`)            |                    |
+| 21  | first loop predictor, TAGE and SC updates, from  |                    |
+|     | one conditional                                  |                    |
+| 66  | first ITTAGE update: the indirect jump           |                    |
+| 78  | first RAS commit (`w_ras_commit_val`)            |                    |
+| 168 | the beq placed in an occupied slot               | the only one       |
+|     | (`rsv_plc_occ`): the always-taken beq's loop     |                    |
+|     | predictor, TAGE and SC updates are suppressed    |                    |
+| 454 | the run ends                                     |                    |

@@ -16,6 +16,139 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-082, after DOC-009: the demonstration regression and events.
+
+DOC-009 COMPLETE (Jeff). 2h15m active, 14h08m wall clock: 129
+permission prompts under blockReadsOutsideWorkingDirectories, one
+waiting 8h13m overnight. 59% context; 0 compactions. Task file written
+by the PA. Header fields and context report written by /cntx.
+tools/run_time.py now reports active time from Claude Code's
+turn_duration entries beside the wall clock. CLAUDE.md: commands run
+from the repo root, with no cd to an absolute path.
+  regress.sh 274 targets PASS, every check count equal to the
+    baseline. regress_demo.sh 24 of 24 PASS, events checked 210 of
+    210, 32 s, no git call, no tracked file written.
+  Built: tools/regress_demo.sh, its waivers in the regress.sh form;
+    an Events section (## 6. Events) in the 20 descriptions without
+    one, baseline values from the run, only added lines, ticfinder
+    clean on them; tb/fe_demo_events.svh, the check engine, and each
+    program's checks; mk_sucl.py reads any description's Events
+    section and, with --svh, writes the build's event tables;
+    chk_sucl.py the same; rtl/core/frontend/fe_top/fe_top_srcs.mk,
+    the source list both Makefiles take (same sources and order).
+  The four existing tables (fd09, fd22 to fd24) agree with the run at
+    every row, exactly. The checks fire in all 24 scenarios, on a moved
+    row and on swapped rows.
+  PROVISIONAL, ACCEPTED (Jeff), recorded in FDT-10c: an event's cycle
+    is its marker's (a testbench-driven signal reads at cyc + 1); rows
+    and checks match by marker label. Consequence: B11 rewording the
+    start of an event's text fails that scenario until its check's
+    label is changed.
+  Surfer: tools/bin/surfer was the v0.7.0 tag, not 010b840. Rebuilt
+    twice under Jeff's instruction; wellen pinned to 0.21.1 in
+    tools/check_surfer.sh (NU-17). chk_sucl.py 24 of 24; NU-UN-3
+    closed.
+  Premises corrected: FD-U1 is closed (FDT-1 still cited it, fixed);
+    a make -B model build is 7 to 24 s, not 7 to 15.
+  Only cyc 0 was taken as exact; FD-1's ready cycles 513, 1025 and
+    2049 are checked by window.
+  Outside the grants, reported: a listing of examples/fe_demo/; the
+    Surfer investigation and tools/check_surfer.sh, with Jeff's
+    permission. No git command on the repository.
+  Open for Jeff: create tools/known_failures_demo.txt (proposed header,
+    no entries); approve the demo_explainer.md sentence on events
+    checked.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md (FDT-1, FDT-10a,
+FDT-10c, FDT-12c), new_user_decisions.md (NU-17, NU-UN-3), CLAUDE.md
+(Experiment File Rules, commands from the repo root).
+
+Next free: BP-141, SYS-003, DOC-011, INFRA-014, TOOLS-007, TD#194.
+
+---
+## Session-082, after DOC-008: release tags and one state on the site.
+
+DOC-008 COMPLETE (Jeff). 1h12m, 19% context. Task file written by the
+PA. regress.sh 274 targets PASS; the 36 new tests in tools/tests/ pass.
+  Built: tools/fe_release.py (the tag rule and the latest tag);
+    publish_waves.py the tag gate (--tag, --commit, --untagged), a
+    dry run that stages locally and clones nothing, manifest keys tag,
+    tag_commit, digest_version and digests, the staleness report
+    against --published; docs.yml runs on fe-* tag pushes, fetches all
+    tags, and takes the Showcase pages from the latest tag by git
+    archive outside the checkout (SR-6a); the landing page names the
+    tag, "Unreleased." without one, and the branch in a local preview;
+    examples/fe_demo/README.md section 4, Release.
+  Full dry run under a stand-in git: 24 scenarios PASS, no git call,
+    51 files staged, 24 digests in 11.2 s.
+  Found and fixed: the dry run cloned pacino-waves; the CI checkout was
+    shallow with no tags; the source links always named blob/main.
+  Premise corrected: the Open waveform links are added by the hook
+    tools/mkdocs_showcase.py, not written in the descriptions; the
+    landing page has 24 typed-in links of its own. Surfer's web build is
+    served from app.surfer-project.org, so no manifest.json collision.
+  PROVISIONAL, ACCEPTED (Jeff): fe_release.py; the git archive
+    mechanism; digest_version and the removed lines; --no-build for dry
+    runs; the docs.yml concurrency group and the mkdocs<2 pin.
+  INSTRUCTION NOT FOLLOWED: one read-only git diff --stat, disclosed.
+  The git lookup path and the CI build are untested until Jeff runs
+    them (commands in prompts/DOC-008.md). Test tags fe-0.0.x must be
+    deleted before any push that sends tags.
+  RULED after DOC-008 (Jeff): a real publish always checks the tag
+    with git (SR-10); a dirty tree under rtl/ or examples/fe_demo/
+    refuses a real publish (SR-9a). DOC-010 WRITTEN, not yet issued.
+  The IA's planning text applied: SR-6a, SR-9 keys, SR-12 version.
+  CLAUDE.md: Run time, Ctx % and Resume sha and the context report
+    between the CONTEXT markers are written by the /cntx command after
+    the task (Jeff).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, showcase_release_decisions.md, CLAUDE.md.
+
+Next free: BP-141, SYS-003, DOC-011, INFRA-014, TOOLS-007, TD#194.
+
+---
+## Session-082: frontend release tags and the demonstration regression.
+
+DOC-008 and DOC-009 WRITTEN, not yet issued (Jeff). From the brief
+pa_brief_fe_tags_and_scenario_regression.md, version 2.
+  RULED (Jeff):
+    Tags fe-<major>.<minor>.<patch>, annotated, applied by Jeff by
+      hand; the Showcase pages and the hosted waveforms come from one
+      tag; fe-1.0.0 after B11 and DOC-009.
+    Two regressions. tools/regress.sh stays RTL only and gates pushes.
+      tools/regress_demo.sh runs the 24 scenarios, gates no push, and
+      blocks only a DOC task that changes examples/fe_demo/; a task
+      that changes rtl/ runs it and reports. Its waiver list is
+      tools/known_failures_demo.txt, Jeff's alone. The brief's
+      scenarios-in-REGRESS_TARGETS and pre-push decision is reversed.
+    Every description gets an Events table; the 20 without one take a
+      baseline from the current run (reset release, end of run, and
+      the IA's choice between), to be refined. A description with no
+      events is valid.
+    The IA needs no git: publish_waves.py takes the tag and commit as
+      arguments; Jeff runs the real tag, publish and CI build.
+  PA DECISIONS, recorded: the tag scheme in a new
+    planning/showcase/showcase_release_decisions.md (SR-1 to SR-12); the
+    event checks' order, exact and window rules (FDT-10c, a window of a
+    tenth of the cycle, at least 8); the Events table read from any
+    description, and a cyc citation without one an error (FDT-12c).
+  web_presence_plan.md section 11 still gives two-part tags and has
+    demo events failing "the regression"; superseded by SR-1 and FDT-2.
+    Jeff's document; not changed.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md (The regression;
+planning/showcase/ inventory), CLAUDE.md (Verification Expectations, the
+demonstration regression), fe_demo_tb_decisions.md (FDT-2, FDT-2a,
+FDT-10, FDT-10c, FDT-12c, FDT-13), showcase_release_decisions.md (new,
+location SHOW).
+
+Next free: BP-141, SYS-003, DOC-010, INFRA-014, TOOLS-007, TD#194.
+(Superseded above.)
+
+---
 ## 2026-10-28, interactive session, branch install_scripts: new-user setup.
 
 Not a PA session: the IA with Jeff; planning edits by Jeff's
@@ -4790,6 +4923,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | fe_demo_tb_decisions.md | Draft       | --                | Created session-080,              |
 |                         |             |                   | planning/testbenches. Owns FDT-N  |
 |                         |             |                   | and FDT-UN.                       |
+| showcase_release        | Draft       | --                | Created session-082,              |
+| _decisions.md           |             |                   | planning/showcase. Owns SR-N,     |
+|                         |             |                   | SR-UN.                            |
+|                         |             |                   | Release tags, one state on the    |
+|                         |             |                   | site, waveform staleness.         |
 
 THE NINE ROWS MARKED "ADDED 2026-09-17" carry a status DERIVED
 from statements already in this file, not from a fresh

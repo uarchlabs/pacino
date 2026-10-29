@@ -44,3 +44,57 @@
     W.mixed(3);
     demo_go(80000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd24_call_slot1.md, in table order. top is
+  // 0x8000_0008: C at position 1, the call at 4 to f, 0x8000_0400; the
+  // return address 0x8000_0014; C's target 0x8000_0010 and fall-through
+  // 0x8000_000E; the epilogue 0x8000_001E. The backend's redirects are
+  // driven by the testbench: late.
+  // =================================================================
+  localparam logic [VA_WIDTH-1:0] FD24_TOP = RESET_VECTOR + VA_WIDTH'('h08);
+  localparam logic [VA_WIDTH-1:0] FD24_F   = RESET_VECTOR + VA_WIDTH'('h400);
+  localparam logic [VA_WIDTH-1:0] FD24_RA  = RESET_VECTOR + VA_WIDTH'('h14);
+
+  function automatic void fd24_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("predecode_redirect_to_0x8000_0400", EV_WINDOW);
+    evt_def("first_return_mispredicted", EV_WINDOW, 1);
+    evt_def("back_edge_mispredicted", EV_WINDOW, 1);
+    evt_def("C_mispredicted_taken", EV_WINDOW, 1);
+    evt_def("first_RAS_push_from_slot_1", EV_WINDOW);
+    evt_def("TOSR_1", EV_WINDOW);
+    evt_def("back_edge_falls_through", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd24_evt_now();
+    logic [EV_MAX-1:0] e;
+    logic              ras_ret;
+    e    = '0;
+    e[0] = dut.ftq_pred_val_p0 && (dut.ftq_pred_pc_p0 == RESET_VECTOR);
+    e[1] = ev_pd_redir(FD24_F);
+    e[2] = ev_redir(FD24_RA);
+    e[3] = ev_redir(FD24_TOP);
+    e[4] = ev_redir(RESET_VECTOR + VA_WIDTH'('h0E));
+    // As the monitor's n_push_s1: a call in slot 1, behind a not-taken
+    // conditional in slot 0, presented to the RAS in an accepted group.
+    e[5] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+           dut.u_bpu.w_ras_pred_val_p2[S1] &&
+           (dut.u_bpu.w_br_type_p2[S1] == DIRECT_CALL) &&
+           dut.bpu_slot_p2[0].slot_valid && !dut.bpu_slot_p2[0].taken &&
+           (dut.bpu_slot_p2[0].br_type == COND);
+    // The pointers after the push, the return address in entry 1, and a
+    // return in f predicted from the RAS to it.
+    ras_ret = 1'b0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      ras_ret = ras_ret || (dut.bpu_slot_p2[s].slot_valid &&
+                            (dut.bpu_slot_p2[s].pred_src == PRED_RAS) &&
+                            (dut.bpu_slot_p2[s].target == FD24_RA));
+    e[6] = (dut.u_bpu.u_ras.tosr == 1) && (dut.u_bpu.u_ras.tosw == 2) &&
+           (dut.u_bpu.u_ras.spec_ret_addr[1] == FD24_RA) &&
+           dut.u_bpu.r_val_p2 && (dut.u_bpu.r_pc_p2 == FD24_F) && ras_ret;
+    e[7] = ev_redir(RESET_VECTOR + VA_WIDTH'('h1E));
+    return e;
+  endfunction

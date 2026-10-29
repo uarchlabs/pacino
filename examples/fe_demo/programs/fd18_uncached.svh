@@ -68,3 +68,47 @@
     W.mixed(2);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd18_uncached.md, in table order. Page u
+  // (NC) is PA page 0x81203, page io (IO) 0x81204; the loop on u at
+  // u+0x200 is line 0x8120_3200 and the function at u+0x400 line
+  // 0x8120_3400. Every condition is on design registers.
+  // =================================================================
+  // An uncached L1I request taken, for the line at pa, or on PA page
+  // pg when pa is 0.
+  function automatic logic fd18_uc(input logic [PA_WIDTH-1:0] pa,
+                                   input int pg);
+    return dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
+           dut.ifu_l1i_req_uncached &&
+           ((pa != '0) ? (dut.ifu_l1i_req_paddr == pa)
+                       : (dut.ifu_l1i_req_paddr[PA_WIDTH-1:12] ==
+                          (PA_WIDTH-12)'(pg)));
+  endfunction
+
+  function automatic void fd18_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_uncached_request", EV_WINDOW);
+    evt_def("first_uncached_block_closed_after_one", EV_WINDOW);
+    evt_def("first_request_for_0x8120_3200", EV_WINDOW);
+    evt_def("first_request_for_0x8120_3400", EV_WINDOW);
+    evt_def("first_uncached_request_from_the_IO", EV_WINDOW);
+    evt_def("last_uncached_request", EV_WINDOW, 0, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd18_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = fd18_uc('0, 'h81203);
+    // F3 ends an uncached block after its first instruction.
+    e[2] = dut.ifu_ftq_pdwb_val && dut.ifu_ftq_uc_end;
+    e[3] = fd18_uc(PA_WIDTH'('h8120_3200), 0);
+    e[4] = fd18_uc(PA_WIDTH'('h8120_3400), 0);
+    e[5] = fd18_uc('0, 'h81204);
+    e[6] = dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
+           dut.ifu_l1i_req_uncached;
+    return e;
+  endfunction

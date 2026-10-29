@@ -82,4 +82,13 @@ item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd08_indirect.md section 6
+marker_set c0_reset_released 36
+marker_set c20_first_misprediction_of_J 235
+marker_set c260_first_ITTAGE_tagged_hit_at_p2 2635
+marker_set c260_first_target_of_K_from_ITTAGE 2635
+marker_set c267_first_target_of_J_from_ITTAGE 2705
+marker_set c1138_the_loop_exits 11415
+marker_set c1147_the_run_ends 11505
+item_unfocus
+zoom_to 16 336

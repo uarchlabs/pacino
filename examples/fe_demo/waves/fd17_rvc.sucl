@@ -124,4 +124,11 @@ item_set_format Bit
 variable_add tb.pd_out.[7].is_rvc
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd17_rvc.md section 6
+marker_set c0_reset_released 36
+marker_set c21_the_straddling_instruction_reaches_decode 245
+marker_set c22_the_next_bundle_starts_on_its 255
+marker_set c28_first_fetch_of_fn 315
+marker_set c198_the_run_ends 2015
+item_unfocus
+zoom_to 16 336

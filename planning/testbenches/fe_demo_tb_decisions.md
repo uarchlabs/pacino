@@ -24,15 +24,18 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
        rtl/:
          Makefile     includes rtl/Vars.mk
          tb/          the testbench top and its scenario code
-         programs/    one program per scenario, or per group of
-                      scenarios (fe_demo_scenarios.md FD-U1)
+         programs/    one program per scenario (fe_demo_scenarios.md
+                      FD-U1, closed), each with its event checks
+                      (FDT-10c)
          waves/       one Surfer command file per scenario;
                       fe_demo_sigs.py, the signal lists, built for
                       the slot count of the model that wrote each FST,
                       the format table FORMATS, and the FST reader;
                       mk_sucl.py, the generator, which writes each
                       command file from its own scenario's FST and
-                      reads the descriptions' event tables (FDT-12c);
+                      reads the descriptions' event tables (FDT-12c),
+                      and with --svh writes the event tables of the
+                      build (FDT-10c);
                       chk_sucl.py, which loads each command file in
                       Surfer and checks it against fe_demo_sigs.py,
                       FDT-12a and FDT-12c
@@ -42,13 +45,29 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
          README.md    the scenario list, how to run one, what to look
                       for
        tb/ holds tb_fe_demo.sv, fe_demo_mon.svh, fe_demo_lib.svh,
-       fe_demo_proofs.svh and fe_demo_finish.cpp.
+       fe_demo_events.svh, fe_demo_proofs.svh and fe_demo_finish.cpp.
+       The Makefile and rtl/core/frontend/fe_top/Makefile take the
+       fe_top source list, defines and shared flags from
+       rtl/core/frontend/fe_top/fe_top_srcs.mk (DOC-009).
        Run output goes to examples/fe_demo/out/<scenario>/, which is
        not committed. The two models are built into
        examples/fe_demo/obj_fe_demo/ (one slot) and obj_fe_demo_2slot/
        (two slots), not committed.
-FDT-2  examples/ is not scanned by tools/regress.sh and has no
-       regression target.
+FDT-2  The scenarios are checked by the demonstration regression,
+       tools/regress_demo.sh, not by tools/regress.sh, which does not
+       scan examples/ (Jeff, session-082). It builds each model of
+       FDT-5 once from the tree it runs in, runs every scenario on its
+       build, and exits non-zero on a failing scenario not listed in
+       tools/known_failures_demo.txt. That file has the format of
+       tools/known_failures.txt and Jeff alone edits it. The
+       demonstration regression gates no push and records no pass
+       (NU-19, NU-20 are tools/regress.sh's).
+FDT-2a A DOC task that changes examples/fe_demo/ ends by running the
+       demonstration regression; a failing scenario not in
+       tools/known_failures_demo.txt blocks its Status: complete. A task
+       that changes rtl/ runs it and reports each failing scenario in
+       Results Capture; the failures do not block that task, and the
+       next DOC task brings the descriptions and checks to the RTL.
 
 ---
 
@@ -108,15 +127,17 @@ FDT-9a make view S=<scenario> opens the scenario in Surfer with its
 FDT-10 Each run ends by checking the scenario's proof (FD-0b). It
        prints one result line and exits non-zero on a failure so make
        stops. A pass is -I: <scenario>: PASS, then the figures; a
-       failure is -E: <scenario>: FAIL, then the figures.
+       failure is -E: <scenario>: FAIL, then the figures. The figures
+       include events checked <n> of <m> (FDT-10c).
 FDT-10a Every line the testbench prints is at most 80 columns. A line
        begins with -I:, -W: or -E:, then the scenario name and a colon.
        Items are separated by commas and named in full words; the
        cycle count is cyc <n>. A line longer than 80 columns breaks
        after a comma, and each continuation line is indented four
        spaces with no prefix:
-         -I: fd09_tage: PASS, tagged-provider predictions 216,
-             allocations 65, T0 by use_alt_on_na 37, cyc 1277
+         -I: fd09_tage: PASS, tagged-provider predictions 188,
+             allocations 59, T0 by use_alt_on_na 22, events checked
+             15 of 15, cyc 1364
        A passing run prints no other line: the simulator's $finish
        message is replaced (tb/fe_demo_finish.cpp, VL_USER_FINISH)
        and its end-of-run report is off (+verilator+quiet). After a
@@ -132,6 +153,34 @@ FDT-10b The monitor counts, from the cycle the three init readies are
        unchanged on a hit, each by conditional and jump. Each run
        prints them in the FDT-10a format after the result line.
        TD#188; not yet built.
+FDT-10c Each scenario checks the events of its description's event
+       table (FDT-12c) in its program, programs/fdNN_<name>.svh, beside
+       its proof (Jeff, session-082). An event's check is a condition
+       on signals of the run, written for that event; its expected
+       cycle is the cyc of the event's row. Each check is one of:
+         order   the events occur in the order the table lists them
+         exact   a count or value the event states, and a cycle the
+                 description presents as exact, match exactly
+         window  any other cycle falls within plus or minus a tenth of
+                 its value, and at least 8 cycles
+       Order is checked for every event. A failed check fails the
+       scenario. In events checked <n> of <m>, m is the number of
+       events in the table; an event no condition on signals can
+       express is not checked. The expected values are the
+       description's, not the run's.
+       An event's cycle is the cyc of the first instant the waveform
+       shows its condition, where the marker of its row stands
+       (FDT-12c): a design register's change at the cycle's edge; a
+       signal the testbench drives one time unit after the edge, or
+       logic combinational from it, at the next cycle's marker. An
+       event stated as the last of its kind is checked at the last
+       cycle its condition holds. A row and its check are matched by
+       the row's marker label; a row with no check, a check with no
+       row and a label used twice in one table fail the scenario, so
+       rewording the start of an event's text needs its check's label
+       changed. waves/mk_sucl.py --svh writes the tables into each
+       model's directory at build time; the checks are in
+       tb/fe_demo_events.svh and each program (DOC-009).
 
 ---
 
@@ -184,13 +233,20 @@ FDT-12c A Surfer file places one marker per event of the scenario's
        with a cyc value starts an event and a row with an empty cyc
        continues the one above. A marker is named c<cyc>_<label>, the
        label being the event text up to its first ';', ':', ',' or '(',
-       at most six words, joined by '_'. A description is in the
+       at most six words, joined by '_'. The event table is the table
+       of the description's level-2 section headed Events, with or
+       without a section number, whether or not the description is in
+       the FDT-13 form (Jeff, session-082). A description is in the
        FDT-13 form when its level-2 headings are the five of FDT-13, in
        order, section 5 optional, after an optional leading
-       "0. Introduction" (Jeff, session-081, DOC-007). A scenario with
-       no description in that form has no markers. A description in
-       that form whose table mk_sucl.py cannot read stops the generator
-       with an error naming the file and row.
+       "0. Introduction" (Jeff, session-081, DOC-007). A description
+       with no Events section that cites no cycle as cyc <n> has no
+       events and no markers. A description that cites a cycle as
+       cyc <n> and has no Events section, or whose Events table
+       mk_sucl.py cannot read, stops the generator with an error naming
+       the file and row. A second Events section is an error. In a
+       description out of the FDT-13 form the Events section is the
+       last, numbered after the others (DOC-009: section 6).
 
 ---
 
@@ -213,7 +269,8 @@ FDT-13 docs/<scenario>.md describes one scenario. Its reader is
             column 2 other details where needed. The first row is cyc
             0, the release of reset. Each row with a cyc value starts
             an event; a row with an empty cyc continues it. Each event
-            is a marker in the Surfer file (FDT-12c).
+            is a marker in the Surfer file (FDT-12c) and is checked by
+            the scenario's program (FDT-10c).
          5  Notes: present only when there is something the reader
             must act on, and it says what to do.
 FDT-13a The descriptions are written in full sentences, with no jargon
@@ -286,4 +343,15 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               tools/build_tools.sh at commit 010b840, the build these
               command files were checked with
               (new_user_decisions.md NU-17).
+  2026-10-28  session-082 (Jeff). FDT-2 reversed: the demonstration
+              regression, tools/regress_demo.sh, and FDT-2a who runs
+              it; FDT-10 events checked; FDT-10c the event checks;
+              FDT-12c the table from any description's Events
+              section, and a cyc citation without one an error;
+              FDT-13 item 4 events are checked.
+  2026-10-29  session-082, after DOC-009. FDT-1 programs/, tb/,
+              waves/ and the shared source list as built; FDT-10a the
+              example line; FDT-10c the cycle of an event and the
+              label match; FDT-12c a second Events section, and its
+              place out of the FDT-13 form.
 ```

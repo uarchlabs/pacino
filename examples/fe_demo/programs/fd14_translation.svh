@@ -42,3 +42,54 @@
     W.mixed(8);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd14_translation.md, in table order. A
+  // walk starts when the walker takes an ITLB request
+  // (itlb_l2t_req_val and _rdy); it answers on l2t_itlb_rsp_val, status
+  // 0 hit or 1 fault (IL-4). C is VPN 0x80010, V (PC_V) VPN 0x80050.
+  // The walker and the ITLB are design registers; the backend's trap
+  // redirect is driven by the testbench: late.
+  // =================================================================
+  // A walk taken for VPN vpn, with V = v.
+  function automatic logic fd14_walk(input int vpn,
+                                     input logic v);
+    return itlb_l2t_req_val && itlb_l2t_req_rdy &&
+           (itlb_l2t_vpn == (VA_WIDTH-12)'(vpn)) &&
+           (itlb_l2t_v == v);
+  endfunction
+
+  function automatic void fd14_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_walk", EV_WINDOW);
+    evt_def("walk_for_C", EV_WINDOW);
+    evt_def("the_CAS", EV_WINDOW);
+    evt_def("the_walk_for_C_answers_PPN", EV_WINDOW);
+    evt_def("first_nested_walk", EV_WINDOW);
+    evt_def("the_ecalls_trap_redirect_to_V", EV_WINDOW, 1);
+    evt_def("the_nested_walk_for_C_ends", EV_WINDOW);
+    evt_def("walk_for_V", EV_WINDOW);
+    evt_def("the_walk_for_V_answers_PPN", EV_WINDOW);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd14_evt_now();
+    logic [EV_MAX-1:0] e;
+    e     = '0;
+    e[0]  = ev_p0(RESET_VECTOR);
+    e[1]  = fd14_walk('h80000, 1'b0);
+    e[2]  = fd14_walk('h80010, 1'b0);
+    // The walker's compare-and-swap (as the monitor's n_cas).
+    e[3]  = ptw_mem_req_val && ptw_mem_req_rdy && ptw_mem_req_op;
+    e[4]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd0) &&
+            (l2t_itlb_ppn == PPN_WIDTH'('h81000));
+    e[5]  = fd14_walk('h80010, 1'b1);
+    e[6]  = ev_redir_any(PC_V);
+    e[7]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd1) &&
+            (l2t_itlb_cause == CAUSE_WIDTH'(12));
+    e[8]  = fd14_walk('h80050, 1'b1);
+    e[9]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd0) &&
+            (l2t_itlb_ppn == PPN_WIDTH'('h81600));
+    return e;
+  endfunction

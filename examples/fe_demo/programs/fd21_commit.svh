@@ -54,3 +54,35 @@
     W.mixed(3);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd21_commit.md, in table order. The
+  // epilogue after the back edge is +0x26. The backend's commit
+  // watermark and redirect are driven by the testbench: late. The
+  // commit walk and the RAS commit stack are design registers.
+  // =================================================================
+  function automatic void fd21_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_commit_watermark_from_the_backend", EV_WINDOW, 1);
+    evt_def("the_commit_pointer_first_moves", EV_WINDOW);
+    evt_def("first_RAS_commit_of_a_call", EV_WINDOW);
+    evt_def("the_commit_stack_reaches_depth_2", EV_WINDOW);
+    evt_def("first_RAS_commit_of_a_return", EV_WINDOW);
+    evt_def("back_edge_falls_through", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd21_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = bkend_ftq_commit_val;
+    e[2] = dut.u_ftq.w_commit_step_val;
+    e[3] = dut.u_bpu.w_ras_commit_val &&
+           (dut.ras_commit_br_type == DIRECT_CALL);
+    e[4] = dut.u_bpu.u_ras.csp == 2;
+    e[5] = dut.u_bpu.w_ras_commit_val && (dut.ras_commit_br_type == RETURN);
+    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h26));
+    return e;
+  endfunction

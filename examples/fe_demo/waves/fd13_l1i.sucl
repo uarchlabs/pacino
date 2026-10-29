@@ -102,4 +102,14 @@ item_set_format Bit
 variable_add tb.dut.u_l1i.u_mshr.b_fil_valid.[1]
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd13_l1i.md section 6
+marker_set c0_reset_released 36
+marker_set c5_first_L1I_miss 85
+marker_set c26_first_L1I_hit 295
+marker_set c151_the_invalidate_is_done 1545
+marker_set c154_the_restart_after_the_FENCEI 1575
+marker_set c176_the_fourth_call_found_at_F3 1795
+marker_set c183_the_merge 1865
+marker_set c214_the_run_ends 2175
+item_unfocus
+zoom_to 16 336

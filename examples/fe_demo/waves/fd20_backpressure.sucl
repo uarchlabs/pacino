@@ -106,4 +106,12 @@ item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
 item_unfocus
-zoom_fit
+# markers, from docs/fd20_backpressure.md section 6
+marker_set c0_reset_released 36
+marker_set c18_decode_first_holds_a_bundle 215
+marker_set c71_the_instruction_buffer_first_refuses_the 745
+marker_set c138_the_FTQ_first_full 1415
+marker_set c526_back_edge_falls_through 5295
+marker_set c537_the_run_ends 5405
+item_unfocus
+zoom_to 16 336

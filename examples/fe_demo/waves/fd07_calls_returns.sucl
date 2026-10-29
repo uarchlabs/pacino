@@ -144,4 +144,14 @@ item_set_format Bit
 variable_add tb.dut.u_bpu.u_ras.commit_top_addr
 item_set_format Hexadecimal
 item_unfocus
-zoom_fit
+# markers, from docs/fd07_calls_returns.md section 6
+marker_set c0_reset_released 36
+marker_set c40_first_RAS_commit 435
+marker_set c128_first_RAS_push_at_p2 1315
+marker_set c131_entry_1s_recursion_count_reads_1 1345
+marker_set c137_entry_1s_count_reaches_4 1405
+marker_set c162_first_return_predicted_from_the_RAS 1655
+marker_set c256_first_RETURN_CALL_at_p2 2595
+marker_set c694_the_run_ends 6975
+item_unfocus
+zoom_to 16 336

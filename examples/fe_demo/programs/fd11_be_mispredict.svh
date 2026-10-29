@@ -41,3 +41,41 @@
     W.mixed(3);
     demo_go(80000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd11_be_mispredict.md, in table order. top
+  // is 0x8000_0008; A at 0x8000_000A, taken to 0x8000_0010 or falling
+  // through to 0x8000_000E; the return address 0x8000_0014; the exit
+  // 0x8000_001A. The backend's redirects are driven by the testbench:
+  // late. The rollback, the RAS restore and the fetch are the design's.
+  // =================================================================
+  function automatic void fd11_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_history_rollback", EV_WINDOW);
+    evt_def("first_misprediction_of_A_taken", EV_WINDOW, 1);
+    evt_def("the_return_mispredicted", EV_WINDOW, 1);
+    evt_def("fetch_restarts_at_0x8000_0014", EV_WINDOW);
+    evt_def("the_back_edge_mispredicted", EV_WINDOW, 1);
+    evt_def("first_misprediction_of_A_not_taken", EV_WINDOW, 1);
+    evt_def("the_loop_exits", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd11_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = dut.ftq_rollback_val && dut.ras_restore_val;
+    e[2] = ev_redir(RESET_VECTOR + VA_WIDTH'('h10));
+    e[3] = ev_redir(RESET_VECTOR + VA_WIDTH'('h14));
+    // The first fetch the FTQ presents at the return address (a block
+    // starts there only after a redirect to it).
+    e[4] = dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val &&
+           (dut.ftq_ifu_start_pc == RESET_VECTOR + VA_WIDTH'('h14));
+    e[5] = ev_redir(RESET_VECTOR + VA_WIDTH'('h08));
+    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h0E));
+    e[7] = ev_redir(RESET_VECTOR + VA_WIDTH'('h1A));
+    return e;
+  endfunction

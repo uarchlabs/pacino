@@ -183,4 +183,12 @@ item_set_format Bit
 variable_add tb.pd_out.[7].valid
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd02_steady.md section 6
+marker_set c0_reset_released 36
+marker_set c1_first_p1_prediction_the_FTQ_accepts 45
+marker_set c18_first_full_decode_bundle 215
+marker_set c20_second_full_bundle 235
+marker_set c83_the_halt_block_reaches_decode 865
+marker_set c84_the_run_ends 875
+item_unfocus
+zoom_to 16 336

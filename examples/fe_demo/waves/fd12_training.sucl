@@ -89,4 +89,16 @@ item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd12_training.md section 6
+marker_set c0_reset_released 36
+marker_set c20_first_p0_request_withheld_for_an 235
+marker_set c21_first_resolution_from_the_backend 245
+marker_set c21_first_uBTB_update 245
+marker_set c21_first_FTB_update 245
+marker_set c21_first_loop_predictor 245
+marker_set c66_first_ITTAGE_update 695
+marker_set c78_first_RAS_commit 815
+marker_set c168_the_beq_placed_in_an_occupied 1715
+marker_set c454_the_run_ends 4575
+item_unfocus
+zoom_to 16 336

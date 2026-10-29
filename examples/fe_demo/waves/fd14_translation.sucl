@@ -105,4 +105,17 @@ item_set_format Bit
 variable_add tb.mem_ptw_rsp_data
 item_set_format Hexadecimal
 item_unfocus
-zoom_fit
+# markers, from docs/fd14_translation.md section 6
+marker_set c0_reset_released 36
+marker_set c4_first_walk 75
+marker_set c46_walk_for_C 495
+marker_set c67_the_CAS 705
+marker_set c73_the_walk_for_C_answers_PPN 765
+marker_set c91_first_nested_walk 945
+marker_set c92_the_ecalls_trap_redirect_to_V 955
+marker_set c168_the_nested_walk_for_C_ends 1715
+marker_set c170_walk_for_V 1735
+marker_set c267_the_walk_for_V_answers_PPN 2705
+marker_set c285_the_run_ends 2885
+item_unfocus
+zoom_to 16 336

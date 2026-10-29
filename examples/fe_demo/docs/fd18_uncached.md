@@ -181,3 +181,26 @@ S=fd18_uncached` opens in Surfer. Look at:
 - In the l1i group: `b_mis_valid` for each uncached request, an MSHR
   `e_val`, `l1i_mem_a_valid` and `l1i_mem_d_valid`, and no
   `b_fil_valid` for the 0x8120_3xxx or 0x8120_4xxx lines.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | S-mode, Sv39       |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 111 | first uncached request: the first block on page  | NC page            |
+|     | u asks the L1I for line 0x8120_3000              |                    |
+|     | (`ifu_l1i_req_uncached`)                         |                    |
+| 126 | first uncached block closed after one            |                    |
+|     | instruction: F3 ends it (`ifu_ftq_uc_end`), and  |                    |
+|     | the next entry starts at the next instruction    |                    |
+| 306 | first request for 0x8120_3200, the loop at       | NC page            |
+|     | u+0x200                                          |                    |
+| 555 | first request for 0x8120_3400, the function at   | NC page            |
+|     | u+0x400                                          |                    |
+| 647 | first uncached request from the IO page, line    | IO page            |
+|     | 0x8120_4000                                      |                    |
+| 772 | last uncached request                            | the 38th           |
+| 797 | the run ends                                     |                    |

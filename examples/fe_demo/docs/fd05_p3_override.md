@@ -163,3 +163,26 @@ S=fd05_p3_override` opens in Surfer. Look at:
 - group `bp_cluster_p3`: `bpu_slot_p3.[0].pred_src` `PRED_SC` and
   `bpu_redir_p3.[0].valid` with its `target_pc`.
 - group `ftq`: `w_ok_redir_p3` accepting it.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 47  | first p3 redirect from an SC reversal: B         | slot 0, `pred_src` |
+|     | reversed to taken; redirect to 0x8000_0024, its  | PRED_SC            |
+|     | target                                           |                    |
+| 178 | A reversed to not taken before the split;        | slot 0, PRED_SC    |
+|     | redirect to 0x8000_0028, the end of the block at |                    |
+|     | top then                                         |                    |
+| 261 | the split: the FTB update for B at position 9    | `upd_split`        |
+|     | from top ends the entry for top at B's PC        |                    |
+| 292 | A reversed to not taken after the split;         | slot 0, PRED_SC    |
+|     | redirect to 0x8000_001A, B's PC                  |                    |
+| 822 | last p3 redirect from an SC reversal             | the 33rd           |
+| 965 | back edge falls through, a misprediction;        | pass 95, backend   |
+|     | redirect to 0x8000_002A                          |                    |
+| 975 | the run ends                                     |                    |

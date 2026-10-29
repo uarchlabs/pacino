@@ -46,3 +46,47 @@
     W.mixed(3);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd03_two_branch.md, in table order. X is
+  // 0x8000_0400 and Y 0x8000_0440, each with conditionals at positions
+  // 1 and 4; the epilogue after the back edge is top + 12, 0x8000_0014.
+  // The backend's redirect is driven by the testbench: late.
+  // =================================================================
+  localparam logic [VA_WIDTH-1:0] FD03_X = RESET_VECTOR + VA_WIDTH'('h400);
+  localparam logic [VA_WIDTH-1:0] FD03_Y = RESET_VECTOR + VA_WIDTH'('h440);
+
+  // An accepted p2 group for block pc with conditionals at 1 and 4.
+  function automatic logic fd03_two_p2(input logic [VA_WIDTH-1:0] pc);
+    return dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+           (dut.u_bpu.r_pc_p2 == pc) &&
+           dut.bpu_slot_p2[0].slot_valid && (dut.bpu_slot_p2[0].pos == 1) &&
+           (dut.bpu_slot_p2[0].br_type == COND) &&
+           dut.bpu_slot_p2[S1].slot_valid && (dut.bpu_slot_p2[S1].pos == 4) &&
+           (dut.bpu_slot_p2[S1].br_type == COND) && (NUM_PRED_SLOTS > 1);
+  endfunction
+
+  function automatic void fd03_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_p1_prediction_for_X_with", EV_WINDOW);
+    evt_def("first_p2_group_for_X_with", EV_WINDOW);
+    evt_def("first_p2_group_for_Y_with", EV_WINDOW);
+    evt_def("back_edge_falls_through", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd03_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    // An accepted p1 prediction for X with both slots valid (as the
+    // monitor's n_two_p1, for X).
+    e[1] = dut.u_ftq.w_ok_pred_p1 && (dut.u_bpu.r_pc_p1 == FD03_X) &&
+           dut.bpu_pred_slot_p1[0].slot_valid &&
+           dut.bpu_pred_slot_p1[S1].slot_valid && (NUM_PRED_SLOTS > 1);
+    e[2] = fd03_two_p2(FD03_X);
+    e[3] = fd03_two_p2(FD03_Y);
+    e[4] = ev_redir(RESET_VECTOR + VA_WIDTH'('h14));
+    return e;
+  endfunction

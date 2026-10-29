@@ -138,6 +138,16 @@
 # 2026-10-23 (the American English spelling rule), and for
 # mmu_decisions.md and pacino_cache.md as Jeff committed them on
 # 2026-10-24 (MMU-U7/U8 wording; L1I mshrs 16, mshr_targets 4).
+# Updated in session-082 when DOC-008 and DOC-009 were written
+# (PROJECT_STATUS.md, PROJECT_CORE.md, CLAUDE.md,
+# fe_demo_tb_decisions.md, showcase_release_decisions.md (new,
+# location SHOW)).
+# Updated after DOC-008, session-082 (PROJECT_STATUS.md, CLAUDE.md,
+# showcase_release_decisions.md), and for the /cntx header fields
+# (CLAUDE.md, PROJECT_STATUS.md).
+# Updated after DOC-009, session-082 (PROJECT_STATUS.md,
+# fe_demo_tb_decisions.md, new_user_decisions.md), and for the
+# run-from-root rule (CLAUDE.md, PROJECT_STATUS.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -159,10 +169,10 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   51e7d50c7ac0
-PLAN  PROJECT_STATUS.md                 8960f2eb5885
+PLAN  PROJECT_CORE.md                   9017d3c80014
+PLAN  PROJECT_STATUS.md                 053db03651bd
 
-UNKN  CLAUDE.md                         004ccebd0cba
+UNKN  CLAUDE.md                         faad7c6b313e
 
 ARCH  bp_arb_spec.md                    667b1c205dff
 ARCH  bp_cluster.md                     187952e94e30
@@ -200,7 +210,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f90a7b3ce267
-TEST  fe_demo_tb_decisions.md           1ca7d46e1c27
+TEST  fe_demo_tb_decisions.md           26012408c403
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
@@ -229,8 +239,9 @@ INTF  tage_interfaces.md                80e89e517207
 INTF  ubtb_interfaces.md          a8e591bbeda2
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
-OBSV  new_user_decisions.md           eb362050ebef
+OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            7a55ae56d56a
+SHOW  showcase_release_decisions.md  5ab166f5ee29
 
 MISC  ras_theory_of_operation.md      d4e71726f007
 

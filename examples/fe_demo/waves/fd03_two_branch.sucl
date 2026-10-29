@@ -122,4 +122,12 @@ item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd03_two_branch.md section 6
+marker_set c0_reset_released 36
+marker_set c83_first_p1_prediction_for_X_with 865
+marker_set c84_first_p2_group_for_X_with 875
+marker_set c107_first_p2_group_for_Y_with 1105
+marker_set c529_back_edge_falls_through 5325
+marker_set c539_the_run_ends 5425
+item_unfocus
+zoom_to 16 336

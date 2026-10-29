@@ -65,3 +65,38 @@
     W.mixed(3);
     demo_go(80000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd07_calls_returns.md, in table order. One
+  // slot. Every condition is on registers of the design or logic they
+  // drive; the RAS commit valid first rises at an edge (FST), so no
+  // check is late.
+  // =================================================================
+  function automatic void fd07_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_RAS_commit", EV_WINDOW);
+    evt_def("first_RAS_push_at_p2", EV_WINDOW);
+    evt_def("entry_1s_recursion_count_reads_1", EV_WINDOW);
+    evt_def("entry_1s_count_reaches_4", EV_WINDOW);
+    evt_def("first_return_predicted_from_the_RAS", EV_WINDOW);
+    evt_def("first_RETURN_CALL_at_p2", EV_WINDOW);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd07_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = dut.u_bpu.w_ras_commit_val;
+    e[2] = dut.u_bpu.w_ras_pred_val_p2[0] &&
+           (dut.u_bpu.w_br_type_p2[0] inside {DIRECT_CALL, INDIRECT_CALL});
+    e[3] = dut.u_bpu.u_ras.spec_rctr[1] == 1;
+    e[4] = dut.u_bpu.u_ras.spec_rctr[1] == 4;
+    e[5] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+           dut.bpu_slot_p2[0].slot_valid &&
+           (dut.bpu_slot_p2[0].pred_src == PRED_RAS);
+    e[6] = dut.u_bpu.w_ras_pred_val_p2[0] &&
+           (dut.u_bpu.w_br_type_p2[0] == RETURN_CALL);
+    return e;
+  endfunction

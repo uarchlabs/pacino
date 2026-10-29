@@ -99,4 +99,14 @@ item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.spec_rctr.[3]
 item_set_format Unsigned
 item_unfocus
-zoom_fit
+# markers, from docs/fd21_commit.md section 6
+marker_set c0_reset_released 36
+marker_set c40_first_commit_watermark_from_the_backend 435
+marker_set c40_the_commit_pointer_first_moves 435
+marker_set c40_first_RAS_commit_of_a_call 435
+marker_set c62_the_commit_stack_reaches_depth_2 655
+marker_set c62_first_RAS_commit_of_a_return 655
+marker_set c204_back_edge_falls_through 2075
+marker_set c214_the_run_ends 2175
+item_unfocus
+zoom_to 16 336

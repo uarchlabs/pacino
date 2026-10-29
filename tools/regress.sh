@@ -41,6 +41,21 @@
 # TD#<n> or TD#? (BP-132, TD#130); a line without one, or with fewer
 # than three fields, is reported as malformed and waives nothing.
 #
+# Progress: as each target finishes, one line shows the count done of
+# the total, the time since the start, the target's own result and time,
+# an estimate of the time left, and each unfinished Makefile's count:
+#   [137/274] 4m12s PASS bpu cov_tage 38s | left ~5m10s | fe_top 31/84
+# The result there is make's exit and the log's %Warning lines only; the
+# summary applies tools/known_failures.txt. The estimate comes from each
+# target's time in earlier runs, kept in .git/regress_times (outside the
+# tracked tree, so the pass record is unaffected): for each unfinished
+# Makefile, the times of its targets not yet done, less the time the
+# current one has run, and the largest of those; with fewer jobs than
+# unfinished Makefiles, at least their sum shared over the jobs. The list
+# after it shows at most four Makefiles, those with the most time left.
+# A target with no earlier time counts at the mean of the known ones;
+# with no history at all the estimate is shown as "left ?".
+#
 # Exit 0 only when every failing target is listed there, every listed
 # target still fails, no listed line is malformed, and no Makefile has
 # a regression-set error.
@@ -260,6 +275,24 @@ echo "regress: ${#MAKEFILES[@]} Makefile(s) found"
 for mf in "${MAKEFILES[@]}"; do echo "  ${mf#$ROOT/}"; done
 echo
 
+# -- earlier target times, "<makefile dir> <target> <seconds>" per line
+TIMES_FILE=""
+if git -C "$ROOT" rev-parse --git-dir > /dev/null 2>&1; then
+  TIMES_FILE=$(cd "$ROOT" && realpath -m "$(git rev-parse --git-path \
+    regress_times)")
+fi
+declare -A EXP=()
+EXP_SUM=0; EXP_N=0
+if [ -n "$TIMES_FILE" ] && [ -f "$TIMES_FILE" ]; then
+  while read -r edir etgt esec; do
+    [[ "$esec" =~ ^[0-9]+$ ]] || continue
+    EXP["$edir $etgt"]=$esec
+    EXP_SUM=$((EXP_SUM + esec)); EXP_N=$((EXP_N + 1))
+  done < "$TIMES_FILE"
+fi
+EXP_MEAN=""
+[ "$EXP_N" -gt 0 ] && EXP_MEAN=$(( (EXP_SUM + EXP_N / 2) / EXP_N ))
+
 SUMMARY=()      # printed lines
 FAIL_NEW=()     # failing, not listed
 FAIL_KNOWN=()   # failing, listed
@@ -320,18 +353,87 @@ done
 
 # -- 2. run. One job per Makefile runs its targets in turn and writes, per
 # target, "<rc> <seconds>" to <tag>.<target>.res and its total time to
-# <tag>.time. Jobs with the most targets start first, so the longest
-# run is not left until last.
+# <tag>.time; <tag>.cur holds "<target> <start>" of the target running.
+# Jobs with the most targets start first, so the longest run is not left
+# until last.
+N_TOTAL=0
+for i in "${!MF_TESTS[@]}"; do
+  set -- ${MF_TESTS[$i]}; N_TOTAL=$((N_TOTAL + $#))
+done
+set --
+
+# 125 -> 2m5s
+dur() {
+  local s=$1
+  if [ "$s" -ge 60 ]; then echo "$((s / 60))m$((s % 60))s"
+  else echo "${s}s"; fi
+}
+
+# One progress line, after target $2 of Makefile $1 finished with rc $3
+# in $4 seconds. Reads only the files the jobs write in LOG_DIR, so it is
+# safe to call from any job; the line is printed with one printf.
+progress() {
+  local i=$1 t=$2 rc=$3 secs=$4 now ndone res j left mf_left n nd
+  local tt start ran e unknown=0 parts="" total=0 n_mf=0 rows=
+  now=$(date +%s)
+  ndone=$(find "$LOG_DIR" -maxdepth 1 -name '*.res' | wc -l)
+  if [ "$rc" -eq 0 ] && ! grep -q '^%Warning' \
+       "$LOG_DIR/${MF_TAG[$i]}.$t.log"; then
+    res=PASS
+  else
+    res=FAIL
+  fi
+  left=0
+  for j in "${!MF_TESTS[@]}"; do
+    [ -n "${MF_TESTS[$j]}" ] || continue
+    [ -f "$LOG_DIR/${MF_TAG[$j]}.time" ] && continue
+    n=0; nd=0; mf_left=0
+    for tt in ${MF_TESTS[$j]}; do
+      n=$((n + 1))
+      if [ -f "$LOG_DIR/${MF_TAG[$j]}.$tt.res" ]; then
+        nd=$((nd + 1)); continue
+      fi
+      e=${EXP["${MF_REL[$j]} $tt"]:-$EXP_MEAN}
+      if [ -z "$e" ]; then unknown=1; continue; fi
+      mf_left=$((mf_left + e))
+    done
+    [ "$nd" -eq "$n" ] && continue
+    if [ -f "$LOG_DIR/${MF_TAG[$j]}.cur" ]; then
+      read -r _ start < "$LOG_DIR/${MF_TAG[$j]}.cur"
+      ran=$((now - start))
+      mf_left=$((mf_left - ran)); [ "$mf_left" -lt 0 ] && mf_left=0
+    fi
+    [ "$mf_left" -gt "$left" ] && left=$mf_left
+    total=$((total + mf_left)); n_mf=$((n_mf + 1))
+    rows+="$mf_left ${MF_REL[$j]##*/} $nd/$n"$'\n'
+  done
+  # With fewer jobs than unfinished Makefiles, the work left shared over
+  # the jobs can exceed the longest Makefile.
+  [ "$n_mf" -gt "$N_JOBS" ] && [ $((total / N_JOBS)) -gt "$left" ] && \
+    left=$((total / N_JOBS))
+  if [ "$unknown" -eq 1 ]; then left="?"; else left="~$(dur "$left")"; fi
+  # The unfinished Makefiles, most time left first, at most four.
+  parts=$(sort -k1,1nr <<< "$rows" | awk 'NF { n++; if (n <= 4)
+    printf " %s %s", $2, $3 } END { if (n > 4) printf " +%d more", n - 4 }')
+  [ -n "$parts" ] || parts=" none"
+  printf '[%d/%d] %s %s %s %s %s | left %s |%s\n' "$ndone" "$N_TOTAL" \
+    "$(dur $((now - T_ALL0)))" "$res" "${MF_REL[$i]##*/}" "$t" \
+    "$(dur "$secs")" "$left" "$parts"
+}
+
 run_makefile() {
-  local i=$1 t rc T0 T_MF0
+  local i=$1 t rc T0 T_MF0 secs
   T_MF0=$(date +%s)
   for t in ${MF_TESTS[$i]}; do
-    echo "[regress] ${MF_REL[$i]} $t"
     T0=$(date +%s)
+    echo "$t $T0" > "$LOG_DIR/${MF_TAG[$i]}.cur"
     "${NICE[@]}" make -B -C "${MF_DIR[$i]}" "$t" \
       > "$LOG_DIR/${MF_TAG[$i]}.$t.log" 2>&1
     rc=$?
-    echo "$rc $(( $(date +%s) - T0 ))" > "$LOG_DIR/${MF_TAG[$i]}.$t.res"
+    secs=$(( $(date +%s) - T0 ))
+    rm -f "$LOG_DIR/${MF_TAG[$i]}.cur"
+    echo "$rc $secs" > "$LOG_DIR/${MF_TAG[$i]}.$t.res"
+    progress "$i" "$t" "$rc" "$secs"
   done
   echo $(( $(date +%s) - T_MF0 )) > "$LOG_DIR/${MF_TAG[$i]}.time"
 }
@@ -402,6 +504,20 @@ for key in "${!KNOWN_TD[@]}"; do
 done
 
 T_ALL=$(( $(date +%s) - T_ALL0 ))
+
+# Save this run's target times for the next run's estimate. Targets not
+# run this time keep their earlier time.
+if [ -n "$TIMES_FILE" ]; then
+  for i in "${!MF_REL[@]}"; do
+    for t in ${MF_TESTS[$i]}; do
+      [ -f "$LOG_DIR/${MF_TAG[$i]}.$t.res" ] || continue
+      read -r _ secs < "$LOG_DIR/${MF_TAG[$i]}.$t.res"
+      EXP["${MF_REL[$i]} $t"]=$secs
+    done
+  done
+  for key in "${!EXP[@]}"; do echo "$key ${EXP[$key]}"; done | sort \
+    > "$TIMES_FILE.tmp" && mv "$TIMES_FILE.tmp" "$TIMES_FILE"
+fi
 
 echo
 echo "=================================================================="

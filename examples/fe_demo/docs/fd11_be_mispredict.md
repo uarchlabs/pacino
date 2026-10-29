@@ -149,3 +149,26 @@ S=fd11_be_mispredict` opens in Surfer. Look at:
   `ftq_rollback_corr`, `bpu_ghist_ptr` stepping back, and
   `ras_restore_val` with `ras_restore_snapshot.tosr`, `.tosw`, `.bos`.
 - bp_cluster_p0 group: the next `ftq_pred_pc_p0` is the redirect PC.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 19  | first history rollback (`ftq_rollback_val`),     | a predecode        |
+|     | with its RAS restore (`ras_restore_val`)         | redirect           |
+| 20  | first misprediction of A taken; redirect to      | pass 0, backend    |
+|     | 0x8000_0010                                      |                    |
+| 49  | the return mispredicted; redirect to 0x8000_0014 | backend            |
+| 53  | fetch restarts at 0x8000_0014: the FTQ presents  | `ftq_ifu_start_pc` |
+|     | a block from the redirect address to the IFU     |                    |
+| 60  | the back edge mispredicted, cold; redirect to    | backend            |
+|     | 0x8000_0008                                      |                    |
+| 86  | first misprediction of A not taken; redirect to  | backend            |
+|     | 0x8000_000E                                      |                    |
+| 471 | the loop exits: the back edge falls through, a   | pass 31, backend   |
+|     | misprediction; redirect to 0x8000_001A           |                    |
+| 480 | the run ends                                     |                    |

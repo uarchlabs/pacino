@@ -132,3 +132,22 @@ S=fd02_steady` opens in Surfer. Look at:
   `dec_ibuf_rdy` from cyc 20, and `pd_out.[0].start_pc` stepping by 0x20,
   one block per bundle. The group shows the first lane's PC only
   (DOC-006).
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 1   | first p1 prediction the FTQ accepts; one in      | uBTB miss, the     |
+|     | every cycle from here to the end of the run      | next 32-byte block |
+| 18  | first full decode bundle, the block at           |                    |
+|     | 0x8000_0000: all eight lanes of `pd_out` valid   |                    |
+| 20  | second full bundle, the block at 0x8000_0020;    |                    |
+|     | one full bundle in every cycle from here to cyc  |                    |
+|     | 82                                               |                    |
+| 83  | the halt block reaches decode, one instruction   | 0x8000_0800        |
+|     | in lane 0                                        |                    |
+| 84  | the run ends                                     |                    |

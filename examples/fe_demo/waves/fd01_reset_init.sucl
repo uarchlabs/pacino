@@ -68,4 +68,15 @@ item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd01_reset_init.md section 6
+marker_set c0_reset_released 36
+marker_set c1_the_three_table_walks_start_at 45
+marker_set c513_ITTAGE_ready 5165
+marker_set c1025_SC_ready 10285
+marker_set c2049_TAGE_ready 20525
+marker_set c2050_first_p1_prediction_the_FTQ_accepts 20535
+marker_set c2051_first_TAGE_and_ITTAGE_responses_at 20545
+marker_set c2052_first_SC_response_at_p3 20555
+marker_set c8086_the_run_ends 80895
+item_unfocus
+zoom_to 16 336

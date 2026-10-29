@@ -129,3 +129,23 @@ itlb, ifu_l1i, decode. Look at:
   IT-4) is 0 hit, 1 miss (a walk has started), 2 fault, 3 reserved;
   `itlb_ifu_cause` (IT-6), valid with a fault, is 1 instruction access
   fault, 12 instruction page fault, 20 instruction guest-page fault.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | S-mode, Sv39       |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 46  | walk for VPN 0x80010, the first page of the      |                    |
+|     | crossing block                                   |                    |
+| 70  | walk for VPN 0x80011, the second page            |                    |
+| 93  | L1I request for 0x8100_0FC0, the line of the     | first page         |
+|     | block's start                                    |                    |
+| 94  | the translation queue entry of the block at      | counted            |
+|     | 0x8001_0FF0 popped with two translations:        |                    |
+|     | `xq_cross` 1, PPN 0x81000 and 0x81205            |                    |
+| 94  | L1I request for 0x8120_5000, the second page's   | second page        |
+|     | first line                                       |                    |
+| 112 | the run ends                                     |                    |

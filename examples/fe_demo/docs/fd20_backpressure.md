@@ -135,3 +135,22 @@ S=fd20_backpressure` opens in Surfer. Look at:
   `u_npc.w_hold` high with it.
 - `u_ibuf.r_count` in the ibuf group, the occupancy the ready is
   computed from: 52 at cyc 71, when `ibuf_ifu_rdy` first refuses.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 18  | decode first holds a bundle: `pd_out.[0].valid`  | decode stall       |
+|     | with `dec_ibuf_rdy` low                          |                    |
+| 71  | the instruction buffer first refuses the IFU:    | buffer full        |
+|     | `ifu_ibuf_val` with `ibuf_ifu_rdy` low,          |                    |
+|     | `r_count` 52                                     |                    |
+| 138 | the FTQ first full (`ftq_full`); the p0 request  | FTQ full           |
+|     | is withheld                                      |                    |
+| 526 | back edge falls through, a misprediction;        | pass 39, backend   |
+|     | redirect to 0x8000_004A                          |                    |
+| 537 | the run ends                                     |                    |

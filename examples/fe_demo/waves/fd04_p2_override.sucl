@@ -107,4 +107,12 @@ item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd04_p2_override.md section 6
+marker_set c0_reset_released 36
+marker_set c182_first_p2_redirect 1855
+marker_set c193_first_p2_redirect_to_0x8000_480A 1965
+marker_set c293_first_p2_redirect_to_the_jal 2965
+marker_set c513_the_chain_exits 5165
+marker_set c522_the_run_ends 5255
+item_unfocus
+zoom_to 16 336

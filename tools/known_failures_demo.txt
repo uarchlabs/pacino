@@ -1,0 +1,11 @@
+# tools/known_failures_demo.txt -- the waived failures of
+# tools/regress_demo.sh (fe_demo_tb_decisions.md FDT-2). Jeff
+# alone edits this file.
+# Line format, one line per failing scenario:
+#   examples/fe_demo <scenario> TD#<n> <one-line description>
+# TD#? when no TD number exists yet. Lines starting with # and
+# blank lines are ignored. A listed scenario that passes, or that
+# did not run, fails the regression.
+#
+# Source: DOC-009, tools/regress_demo.sh, 24 of 24 scenarios PASS,
+# events checked 210 of 210. No entry.

@@ -137,4 +137,18 @@ item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
 item_unfocus
-zoom_fit
+# markers, from docs/fd15_faults.md section 6
+marker_set c0_reset_released 36
+marker_set c90_walk_for_VPN_0x80400 935
+marker_set c104_the_walker_answers_a_page_fault 1075
+marker_set c108_the_page_fault_reaches_decode 1115
+marker_set c166_walk_for_VPN_0x80600 1695
+marker_set c187_the_walker_answers_a_hit 1905
+marker_set c191_the_access_fault_reaches_decode 1945
+marker_set c202_the_ecalls_trap_redirect_to_V 2055
+marker_set c399_walk_for_VPN_0x80800 4025
+marker_set c490_the_walker_answers_cause_20 4935
+marker_set c494_the_third_fault_reaches_decode 4975
+marker_set c700_the_run_ends 7035
+item_unfocus
+zoom_to 16 336

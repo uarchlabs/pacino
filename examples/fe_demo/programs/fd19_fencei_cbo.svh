@@ -44,3 +44,53 @@
     W.mixed(2);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd19_fencei_cbo.md, in table order. The
+  // FENCE.I is at +0x20, the next instruction +0x24; the taken branch
+  // at +0x40 targets +0x46, the cbo.inval; the next instruction +0x4A.
+  // The IFU's and the L1I's maintenance signals are design registers;
+  // the backend's redirects (RC_REPLAY after a maintenance ack, and the
+  // mispredict) are driven by the testbench: late.
+  // =================================================================
+  function automatic logic fd19_fetch(input logic [VA_WIDTH-1:0] pc);
+    return dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val && (dut.ftq_ifu_start_pc == pc);
+  endfunction
+
+  function automatic void fd19_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("the_FENCEI_reaches_the_L1I", EV_WINDOW);
+    evt_def("first_invalidate_done", EV_WINDOW);
+    evt_def("first_maintenance_acknowledgement", EV_WINDOW);
+    evt_def("the_restart_after_the_FENCEI", EV_WINDOW, 1);
+    evt_def("fetch_starts_at_0x8000_0024", EV_WINDOW);
+    evt_def("the_branch_at_0x8000_0040_mispredicted", EV_WINDOW, 1);
+    evt_def("the_cboinval_reaches_the_L1I", EV_WINDOW);
+    evt_def("second_invalidate_done", EV_WINDOW, 0, 1);
+    evt_def("second_maintenance_acknowledgement", EV_WINDOW, 0, 1);
+    evt_def("the_restart_after_the_cboinval", EV_WINDOW, 1);
+    evt_def("fetch_starts_at_0x8000_004A", EV_WINDOW);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd19_evt_now();
+    logic [EV_MAX-1:0] e;
+    e     = '0;
+    e[0]  = ev_p0(RESET_VECTOR);
+    e[1]  = dut.ifu_l1i_inv_val && dut.ifu_l1i_inv_rdy && dut.ifu_l1i_inv_all;
+    e[2]  = dut.l1i_ifu_inv_done;
+    e[3]  = ifu_cmt_maint_ack;
+    e[4]  = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h24));
+    e[5]  = fd19_fetch(RESET_VECTOR + VA_WIDTH'('h24));
+    e[6]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h46));
+    e[7]  = dut.ifu_l1i_inv_val && dut.ifu_l1i_inv_rdy &&
+            !dut.ifu_l1i_inv_all;
+    // The last of the two dones and acks: the cbo.inval's.
+    e[8]  = dut.l1i_ifu_inv_done;
+    e[9]  = ifu_cmt_maint_ack;
+    e[10] = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h4A));
+    e[11] = fd19_fetch(RESET_VECTOR + VA_WIDTH'('h4A));
+    return e;
+  endfunction

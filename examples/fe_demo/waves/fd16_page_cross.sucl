@@ -124,4 +124,13 @@ item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
 item_unfocus
-zoom_fit
+# markers, from docs/fd16_page_cross.md section 6
+marker_set c0_reset_released 36
+marker_set c46_walk_for_VPN_0x80010 495
+marker_set c70_walk_for_VPN_0x80011 735
+marker_set c93_L1I_request_for_0x8100_0FC0 965
+marker_set c94_the_translation_queue_entry_of_the 975
+marker_set c94_L1I_request_for_0x8120_5000 975
+marker_set c112_the_run_ends 1155
+item_unfocus
+zoom_to 16 336

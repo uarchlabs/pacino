@@ -1,29 +1,72 @@
 name: Deploy Docs
 
+# The Showcase pages come from the latest fe-* tag (SR-4, SR-6,
+# planning/showcase/showcase_release_decisions.md), the rest of the site
+# from main. A push of an fe-* tag rebuilds the site; path filters do not
+# apply to tag pushes.
 on:
   push:
     branches:
       - main
+    tags:
+      - 'fe-*'
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'examples/fe_demo/docs/**'
       - 'tools/mkdocs_showcase.py'
+      - 'tools/fe_release.py'
+      - '.github/workflows/docs.yml'
 
 permissions:
   contents: write
+
+# gh-deploy force-pushes gh-pages; a tag push and a main push together
+# must not race.
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # main, also on a tag push, so the rest of the site is main's.
+      # fetch-depth 0 fetches every tag and the commits they name.
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
 
-      - run: pip install mkdocs-material
+      # MkDocs 1.6 for File.generated (tools/mkdocs_showcase.py); 2.0
+      # drops the plugin and hook system.
+      - run: pip install mkdocs-material 'mkdocs>=1.6,<2'
+
+      # The latest fe-* tag's examples/fe_demo pages, extracted outside
+      # the checkout; tools/mkdocs_showcase.py takes the Showcase pages
+      # from there. With no tag the pages come from main through the
+      # docs/showcase/fe_demo symlink, and the landing page says they are
+      # unreleased.
+      - name: Showcase release
+        run: |
+          echo "SHOWCASE_CI=1" >> "$GITHUB_ENV"
+          tag=$(git tag -l 'fe-*' | python3 tools/fe_release.py latest)
+          if [ -z "$tag" ]; then
+            echo "No fe-* tag: the Showcase pages are main's (unreleased)"
+            exit 0
+          fi
+          dir="$RUNNER_TEMP/showcase_release"
+          rm -rf "$dir"
+          mkdir -p "$dir"
+          git archive "$tag" examples/fe_demo/docs examples/fe_demo/programs \
+            examples/fe_demo/waves | tar -x -C "$dir"
+          echo "SHOWCASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "SHOWCASE_DEMO_DIR=$dir/examples/fe_demo" >> "$GITHUB_ENV"
+          commit=$(git rev-parse "$tag^{commit}")
+          echo "The Showcase pages are $tag's, commit $commit"
 
       - run: mkdocs gh-deploy --force
-

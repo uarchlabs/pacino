@@ -141,4 +141,15 @@ item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd11_be_mispredict.md section 6
+marker_set c0_reset_released 36
+marker_set c19_first_history_rollback 225
+marker_set c20_first_misprediction_of_A_taken 235
+marker_set c49_the_return_mispredicted 525
+marker_set c53_fetch_restarts_at_0x8000_0014 565
+marker_set c60_the_back_edge_mispredicted 635
+marker_set c86_first_misprediction_of_A_not_taken 895
+marker_set c471_the_loop_exits 4745
+marker_set c480_the_run_ends 4835
+item_unfocus
+zoom_to 16 336

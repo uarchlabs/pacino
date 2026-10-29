@@ -126,4 +126,14 @@ item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd05_p3_override.md section 6
+marker_set c0_reset_released 36
+marker_set c47_first_p3_redirect_from_an_SC 505
+marker_set c178_A_reversed_to_not_taken_before 1815
+marker_set c261_the_split 2645
+marker_set c292_A_reversed_to_not_taken_after 2955
+marker_set c822_last_p3_redirect_from_an_SC 8255
+marker_set c965_back_edge_falls_through 9685
+marker_set c975_the_run_ends 9785
+item_unfocus
+zoom_to 16 336

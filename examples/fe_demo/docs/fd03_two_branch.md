@@ -163,3 +163,23 @@ S=fd03_two_branch` opens in Surfer. Look at:
   `bpu_slot_p2.[0]` / `.[1]` both valid, each a conditional (`br_type`
   COND) at its own `pos`, `pred_src` PRED_TAGE.
 - group `ftq`: `w_ok_pred_p1` and `w_ok_slot_p2` accepting them.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 83  | first p1 prediction for X with both slots valid, | uBTB, X            |
+|     | accepted by the FTQ                              | 0x8000_0400        |
+| 84  | first p2 group for X with both slots: X.c1 at    | accepted, FTB      |
+|     | position 1 and X.c2 at position 4, both          |                    |
+|     | conditionals                                     |                    |
+| 107 | first p2 group for Y with both slots: Y.c1 at    | accepted, FTB, Y   |
+|     | position 1 and Y.c2 at position 4, both          | 0x8000_0440        |
+|     | conditionals                                     |                    |
+| 529 | back edge falls through, a misprediction;        | pass 23            |
+|     | redirect to 0x8000_0014                          |                    |
+| 539 | the run ends                                     |                    |

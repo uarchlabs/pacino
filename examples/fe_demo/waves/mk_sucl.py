@@ -4,12 +4,13 @@
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 #
 # mk_sucl.py -- write waves/<scenario>.sucl, the Surfer command file of
-# each scenario (DOC-002, DOC-004, DOC-006, fe_demo_tb_decisions.md
-# FDT-1, FDT-12a, FDT-12c)
+# each scenario (DOC-002, DOC-004, DOC-006, DOC-009,
+# fe_demo_tb_decisions.md FDT-1, FDT-10c, FDT-12a, FDT-12c)
 #
 # Usage, from examples/fe_demo, after the scenarios have run:
 #   python3 waves/mk_sucl.py [scenario ...]
-# With no names, every scenario of fe_demo_sigs.NAMES.
+# With no names, every scenario of fe_demo_sigs.NAMES. The Makefile
+# runs the other form, --svh <file>, before each compile (below).
 #
 # THE FST OF EACH SCENARIO (DOC-006). The scenarios run on two models,
 # at one and two prediction slots (Makefile SCEN_2S), whose FSTs name
@@ -46,23 +47,34 @@
 # enum-typed signal Enum (the value names of its FST enum table). A
 # signal no row of the table matches stops the script.
 #
-# MARKERS (FDT-12c). A scenario whose description docs/<scenario>.md is
-# in the FDT-13 form gets one marker per event of its section 4 table.
-# The description is in that form when its level-2 headings are, in
-# order, 1. What the scenario shows, 2. The program, 3. Walkthrough,
-# 4. Events, and optionally 5. Notes; a leading 0. Introduction is
-# allowed (DOC-007, PROVISIONAL: fd09_tage.md has one, a hand edit, and
-# its table is still the section 4 one). The table's rows are | cyc |
-# event | other |; a row with a cyc value starts an event and a row
-# with an empty cyc continues the one above. Each event is a marker
+# MARKERS (FDT-12c). A scenario gets one marker per event of the table
+# of its description's level-2 section headed Events, with or without a
+# section number ("## 4. Events", "## Events"), whether or not the
+# description is in the FDT-13 form (Jeff, session-082, DOC-009). The
+# section ends at the next level-1 or level-2 heading. The table's rows
+# are | cyc | event | other |; a row with a cyc value starts an event and
+# a row with an empty cyc continues the one above. Each event is a
+# marker
 #   marker_set c<cyc>_<label> <time>
 # <label> is the event text up to its first ';', ':', ',' or '(',
 # at most LABEL_WORDS words, joined by '_' (a marker name is one word,
 # and '#' starts a comment in a command file). <time> is the first FST
 # time at which tb.cyc equals <cyc> with tb.rstn high, read from that
-# scenario's own FST, out/<scenario>/<scenario>.fst. A table this
-# script cannot read, or a cyc the FST does not reach, stops it with
-# the file and row.
+# scenario's own FST, out/<scenario>/<scenario>.fst. A description with
+# no Events section that cites no cycle as cyc <n> has no markers. One
+# that cites a cycle and has no Events section, a table this script
+# cannot read, or a cyc the FST does not reach, stops it with the file
+# and line.
+#
+# THE TESTBENCH'S TABLE (FDT-10c, DOC-009). With --svh <file> the script
+# reads only the descriptions and writes <file>, an include of module tb
+# that gives each event of each table to tb/fe_demo_events.svh as
+#   evt_row("<label>", <cyc>, <line>);
+# so the expected cycle of every event check is the description's. The
+# Makefile writes it into each model's directory before the compile; a
+# description it cannot read stops the build. No FST is read and
+# fe_demo_sigs.py is not loaded.
+#   python3 waves/mk_sucl.py --svh obj_fe_demo/fe_demo_evt_tbl.svh
 #
 # THE OPENING VIEW. With markers, zoom_to opens the view at the first
 # marker: VIEW_BEFORE cycles before it to VIEW_AFTER cycles after it.
@@ -73,26 +85,18 @@ import os
 import re
 import sys
 
-from fe_demo_sigs import NAMES, fmt, fst_names, fst_values, nslots, scenarios
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, '..', 'docs')
 OUT = os.path.join(HERE, '..', 'out')
-
-scens = sys.argv[1:] or NAMES
-bad = [s for s in scens if s not in NAMES]
-if bad:
-    sys.exit('mk_sucl.py: not a scenario: %s' % ' '.join(bad))
 
 LABEL_WORDS = 6
 VIEW_BEFORE = 2
 VIEW_AFTER = 30
 
-# The level-2 headings of a description in the FDT-13 form.
-FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
-        '4. Events']
-NOTES = '5. Notes'
-INTRO = '0. Introduction'
+# The Events heading, with or without a section number; a cycle cited
+# as cyc <n> (FDT-12c).
+EVENTS_HEAD = re.compile(r'## (?:(\d+)\. )?Events\s*$')
+CYC_CITE = re.compile(r'\bcyc \d+')
 
 missing = []
 nofmt = []
@@ -108,23 +112,27 @@ def alpha(i):
     return ''.join(chr(ord('a') + int(c, 16)) for c in '%x' % i)
 
 
-# The events of a description in the FDT-13 form: [(row, cyc, text)],
-# row the line number of the event's first table row. None when the
-# description is absent or not in that form.
+# The events of a description: [(row, cyc, text)], row the line number
+# of the event's first table row, and the section number of its Events
+# heading ('' when it has none). (None, None) when the description is
+# absent, or has no Events section and cites no cycle.
 def events(path):
     if not os.path.exists(path):
-        return None
+        return None, None
     lines = open(path).read().split('\n')
-    heads = [(n, ln[3:].strip()) for n, ln in enumerate(lines, 1)
-             if ln.startswith('## ')]
-    titles = [t for _, t in heads]
-    if titles[:1] == [INTRO]:
-        titles = titles[1:]
-        heads = heads[1:]
-    if titles not in (FORM, FORM + [NOTES]):
-        return None
-    start = heads[3][0]
-    end = heads[4][0] - 1 if len(heads) > 4 else len(lines)
+    head = [(n, m) for n, m in ((n, EVENTS_HEAD.fullmatch(ln))
+                                for n, ln in enumerate(lines, 1)) if m]
+    if not head:
+        cite = [n for n, ln in enumerate(lines, 1) if CYC_CITE.search(ln)]
+        if cite:
+            raise TableError('cites cyc <n> and has no Events section',
+                             cite[0])
+        return None, None
+    if len(head) > 1:
+        raise TableError('a second Events section', head[1][0])
+    start, num = head[0][0], head[0][1].group(1) or ''
+    end = next((n - 1 for n, ln in enumerate(lines, 1)
+                if n > start and re.match(r'#{1,2} ', ln)), len(lines))
     rows = [(n, ln.strip()) for n, ln in enumerate(lines[start:end],
                                                    start + 1)
             if ln.strip().startswith('|')]
@@ -138,7 +146,7 @@ def events(path):
         return c
 
     if len(rows) < 3:
-        raise TableError('no event table in section 4', start)
+        raise TableError('no event table in the Events section', start)
     head = cells(*rows[0])
     if head[0] != 'cyc':
         raise TableError('column 0 is "%s", not "cyc"' % head[0], rows[0][0])
@@ -155,7 +163,7 @@ def events(path):
             raise TableError('a continuation row before any event', n)
         else:
             ev[-1][2] += ' ' + text
-    return [tuple(e) for e in ev]
+    return [tuple(e) for e in ev], num
 
 
 def label(text):
@@ -190,15 +198,25 @@ def cyc_times(fst):
     return first, rise[1] - rise[0]
 
 
-def markers(scen):
-    doc = os.path.join(DOCS, scen + '.md')
+# The events of docs/<scen>.md, each with a label; a description this
+# script cannot read stops it with the file and line.
+def read_events(scen):
     rel = os.path.join('docs', scen + '.md')
     try:
-        ev = events(doc)
+        ev, num = events(os.path.join(DOCS, scen + '.md'))
     except TableError as e:
         sys.exit('%s line %d: %s' % (rel, e.args[1], e.args[0]))
+    for n, _, text in ev or []:
+        if not label(text):
+            sys.exit('%s line %d: no label in "%s"' % (rel, n, text))
+    return ev, num
+
+
+def markers(scen):
+    rel = os.path.join('docs', scen + '.md')
+    ev, num = read_events(scen)
     if ev is None:
-        return None, None
+        return None, None, None
     fst = os.path.join(OUT, scen, scen + '.fst')
     if not os.path.exists(fst):
         sys.exit('%s has events; its FST %s is missing (make %s)'
@@ -207,15 +225,59 @@ def markers(scen):
     first, period = cyc_times(fst)
     out = []
     for n, cyc, text in ev:
-        lbl = label(text)
-        if not lbl:
-            sys.exit('%s line %d: no label in "%s"' % (rel, n, text))
         if cyc not in first:
             sys.exit('%s line %d: cyc %d is not in %s'
                      % (rel, n, cyc, os.path.basename(fst)))
-        out.append(('c%d_%s' % (cyc, lbl), first[cyc]))
-    return out, period
+        out.append(('c%d_%s' % (cyc, label(text)), first[cyc]))
+    return out, period, num
 
+
+# --svh: the testbench's table (FDT-10c). Every description
+# docs/fdNN_<name>.md, in name order. tb/fe_demo_events.svh matches a
+# row with its check by label, so a label must be unique in its table.
+def write_svh(path):
+    scens = sorted(f[:-3] for f in os.listdir(DOCS)
+                   if re.fullmatch(r'fd\d\d_\w+\.md', f))
+    lines = ['// %s -- written by examples/fe_demo/waves/mk_sucl.py --svh'
+             % os.path.basename(path),
+             '// from the Events tables of docs/fdNN_<name>.md (FDT-10c,',
+             '// FDT-12c). Included inside module tb by tb_fe_demo.sv.',
+             '// Do not edit: the descriptions are the source.',
+             '  function automatic void evt_table(input string nm);',
+             '    case (nm)']
+    for scen in scens:
+        ev, _ = read_events(scen)
+        if not ev:
+            continue
+        seen = {}
+        lines += ['      "%s": begin' % scen]
+        for n, cyc, text in ev:
+            lbl = label(text)
+            if lbl in seen:
+                sys.exit('docs/%s.md line %d: label %s is also the label '
+                         'of line %d' % (scen, n, lbl, seen[lbl]))
+            seen[lbl] = n
+            lines += ['        evt_row("%s", %d, %d);' % (lbl, cyc, n)]
+        lines += ['      end']
+    lines += ['      default: ;', '    endcase', '  endfunction']
+    with open(path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+
+args = sys.argv[1:]
+if args[:1] == ['--svh']:
+    if len(args) != 2:
+        sys.exit('usage: mk_sucl.py --svh <file>')
+    write_svh(args[1])
+    sys.exit(0)
+
+# The command files need the FST reader and the signal lists.
+from fe_demo_sigs import NAMES, fmt, fst_names, fst_values, nslots, scenarios
+
+scens = args or NAMES
+bad = [s for s in scens if s not in NAMES]
+if bad:
+    sys.exit('mk_sucl.py: not a scenario: %s' % ' '.join(bad))
 
 out = {}
 nmark = {}
@@ -262,9 +324,10 @@ for scen in scens:
         n += 1 + len(rows)
     if missing or nofmt:
         continue
-    mk, period = markers(scen)
+    mk, period, num = markers(scen)
     if mk:
-        lines += ['# markers, from docs/%s.md section 4' % scen]
+        lines += ['# markers, from docs/%s.md section %s'
+                  % (scen, num or 'Events')]
         lines += ['marker_set %s %d' % m for m in mk]
         t0 = mk[0][1]
         lines += ['item_unfocus',

@@ -97,4 +97,14 @@ item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
 item_unfocus
-zoom_fit
+# markers, from docs/fd10_pd_redirect.md section 6
+marker_set c0_reset_released 36
+marker_set c19_first_predecode_redirect 225
+marker_set c165_the_13th_predecode_redirect 1685
+marker_set c175_a_predecode_redirect_to_0x8000_0116 1785
+marker_set c176_the_back_edge_mispredicted 1795
+marker_set c186_last_predecode_redirect 1895
+marker_set c246_back_edge_falls_through 2495
+marker_set c255_the_run_ends 2585
+item_unfocus
+zoom_to 16 336

@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Jeff Nye, uarchlabs.com
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 
-# Makefile -- the front-end demonstration testbench (DOC-001),
+# Makefile -- the front-end demonstration testbench (DOC-001, DOC-009),
 # planning/testbenches/fe_demo_tb_decisions.md
 #
 # TARGETS:
@@ -15,6 +15,8 @@
 #   scenarios     every scenario in FD order (FDT-9); stops at the
 #                 first FAIL. make -k scenarios runs them all
 #   build         both simulation models only
+#   scenario_list the scenarios, the 2-slot ones and the models, for
+#                 tools/regress_demo.sh
 #   clean         the models and out/
 #   view S=<scenario>
 #                 the scenario's waveform in Surfer with its command file
@@ -36,8 +38,22 @@
 # SURFER_LOG, default warn, is Surfer's log level; SURFER_LOG=info gives
 # its full output.
 #
-# NOT A REGRESSION (FDT-2): tools/regress.sh scans rtl/ only, and
-# nothing here is in it.
+# THE DEMONSTRATION REGRESSION (FDT-2, FDT-2a, Jeff session-082). The
+# scenarios are checked by tools/regress_demo.sh, not by tools/regress.sh,
+# which scans rtl/ only. Run from the repository root, it builds each
+# model once from the tree it runs in, runs every scenario of SCENARIOS
+# on its model (scenario_list gives it the lists) and exits non-zero on a
+# failing scenario not listed in tools/known_failures_demo.txt, which
+# Jeff alone edits. It gates no push and records no pass. A DOC task that
+# changes examples/fe_demo/ ends by running it; a failing scenario not
+# listed blocks its Status: complete. A task that changes rtl/ runs it
+# and reports each failing scenario; those do not block that task.
+#
+# EVENT CHECKS (FDT-10c, DOC-009). Each scenario checks the events of
+# its description's Events table in its program, programs/fdNN_*.svh.
+# waves/mk_sucl.py --svh writes the tables into each model's directory
+# before the compile (EVT_TBL below), so the expected cycles are the
+# descriptions'. The result line reports events checked <n> of <m>.
 RVA_ROOT ?= $(abspath ../..)
 include $(RVA_ROOT)/rtl/Vars.mk
 
@@ -53,102 +69,17 @@ endif
 .DEFAULT_GOAL := help
 
 # -- Sources ----------------------------------------------------------
-# THE fe_top SOURCE LIST, as rtl/core/frontend/fe_top/Makefile gives it
-# for tb_fe_top less the bound properties (a demonstration checks no
-# properties). Kept in step with that Makefile by hand.
-FE_DIR   := $(RVA_ROOT)/rtl/core/frontend
-FE_TOP   := $(FE_DIR)/fe_top
-BPU_DIR  := $(FE_DIR)/bpu/rtl
-FTQ_DIR  := $(FE_DIR)/ftq/rtl
-IFU_DIR  := $(FE_DIR)/ifu/rtl
-IBUF_DIR := $(FE_DIR)/ibuf/rtl
-DEC_DIR  := $(FE_DIR)/decode/rtl
-L1I_DIR  := $(FE_DIR)/icache/rtl
-COMP_DIR := $(RVA_ROOT)/rtl/lib/rtl
-ITLB_DIR := $(RVA_ROOT)/rtl/mmu/itlb/rtl
-PMP_DIR  := $(RVA_ROOT)/rtl/mmu/pmp/rtl
-PTW_DIR  := $(RVA_ROOT)/rtl/mmu/ptw/rtl
-CSR_DIR  := $(RVA_ROOT)/rtl/core/csr
+# THE fe_top SOURCE LIST, its RTL directories and the flags tb_fe_top's
+# builds share, from rtl/core/frontend/fe_top/fe_top_srcs.mk (DOC-009),
+# the fragment rtl/core/frontend/fe_top/Makefile also includes. The
+# demonstration compiles the top and the walker, without tb_fe_top's
+# bound properties (a demonstration checks no properties).
+include $(RVA_ROOT)/rtl/core/frontend/fe_top/fe_top_srcs.mk
 
 # The shared testbench models (FDT-4).
-MODELS   := $(FE_TOP)/tb/models
+MODELS   := $(FE_TB_MODELS)
 
-PKG_SRCS := \
-  $(BPU_DIR)/bp_defines_pkg.sv \
-  $(BPU_DIR)/bp_structs_pkg.sv \
-  $(DEC_DIR)/decode_pkg.sv \
-  $(CSR_DIR)/rtl/csr_pkg.sv
-
-TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv
-
-L1I_SRCS := \
-  $(L1I_DIR)/cgen_tl_pkg.sv \
-  $(L1I_DIR)/l1i_pkg.sv \
-  $(L1I_DIR)/l1i_core_slv.sv \
-  $(L1I_DIR)/l1i_mem_mst.sv \
-  $(L1I_DIR)/l1i_meta_array.sv \
-  $(L1I_DIR)/l1i_data_array.sv \
-  $(L1I_DIR)/l1i_ctrl.sv \
-  $(L1I_DIR)/l1i_bank.sv \
-  $(L1I_DIR)/l1i_mshr.sv \
-  $(L1I_DIR)/l1i_maint.sv \
-  $(L1I_DIR)/l1i.sv
-
-BPU_SRCS := \
-  $(COMP_DIR)/bw_ram.sv \
-  $(COMP_DIR)/sram_init.sv \
-  $(BPU_DIR)/bp_history.sv \
-  $(BPU_DIR)/ubtb.sv \
-  $(BPU_DIR)/loop_pred.sv \
-  $(BPU_DIR)/ftb_array.sv \
-  $(BPU_DIR)/ftb_plru.sv \
-  $(BPU_DIR)/ftb_cntrl.sv \
-  $(BPU_DIR)/ftb.sv \
-  $(BPU_DIR)/tage_bim.sv \
-  $(BPU_DIR)/tage_table.sv \
-  $(BPU_DIR)/tage_cntrl.sv \
-  $(BPU_DIR)/tage_arb.sv \
-  $(BPU_DIR)/tage.sv \
-  $(BPU_DIR)/ittage_table.sv \
-  $(BPU_DIR)/ittage_cntrl.sv \
-  $(BPU_DIR)/ittage_arb.sv \
-  $(BPU_DIR)/ittage.sv \
-  $(BPU_DIR)/sc_table.sv \
-  $(BPU_DIR)/sc_brimli.sv \
-  $(BPU_DIR)/sc_cntrl.sv \
-  $(BPU_DIR)/sc.sv \
-  $(BPU_DIR)/ras.sv \
-  $(BPU_DIR)/bp_cluster.sv
-
-FTQ_SRCS := \
-  $(FTQ_DIR)/ftq_ptr.sv \
-  $(FTQ_DIR)/ftq_commit.sv \
-  $(FTQ_DIR)/ftq_entry.sv \
-  $(FTQ_DIR)/ftq_meta.sv \
-  $(FTQ_DIR)/ftq_status.sv \
-  $(FTQ_DIR)/ftq_shadow.sv \
-  $(FTQ_DIR)/ftq_npc.sv \
-  $(FTQ_DIR)/ftq_ifu.sv \
-  $(FTQ_DIR)/ftq_resolve.sv \
-  $(FTQ_DIR)/ftq_upd_conv.sv \
-  $(FTQ_DIR)/ftq_ftb_sched.sv \
-  $(FTQ_DIR)/ftq.sv
-
-IFU_SRCS := \
-  $(IFU_DIR)/ifu_xlate.sv \
-  $(IFU_DIR)/ifu_lbuf.sv \
-  $(IFU_DIR)/ifu_fetch.sv \
-  $(IFU_DIR)/ifu_rvc_exp.sv \
-  $(IFU_DIR)/ifu_predecode.sv \
-  $(IFU_DIR)/ifu_f3.sv \
-  $(IFU_DIR)/ifu_wb.sv \
-  $(IFU_DIR)/ifu_maint.sv \
-  $(IFU_DIR)/ifu.sv
-
-RTL_SRCS := $(PKG_SRCS) $(L1I_SRCS) $(BPU_SRCS) $(FTQ_SRCS) $(IFU_SRCS) \
-            $(IBUF_DIR)/ibuf.sv $(PMP_DIR)/pmp_pma_chk.sv \
-            $(ITLB_DIR)/itlb.sv $(DEC_DIR)/instr_decoder.sv \
-            $(FE_TOP)/rtl/fe_top.sv $(PTW_DIR)/ptw.sv
+RTL_SRCS := $(FE_TOP_SRCS) $(FE_PTW_SRCS)
 
 TB_TOP   := tb/tb_fe_demo.sv
 # The runtime's $finish without its message (FDT-10a): see the file.
@@ -157,27 +88,27 @@ TB_INCS  := $(wildcard tb/*.svh) $(wildcard programs/*.svh) \
             $(wildcard $(MODELS)/*.svh)
 
 # -- Flags --------------------------------------------------------------
-# As tb_fe_top's (rtl/core/frontend/fe_top/Makefile): -Wall less
-# UNUSED and IMPORTSTAR, DECLFILENAME for module tb, VARHIDDEN for the
-# loop_pred.sv parameters, SYNCASYNCNET for sram_init.
+# As tb_fe_top's, from fe_top_srcs.mk: FE_VER_FLAGS (-Wall less UNUSED
+# and IMPORTSTAR, --timing), FE_SIM_FLAGS (DECLFILENAME for module tb)
+# and FE_WAIVERS (VARHIDDEN for the loop_pred.sv parameters,
+# SYNCASYNCNET for sram_init).
 # --trace-fst for the waveform (FDT-11), --trace-structs so struct
 # members appear by name. VL_USER_FINISH: the runtime's vl_finish is
 # replaced by tb/fe_demo_finish.cpp's, which prints nothing (FDT-10a).
-VER_FLAGS := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR -Wno-DECLFILENAME \
-             -Wno-VARHIDDEN -Wno-SYNCASYNCNET --timing \
+VER_FLAGS := $(FE_VER_FLAGS) $(FE_SIM_FLAGS) $(FE_WAIVERS) \
              --trace-fst --trace-structs -CFLAGS -DVL_USER_FINISH
 
 # The two models. OBJ, the default, at one prediction slot: the macros
-# tb_fe_top's _1slot targets pass (rtl/core/frontend/fe_top/Makefile);
+# tb_fe_top's _1slot targets pass, FE_SLOT1_DEFS (fe_top_srcs.mk);
 # BP_EXPECT_PRED_SLOTS makes bp_defines_pkg check the count it builds.
 # OBJ2 at two, the package default, with no macro.
-SLOT1_FLAGS := +define+BP_NUM_PRED_SLOTS=1 +define+BP_EXPECT_PRED_SLOTS=1
+SLOT1_FLAGS := $(FE_SLOT1_DEFS)
 OBJ       := obj_fe_demo
 OBJ2      := obj_fe_demo_2slot
 VTB       := $(OBJ)/Vtb
 VTB2      := $(OBJ2)/Vtb
 
-FAST_INIT := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
+FAST_INIT := $(FE_FAST_INIT)
 # The runtime's end-of-run report off (FDT-10a).
 QUIET     := +verilator+quiet
 
@@ -203,7 +134,7 @@ vtb_of = $(if $(filter $(1),$(SCEN_2S)),$(VTB2),$(VTB))
 # init.
 plusargs = $(if $(filter fd01_reset_init,$(1)),,$(FAST_INIT))
 
-.PHONY: help build scenarios clean view $(SCENARIOS)
+.PHONY: help build scenarios clean view scenario_list $(SCENARIOS)
 
 help:
 	@echo "make <scenario>   run one scenario on its model; out/<scenario>/"
@@ -211,6 +142,9 @@ help:
 	@echo "make scenarios    run all of them in FD order"
 	@echo "make build        build both models only"
 	@echo "make clean        remove the models and out/"
+	@echo "make scenario_list"
+	@echo "                  the scenarios, the 2-slot ones and the models,"
+	@echo "                  for tools/regress_demo.sh"
 	@echo "make view S=<scenario>"
 	@echo "                  open the scenario's waveform in Surfer"
 	@echo "                  (runs the scenario first if its FST is"
@@ -225,19 +159,33 @@ build: $(VTB) $(VTB2)
 
 DEPS := $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(TB_INCS) $(TB_CPP)
 
+# THE EVENT TABLE (FDT-10c, DOC-009). waves/mk_sucl.py --svh reads the
+# Events table of every description and writes fe_demo_evt_tbl.svh, the
+# expected cycle of each event check, into the model's directory, which
+# the compile adds to its include path. A changed description rebuilds
+# both models; one mk_sucl.py cannot read stops the build with the file
+# and line.
+EVT_TBL  := fe_demo_evt_tbl.svh
+MK_SUCL  := waves/mk_sucl.py
+EVT_DOCS := $(wildcard docs/fd[0-9][0-9]_*.md)
+
+$(OBJ)/$(EVT_TBL) $(OBJ2)/$(EVT_TBL): $(EVT_DOCS) $(MK_SUCL)
+	$(Q)mkdir -p $(@D)
+	$(Q)python3 $(MK_SUCL) --svh $@
+
 # One compile recipe for both models: $(1) the Mdir, $(2) the extra
 # flags, $(3) the slot count for the message.
 define compile
 	@echo "[compiling]  tb_fe_demo, $(3) prediction slot(s)"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(2) --top-module tb --Mdir $(1) \
-	  +incdir+$(MODELS) +incdir+tb +incdir+programs \
+	  +incdir+$(MODELS) +incdir+tb +incdir+programs +incdir+$(1) \
 	  $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(abspath $(TB_CPP)) $(VSILENCE)
 endef
 
-$(VTB): $(DEPS)
+$(VTB): $(DEPS) $(OBJ)/$(EVT_TBL)
 	$(call compile,$(OBJ),$(SLOT1_FLAGS),1)
 
-$(VTB2): $(DEPS)
+$(VTB2): $(DEPS) $(OBJ2)/$(EVT_TBL)
 	$(call compile,$(OBJ2),,2)
 
 # One scenario, on its model. The log keeps the run's whole output; the
@@ -262,6 +210,14 @@ $(SCEN_2S): $(VTB2)
 # The scenarios are its prerequisites, run in FD order; make stops at
 # the first FAIL, and make -k scenarios runs every one.
 scenarios: $(SCENARIOS)
+
+# For tools/regress_demo.sh (FDT-2): the scenarios in FD order, those on
+# the 2-slot model, and the two models, one line each, so the script
+# keeps no list of its own.
+scenario_list:
+	@echo "scenarios: $(SCENARIOS)"
+	@echo "two_slot: $(SCEN_2S)"
+	@echo "models: $(VTB) $(VTB2)"
 
 clean:
 	@echo "[cleaning]   fe_demo"

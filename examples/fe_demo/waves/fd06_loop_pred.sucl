@@ -147,4 +147,15 @@ item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
 item_unfocus
-zoom_fit
+# markers, from docs/fd06_loop_pred.md section 6
+marker_set c0_reset_released 36
+marker_set c49_first_inner_exit_mispredicted 525
+marker_set c116_the_loop_predictor_learns_the_trip 1195
+marker_set c248_confidence_reaches_3 2515
+marker_set c256_first_p1_slot_from_the_loop 2595
+marker_set c257_the_loop_predictor_first_trusted_at 2605
+marker_set c259_first_exit_predicted_not_taken 2625
+marker_set c429_outer_loop_falls_through 4325
+marker_set c439_the_run_ends 4425
+item_unfocus
+zoom_to 16 336

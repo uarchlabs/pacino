@@ -9,16 +9,22 @@
 # Surfer is built from https://gitlab.com/surfer-project/surfer at commit
 # SURFER_REF, cloned into $RVA_ROOT/tools/surfer, and installed to
 # $RVA_ROOT/tools/bin (cargo install --root). It is correct when every
-# shared library resolves (ldd) and --version names exactly
-# SURFER_VERSION ("git: v0.7.0-35-g010b840)"); the version is checked
-# again after a build.
+# shared library resolves (ldd), --version names exactly SURFER_VERSION
+# ("git: v0.7.0-35-g010b840)") and the binary links wellen
+# WELLEN_VERSION; both are checked again after a build.
 #
 # The pin is a commit, not the v0.7.0 tag: examples/fe_demo's command
 # files were written and checked (DOC-004) with this build. The v0.7.0
-# tag has no zoom_to command, and its wellen (0.20.5) names an unpacked
-# array element a[i] as a.a.[i] or a.a, not a.[i] (wellen 0.21.0 here),
-# so fe_demo's files fail in it. Move the pin to a release tag once one
-# includes this commit.
+# tag has no zoom_to command, so fe_demo's files fail in it. Move the
+# pin to a release tag once one includes this commit.
+#
+# THE WELLEN PIN (DOC-009). The commit's Cargo.lock locks wellen 0.21.0,
+# which does not name an unpacked array element a[i] as a.[i]; wellen
+# 0.21.1 does, and fe_demo's command files use that name. The build
+# moves the clone's lock to WELLEN_VERSION (cargo update --precise)
+# before cargo install --locked, and verify_surfer checks the version
+# the binary links, which --version does not show. A 0.21.0 build passed
+# every other check here and failed 9 of fe_demo's 24 files.
 #
 # Rust is needed to build only. --build installs it per clone, at
 # RUST_VERSION, into $RVA_ROOT/tools/rust (RUSTUP_HOME and CARGO_HOME
@@ -35,6 +41,7 @@ SRC="$RVA_ROOT/tools/surfer"
 SURFER_URL="https://gitlab.com/surfer-project/surfer.git"
 SURFER_REF="010b84085e7eb27546fce84ca8f02ca6b4797b6a"   # 2026-05-25
 SURFER_VERSION="v0.7.0-35-g010b840"   # what --version prints after git:
+WELLEN_VERSION="0.21.1"               # the wellen the binary must link
 
 # Rust 1.95.0 built Surfer v0.7.0 on 2026-10-27; this commit needs 1.92
 # or later (rust-version in its Cargo.toml).
@@ -71,7 +78,12 @@ verify_surfer() {
     echo "BROKEN  surfer: expected $SURFER_VERSION, got: $version"
     return 1
   fi
-  echo "OK      surfer: $version at $BIN/surfer"
+  # The crate's name and version are in the binary's panic paths.
+  if ! grep -aq "wellen-$WELLEN_VERSION/" "$BIN/surfer"; then
+    echo "BROKEN  surfer: does not link wellen $WELLEN_VERSION"
+    return 1
+  fi
+  echo "OK      surfer: $version, wellen $WELLEN_VERSION, at $BIN/surfer"
 }
 
 check_pkgs surfer
@@ -105,11 +117,15 @@ fi
   fi
   export PATH="$CARGO_HOME/bin:$PATH"
   [ -d "$SRC/.git" ] || git clone "$SURFER_URL" "$SRC"
+  # The lock as committed, so the checkout is clean; the wellen pin
+  # below changes it again.
+  git -C "$SRC" checkout --quiet -- Cargo.lock 2>/dev/null || true
   if ! git -C "$SRC" checkout --quiet "$SURFER_REF" 2>/dev/null; then
     git -C "$SRC" fetch --tags origin
     git -C "$SRC" checkout --quiet "$SURFER_REF"
   fi
   git -C "$SRC" submodule update --init --recursive
+  (cd "$SRC" && cargo update --quiet -p wellen --precise "$WELLEN_VERSION")
   cargo install --locked --no-track --force --jobs "$JOBS" \
     --root "$RVA_ROOT/tools" --path "$SRC/surfer"
 )

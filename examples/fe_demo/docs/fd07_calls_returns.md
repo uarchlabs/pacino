@@ -178,3 +178,25 @@ S=fd07_calls_returns` opens in Surfer. Look at:
 - `bpu_slot_p2.[0].pred_src` `PRED_RAS` on return slots.
 - ras_commit group: `ras_commit_val`, `csp`, `commit_top_addr` change
   as calls and returns retire.
+
+---
+
+## 6. Events
+
+| cyc | Event                                            | Other              |
+|-----|--------------------------------------------------|--------------------|
+| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|     | 0x8000_0000 the same cycle                       |                    |
+| 40  | first RAS commit (`w_ras_commit_val`): a retired |                    |
+|     | call reaches the commit stack                    |                    |
+| 128 | first RAS push at p2: a call presented to the    | `w_ras_pred_val_p2` |
+|     | RAS                                              |                    |
+| 131 | entry 1's recursion count reads 1                |                    |
+|     | (`spec_rctr.[1]`): the first compressed          |                    |
+|     | recursive call                                   |                    |
+| 137 | entry 1's count reaches 4, one step every two    |                    |
+|     | cycles                                           |                    |
+| 162 | first return predicted from the RAS at p2:       |                    |
+|     | `pred_src` PRED_RAS, accepted by the FTQ         |                    |
+| 256 | first RETURN_CALL at p2, presented to the RAS    | coroutine switch   |
+| 694 | the run ends                                     |                    |

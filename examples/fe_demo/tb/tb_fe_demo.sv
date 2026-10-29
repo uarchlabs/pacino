@@ -17,8 +17,11 @@
 // program's executed stream, so a run whose stream does not retire is
 // reported, but nothing else is checked: each run ends by evaluating
 // its scenario's proof, a condition on RTL signals that shows the
-// behaviour occurred, and prints one result line (FDT-10),
-//   -I: <scenario>: PASS, <what the proof read>, cyc <n>
+// behaviour occurred, and the checks of the events of its description's
+// event table (FDT-10c, fe_demo_events.svh), and prints one result line
+// (FDT-10),
+//   -I: <scenario>: PASS, <what the proof read>,
+//       events checked <n> of <m>, cyc <n>
 // or -E: <scenario>: FAIL, ..., which exits non-zero. Every line this
 // testbench prints is in the format of FDT-10a (say(), fe_demo_lib.svh).
 //
@@ -34,6 +37,8 @@
 //   +SCEN=<name>   the scenario (fdNN_<name>, the make target names)
 //   +FST=<file>    write the waveform there (FDT-11); none without it
 //   +TRACE         the shared backend's RETIRE / MISP lines
+//   +EVDUMP        after the result line, the cycle each event check saw
+//                  (fe_demo_events.svh)
 //   +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 //                  the fast SRAM init, every scenario but FD-1 (FDT-7);
 //                  the Makefile passes them
@@ -43,8 +48,12 @@
 //                          backend's hooks
 //   tb/fe_demo_lib.svh     the start and end of a run, the address map
 //                          and shared program pieces
+//   tb/fe_demo_events.svh  the event checks (FDT-10c)
+//   fe_demo_evt_tbl.svh    the event tables of the descriptions, written
+//                          into the model directory by waves/mk_sucl.py
+//                          --svh (Makefile)
 //   programs/fdNN_*.svh    one program per scenario, its FD-0b entry in
-//                          its header
+//                          its header, and its event checks
 //   tb/fe_demo_proofs.svh  the proofs
 // ===================================================================
 import bp_defines_pkg::*;
@@ -62,6 +71,8 @@ module tb;
   `include "fe_tb_backend.svh"
   `include "fe_tb_csr.svh"
   `include "fe_demo_lib.svh"
+  `include "fe_demo_events.svh"
+  `include "fe_demo_evt_tbl.svh"
 
   `include "fd01_reset_init.svh"
   `include "fd02_steady.svh"
@@ -139,12 +150,75 @@ module tb;
     endcase
   endtask
 
+  // The event checks of each program (fe_demo_events.svh, FDT-10c).
+  function automatic void evt_defs(input string nm);
+    case (nm)
+      "fd01_reset_init":    fd01_evt_defs();
+      "fd02_steady":        fd02_evt_defs();
+      "fd03_two_branch":    fd03_evt_defs();
+      "fd04_p2_override":   fd04_evt_defs();
+      "fd05_p3_override":   fd05_evt_defs();
+      "fd06_loop_pred":     fd06_evt_defs();
+      "fd07_calls_returns": fd07_evt_defs();
+      "fd08_indirect":      fd08_evt_defs();
+      "fd09_tage":          fd09_evt_defs();
+      "fd10_pd_redirect":   fd10_evt_defs();
+      "fd11_be_mispredict": fd11_evt_defs();
+      "fd12_training":      fd12_evt_defs();
+      "fd13_l1i":           fd13_evt_defs();
+      "fd14_translation":   fd14_evt_defs();
+      "fd15_faults":        fd15_evt_defs();
+      "fd16_page_cross":    fd16_evt_defs();
+      "fd17_rvc":           fd17_evt_defs();
+      "fd18_uncached":      fd18_evt_defs();
+      "fd19_fencei_cbo":    fd19_evt_defs();
+      "fd20_backpressure":  fd20_evt_defs();
+      "fd21_commit":        fd21_evt_defs();
+      "fd22_sc_slot1":      fd22_evt_defs();
+      "fd23_jump_cut":      fd23_evt_defs();
+      "fd24_call_slot1":    fd24_evt_defs();
+      default: ;
+    endcase
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] evt_now(input string nm);
+    case (nm)
+      "fd01_reset_init":    return fd01_evt_now();
+      "fd02_steady":        return fd02_evt_now();
+      "fd03_two_branch":    return fd03_evt_now();
+      "fd04_p2_override":   return fd04_evt_now();
+      "fd05_p3_override":   return fd05_evt_now();
+      "fd06_loop_pred":     return fd06_evt_now();
+      "fd07_calls_returns": return fd07_evt_now();
+      "fd08_indirect":      return fd08_evt_now();
+      "fd09_tage":          return fd09_evt_now();
+      "fd10_pd_redirect":   return fd10_evt_now();
+      "fd11_be_mispredict": return fd11_evt_now();
+      "fd12_training":      return fd12_evt_now();
+      "fd13_l1i":           return fd13_evt_now();
+      "fd14_translation":   return fd14_evt_now();
+      "fd15_faults":        return fd15_evt_now();
+      "fd16_page_cross":    return fd16_evt_now();
+      "fd17_rvc":           return fd17_evt_now();
+      "fd18_uncached":      return fd18_evt_now();
+      "fd19_fencei_cbo":    return fd19_evt_now();
+      "fd20_backpressure":  return fd20_evt_now();
+      "fd21_commit":        return fd21_evt_now();
+      "fd22_sc_slot1":      return fd22_evt_now();
+      "fd23_jump_cut":      return fd23_evt_now();
+      "fd24_call_slot1":    return fd24_evt_now();
+      default:              return '0;
+    endcase
+  endfunction
+
   // =================================================================
   initial begin
     string scen;
     string fst;
     string msg;
+    string evs;
     logic  ok;
+    logic  evok;
     logic  ran;
     if (!$value$plusargs("SCEN=%s", scen) || !known(scen)) begin
       say("E", "tb_fe_demo", "+SCEN=<name> is required, the scenarios:");
@@ -155,18 +229,23 @@ module tb;
       $dumpfile(fst);
       $dumpvars(0, tb);
     end
+    evt_begin(scen);
     run_scen(scen);
+    evt_at("the_run_ends", cyc_run);
     // The stream must have retired whole for the run to show anything.
-    ran = (ep == W.ne) && (n_err == 0) && (n_retired == W.ne);
-    ok  = proof(scen, msg);
+    ran  = (ep == W.ne) && (n_err == 0) && (n_retired == W.ne);
+    ok   = proof(scen, msg);
+    evok = evt_check(scen, evs);
     if (!ran)
       msg = $sformatf({"stream not retired, retired %0d of %0d, ",
                        "stream errors %0d, %s"}, ep, W.ne, n_err, msg);
-    if (ran && ok) begin
-      say("I", scen, $sformatf("PASS, %s, cyc %0d", msg, cyc_run));
+    if (ran && ok && evok) begin
+      say("I", scen, $sformatf("PASS, %s, %s, cyc %0d", msg, evs, cyc_run));
+      evt_print(scen);
       $finish;
     end else begin
-      say("E", scen, $sformatf("FAIL, %s, cyc %0d", msg, cyc_run));
+      say("E", scen, $sformatf("FAIL, %s, %s, cyc %0d", msg, evs, cyc_run));
+      evt_print(scen);
       $fatal(1);
     end
   end

@@ -39,3 +39,38 @@
     W.mixed(3);
     demo_go(40000);
   endtask
+
+  // =================================================================
+  // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
+  // the Events table of docs/fd10_pd_redirect.md, in table order. T(0)
+  // is 0x8000_0200; the jal of T(11) targets 0x8000_0108; the halt jal
+  // is at 0x8000_0116; the epilogue after the back edge 0x8000_010E.
+  // The predecode redirect is the design's (it changes at the edge);
+  // the backend's redirects are driven by the testbench: late.
+  // =================================================================
+  function automatic void fd10_evt_defs();
+    evt_def("reset_released", EV_EXACT);
+    evt_def("first_predecode_redirect", EV_WINDOW);
+    evt_def("the_13th_predecode_redirect", EV_WINDOW);
+    evt_def("a_predecode_redirect_to_0x8000_0116", EV_WINDOW);
+    evt_def("the_back_edge_mispredicted", EV_WINDOW, 1);
+    evt_def("last_predecode_redirect", EV_WINDOW, 0, 1);
+    evt_def("back_edge_falls_through", EV_WINDOW, 1);
+    evt_def("the_run_ends", EV_WINDOW);
+  endfunction
+
+  function automatic logic [EV_MAX-1:0] fd10_evt_now();
+    logic [EV_MAX-1:0] e;
+    e    = '0;
+    e[0] = ev_p0(RESET_VECTOR);
+    e[1] = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h200));
+    e[2] = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h108));
+    // The halt's predecode redirect, whatever the backend does.
+    e[3] = dut.u_ftq.w_pd_redir_val &&
+           (dut.u_ftq.w_pd_redir_pc == RESET_VECTOR + VA_WIDTH'('h116));
+    e[4] = ev_redir(RESET_VECTOR + VA_WIDTH'('h08));
+    // The jal at top + 2 found again, to T(0).
+    e[5] = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h200));
+    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h10E));
+    return e;
+  endfunction

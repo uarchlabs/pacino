@@ -140,3 +140,23 @@ S=fd08_indirect` opens in Surfer. Look at:
   for K.
 - `bpu_redir_p2.[0]` with `w_ok_redir_p2`: a p2 redirect, the p2
   target differing from the block's p1 prediction.
+
+---
+
+## 6. Events
+
+| cyc  | Event                                            | Other              |
+|------|--------------------------------------------------|--------------------|
+| 0    | reset released (`tb.rstn`); the FTQ requests     | fast init          |
+|      | 0x8000_0000 the same cycle                       |                    |
+| 20   | first misprediction of J; redirect to tb,        | pass 0, backend    |
+|      | 0x8000_0480                                      |                    |
+| 260  | first ITTAGE tagged hit at p2 (`ittage_hit`)     | slot 0             |
+| 260  | first target of K from ITTAGE: the call's slot   | accepted by the    |
+|      | at p2 has `pred_src` PRED_ITTAGE                 | FTQ                |
+| 267  | first target of J from ITTAGE: the jump's slot   | accepted by the    |
+|      | at p2 has `pred_src` PRED_ITTAGE                 | FTQ                |
+| 1138 | the loop exits: its last conditional taken on    | pass 39, backend   |
+|      | the last pass, a misprediction; redirect to      |                    |
+|      | 0x8000_0516                                      |                    |
+| 1147 | the run ends                                     |                    |

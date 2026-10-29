@@ -6,7 +6,7 @@
  FILE:    new_user_decisions.md
  SOURCE:  interactive session, 2026-10-27, branch install_scripts
  STATUS:  DRAFT
- UPDATED: 2026-10-28
+ UPDATED: 2026-10-29
  CONTACT: Jeff Nye
 ```
 
@@ -279,7 +279,13 @@ NU-17  Surfer is installed as tools/bin/surfer. rtl/core/frontend/bpu/
        element a[i] a.a.[i], or a.a with bit index i when 1 bit wide,
        where fe_demo_sigs.py writes a.[i] as wellen 0.21.0 in the commit
        does (71 of 1108 variable_add lines, in 9 files). make view
-       S=fd09_tage with the 010b840 build shows no error. Rejected:
+       S=fd09_tage with the 010b840 build shows no error.
+       wellen is pinned to 0.21.1 (DOC-009): the commit's own lock has
+       0.21.0, which also fails the 9 files with unpacked array
+       elements. check_surfer.sh restores the clone's Cargo.lock, runs
+       cargo update -p wellen --precise 0.21.1, then cargo install
+       --locked; verify_surfer requires wellen-0.21.1 in the binary,
+       since --version cannot tell the two builds apart. Rejected:
        changing fe_demo for the tag (the opening view would only
        approximate FDT-12c's two cycles before to thirty after). Move
        the pin to a release tag once one includes the commit.
@@ -431,10 +437,9 @@ NU-UN-1  Resolved 2026-10-28 (the IA, Jeff's authorization):
 NU-UN-2  The SSH keepalive (NU-21) is not yet proven on a push to
          GitHub whose regression runs for minutes (about 10 at the
          default jobs, NU-22; 15 to 18 before).
-NU-UN-3  waves/chk_sucl.py has not been run with the Surfer that
-         check_surfer.sh builds (commit 010b840, NU-17). make view
-         S=fd09_tage was clean with the same commit built earlier into
-         ~/.cargo (2026-10-28).
+NU-UN-3  CLOSED, DOC-009 (2026-10-29): waves/chk_sucl.py is 24 of 24
+         clean with the Surfer check_surfer.sh builds, 010b840 with
+         wellen pinned to 0.21.1 (NU-17).
 NU-UN-4  The new-user test on a fresh account (new_user.md, account
          randy) has not been run to completion. The 2026-10-27 runs
          found: the check required riscv64- names the release does not
