@@ -445,6 +445,22 @@
          <lastmod>2026-10-31</lastmod>
     </url>
     <url>
+         <loc>https://uarchlabs.github.io/pacino/system/csr/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://uarchlabs.github.io/pacino/system/debug/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://uarchlabs.github.io/pacino/system/exceptions/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
+         <loc>https://uarchlabs.github.io/pacino/system/hpm/</loc>
+         <lastmod>2026-10-31</lastmod>
+    </url>
+    <url>
          <loc>https://uarchlabs.github.io/pacino/showcase/fe_demo/demo_explainer/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
@@ -546,22 +562,6 @@
     </url>
     <url>
          <loc>https://uarchlabs.github.io/pacino/showcase/fe_demo/fe_top_connectivity/</loc>
-         <lastmod>2026-10-31</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/system/csr/</loc>
-         <lastmod>2026-10-31</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/system/debug/</loc>
-         <lastmod>2026-10-31</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/system/exceptions/</loc>
-         <lastmod>2026-10-31</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/system/hpm/</loc>
          <lastmod>2026-10-31</lastmod>
     </url>
 </urlset>
