@@ -6,19 +6,59 @@
  FILE:    fd01_reset_init.md
  SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-19
+ UPDATED: 2026-10-30
  CONTACT: Jeff Nye
 ```
 
-`fd01_reset_init` is the FD-1 demonstration scenario. It is a demo, not a
-verification test. It is the one scenario run without the fast SRAM init
-(FDT-7): the TAGE, ITTAGE and SC tables are cleared by their sram_init
-walks, and the FTQ presents no p0 request until all three readies are
-high. The run passes if each ready is seen low, then rises, and the first
-p1 prediction the FTQ accepts comes no earlier than the last of them.
+## 1. Introduction
 
-The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
+Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs in the TAGE, ITTAGE and SC. These branch predictor tables require an initial value before they are trained by executed branch behavior. 
+
+Initialization is done with simple FSMs that walk the table addresses writing the constants one cycle per entry. There are 2048 TAGE entries, 512 ITTAGE entries and 1024 SC entries. All tables are initialized in parallel.
+
+Ready signals indicate to upstream logic when the predictors have completed this initialization. 
+
+This waveform shows ~2048 cycles for completion of the init process. This is followed by ~295 cycles of example requests. Lastly there are ~100 cycles before termination of the scenario.
+
+The RAS (return address stack) initialization is also shown. The RAS init is a simple reset.
+
+This scenario runs in the 1-prediction slot Pacino configuration. The operations are the same in either 1 or 2 prediction slots.
+
+
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                          |
+  |--------------------|-----------------------------------------------|
+  | This file          | $DEMO/docs/fd01_reset_init.md                 |
+  | Program (stimulus) | $DEMO/programs/fd01_reset_init.svh            |
+  | Surfer sucl        | $DEMO/waves/fd01_reset_init.sucl              |
+  | Log                | $DEMO/out/fd01_reset_init/fd01_reset_init.log |
+  | Waveform           | $DEMO/out/fd01_reset_init/fd01_reset_init.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.sucl) |
+
+
+---
+
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd01_reset_init
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd01_reset_init
+```
+
+Console output:
+```
+-I: fd01_reset_init : PASS : cyc = 2344
+```
+
+Log file output:
 
 ```
 -I: fd01_reset_init: PASS, TAGE ready at cyc 2049, ITTAGE ready at cyc 513,
@@ -26,146 +66,13 @@ A recorded run:
     first p0 request at cyc 2049, first accepted p1 prediction at cyc 2050,
     first TAGE response at cyc 2051, first ITTAGE response at cyc 2051,
     first SC response at cyc 2052, first TAGE update at cyc 2069,
-    first ITTAGE update none, first SC update at cyc 2069, cyc 8086
+    first ITTAGE update none, first SC update at cyc 2069,
+    events checked 9 of 9, cyc 2344
 ```
 
 ---
 
-## 1. The program
-
-Source: `programs/fd01_reset_init.svh`, task `prog_fd01`.
-
-```
-RESET_VECTOR+0   mixed(3)           c.addi, addi, c.addi        8 bytes
-top = +8         mixed(6)           c.addi, addi, c.addi x2     16 bytes
-top+16           bne x6,x0,top      back edge: taken on passes 0..2998
-top+20           mixed(3)
-top+28           jal x0,0           halt (demo_go -> W.halt)
-```
-
-- `FD01_ITERS` = 3000 passes. Each pass resets `W.wp = top` and writes
-  the same bytes, so the code is fixed; only the expected stream grows.
-  3000 passes of 7 instructions keep the stream retiring past the end
-  of the longest walk (TAGE, 2048 entries).
-- The Makefile omits `$(FAST_INIT)` for this scenario alone
-  (`plusargs`, `Makefile:204`), so `fast_init_r` is 0 in TAGE and SC and
-  `fast_init` is 0 in ITTAGE.
-- The program is there only so that there is a first prediction to
-  accept and a stream to retire; FD-1 names no program.
-
----
-
-## 2. Why the readies rise when they do
-
-1. One sram_init per predictor. `rtl/lib/rtl/sram_init.sv:47-80`: from
-   reset the state is PENDING; with `START_DELAY` 0 the first clock
-   moves it to INIT (line 56-57); INIT writes one address per cycle
-   from `waddr` 0, and on the cycle `waddr == LAST_ADDR` it moves to
-   DONE and sets `ready` (lines 68-71).
-   - TAGE: `NUM_ENTRIES (1 << TAGE_MAX_IDX_WIDTH)`
-     (`rtl/core/frontend/bpu/rtl/tage.sv:313-319`), 2048
-     (`bp_defines_pkg.sv:404`, `TAGE_MAX_IDX_WIDTH = 11`).
-   - ITTAGE: `IT_MAX_NUM_ENTRIES` (`ittage.sv:72`, `:101-106`), 512
-     (`IT_MAX_IDX_WIDTH = 9`, `bp_defines_pkg.sv:516`).
-   - SC: `RI_ENTRIES = SC_TBL_ENTRIES[ST4]`, 1024 (`sc.sv:120`).
-2. The cycle numbers. `cyc` counts edges with `rstn` high
-   (`rtl/core/frontend/fe_top/tb/models/fe_tb_dut.svh:129`). The FST
-   shows the TAGE walk in INIT with `waddr` 0 at cycle 1 and `waddr`
-   0x7FF at cycle 2048, so `ready` is high from cycle N + 1: ITTAGE 513,
-   SC 1025, TAGE 2049.
-3. The readies reach the FTQ. `fe_top.sv:488-490` (the `u_bpu`
-   instance) and `:514-516` (the `u_ftq` instance) connect
-   `bpu_tage_rdy`, `bpu_ittage_rdy` and `bpu_sc_ready`; the note at
-   `fe_top.sv:74-78` records that BP-137 connected them.
-4. The hold. `rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309` adds
-   `~tage_rdy | ~ittage_rdy | ~sc_ready` to `w_hold`, and line 377
-   drives `ftq_pred_val_p0 = ~w_hold`. The first p0 request is therefore
-   the cycle the last ready rises, 2049; its p1 prediction is accepted
-   at 2050, its TAGE and ITTAGE answers come at p2 (2051) and its SC
-   answer at p3 (2052).
-5. ITTAGE is never updated. `ftq_resolve.sv:561-563` raises an ITTAGE
-   update only for `INDIRECT_NONRET` and `INDIRECT_CALL`; the program
-   has no indirect jump, so `c_it_u` stays -1 and the line reads
-   `first ITTAGE update none`.
-
----
-
-## 3. What the monitor counts
-
-The figures come from `tb/fe_demo_mon.svh:350-374` (`mon_init`). Unlike
-every other count, they are taken from the release of reset, not inside
-the `meas` window.
-
-```
-c_tage_rdy, c_it_rdy, c_sc_rdy   first cycle bpu_tage_rdy,
-                                 bpu_ittage_rdy, bpu_sc_ready is high
-lo_tage_rdy, lo_it_rdy, lo_sc_rdy
-                                 the ready was seen low after reset
-                                 (printed as the count of the three,
-                                 "readies seen low first 3 of 3")
-c_ras_rdy                        first cycle u_ras.ras_rst_done
-c_p0                             first ftq_pred_val_p0
-c_p1                             first u_ftq.w_ok_pred_p1
-c_tage_p2, c_it_p2, c_sc_p3      first w_tage_pred_rdy_p2,
-                                 w_ittage_pred_rdy_p2, w_sc_pred_rdy_p3
-c_tage_u, c_it_u, c_sc_u         first w_tage_upd_val_u0,
-                                 w_ittage_upd_val_u0, w_sc_upd_val_u0
-```
-
-Each is -1 until its event occurs (`mon_reset`, lines 167-178), and is
-printed as "none" while it is -1 (`at_cyc`, `tb/fe_demo_proofs.svh:17`).
-
-The proof (`tb/fe_demo_proofs.svh:23-48`) is all three `lo_*` set, all
-three readies seen (`> 0`), and `c_p1 >= last`, the latest of the three
-readies. The other figures are only reported. `tb_fe_demo.sv` also
-requires the whole stream to retire with no errors before it accepts
-the proof.
-
----
-
-## 4. Reading the numbers
-
-- `first p0 request at cyc 2049` equals `TAGE ready at cyc 2049`: the
-  request waits for the last ready and starts on the same cycle. `first
-  accepted p1 prediction at cyc 2050` is one cycle later, as the
-  pipeline requires.
-- `RAS ready at cyc 1`: the RAS reset (`ras_rst_done`) is not one of
-  the three RAM Init readies and is not part of the proof.
-- `first ITTAGE update none` is expected: there is no indirect branch to
-  update it.
-- `cyc 8086` counts from the release of reset to the last retirement,
-  so it includes the 2049 cycles of the walk.
-- Departure from `planning/showcase/fe_demo_scenarios.md` FD-1: its
-  program line reads "none; reset without the fast-init options". As
-  built, the scenario runs a 3000-pass loop so that a prediction exists
-  to be accepted and the stream has work after the walk. The reset
-  without the fast-init options is as specified. The proof is FD-1's.
-- Before BP-137 this scenario failed: the FTQ requested from
-  the first cycle after reset (DOC-001 Results Capture; BP-137 Results
-  Capture, Problem 1).
-
----
-
-## 5. Waveform
-
-The saved view is `waves/fd01_reset_init.sucl`, which `make view
-S=fd01_reset_init` opens in Surfer. Look at:
-
-- group `sram_init`: `u_tage.u_sram_init.state` INIT from cyc 1 with
-  `waddr` counting from 0 (0x7FF, 2047, at cyc 2048), then DONE with
-  `bpu_tage_rdy`; the same for
-  `u_ittage.u_sram_init` with `bpu_ittage_rdy` and `u_sc.u_sram_init`
-  with `bpu_sc_ready`; `u_ras.ras_rst_done`.
-- group `bp_cluster_first`: `ftq_pred_val_p0` low until cyc 2049,
-  then `bpu_pred_val_p1` and `u_ftq.w_ok_pred_p1`, then
-  `w_tage_pred_rdy_p2`, `w_ittage_pred_rdy_p2` and `w_sc_pred_rdy_p3`.
-- group `bp_cluster_p0`: `ftq_pred_pc_p0` at `RESET_VECTOR`
-  (0x80000000) while held, and `u_npc.w_hold` high from cyc 0 to
-  2048.
-
----
-
-## 6. Events
+## 3. Events
 
 | cyc  | Event                                            | Other              |
 |------|--------------------------------------------------|--------------------|
@@ -182,4 +89,53 @@ S=fd01_reset_init` opens in Surfer. Look at:
 |      | (`w_ok_pred_p1`)                                 |                    |
 | 2051 | first TAGE and ITTAGE responses at p2            |                    |
 | 2052 | first SC response at p3                          |                    |
-| 8086 | the run ends                                     |                    |
+| 2344 | the run ends (`tb.cyc_run`): the last            | a 100 cycle drain  |
+|      | instruction retires                              | follows, to 2444   |
+
+---
+
+## 4. Waveform
+
+`make -C examples/fe_demo view S=fd01_reset_init` opens
+`waves/fd01_reset_init.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+- group `clock`
+    - `tb.clk` - clock
+    - `tb.rstn` - active low reset
+    - `tb.cyc` - cycle number
+- group `tage_init`, signals under `u_bpu.u_tage`, then the ready
+    - `u_sram_init.state` - initialization FSM state
+    - `tbl_ri_wr` - RAM write enable, high cyc 1 to 2048
+    - `u_sram_init.waddr` - RAM address
+    - `tbl_ri_wd` - T1-T4 RAM write data, 0 (entry invalid, u = 0)
+    - `u_tage_bim.tbl_ri_wd` - T0 RAM write data, 2 (`2'b10`, weakly taken)
+    - `bpu_tage_rdy` - TAGE ready
+- group `ittage_init`, signals under `u_bpu.u_ittage`, then the ready
+    - `u_sram_init.state` - initialization FSM state
+    - `ri_wr` - RAM write enable, high cyc 1 to 512; ITTAGE gates it per
+      table
+    - `u_sram_init.waddr` - RAM address
+    - `ri_wd` - RAM write data, 0; ITTAGE slices it per table
+    - `bpu_ittage_rdy` - ITTAGE ready
+- group `sc_init`, signals under `u_bpu.u_sc`, then the ready
+    - `u_sram_init.state` - initialization FSM state
+    - `tbl_ri_wr` - RAM write enable, high cyc 1 to 1024
+    - `u_sram_init.waddr` - RAM address
+    - `tbl_ri_wd` - RAM write data, 0
+    - `bpu_sc_ready` - SC ready
+- group `ras_init`
+    - `u_bpu.u_ras.ras_rst_done` - RAS reset done, high from cyc 1
+- group `bp_cluster_p0`
+    - `ftq_pred_val_p0` - p0 request valid
+    - `ftq_pred_pc_p0` - p0 request PC
+    - `ftq_pred_idx_p0` - p0 request FTQ index
+    - `u_ftq.u_npc.w_hold` - holds the p0 request until all three readies
+      are high
+- group `request_stages`, one request from p0 to p3
+    - `ftq_pred_val_p0` - p0 request valid
+    - `bpu_pred_val_p1` - p1 prediction valid
+    - `u_ftq.w_ok_pred_p1` - the FTQ accepts the p1 prediction
+    - `u_bpu.w_tage_pred_rdy_p2` - TAGE response at p2
+    - `u_bpu.w_ittage_pred_rdy_p2` - ITTAGE response at p2
+    - `u_bpu.w_sc_pred_rdy_p3` - SC response at p3

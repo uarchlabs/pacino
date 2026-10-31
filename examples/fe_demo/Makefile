@@ -188,17 +188,14 @@ $(VTB): $(DEPS) $(OBJ)/$(EVT_TBL)
 $(VTB2): $(DEPS) $(OBJ2)/$(EVT_TBL)
 	$(call compile,$(OBJ2),,2)
 
-# One scenario, on its model. The log keeps the run's whole output; the
-# result line (FDT-10), with its continuation lines, is also printed
-# here. The exit status is the simulation's.
+# One scenario, on its model. The log keeps the run's whole output, its
+# stdout; the console line (tb_fe_demo.sv console()) is its stderr and
+# is printed here. The exit status is the simulation's.
 define run_scen
 	@echo "[running]    $@"
 	$(Q)mkdir -p out/$@
 	$(Q)./$(call vtb_of,$@) $(QUIET) $(call plusargs,$@) +SCEN=$@ \
-	  +FST=out/$@/$@.fst > out/$@/$@.log 2>&1; rc=$$?; \
-	  awk '/^-[IE]: $@: (PASS|FAIL),/ {p = 1; print; next} \
-	       p && /^    / {print; next} {p = 0}' out/$@/$@.log; \
-	  exit $$rc
+	  +FST=out/$@/$@.fst > out/$@/$@.log
 endef
 
 $(SCEN_1S): $(VTB)

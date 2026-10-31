@@ -25,8 +25,20 @@
   // =================================================================
   localparam int MSG_COLS = 80;
 
-  function automatic void say(input string sev, input string nm,
-                              input string body);
+  // THE LOG AND THE CONSOLE. stdout is the log: the Makefile writes it
+  // to out/<s>/<s>.log, with the models' lines and the simulator's own.
+  // stderr is the console, which the Makefile leaves on the terminal;
+  // only the result's console line goes there (console(), tb_fe_demo.sv).
+  localparam int FD_STDERR = 32'h8000_0002;
+
+  // One line, to the log, or to the console when to_con is set.
+  function automatic void say_ln(input logic to_con, input string ln);
+    if (to_con) $fdisplay(FD_STDERR, "%s", ln);
+    else        $display("%s", ln);
+  endfunction
+
+  function automatic void say_to(input logic to_con, input string sev,
+                                 input string nm, input string body);
     string ln;
     string item;
     int    st;
@@ -39,7 +51,7 @@
            (body[i+1] == " ")) || (i == body.len() - 1)) begin
         item = body.substr(st, i);
         if (ln.len() + 1 + item.len() > MSG_COLS) begin
-          $display("%s", ln);
+          say_ln(to_con, ln);
           ln = {"    ", item};
         end else begin
           ln = {ln, " ", item};
@@ -48,7 +60,13 @@
         i  = i + 1;
       end
     end
-    $display("%s", ln);
+    say_ln(to_con, ln);
+  endfunction
+
+  // A line of the log.
+  function automatic void say(input string sev, input string nm,
+                              input string body);
+    say_to(1'b0, sev, nm, body);
   endfunction
 
   // Every model and monitor to its start; the program is written at

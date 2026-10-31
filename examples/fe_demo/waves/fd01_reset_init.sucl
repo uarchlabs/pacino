@@ -13,36 +13,78 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
-# group sram_init
+# group tage_init
 variable_add tb.dut.u_bpu.u_tage.u_sram_init.state
 item_focus e
-group_marked sram_init
+group_marked tage_init
 item_focus f
 item_set_format Enum
+variable_add tb.dut.u_bpu.u_tage.tbl_ri_wr
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_sram_init.waddr
 item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_tage.tbl_ri_wd
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.u_tage.u_tage_bim.tbl_ri_wd
+item_set_format Hexadecimal
 variable_add tb.dut.bpu_tage_rdy
 item_set_format Bit
+item_unfocus
+# group ittage_init
 variable_add tb.dut.u_bpu.u_ittage.u_sram_init.state
+item_focus l
+group_marked ittage_init
+item_focus m
 item_set_format Enum
+variable_add tb.dut.u_bpu.u_ittage.ri_wr
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_ittage.u_sram_init.waddr
 item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_ittage.ri_wd
+item_set_format Hexadecimal
 variable_add tb.dut.bpu_ittage_rdy
 item_set_format Bit
+item_unfocus
+# group sc_init
 variable_add tb.dut.u_bpu.u_sc.u_sram_init.state
+item_focus bb
+group_marked sc_init
+item_focus bc
 item_set_format Enum
+variable_add tb.dut.u_bpu.u_sc.tbl_ri_wr
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_sc.u_sram_init.waddr
 item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_sc.tbl_ri_wd
+item_set_format Hexadecimal
 variable_add tb.dut.bpu_sc_ready
 item_set_format Bit
+item_unfocus
+# group ras_init
 variable_add tb.dut.u_bpu.u_ras.ras_rst_done
+item_focus bh
+group_marked ras_init
+item_focus bi
 item_set_format Bit
 item_unfocus
-# group bp_cluster_first
+# group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus p
-group_marked bp_cluster_first
-item_focus ba
+item_focus bj
+group_marked bp_cluster_p0
+item_focus bk
+item_set_format Bit
+variable_add tb.dut.ftq_pred_pc_p0
+item_set_format Hexadecimal
+variable_add tb.dut.ftq_pred_idx_p0
+item_set_format Unsigned
+variable_add tb.dut.u_ftq.u_npc.w_hold
+item_set_format Bit
+item_unfocus
+# group request_stages
+variable_add tb.dut.ftq_pred_val_p0
+item_focus bo
+group_marked request_stages
+item_focus bp
 item_set_format Bit
 variable_add tb.dut.bpu_pred_val_p1
 item_set_format Bit
@@ -55,20 +97,7 @@ item_set_format Bit
 variable_add tb.dut.u_bpu.w_sc_pred_rdy_p3
 item_set_format Bit
 item_unfocus
-# group bp_cluster_p0
-variable_add tb.dut.ftq_pred_val_p0
-item_focus bg
-group_marked bp_cluster_p0
-item_focus bh
-item_set_format Bit
-variable_add tb.dut.ftq_pred_pc_p0
-item_set_format Hexadecimal
-variable_add tb.dut.ftq_pred_idx_p0
-item_set_format Unsigned
-variable_add tb.dut.u_ftq.u_npc.w_hold
-item_set_format Bit
-item_unfocus
-# markers, from docs/fd01_reset_init.md section 6
+# markers, from docs/fd01_reset_init.md section 3
 marker_set c0_reset_released 36
 marker_set c1_the_three_table_walks_start_at 45
 marker_set c513_ITTAGE_ready 5165
@@ -77,6 +106,6 @@ marker_set c2049_TAGE_ready 20525
 marker_set c2050_first_p1_prediction_the_FTQ_accepts 20535
 marker_set c2051_first_TAGE_and_ITTAGE_responses_at 20545
 marker_set c2052_first_SC_response_at_p3 20555
-marker_set c8086_the_run_ends 80895
+marker_set c2344_the_run_ends 23475
 item_unfocus
 zoom_to 16 336

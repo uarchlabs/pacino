@@ -32,7 +32,8 @@
 # the result, the name and its own time:
 #   [ 5/26]  0m41s PASS fd03_two_branch 1s
 #
-# A scenario PASSES when its make call exits 0 and its log holds its
+# A scenario PASSES when its make call exits 0 and its log,
+# examples/fe_demo/out/<scenario>/<scenario>.log, holds its
 # -I: <scenario>: PASS, result line. Failures are compared with
 # ROOT/tools/known_failures_demo.txt (a missing file is empty, and the
 # script says so), in the format of tools/known_failures.txt:
@@ -165,15 +166,20 @@ for s in $SCENS; do
     echo "model $m did not build; $s not run" > "$log"
   else
     t0=$(date +%s)
+    # The scenario's own log, removed first so a run that does not start
+    # leaves no earlier result to read.
+    slog=$DEMO/out/$s/$s.log
+    rm -f "$slog"
     make -C "$DEMO" "$s" -o "$VTB1" -o "$VTB2" > "$log" 2>&1
     rc=$?
     secs=$(( $(date +%s) - t0 ))
     N_RUN=$((N_RUN + 1))
     [ -n "${KNOWN_TD[$key]:-}" ] && KNOWN_SEEN[$key]=1
-    # The result line with its continuation lines, joined (FDT-10a).
+    # The result line with its continuation lines, joined (FDT-10a), from
+    # the scenario's log; the make output in $log holds only the console.
     res=$(awk -v s="$s" '$0 ~ "^-[IE]: " s ": (PASS|FAIL)," {p = 1;
           printf "%s", $0; next} p && /^    / {sub(/^ +/, " "); printf "%s",
-          $0; next} {p = 0}' "$log")
+          $0; next} {p = 0}' "$slog" 2>/dev/null)
     n=$(sed -nE 's/.*events checked ([0-9]+) of ([0-9]+).*/\1 \2/p' \
         <<< "$res")
     if [ -n "$n" ]; then

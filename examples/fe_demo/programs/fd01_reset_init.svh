@@ -8,11 +8,11 @@
 //
 //   shows     the full init walk of the predictor tables, ending with
 //             every predictor ready
-//   program   a loop of 3000 passes over 7 instructions, long enough
-//             to outlast the longest walk; reset without the fast-init
-//             options (FDT-7: this scenario alone)
+//   program   a loop of 128 passes over 7 instructions, run after the
+//             last ready; reset without the fast-init options (FDT-7:
+//             this scenario alone)
 //   waveform  the TAGE, ITTAGE and SC sram_init walks and readies, the
-//             RAS reset walk, the first p0 request and p1 prediction
+//             RAS reset done, the first p0 request and p1 prediction
 //   trace     none until the trace writer (FDT-U1)
 //   proof     as FD-1 gives it: each of the TAGE, ITTAGE and SC readies
 //             is seen low after reset and then rises, and the first p1
@@ -25,9 +25,10 @@
 // until all three readies are high; the proof is met since.
 // ===================================================================
 
-  // Passes of the loop: enough to outlast the longest walk, TAGE's
-  // 2048 entries (TAGE_MAX_IDX_WIDTH 11), at about one pass a cycle.
-  localparam int FD01_ITERS = 3000;
+  // Passes of the loop. The p0 request is held for the whole walk, so
+  // the loop runs only after the last ready; nothing in the loop
+  // depends on the walk, so a short loop is enough.
+  localparam int FD01_ITERS = 128;
 
   task automatic prog_fd01();
     logic [VA_WIDTH-1:0] top;
@@ -42,6 +43,13 @@
     W.mixed(3);
     demo_go(40000);
   endtask
+
+  // The console line (console(), tb_fe_demo.sv): the verdict and the
+  // cycle count only; the full result line stays in the log.
+  function automatic void fd01_console(input logic pass, input int c);
+    $fdisplay(FD_STDERR, "-%s: fd01_reset_init : %s : cyc = %0d",
+              pass ? "I" : "E", pass ? "PASS" : "FAIL", c);
+  endfunction
 
   // =================================================================
   // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of

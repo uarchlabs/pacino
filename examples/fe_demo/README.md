@@ -61,6 +61,10 @@ one result line (FDT-10):
 
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
 is the cycle count from the release of reset to the last retirement.
+The run's whole output goes to `out/<scenario>/<scenario>.log`; the
+console shows the result line only, except `fd01_reset_init`, whose
+console line is `-I: fd01_reset_init : PASS : cyc = <n>`, or
+`-E: fd01_reset_init : FAIL : cyc = <n>`.
 Every line the testbench prints begins with `-I:`, `-W:` or `-E:` and
 the scenario name, and is at most 80 columns; a longer message breaks
 after a comma and continues on lines indented four spaces (FDT-10a):

@@ -214,7 +214,8 @@ FORMATS = [
      'number, PROVISIONAL'),
     # Addresses, targets, PCs and data.
     (r'(.*_)?pc(_[pu]\d)?|.*_pft_p\d|(.*_)?(target|tgt)|.*addr(ess)?|'
-     r'.*_[vp]pn\d?|fault_va|instr|.*_(data|cmp|swap)', 'Hexadecimal',
+     r'.*_[vp]pn\d?|fault_va|instr|.*_(data|cmp|swap)|(tbl_)?ri_wd',
+     'Hexadecimal',
      'an address, target, PC or data'),
 ]
 
@@ -416,11 +417,22 @@ def scenarios(n):
              D + '.ifu_l1i_inv_paddr', L + '.u_maint.r_st',
              L + '.mt_busy_any', L + '.mt_busy_line', D + '.l1i_ifu_inv_done',
              'tb.ifu_cmt_maint_ack']
-    init = [B + '.u_tage.u_sram_init.state', B + '.u_tage.u_sram_init.waddr',
-            D + '.bpu_tage_rdy', B + '.u_ittage.u_sram_init.state',
-            B + '.u_ittage.u_sram_init.waddr', D + '.bpu_ittage_rdy',
-            B + '.u_sc.u_sram_init.state', B + '.u_sc.u_sram_init.waddr',
-            D + '.bpu_sc_ready', B + '.u_ras.ras_rst_done']
+    # The write enable and data are the gated ones every tage_table and
+    # SC table takes (tage.sv, sc.sv tbl_ri_wr, tbl_ri_wd), not the
+    # walker's own. ITTAGE gates and slices them per table
+    # (gen_ittage_tables); its group shows the shared ri_wr and ri_wd
+    # they are taken from. TAGE's T0 (u_tage_bim) takes its own write
+    # data, TAGE_T0_SRAM_INIT_VALUE (tage.sv), shown after T1-T4's.
+    tage_init = [B + '.u_tage.u_sram_init.state', B + '.u_tage.tbl_ri_wr',
+                 B + '.u_tage.u_sram_init.waddr', B + '.u_tage.tbl_ri_wd',
+                 B + '.u_tage.u_tage_bim.tbl_ri_wd', D + '.bpu_tage_rdy']
+    ittage_init = [B + '.u_ittage.u_sram_init.state', B + '.u_ittage.ri_wr',
+                   B + '.u_ittage.u_sram_init.waddr', B + '.u_ittage.ri_wd',
+                   D + '.bpu_ittage_rdy']
+    sc_init = [B + '.u_sc.u_sram_init.state', B + '.u_sc.tbl_ri_wr',
+               B + '.u_sc.u_sram_init.waddr', B + '.u_sc.tbl_ri_wd',
+               D + '.bpu_sc_ready']
+    ras_init = [B + '.u_ras.ras_rst_done']
     first = [D + '.ftq_pred_val_p0', D + '.bpu_pred_val_p1',
              Q + '.w_ok_pred_p1', B + '.w_tage_pred_rdy_p2',
              B + '.w_ittage_pred_rdy_p2', B + '.w_sc_pred_rdy_p3']
@@ -457,9 +469,11 @@ def scenarios(n):
                  FC + '.upd_split', FC + '.upd_cut_pos']
 
     return [
-        ('fd01_reset_init', [('clock', clk), ('sram_init', init),
-                             ('bp_cluster_first', first),
-                             ('bp_cluster_p0', bpu_p0)]),
+        ('fd01_reset_init', [('clock', clk), ('tage_init', tage_init),
+                             ('ittage_init', ittage_init),
+                             ('sc_init', sc_init), ('ras_init', ras_init),
+                             ('bp_cluster_p0', bpu_p0),
+                             ('request_stages', first)]),
         ('fd02_steady', [('clock', clk), ('bp_cluster_p0', bpu_p0),
                          ('bp_cluster_p1', bpu_p1), ('ftq', ftq),
                          ('ftq_ifu', ftq_ifu), ('ifu_l1i', ifu_l1i),

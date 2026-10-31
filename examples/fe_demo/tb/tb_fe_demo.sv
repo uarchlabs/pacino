@@ -25,6 +25,13 @@
 // or -E: <scenario>: FAIL, ..., which exits non-zero. Every line this
 // testbench prints is in the format of FDT-10a (say(), fe_demo_lib.svh).
 //
+// THE LOG AND THE CONSOLE. Everything goes to stdout, which the Makefile
+// writes to out/<s>/<s>.log. The console (stderr) gets one result line
+// only (console() below): the result line itself, or the scenario's own
+// shorter form; fd01_reset_init prints
+//   -I: fd01_reset_init : PASS : cyc = <n>
+//   -E: fd01_reset_init : FAIL : cyc = <n>
+//
 // THE SIMULATOR'S OWN LINES. tb/fe_demo_finish.cpp replaces the
 // runtime's $finish message with nothing, and the Makefile passes
 // +verilator+quiet, which drops its end-of-run report, so a passing run
@@ -211,6 +218,18 @@ module tb;
     endcase
   endfunction
 
+  // The console line of a run's result (stderr, fe_demo_lib.svh). A
+  // scenario with a console function of its own prints that; every
+  // other scenario repeats its result line.
+  function automatic void console(input string nm, input string sev,
+                                  input string body, input logic pass,
+                                  input int c);
+    case (nm)
+      "fd01_reset_init": fd01_console(pass, c);
+      default:           say_to(1'b1, sev, nm, body);
+    endcase
+  endfunction
+
   // =================================================================
   initial begin
     string scen;
@@ -240,11 +259,15 @@ module tb;
       msg = $sformatf({"stream not retired, retired %0d of %0d, ",
                        "stream errors %0d, %s"}, ep, W.ne, n_err, msg);
     if (ran && ok && evok) begin
-      say("I", scen, $sformatf("PASS, %s, %s, cyc %0d", msg, evs, cyc_run));
+      msg = $sformatf("PASS, %s, %s, cyc %0d", msg, evs, cyc_run);
+      say("I", scen, msg);
+      console(scen, "I", msg, 1'b1, cyc_run);
       evt_print(scen);
       $finish;
     end else begin
-      say("E", scen, $sformatf("FAIL, %s, %s, cyc %0d", msg, evs, cyc_run));
+      msg = $sformatf("FAIL, %s, %s, cyc %0d", msg, evs, cyc_run);
+      say("E", scen, msg);
+      console(scen, "E", msg, 1'b0, cyc_run);
       evt_print(scen);
       $fatal(1);
     end
@@ -254,6 +277,8 @@ module tb;
     #30000000;
     say("E", (tname == "") ? "tb_fe_demo" : tname,
         "FAIL, timeout, the run did not end");
+    console((tname == "") ? "tb_fe_demo" : tname, "E",
+            "FAIL, timeout, the run did not end", 1'b0, cyc);
     $fatal(1);
   end
 
