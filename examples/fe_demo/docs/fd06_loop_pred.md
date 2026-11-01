@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd06_loop_pred` is the FD-6 demonstration scenario. It is a demo, not a
 verification test. It runs a counted inner loop of 10 iterations inside
 an outer loop of 16 passes. The loop predictor (LP) learns the inner
@@ -18,15 +20,82 @@ the inner loop branch's direction, including the not-taken exit. The run
 passes if at least one retired exit was predicted not taken by the LP.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd06_loop_pred: PASS, loop exits predicted by the loop predictor 8, cyc 439
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                        |
+  |--------------------|---------------------------------------------|
+  | This file          | $DEMO/docs/fd06_loop_pred.md                |
+  | Program (stimulus) | $DEMO/programs/fd06_loop_pred.svh           |
+  | Surfer sucl        | $DEMO/waves/fd06_loop_pred.sucl             |
+  | Log                | $DEMO/out/fd06_loop_pred/fd06_loop_pred.log |
+  | Waveform           | $DEMO/out/fd06_loop_pred/fd06_loop_pred.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd06_loop_pred.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd06_loop_pred.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd06_loop_pred
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd06_loop_pred
+```
+
+Console output:
+```
+-I: fd06_loop_pred : PASS : cyc = 439
+```
+
+Log file output:
+```
+-I: fd06_loop_pred: PASS, loop exits predicted by the loop predictor 8,
+    events checked 9 of 9, cyc 439
+```
+
+### 2.1 What the monitor counts
+
+The count is taken at retirement, in the backend's retire hook
+(`tb/fe_demo_mon.svh:302-305`):
+
+```
+n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
+               FTQ entry's final slot at its position is valid, has
+               pred_src == PRED_LOOP and taken == 0
+```
+
+The final slot is the last group the FTQ accepted for the entry, p1 then
+p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:270-279`), found by position
+(`slot_at`, line 282).
+
+The proof (`tb/fe_demo_proofs.svh:72`) is `n_lp_exit_ok > 0`.
+`tb_fe_demo.sv:160` also requires the whole stream to retire with no
+errors before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- 8 of the 16 inner exits were predicted not taken by the LP. Of the
+  other 8, four were mispredicted (the backend redirects of section
+  4.1); for the other four, the slot that predicted them was not traced.
+- The count is of retired exits, each counted once, so it cannot exceed
+  16.
+- Spec and build agree on program and proof. The FD-6 waveform entry
+  names "loop predictor entry". The command file shows the loop
+  predictor's per-slot answers in the group `loop_pred_p1_p2`, which
+  stand in for the table entry. The p1 answer shows its hit and its
+  direction. The p2 answer, which re-reads the same entry, also shows
+  the speculative count `lp_curs` and the learned trip count
+  `lp_past_itr` with its confidence `lp_conf` (DOC-006).
+
+---
+
+## 3. The program
 
 Source: `programs/fd06_loop_pred.svh`, task `prog_fd06` (line 20).
 Addresses from the source (`RESET_VECTOR` 0x8000_0000,
@@ -54,7 +123,9 @@ itop = 0x8000_000E   mixed(3)                                    8 bytes
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 The loop predictor is `rtl/core/frontend/bpu/rtl/loop_pred.sv`, one
 bank per slot.
@@ -91,47 +162,7 @@ four times: backend redirects to 0x8000_001A at cycles 49, 88, 112 and
 140. The p2 answer describes the inner loop's branch only in the cycles
 its block is at p2; in other cycles it reads 0.
 
----
-
-## 3. What the monitor counts
-
-The count is taken at retirement, in the backend's retire hook
-(`tb/fe_demo_mon.svh:302-305`):
-
-```
-n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
-               FTQ entry's final slot at its position is valid, has
-               pred_src == PRED_LOOP and taken == 0
-```
-
-The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:270-279`), found by position
-(`slot_at`, line 282).
-
-The proof (`tb/fe_demo_proofs.svh:72`) is `n_lp_exit_ok > 0`.
-`tb_fe_demo.sv:160` also requires the whole stream to retire with no
-errors before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- 8 of the 16 inner exits were predicted not taken by the LP. Of the
-  other 8, four were mispredicted (the backend redirects of section
-  2); for the other four, the slot that predicted them was not traced.
-- The count is of retired exits, each counted once, so it cannot exceed
-  16.
-- Spec and build agree on program and proof. The FD-6 waveform entry
-  names "loop predictor entry". The command file shows the loop
-  predictor's per-slot answers in the group `loop_pred_p1_p2`, which
-  stand in for the table entry. The p1 answer shows its hit and its
-  direction. The p2 answer, which re-reads the same entry, also shows
-  the speculative count `lp_curs` and the learned trip count
-  `lp_past_itr` with its confidence `lp_conf` (DOC-006).
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd06_loop_pred.sucl`, which `make view
 S=fd06_loop_pred` opens in Surfer. Look at:
@@ -148,7 +179,7 @@ S=fd06_loop_pred` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                       | Other              |
 |---|-----|---------------------------------------------------------------------------------------------|--------------------|
@@ -161,3 +192,69 @@ S=fd06_loop_pred` opens in Surfer. Look at:
 | 6 | 259 | first exit predicted not taken, by the loop predictor: I's slot at p2, PRED_LOOP, `taken` 0 | block 0x8000_000E  |
 | 7 | 429 | outer loop falls through, a misprediction; redirect to 0x8000_0024                          | pass 15, backend   |
 | 8 | 439 | the run ends                                                                                |                    |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd06_loop_pred` opens
+`waves/fd06_loop_pred.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group            | signal                                   | description                                     |
+|------------------|------------------------------------------|-------------------------------------------------|
+| clock            | `tb.clk`                                 | clock                                           |
+|                  | `tb.rstn`                                | active low reset                                |
+|                  | `tb.cyc`                                 | cycle number                                    |
+| bp_cluster_p1    | `bpu_pred_val_p1`                        | p1 prediction valid                             |
+|                  | `bpu_pred_idx_p1`                        | FTQ index of the p1 prediction                  |
+|                  | `u_bpu.r_ubtb_blk_p1.hit`                | uBTB hit at p1                                  |
+|                  | `bpu_pred_pft_p1`                        | p1 fetch block end, the first halfword after it |
+|                  | `bpu_pred_slot_p1.[0].slot_valid`        | slot 0 holds a branch                           |
+|                  | `bpu_pred_slot_p1.[0].br_type`           | slot 0 branch type                              |
+|                  | `bpu_pred_slot_p1.[0].pos`               | slot 0 halfword position in the fetch block     |
+|                  | `bpu_pred_slot_p1.[0].taken`             | slot 0 predicted direction                      |
+|                  | `bpu_pred_slot_p1.[0].target`            | slot 0 predicted target                         |
+|                  | `bpu_pred_slot_p1.[0].pred_src`          | slot 0 predictor that supplied the direction    |
+| loop_pred_p1_p2  | `u_bpu.w_lp_pred_p1.[0].lp_hit`          | loop predictor hit at p1, slot 0                |
+|                  | `u_bpu.w_lp_pred_p1.[0].lp_pred_is_loop` | loop predictor trusted at p1, slot 0            |
+|                  | `u_bpu.w_lp_pred_p1.[0].lp_pred_taken`   | loop predictor direction at p1, slot 0          |
+|                  | `u_bpu.w_lp_pred_p2.[0].lp_hit`          | loop predictor hit at p2, slot 0                |
+|                  | `u_bpu.w_lp_pred_p2.[0].lp_pred_is_loop` | loop predictor trusted at p2, slot 0            |
+|                  | `u_bpu.w_lp_pred_p2.[0].lp_pred_taken`   | loop predictor direction at p2, slot 0          |
+|                  | `u_bpu.w_lp_pred_p2.[0].lp_conf`         | loop predictor confidence, slot 0               |
+|                  | `u_bpu.w_lp_pred_p2.[0].lp_past_itr`     | learned trip count, slot 0                      |
+|                  | `u_bpu.w_lp_pred_p2.[0].lp_curs`         | speculative count, slot 0                       |
+| bp_cluster_p2    | `u_bpu.r_val_p2`                         | p2 valid                                        |
+|                  | `bpu_slot_val_p2`                        | slot valid mask                                 |
+|                  | `bpu_slot_idx_p2`                        | FTQ index of the p2 group                       |
+|                  | `u_bpu.w_ftb_valid_p2`                   | FTB hit at p2                                   |
+|                  | `bpu_slot_p2.[0].slot_valid`             | slot 0 holds a branch                           |
+|                  | `bpu_slot_p2.[0].br_type`                | slot 0 branch type                              |
+|                  | `bpu_slot_p2.[0].pos`                    | slot 0 halfword position in the fetch block     |
+|                  | `bpu_slot_p2.[0].taken`                  | slot 0 predicted direction                      |
+|                  | `bpu_slot_p2.[0].target`                 | slot 0 predicted target                         |
+|                  | `bpu_slot_p2.[0].pred_src`               | slot 0 predictor that supplied the direction    |
+|                  | `bpu_redir_p2.[0].valid`                 | p2 redirect from slot 0                         |
+|                  | `bpu_redir_p2.[0].target_pc`             | p2 redirect target from slot 0                  |
+|                  | `bpu_redir_idx_p2`                       | FTQ index of the p2 redirect                    |
+| ftq              | `u_ftq.w_ok_pred_p1`                     | the FTQ accepts the p1 prediction               |
+|                  | `u_ftq.w_ok_slot_p2`                     | the FTQ accepts the p2 group                    |
+|                  | `u_ftq.w_ok_slot_p3`                     | the FTQ accepts the p3 group                    |
+|                  | `u_ftq.w_ok_redir_p2`                    | the FTQ accepts the p2 redirect                 |
+|                  | `u_ftq.w_ok_redir_p3`                    | the FTQ accepts the p3 redirect                 |
+|                  | `u_ftq.w_redir_val`                      | a redirect the FTQ takes                        |
+|                  | `u_ftq.w_redir_idx`                      | FTQ index of the redirect                       |
+|                  | `u_ftq.w_commit_ptr`                     | FTQ commit pointer                              |
+|                  | `ftq_full`                               | FTQ full                                        |
+|                  | `ftq_empty`                              | FTQ empty                                       |
+| loop_pred_update | `u_bpu.w_lp_upd_val_p0`                  | loop predictor update valid, per slot           |
+| decode           | `tb.dec_ibuf_rdy`                        | the backend model takes the bundle              |
+|                  | `tb.pd_out.[0].valid`                    | lane 0 valid                                    |
+|                  | `tb.pd_out.[0].start_pc`                 | lane 0 instruction address                      |
+|                  | `tb.pd_out.[0].ftq_idx`                  | lane 0 FTQ index                                |
+|                  | `tb.pd_out.[0].pos`                      | lane 0 halfword position in the fetch block     |
+|                  | `tb.pd_out.[0].instr`                    | lane 0 instruction, expanded if compressed      |
+|                  | `tb.pd_out.[0].is_rvc`                   | lane 0 instruction is 16-bit                    |
+|                  | `tb.pd_out.[0].fault_cause`              | lane 0 fetch fault cause                        |
+|                  | `tb.pd_out.[0].fault_va`                 | lane 0 fetch fault virtual address              |

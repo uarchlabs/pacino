@@ -13,11 +13,21 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd17_rvc.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c21_the_straddling_instruction_reaches_decode 245
+marker_set c22_the_next_bundle_starts_on_its 255
+marker_set c28_first_fetch_of_fn 315
+marker_set c198_the_run_ends 2015
+item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus e
+item_focus k
 group_marked ftq_ifu
-item_focus f
+item_focus l
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -40,9 +50,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_f3
 variable_add tb.dut.ifu_ftq_pdwb_val
-item_focus p
+item_focus bf
 group_marked ifu_f3
-item_focus ba
+item_focus bg
 item_set_format Bit
 variable_add tb.dut.ifu_ftq_pdwb_idx
 item_set_format Unsigned
@@ -61,9 +71,9 @@ item_set_format Bit
 item_unfocus
 # group ifu_f3_straddle
 variable_add tb.dut.u_ifu.u_f3.r_strad_val
-item_focus bi
+item_focus bo
 group_marked ifu_f3_straddle
-item_focus bj
+item_focus bp
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_f3.r_strad_pc
 item_set_format Hexadecimal
@@ -72,9 +82,9 @@ item_set_format Unsigned
 item_unfocus
 # group ibuf
 variable_add tb.dut.ifu_ibuf_val
-item_focus bm
+item_focus cc
 group_marked ibuf
-item_focus bn
+item_focus cd
 item_set_format Bit
 variable_add tb.dut.ifu_ibuf_en
 item_set_format Binary
@@ -83,9 +93,9 @@ item_set_format Bit
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus ca
+item_focus cg
 group_marked decode
-item_focus cb
+item_focus ch
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -123,12 +133,5 @@ variable_add tb.pd_out.[6].is_rvc
 item_set_format Bit
 variable_add tb.pd_out.[7].is_rvc
 item_set_format Bit
-item_unfocus
-# markers, from docs/fd17_rvc.md section 6
-marker_set c0_reset_released 36
-marker_set c21_the_straddling_instruction_reaches_decode 245
-marker_set c22_the_next_bundle_starts_on_its 255
-marker_set c28_first_fetch_of_fn 315
-marker_set c198_the_run_ends 2015
 item_unfocus
 zoom_to 16 336

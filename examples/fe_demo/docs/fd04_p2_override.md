@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd04_p2_override` is the FD-4 demonstration scenario. It is a demo, not
 a verification test. It runs a chain of eight blocks that all index one
 uBTB set, which has four ways, while each has its own FTB set. The uBTB
@@ -19,15 +21,78 @@ differ, and the cluster raises a p2 redirect. The run passes if the FTQ
 accepts at least one p2 redirect.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd04_p2_override: PASS, p2 redirects 49, cyc 522
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                            |
+  |--------------------|-------------------------------------------------|
+  | This file          | $DEMO/docs/fd04_p2_override.md                  |
+  | Program (stimulus) | $DEMO/programs/fd04_p2_override.svh             |
+  | Surfer sucl        | $DEMO/waves/fd04_p2_override.sucl               |
+  | Log                | $DEMO/out/fd04_p2_override/fd04_p2_override.log |
+  | Waveform           | $DEMO/out/fd04_p2_override/fd04_p2_override.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd04_p2_override
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd04_p2_override
+```
+
+Console output:
+```
+-I: fd04_p2_override : PASS : cyc = 522
+```
+
+Log file output:
+```
+-I: fd04_p2_override: PASS, p2 redirects 49, events checked 6 of 6, cyc 522
+```
+
+### 2.1 What the monitor counts
+
+The count comes from `tb/fe_demo_mon.svh:424-435`, taken inside the
+`meas` window.
+
+```
+n_redir_p2   u_ftq.w_ok_redir_p2 && (bpu_redir_p2[0].valid
+             || bpu_redir_p2[1].valid)
+             a cycle in which the FTQ accepted a p2 redirect
+```
+
+The proof (`tb/fe_demo_proofs.svh:60-63`) is `n_redir_p2 > 0`.
+`tb_fe_demo.sv` also requires the whole stream to retire with no errors
+before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- `p2 redirects 49` counts cycles in which the FTQ accepted a p2
+  redirect. On the two-slot model a cycle with both slots redirecting
+  counts once; on this model a cycle has one slot.
+- The miss counts are uneven across the chain (2, 3, 3, 14 and 12 for
+  b[0] to b[4], none for b[5] and b[6]): which four blocks the set holds
+  at a given time depends on the round-robin pointer and the order of
+  updates. The figures are from this run.
+- Departure from `planning/showcase/fe_demo_scenarios.md` FD-4: its
+  program is "a branch whose uBTB entry is stale while its FTB entry is
+  current". As built, the mechanism is uBTB capacity: eight blocks in
+  one four-way set, so most redirects follow a uBTB miss, not a stale
+  hit. 15 of the 49 do follow a hit, all of them b[7]'s, whose uBTB
+  entry keeps an end the FTB entry has split. The proof is FD-4's.
+
+---
+
+## 3. The program
 
 Source: `programs/fd04_p2_override.svh`, task `prog_fd04` (tb_fe_top's
 ftbonly). `b[k] = RESET_VECTOR + 0x1000 + k * 0x800`, k = 0..7, so b[0]
@@ -56,7 +121,9 @@ b[7]+18          jal x0,0             halt (demo_go -> W.halt)
 
 ---
 
-## 2. Why the program produces p2 redirects
+## 4. Walkthrough
+
+### 4.1 Why the program produces p2 redirects
 
 1. One uBTB set. The uBTB index is `pc[10:5]` XOR (`pc[4:1]` << 2),
    the block start's halfword offset folded into the top index bits
@@ -123,44 +190,7 @@ uBTB's not taken. None of the 49 has the cluster's cut set
 (`w_cut_p2`, `fe_decisions.md` 10): the FTB entry never reports a
 branch no slot carries.
 
----
-
-## 3. What the monitor counts
-
-The count comes from `tb/fe_demo_mon.svh:424-435`, taken inside the
-`meas` window.
-
-```
-n_redir_p2   u_ftq.w_ok_redir_p2 && (bpu_redir_p2[0].valid
-             || bpu_redir_p2[1].valid)
-             a cycle in which the FTQ accepted a p2 redirect
-```
-
-The proof (`tb/fe_demo_proofs.svh:60-63`) is `n_redir_p2 > 0`.
-`tb_fe_demo.sv` also requires the whole stream to retire with no errors
-before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- `p2 redirects 49` counts cycles in which the FTQ accepted a p2
-  redirect. On the two-slot model a cycle with both slots redirecting
-  counts once; on this model a cycle has one slot.
-- The miss counts are uneven across the chain (2, 3, 3, 14 and 12 for
-  b[0] to b[4], none for b[5] and b[6]): which four blocks the set holds
-  at a given time depends on the round-robin pointer and the order of
-  updates. The figures are from this run.
-- Departure from `planning/showcase/fe_demo_scenarios.md` FD-4: its
-  program is "a branch whose uBTB entry is stale while its FTB entry is
-  current". As built, the mechanism is uBTB capacity: eight blocks in
-  one four-way set, so most redirects follow a uBTB miss, not a stale
-  hit. 15 of the 49 do follow a hit, all of them b[7]'s, whose uBTB
-  entry keeps an end the FTB entry has split. The proof is FD-4's.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd04_p2_override.sucl`, which `make view
 S=fd04_p2_override` opens in Surfer. Look at:
@@ -177,7 +207,7 @@ S=fd04_p2_override` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                                | Other               |
 |---|-----|------------------------------------------------------------------------------------------------------|---------------------|
@@ -187,3 +217,54 @@ S=fd04_p2_override` opens in Surfer. Look at:
 | 3 | 293 | first p2 redirect to the jal, 0x8000_4806: the end of the FTB entry for b[7] after the split         | from b[7]           |
 | 4 | 513 | the chain exits: b[7]'s conditional taken on the last pass, a misprediction; redirect to 0x8000_480A | pass 15, backend    |
 | 5 | 522 | the run ends                                                                                         |                     |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd04_p2_override` opens
+`waves/fd04_p2_override.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group              | signal                            | description                                     |
+|--------------------|-----------------------------------|-------------------------------------------------|
+| clock              | `tb.clk`                          | clock                                           |
+|                    | `tb.rstn`                         | active low reset                                |
+|                    | `tb.cyc`                          | cycle number                                    |
+| bp_cluster_p1_ubtb | `bpu_pred_val_p1`                 | p1 prediction valid                             |
+|                    | `bpu_pred_idx_p1`                 | FTQ index of the p1 prediction                  |
+|                    | `u_bpu.r_ubtb_blk_p1.hit`         | uBTB hit at p1                                  |
+|                    | `bpu_pred_pft_p1`                 | p1 fetch block end, the first halfword after it |
+|                    | `bpu_pred_slot_p1.[0].slot_valid` | slot 0 holds a branch                           |
+|                    | `bpu_pred_slot_p1.[0].br_type`    | slot 0 branch type                              |
+|                    | `bpu_pred_slot_p1.[0].pos`        | slot 0 halfword position in the fetch block     |
+|                    | `bpu_pred_slot_p1.[0].taken`      | slot 0 predicted direction                      |
+|                    | `bpu_pred_slot_p1.[0].target`     | slot 0 predicted target                         |
+|                    | `bpu_pred_slot_p1.[0].pred_src`   | slot 0 predictor that supplied the direction    |
+| bp_cluster_p2_ftb  | `u_bpu.r_val_p2`                  | p2 valid                                        |
+|                    | `bpu_slot_val_p2`                 | slot valid mask                                 |
+|                    | `bpu_slot_idx_p2`                 | FTQ index of the p2 group                       |
+|                    | `u_bpu.w_ftb_valid_p2`            | FTB hit at p2                                   |
+|                    | `bpu_slot_p2.[0].slot_valid`      | slot 0 holds a branch                           |
+|                    | `bpu_slot_p2.[0].br_type`         | slot 0 branch type                              |
+|                    | `bpu_slot_p2.[0].pos`             | slot 0 halfword position in the fetch block     |
+|                    | `bpu_slot_p2.[0].taken`           | slot 0 predicted direction                      |
+|                    | `bpu_slot_p2.[0].target`          | slot 0 predicted target                         |
+|                    | `bpu_slot_p2.[0].pred_src`        | slot 0 predictor that supplied the direction    |
+|                    | `bpu_redir_p2.[0].valid`          | p2 redirect from slot 0                         |
+|                    | `bpu_redir_p2.[0].target_pc`      | p2 redirect target from slot 0                  |
+|                    | `bpu_redir_idx_p2`                | FTQ index of the p2 redirect                    |
+| ftq                | `u_ftq.w_ok_pred_p1`              | the FTQ accepts the p1 prediction               |
+|                    | `u_ftq.w_ok_slot_p2`              | the FTQ accepts the p2 group                    |
+|                    | `u_ftq.w_ok_slot_p3`              | the FTQ accepts the p3 group                    |
+|                    | `u_ftq.w_ok_redir_p2`             | the FTQ accepts the p2 redirect                 |
+|                    | `u_ftq.w_ok_redir_p3`             | the FTQ accepts the p3 redirect                 |
+|                    | `u_ftq.w_redir_val`               | a redirect the FTQ takes                        |
+|                    | `u_ftq.w_redir_idx`               | FTQ index of the redirect                       |
+|                    | `u_ftq.w_commit_ptr`              | FTQ commit pointer                              |
+|                    | `ftq_full`                        | FTQ full                                        |
+|                    | `ftq_empty`                       | FTQ empty                                       |
+| bp_cluster_p0      | `ftq_pred_val_p0`                 | p0 request valid                                |
+|                    | `ftq_pred_pc_p0`                  | p0 request PC                                   |
+|                    | `ftq_pred_idx_p0`                 | p0 request FTQ index                            |
+|                    | `u_ftq.u_npc.w_hold`              | holds the p0 request                            |

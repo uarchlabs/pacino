@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd20_backpressure` is the FD-20 demonstration scenario. It is a demo,
 not a verification test. The backend takes decode's output one cycle in
 four. Decode stalls first, the ibuf fills and refuses the IFU, the
@@ -17,16 +19,88 @@ IFU stops draining the FTQ, the FTQ fills, and the FTQ stops issuing
 p0 requests. The run passes if each of the four stalls occurs.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd20_backpressure: PASS, stall cycles with the instruction buffer full 378,
-    FTQ full 324, decode held 368, no p0 request 331, cyc 537
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                              |
+  |--------------------|---------------------------------------------------|
+  | This file          | $DEMO/docs/fd20_backpressure.md                   |
+  | Program (stimulus) | $DEMO/programs/fd20_backpressure.svh              |
+  | Surfer sucl        | $DEMO/waves/fd20_backpressure.sucl                |
+  | Log                | $DEMO/out/fd20_backpressure/fd20_backpressure.log |
+  | Waveform           | $DEMO/out/fd20_backpressure/fd20_backpressure.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd20_backpressure
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd20_backpressure
+```
+
+Console output:
+```
+-I: fd20_backpressure : PASS : cyc = 537
+```
+
+Log file output:
+```
+-I: fd20_backpressure: PASS, stall cycles with the instruction buffer full 378,
+    FTQ full 324, decode held 368, no p0 request 331, events checked 6 of 6,
+    cyc 537
+```
+
+### 2.1 What the monitor counts
+
+The counts come from `tb/fe_demo_mon.svh:571-576`, sampled every cycle
+while `meas` is set. All four are counts of CYCLES in which the
+condition holds, not of stall events.
+
+```
+n_ibuf_full  ifu_ibuf_val && !ibuf_ifu_rdy   the IFU offers, the ibuf
+                                             refuses
+n_ftq_full   ftq_full                        (tb's ftq_full, fe_top's
+                                             port, fe_tb_dut.svh:98,
+                                             :101)
+n_dec_stall  pd_out[0].valid && !dec_ibuf_rdy
+n_p0_held    !ftq_pred_val_p0                for any hold reason
+```
+
+The proof (`tb/fe_demo_proofs.svh:160-161`) is that each count is above
+zero. `tb_fe_demo.sv` also requires the whole stream to retire with no
+errors.
+
+### 2.2 Reading the numbers
+
+- `cyc 537` is the measured window, so the stall counts are
+  fractions of it: the ibuf refuses the IFU in 378 of 537 cycles, the
+  FTQ is full in 324, decode holds a bundle in 368.
+- `no p0 request 331` counts every hold, not only backpressure. From
+  the run: of the 331 cycles, 324 have `ftq_full` and 7 have
+  `u_ftq.u_npc.h3_ftb_upd` (the FTB update hold, H3) without it.
+- The order of onset (18, 71, 138) is the propagation from decode back
+  to the FTQ; the counts alone do not show it.
+- Departures from `planning/showcase/fe_demo_scenarios.md` FD-20:
+  - FD-20's program is "a long run with the backend accepting slowly";
+    the program fixes the rate at one cycle in four (be_rdy_pat 4,
+    FD-U2 closed).
+  - FD-20's proof is "each stall occurs". The proof as built also
+    counts `n_p0_held`, which includes the FTB update holds; it does
+    not separate the p0 stall caused by the full FTQ. `n_ftq_full` is
+    the count of that cause.
+
+---
+
+## 3. The program
 
 Source: `programs/fd20_backpressure.svh`, task `prog_fd20`. M-mode,
 bare. Offsets from RESET_VECTOR 0x8000_0000.
@@ -47,7 +121,9 @@ top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. Decode. With `dec_ibuf_rdy` low three cycles in four, the ibuf's
    read port presents a bundle that is not taken.
@@ -75,52 +151,7 @@ top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
    `ifu_ibuf_val` with `ibuf_ifu_rdy` low is 71, with `u_ibuf.r_count`
    52; the first `ftq_full` is 138 (tb.cyc values).
 
----
-
-## 3. What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:571-576`, sampled every cycle
-while `meas` is set. All four are counts of CYCLES in which the
-condition holds, not of stall events.
-
-```
-n_ibuf_full  ifu_ibuf_val && !ibuf_ifu_rdy   the IFU offers, the ibuf
-                                             refuses
-n_ftq_full   ftq_full                        (tb's ftq_full, fe_top's
-                                             port, fe_tb_dut.svh:98,
-                                             :101)
-n_dec_stall  pd_out[0].valid && !dec_ibuf_rdy
-n_p0_held    !ftq_pred_val_p0                for any hold reason
-```
-
-The proof (`tb/fe_demo_proofs.svh:160-161`) is that each count is above
-zero. `tb_fe_demo.sv` also requires the whole stream to retire with no
-errors.
-
----
-
-## 4. Reading the numbers
-
-- `cyc 537` is the measured window, so the stall counts are
-  fractions of it: the ibuf refuses the IFU in 378 of 537 cycles, the
-  FTQ is full in 324, decode holds a bundle in 368.
-- `no p0 request 331` counts every hold, not only backpressure. From
-  the run: of the 331 cycles, 324 have `ftq_full` and 7 have
-  `u_ftq.u_npc.h3_ftb_upd` (the FTB update hold, H3) without it.
-- The order of onset (18, 71, 138) is the propagation from decode back
-  to the FTQ; the counts alone do not show it.
-- Departures from `planning/showcase/fe_demo_scenarios.md` FD-20:
-  - FD-20's program is "a long run with the backend accepting slowly";
-    the program fixes the rate at one cycle in four (be_rdy_pat 4,
-    FD-U2 closed).
-  - FD-20's proof is "each stall occurs". The proof as built also
-    counts `n_p0_held`, which includes the FTB update holds; it does
-    not separate the p0 stall caused by the full FTQ. `n_ftq_full` is
-    the count of that cause.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd20_backpressure.sucl`, which `make view
 S=fd20_backpressure` opens in Surfer. Look at:
@@ -138,7 +169,7 @@ S=fd20_backpressure` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                              | Other            |
 |---|-----|----------------------------------------------------------------------------------------------------|------------------|
@@ -148,3 +179,51 @@ S=fd20_backpressure` opens in Surfer. Look at:
 | 3 | 138 | the FTQ first full (`ftq_full`); the p0 request is withheld                                        | FTQ full         |
 | 4 | 526 | back edge falls through, a misprediction; redirect to 0x8000_004A                                  | pass 39, backend |
 | 5 | 537 | the run ends                                                                                       |                  |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd20_backpressure` opens
+`waves/fd20_backpressure.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group         | signal                      | description                                       |
+|---------------|-----------------------------|---------------------------------------------------|
+| clock         | `tb.clk`                    | clock                                             |
+|               | `tb.rstn`                   | active low reset                                  |
+|               | `tb.cyc`                    | cycle number                                      |
+| bp_cluster_p0 | `ftq_pred_val_p0`           | p0 request valid                                  |
+|               | `ftq_pred_pc_p0`            | p0 request PC                                     |
+|               | `ftq_pred_idx_p0`           | p0 request FTQ index                              |
+|               | `u_ftq.u_npc.w_hold`        | holds the p0 request                              |
+| ftq           | `u_ftq.w_commit_ptr`        | FTQ commit pointer                                |
+|               | `ftq_full`                  | FTQ full                                          |
+|               | `ftq_empty`                 | FTQ empty                                         |
+|               | `ftq_pred_idx_p0`           | p0 request FTQ index                              |
+|               | `ftq_ifu_idx`               | FTQ index of the block                            |
+| ftq_ifu       | `ftq_ifu_req_val`           | FTQ presents a block to the IFU                   |
+|               | `ftq_ifu_req_rdy`           | the IFU takes the block                           |
+|               | `ftq_ifu_idx`               | FTQ index of the block                            |
+|               | `ftq_ifu_start_pc`          | block start address                               |
+|               | `ftq_ifu_next_pc`           | address after the block                           |
+|               | `ftq_ifu_taken_val`         | the block holds a predicted-taken transfer        |
+|               | `ftq_ifu_taken_pos`         | halfword position of the predicted-taken transfer |
+|               | `ftq_ifu_flush_val`         | flush of the blocks younger than the named entry  |
+|               | `ftq_ifu_flush_idx`         | FTQ index the flush names                         |
+|               | `ftq_ifu_commit_ptr`        | FTQ commit pointer as the IFU sees it             |
+| ibuf          | `ifu_ibuf_val`              | the IFU offers a block to the instruction buffer  |
+|               | `ifu_ibuf_en`               | per-lane mask of the slots offered                |
+|               | `ibuf_ifu_rdy`              | the instruction buffer takes the block            |
+|               | `u_ibuf.r_count`            | instruction buffer occupancy                      |
+|               | `u_ibuf.w_n_pres`           | slots presented to decode                         |
+|               | `u_ibuf.w_n_pop`            | slots taken by decode                             |
+| decode        | `tb.dec_ibuf_rdy`           | the backend model takes the bundle                |
+|               | `tb.pd_out.[0].valid`       | lane 0 valid                                      |
+|               | `tb.pd_out.[0].start_pc`    | lane 0 instruction address                        |
+|               | `tb.pd_out.[0].ftq_idx`     | lane 0 FTQ index                                  |
+|               | `tb.pd_out.[0].pos`         | lane 0 halfword position in the fetch block       |
+|               | `tb.pd_out.[0].instr`       | lane 0 instruction, expanded if compressed        |
+|               | `tb.pd_out.[0].is_rvc`      | lane 0 instruction is 16-bit                      |
+|               | `tb.pd_out.[0].fault_cause` | lane 0 fetch fault cause                          |
+|               | `tb.pd_out.[0].fault_va`    | lane 0 fetch fault virtual address                |

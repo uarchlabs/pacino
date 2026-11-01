@@ -192,7 +192,6 @@ $(VTB2): $(DEPS) $(OBJ2)/$(EVT_TBL)
 # stdout; the console line (tb_fe_demo.sv console()) is its stderr and
 # is printed here. The exit status is the simulation's.
 define run_scen
-	@echo "[running]    $@"
 	$(Q)mkdir -p out/$@
 	$(Q)./$(call vtb_of,$@) $(QUIET) $(call plusargs,$@) +SCEN=$@ \
 	  +FST=out/$@/$@.fst > out/$@/$@.log

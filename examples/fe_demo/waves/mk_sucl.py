@@ -38,7 +38,9 @@
 # So each group is: add its first signal, focus it, group it, focus it
 # inside the group, set its format, then add each further signal and
 # set its format; then unfocus. The visible index counts each group
-# row and each signal row (every group is open).
+# row and each signal row (every group is open). marker_set places its
+# marker as variable_add places a variable, so the markers group is
+# built the same way (DOC-012, checked on Surfer 0.7).
 #
 # NAMES AND FORMATS (FDT-12a). variable_force_name_type Unique shows
 # each name as the shortest suffix of its path that identifies it.
@@ -55,8 +57,10 @@
 # are | # | cyc | event | other |; a row with a cyc value starts an event
 # and a row with an empty # and cyc continues the one above. # is the
 # event's marker number as Surfer shows it, 0 for the first event, and
-# must equal the event's position in the table. Each event is a
-# marker
+# must equal the event's position in the table. The markers are in a
+# group named markers, immediately after the clock group, in table
+# order; a scenario with no events has no markers group. Each event is
+# a marker
 #   marker_set c<cyc>_<label> <time>
 # <label> is the event text up to its first ';', ':', ',' or '(',
 # at most LABEL_WORDS words, joined by '_' (a marker name is one word,
@@ -309,7 +313,8 @@ for scen in scens:
              '# surfer out/%s/%s.fst -c waves/%s.sucl' % (scen, scen, scen),
              'variable_force_name_type Unique']
     n = 0                                  # visible items so far
-    for g, sigs in groups:
+    mk, period, num = markers(scen)
+    for k, (g, sigs) in enumerate(groups):
         rows = []
         for p in sigs:
             if p not in names:
@@ -332,16 +337,22 @@ for scen in scens:
             lines += ['variable_add ' + snm, 'item_set_format ' + f]
         lines += ['item_unfocus']
         n += 1 + len(rows)
+        # The markers group, immediately after the clock group (FDT-12c).
+        if k == 0 and mk:
+            lines += ['# group markers, from docs/%s.md section %s'
+                      % (scen, num or 'Events'),
+                      'marker_set %s %d' % mk[0],
+                      'item_focus ' + alpha(n),
+                      'group_marked markers',
+                      'item_focus ' + alpha(n + 1)]
+            lines += ['marker_set %s %d' % m for m in mk[1:]]
+            lines += ['item_unfocus']
+            n += 1 + len(mk)
     if missing or nofmt:
         continue
-    mk, period, num = markers(scen)
     if mk:
-        lines += ['# markers, from docs/%s.md section %s'
-                  % (scen, num or 'Events')]
-        lines += ['marker_set %s %d' % m for m in mk]
         t0 = mk[0][1]
-        lines += ['item_unfocus',
-                  'zoom_to %d %d' % (max(0, t0 - VIEW_BEFORE * period),
+        lines += ['zoom_to %d %d' % (max(0, t0 - VIEW_BEFORE * period),
                                      t0 + VIEW_AFTER * period)]
         nmark[scen] = len(mk)
     else:

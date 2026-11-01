@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd12_training` is the FD-12 demonstration scenario. It is a demo, not a
 verification test. It runs nested counted loops whose body holds every
 kind of control transfer the predictors train on: conditionals, an
@@ -21,17 +23,100 @@ least one update and at least one p0 request is withheld for an FTB
 update.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd12_training: PASS, update cycles uBTB 154, loop predictor 111, FTB 154,
-    TAGE 111, SC 111, ITTAGE 28, RAS commit 28, p0 holds for an FTB update 154,
-    cyc 454
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                      |
+  |--------------------|-------------------------------------------|
+  | This file          | $DEMO/docs/fd12_training.md               |
+  | Program (stimulus) | $DEMO/programs/fd12_training.svh          |
+  | Surfer sucl        | $DEMO/waves/fd12_training.sucl            |
+  | Log                | $DEMO/out/fd12_training/fd12_training.log |
+  | Waveform           | $DEMO/out/fd12_training/fd12_training.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd12_training
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd12_training
+```
+
+Console output:
+```
+-I: fd12_training : PASS : cyc = 454
+```
+
+Log file output:
+```
+-I: fd12_training: PASS, update cycles uBTB 154, loop predictor 111, FTB 154,
+    TAGE 111, SC 111, ITTAGE 28, RAS commit 28, p0 holds for an FTB update 154,
+    events checked 10 of 10, cyc 454
+```
+
+### 2.1 What the monitor counts
+
+The counts come from `tb/fe_demo_mon.svh:502-514`, sampled every cycle
+while the stream is being measured (`meas`,
+`rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:416`). They read
+the valids after the cluster's gates.
+
+```
+n_upd_ubtb   per slot: w_ubtb_upd_u0[s].valid, summed over the slots
+             of the cycle (DOC-002)
+n_upd_lp     cycles with w_lp_upd_val_p0 != 0
+n_upd_tage   cycles with w_tage_upd_val_u0 != 0
+n_upd_itt    cycles with w_ittage_upd_val_u0 != 0
+n_upd_sc     cycles with w_sc_upd_val_u0 != 0
+n_upd_ftb    cycles with w_ftb_upd_val_u0
+n_upd_ras    cycles with w_ras_commit_val
+n_ftb_bub    cycles with u_ftq.u_npc.h3_ftb_upd
+```
+
+The proof (`tb/fe_demo_proofs.svh:108-110`) requires every one of the
+eight counts to be non-zero. `tb_fe_demo.sv` also requires the whole
+stream to retire with no errors before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- The figures match the program's control transfers but for one: uBTB
+  and FTB 154 (every transfer), LP, TAGE and SC 111 (the conditionals,
+  less one), ITTAGE 28 (the indirect jump and call), RAS commit 28 (the
+  call and the return). FTB update p0 holds 154: one per FTB update.
+- The conditional left out is the always-taken `beq` at +0x1C,
+  resolved at cyc 168 in a block from +0x10 whose one slot holds the
+  inner loop branch at position 4. The FTQ places its resolution in
+  that occupied slot, whose prediction metadata describes the other
+  branch, so the uBTB and FTB updates form and the LP, TAGE and SC
+  updates are suppressed (item C, BP-139,
+  `rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 46 to 57). The
+  condition is `rsv_plc_occ` (line 443), which gates the updates at
+  lines 551 to 560. It is the only such resolution in the run.
+- Except `n_upd_ubtb`, the counters count cycles with any slot valid,
+  not slot updates; the result line says "update cycles" for that
+  reason. DOC-002 changed `n_upd_ubtb` to sum its slots. On this model
+  a cycle has one slot, so every count is of single-slot updates.
+- The run takes 454 cycles on this model and 459 on the two-slot model
+  (DOC-007 run). On the two-slot model the LP, TAGE and SC counts are
+  112, since the `beq` has a slot of its own.
+- Departure from `planning/showcase/fe_demo_scenarios.md` FD-12: the
+  program there is "any branch, first execution and the next"; the
+  program as built is tb_fe_top's `loops`, with every update type, so
+  that the proof can require an update at each predictor. The proof as
+  built adds the RAS commit to the predictors FD-12 names.
+
+---
+
+## 3. The program
 
 Source: `programs/fd12_training.svh`, task `prog_fd12`. Bare M-mode,
 code at RESET_VECTOR 0x8000_0000 (`bp_defines_pkg.sv:40`). Addresses
@@ -69,12 +154,14 @@ always-taken `beq`, the indirect jump, the indirect call, the return,
 the outer branch. Over 14 passes: 154 transfers, of which 112
 conditionals (8 per pass), 28 indirect (jump and call) and 28 RAS
 operations (call and return). The halt (`jal x0,0`) is the stream's
-last entry; the counts below (154, not 155, for the uBTB and FTB) show
+last entry; the counts of section 2 (154, not 155, for the uBTB and FTB) show
 that its update falls after the measurement window closes.
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. Resolution and conversion. `ftq_upd_conv`
    (`rtl/core/frontend/ftq/rtl/ftq_upd_conv.sv`) forms the per-slot
@@ -103,64 +190,7 @@ that its update falls after the measurement window closes.
    (hold term H3 in `w_hold`, `ftq_npc.sv:307-309`; rationale at
    `ftq_npc.sv:132-137`). One p0 request is withheld per FTB update.
 
----
-
-## 3. What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:502-514`, sampled every cycle
-while the stream is being measured (`meas`,
-`rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:416`). They read
-the valids after the cluster's gates.
-
-```
-n_upd_ubtb   per slot: w_ubtb_upd_u0[s].valid, summed over the slots
-             of the cycle (DOC-002)
-n_upd_lp     cycles with w_lp_upd_val_p0 != 0
-n_upd_tage   cycles with w_tage_upd_val_u0 != 0
-n_upd_itt    cycles with w_ittage_upd_val_u0 != 0
-n_upd_sc     cycles with w_sc_upd_val_u0 != 0
-n_upd_ftb    cycles with w_ftb_upd_val_u0
-n_upd_ras    cycles with w_ras_commit_val
-n_ftb_bub    cycles with u_ftq.u_npc.h3_ftb_upd
-```
-
-The proof (`tb/fe_demo_proofs.svh:108-110`) requires every one of the
-eight counts to be non-zero. `tb_fe_demo.sv` also requires the whole
-stream to retire with no errors before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- The figures match the program's control transfers but for one: uBTB
-  and FTB 154 (every transfer), LP, TAGE and SC 111 (the conditionals,
-  less one), ITTAGE 28 (the indirect jump and call), RAS commit 28 (the
-  call and the return). FTB update p0 holds 154: one per FTB update.
-- The conditional left out is the always-taken `beq` at +0x1C,
-  resolved at cyc 168 in a block from +0x10 whose one slot holds the
-  inner loop branch at position 4. The FTQ places its resolution in
-  that occupied slot, whose prediction metadata describes the other
-  branch, so the uBTB and FTB updates form and the LP, TAGE and SC
-  updates are suppressed (item C, BP-139,
-  `rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 46 to 57). The
-  condition is `rsv_plc_occ` (line 443), which gates the updates at
-  lines 551 to 560. It is the only such resolution in the run.
-- Except `n_upd_ubtb`, the counters count cycles with any slot valid,
-  not slot updates; the result line says "update cycles" for that
-  reason. DOC-002 changed `n_upd_ubtb` to sum its slots. On this model
-  a cycle has one slot, so every count is of single-slot updates.
-- The run takes 454 cycles on this model and 459 on the two-slot model
-  (DOC-007 run). On the two-slot model the LP, TAGE and SC counts are
-  112, since the `beq` has a slot of its own.
-- Departure from `planning/showcase/fe_demo_scenarios.md` FD-12: the
-  program there is "any branch, first execution and the next"; the
-  program as built is tb_fe_top's `loops`, with every update type, so
-  that the proof can require an update at each predictor. The proof as
-  built adds the RAS commit to the predictors FD-12 names.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd12_training.sucl`, which `make view
 S=fd12_training` opens in Surfer. Groups: clock, backend, ftq_upd_conv,
@@ -176,7 +206,7 @@ ftb_update, bp_cluster_p0. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                                                         | Other                 |
 |---|-----|-------------------------------------------------------------------------------------------------------------------------------|-----------------------|
@@ -190,3 +220,45 @@ ftb_update, bp_cluster_p0. Look at:
 | 7 | 78  | first RAS commit (`w_ras_commit_val`)                                                                                         |                       |
 | 8 | 168 | the beq placed in an occupied slot (`rsv_plc_occ`): the always-taken beq's loop predictor, TAGE and SC updates are suppressed | the only one          |
 | 9 | 454 | the run ends                                                                                                                  |                       |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd12_training` opens
+`waves/fd12_training.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group         | signal                          | description                            |
+|---------------|---------------------------------|----------------------------------------|
+| clock         | `tb.clk`                        | clock                                  |
+|               | `tb.rstn`                       | active low reset                       |
+|               | `tb.cyc`                        | cycle number                           |
+| backend       | `tb.bkend_ftq_redir_val`        | backend redirect                       |
+|               | `tb.bkend_ftq_redir_idx`        | FTQ index of the backend redirect      |
+|               | `tb.bkend_ftq_redir_pc`         | backend redirect PC                    |
+|               | `tb.bkend_ftq_redir_cause`      | backend redirect cause                 |
+|               | `tb.bkend_ftq_redir_self`       | self flag of the backend redirect      |
+|               | `tb.bkend_ftq_rsv_val`          | resolution from the backend, per slot  |
+|               | `tb.bkend_ftq_commit_val`       | commit watermark valid                 |
+|               | `tb.bkend_ftq_commit_idx`       | commit watermark FTQ index             |
+| ftq_upd_conv  | `tb.bkend_ftq_rsv_val`          | resolution from the backend, per slot  |
+|               | `tb.ftq_bkend_rsv_rdy`          | the FTQ takes the resolution, per slot |
+|               | `u_bpu.w_lp_upd_val_p0`         | loop predictor update valid, per slot  |
+|               | `u_bpu.w_tage_upd_val_u0`       | TAGE update valid, per slot            |
+|               | `u_bpu.w_ittage_upd_val_u0`     | ITTAGE update valid, per slot          |
+|               | `u_bpu.w_sc_upd_val_u0`         | SC update valid, per slot              |
+|               | `bpu_tage_upd_rdy`              | TAGE takes the update, per slot        |
+|               | `u_bpu.w_ras_commit_val`        | RAS commit valid at the cluster        |
+|               | `u_bpu.w_ubtb_upd_u0.[0].valid` | uBTB update valid, slot 0              |
+| ftb_update    | `ftb_upd_valid_u0`              | FTB update valid                       |
+|               | `ftb_upd_pc_u0`                 | block start address of the FTB update  |
+|               | `ftb_upd_hit_u0`                | the FTB update hits an entry           |
+|               | `ftb_upd_is_br_u0`              | the FTB update is for a conditional    |
+|               | `ftb_upd_taken_u0`              | resolved direction of the FTB update   |
+|               | `ftb_upd_is_jmp_u0`             | the FTB update is for a jump           |
+|               | `u_ftq.u_npc.h3_ftb_upd`        | p0 hold for an FTB update              |
+| bp_cluster_p0 | `ftq_pred_val_p0`               | p0 request valid                       |
+|               | `ftq_pred_pc_p0`                | p0 request PC                          |
+|               | `ftq_pred_idx_p0`               | p0 request FTQ index                   |
+|               | `u_ftq.u_npc.w_hold`            | holds the p0 request                   |

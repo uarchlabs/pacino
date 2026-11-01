@@ -37,6 +37,9 @@
 #   - markers: one per event of the table of docs/<s>.md's level-2
 #     section headed Events, with or without a section number, in or out
 #     of the FDT-13 form (DOC-009), none when it has no such section; in
+#     a group named markers immediately after the clock group, nothing
+#     else in it and none outside it (DOC-012); no such group when there
+#     are no events; in
 #     table order, each named c<cyc>_<label>, at a time where the FST has
 #     tb.cyc equal to <cyc> with tb.rstn high and did not have it just
 #     before (FDT-12c), and numbered by Surfer as the row's # column
@@ -220,6 +223,26 @@ def check_markers(scen, fst, got, view):
     return errs, len(mk)
 
 
+# The markers group (FDT-12c): at item at, the first after the clock group,
+# a top-level group named markers holding the n markers and nothing else.
+# With no events there is no such group and no marker.
+def check_markers_group(got, at, n):
+    groups = [k for k, it in enumerate(got)
+              if it[1] == 'Group' and it[2] == 'markers']
+    marks = [k for k, it in enumerate(got) if it[1] == 'Marker']
+    if n == 0:
+        return ['a markers group or marker with no events'] \
+            if groups or marks else []
+    if groups != [at] or got[at][0] != 0:
+        return ['markers group: at items %s, expected top-level at item %d, '
+                'immediately after the clock group' % (groups, at)]
+    if marks != list(range(at + 1, at + 1 + n)) or \
+            any(got[k][0] != 1 for k in marks):
+        return ['markers group: markers at items %s, expected the %d items '
+                'inside it' % (marks, n)]
+    return []
+
+
 def check(scen, tmpdir):
     fst = os.path.join('out', scen, scen + '.fst')
     if not os.path.exists(fst):
@@ -237,8 +260,12 @@ def check(scen, tmpdir):
         if 'ERROR' in line or 'WARN' in line:
             errs.append('surfer: ' + line.strip())
     got, view = state(open(ron).read())
+    cycs = event_cycs(scen)
     want = []
-    for g, sigs in exp:
+    for k, (g, sigs) in enumerate(exp):
+        # The markers group follows the clock group (FDT-12c).
+        if k == 1 and cycs:
+            want.append((0, 'Group', 'markers', None, None))
         want.append((0, 'Group', g, None, None))
         for p in sigs:
             if p not in names:
@@ -261,9 +288,7 @@ def check(scen, tmpdir):
                 break
         errs.append('items: Surfer %d, expected %d' % (len(vars_got),
                                                        len(want)))
-    tail = got[len(vars_got):]
-    if any(it[1] != 'Marker' or it[0] != 0 for it in tail):
-        errs.append('markers are not top-level items after the groups')
+    errs += check_markers_group(got, 1 + len(exp[0][1]), len(cycs))
     e, nm = check_markers(scen, fst, got, view)
     return errs + e, len(exp), sum(len(s) for _, s in exp), nm
 

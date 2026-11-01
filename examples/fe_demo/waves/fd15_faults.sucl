@@ -13,11 +13,28 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd15_faults.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c90_walk_for_VPN_0x80400 935
+marker_set c104_the_walker_answers_a_page_fault 1075
+marker_set c108_the_page_fault_reaches_decode 1115
+marker_set c166_walk_for_VPN_0x80600 1695
+marker_set c187_the_walker_answers_a_hit 1905
+marker_set c191_the_access_fault_reaches_decode 1945
+marker_set c202_the_ecalls_trap_redirect_to_V 2055
+marker_set c399_walk_for_VPN_0x80800 4025
+marker_set c490_the_walker_answers_cause_20 4935
+marker_set c494_the_third_fault_reaches_decode 4975
+marker_set c700_the_run_ends 7035
+item_unfocus
 # group itlb
 variable_add tb.dut.ifu_itlb_req_val
-item_focus e
+item_focus bb
 group_marked itlb
-item_focus f
+item_focus bc
 item_set_format Bit
 variable_add tb.dut.ifu_itlb_req_rdy
 item_set_format Bit
@@ -34,9 +51,9 @@ item_set_format Unsigned
 item_unfocus
 # group walker
 variable_add tb.itlb_l2t_req_val
-item_focus m
+item_focus bj
 group_marked walker
-item_focus n
+item_focus bk
 item_set_format Bit
 variable_add tb.itlb_l2t_req_rdy
 item_set_format Bit
@@ -61,9 +78,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_xlate
 variable_add tb.dut.u_ifu.u_xlate.xq_val
-item_focus bi
+item_focus cf
 group_marked ifu_xlate
-item_focus bj
+item_focus cg
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_xlate.xq_pop
 item_set_format Bit
@@ -86,18 +103,18 @@ item_set_format Bit
 item_unfocus
 # group ifu_fault
 variable_add tb.dut.ifu_ftq_fault_val
-item_focus cd
+item_focus da
 group_marked ifu_fault
-item_focus ce
+item_focus db
 item_set_format Bit
 variable_add tb.dut.ifu_ftq_fault_pos
 item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus cg
+item_focus dd
 group_marked decode
-item_focus ch
+item_focus de
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -118,9 +135,9 @@ item_set_format Hexadecimal
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus da
+item_focus dn
 group_marked backend
-item_focus db
+item_focus do
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -136,19 +153,5 @@ variable_add tb.bkend_ftq_commit_val
 item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
-item_unfocus
-# markers, from docs/fd15_faults.md section 6
-marker_set c0_reset_released 36
-marker_set c90_walk_for_VPN_0x80400 935
-marker_set c104_the_walker_answers_a_page_fault 1075
-marker_set c108_the_page_fault_reaches_decode 1115
-marker_set c166_walk_for_VPN_0x80600 1695
-marker_set c187_the_walker_answers_a_hit 1905
-marker_set c191_the_access_fault_reaches_decode 1945
-marker_set c202_the_ecalls_trap_redirect_to_V 2055
-marker_set c399_walk_for_VPN_0x80800 4025
-marker_set c490_the_walker_answers_cause_20 4935
-marker_set c494_the_third_fault_reaches_decode 4975
-marker_set c700_the_run_ends 7035
 item_unfocus
 zoom_to 16 336

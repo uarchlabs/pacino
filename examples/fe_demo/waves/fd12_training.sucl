@@ -13,11 +13,26 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd12_training.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c20_first_p0_request_withheld_for_an 235
+marker_set c21_first_resolution_from_the_backend 245
+marker_set c21_first_uBTB_update 245
+marker_set c21_first_FTB_update 245
+marker_set c21_first_loop_predictor 245
+marker_set c66_first_ITTAGE_update 695
+marker_set c78_first_RAS_commit 815
+marker_set c168_the_beq_placed_in_an_occupied 1715
+marker_set c454_the_run_ends 4575
+item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus e
+item_focus p
 group_marked backend
-item_focus f
+item_focus ba
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -36,9 +51,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq_upd_conv
 variable_add tb.bkend_ftq_rsv_val
-item_focus n
+item_focus bi
 group_marked ftq_upd_conv
-item_focus o
+item_focus bj
 item_set_format Bit
 variable_add tb.ftq_bkend_rsv_rdy
 item_set_format Bit
@@ -59,9 +74,9 @@ item_set_format Bit
 item_unfocus
 # group ftb_update
 variable_add tb.dut.ftb_upd_valid_u0
-item_focus bh
+item_focus cc
 group_marked ftb_update
-item_focus bi
+item_focus cd
 item_set_format Bit
 variable_add tb.dut.ftb_upd_pc_u0
 item_set_format Hexadecimal
@@ -78,9 +93,9 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus bp
+item_focus ck
 group_marked bp_cluster_p0
-item_focus ca
+item_focus cl
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
@@ -88,17 +103,5 @@ variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
-item_unfocus
-# markers, from docs/fd12_training.md section 6
-marker_set c0_reset_released 36
-marker_set c20_first_p0_request_withheld_for_an 235
-marker_set c21_first_resolution_from_the_backend 245
-marker_set c21_first_uBTB_update 245
-marker_set c21_first_FTB_update 245
-marker_set c21_first_loop_predictor 245
-marker_set c66_first_ITTAGE_update 695
-marker_set c78_first_RAS_commit 815
-marker_set c168_the_beq_placed_in_an_occupied 1715
-marker_set c454_the_run_ends 4575
 item_unfocus
 zoom_to 16 336

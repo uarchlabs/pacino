@@ -10,7 +10,7 @@
  CONTACT: Jeff Nye
 ```
 
-## 1. What the scenario shows
+## 1. Introduction
 
 `fd24_call_slot1` is the FD-24 scenario of the front-end demonstration.
 A fetch block holds a conditional branch followed by a call. With two
@@ -22,13 +22,43 @@ predicted from the stack. The scenario runs on the two-slot model
 (`SCEN_2S` in the `Makefile`). demo_explainer.md describes how a
 scenario is built and run, and defines the terms used here.
 
-When the scenario passes, it prints one line. This is the line from a
-run on 2026-10-19, the run the cyc values below come from:
+### 1.1 Files
 
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                          |
+  |--------------------|-----------------------------------------------|
+  | This file          | $DEMO/docs/fd24_call_slot1.md                 |
+  | Program (stimulus) | $DEMO/programs/fd24_call_slot1.svh            |
+  | Surfer sucl        | $DEMO/waves/fd24_call_slot1.sucl              |
+  | Log                | $DEMO/out/fd24_call_slot1/fd24_call_slot1.log |
+  | Waveform           | $DEMO/out/fd24_call_slot1/fd24_call_slot1.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.sucl) |
+
+---
+
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd24_call_slot1
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd24_call_slot1
+```
+
+Console output:
+```
+-I: fd24_call_slot1 : PASS : cyc = 270
+```
+
+Log file output:
 ```
 -I: fd24_call_slot1: PASS,
     RAS pushes from slot 1 behind a not-taken conditional 24,
-    returns predicted by the RAS 21, cyc 270
+    returns predicted by the RAS 21, events checked 9 of 9, cyc 270
 ```
 
 The two counts are:
@@ -49,7 +79,7 @@ is 0 and the scenario fails. The run took 270 cycles.
 
 ---
 
-## 2. The program
+## 3. The program
 
 The program is written by the task `prog_fd24` in
 `programs/fd24_call_slot1.svh`. Between a short prologue and epilogue
@@ -93,9 +123,9 @@ is taken on passes 0 to 22 and falls through on pass 23.
 
 ---
 
-## 3. Walkthrough
+## 4. Walkthrough
 
-### 3.1 The call reaches slot 1
+### 4.1 The call reaches slot 1
 
 The FTB entry for the block at top holds C in its first conditional field and
 the call in its jump field. At p2 the cluster places C in slot 0. The call goes
@@ -105,7 +135,7 @@ lines 1037 to 1045). A taken branch ends the block, so a slot is on the
 predicted path only when no earlier slot is predicted taken (`w_reach_p2`,
 lines 1076 to 1084).
 
-### 3.2 The RAS operation of slot 1
+### 4.2 The RAS operation of slot 1
 
 At p2 a slot of a valid block is presented to the RAS when it holds a
 branch on the predicted path (`w_ras_pred_val_p2`, lines 1086 to 1091).
@@ -128,7 +158,7 @@ which the RAS does not act on. At cyc 91 `tb.dut.u_bpu.u_ras.tosr` has
 moved from 0 to 1 and `tosw` from 0 to 2. `spec_ret_addr.[1]` holds
 0x8000_0014, the call's return address.
 
-### 3.3 The return predicted from the stack
+### 4.3 The return predicted from the stack
 
 The block at f holds the return. At p2 a return slot takes the RAS's
 pop address as its target when the pop is valid, with `pred_src`
@@ -154,7 +184,7 @@ RTL: the slot-1 presentation is `w_ras_pred_val_p2[1]` in
 
 ---
 
-## 4. Events
+## 5. Events
 
 | # | cyc | Event                                                                                      | Other     |
 |---|-----|--------------------------------------------------------------------------------------------|-----------|
@@ -167,3 +197,70 @@ RTL: the slot-1 presentation is `w_ras_pred_val_p2[1]` in
 | 6 | 91  | TOSR 1, TOSW 2; entry 1 holds 0x8000_0014; first return predicted from the RAS             | PRED_RAS  |
 | 7 | 261 | back edge falls through, a misprediction; redirect to 0x8000_001E                          | pass 23   |
 | 8 | 270 | the run ends                                                                               |           |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd24_call_slot1` opens
+`waves/fd24_call_slot1.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group         | signal                          | description                                  |
+|---------------|---------------------------------|----------------------------------------------|
+| clock         | `tb.clk`                        | clock                                        |
+|               | `tb.rstn`                       | active low reset                             |
+|               | `tb.cyc`                        | cycle number                                 |
+| bp_cluster_p2 | `u_bpu.r_val_p2`                | p2 valid                                     |
+|               | `bpu_slot_val_p2`               | slot valid mask                              |
+|               | `bpu_slot_idx_p2`               | FTQ index of the p2 group                    |
+|               | `u_bpu.w_ftb_valid_p2`          | FTB hit at p2                                |
+|               | `bpu_slot_p2.[0].slot_valid`    | slot 0 holds a branch                        |
+|               | `bpu_slot_p2.[0].br_type`       | slot 0 branch type                           |
+|               | `bpu_slot_p2.[0].pos`           | slot 0 halfword position in the fetch block  |
+|               | `bpu_slot_p2.[0].taken`         | slot 0 predicted direction                   |
+|               | `bpu_slot_p2.[0].target`        | slot 0 predicted target                      |
+|               | `bpu_slot_p2.[0].pred_src`      | slot 0 predictor that supplied the direction |
+|               | `bpu_slot_p2.[1].slot_valid`    | slot 1 holds a branch                        |
+|               | `bpu_slot_p2.[1].br_type`       | slot 1 branch type                           |
+|               | `bpu_slot_p2.[1].pos`           | slot 1 halfword position in the fetch block  |
+|               | `bpu_slot_p2.[1].taken`         | slot 1 predicted direction                   |
+|               | `bpu_slot_p2.[1].target`        | slot 1 predicted target                      |
+|               | `bpu_slot_p2.[1].pred_src`      | slot 1 predictor that supplied the direction |
+|               | `bpu_redir_p2.[0].valid`        | p2 redirect from slot 0                      |
+|               | `bpu_redir_p2.[0].target_pc`    | p2 redirect target from slot 0               |
+|               | `bpu_redir_p2.[1].valid`        | p2 redirect from slot 1                      |
+|               | `bpu_redir_p2.[1].target_pc`    | p2 redirect target from slot 1               |
+|               | `bpu_redir_idx_p2`              | FTQ index of the p2 redirect                 |
+| ras           | `u_bpu.u_ras.tosr`              | RAS read pointer                             |
+|               | `u_bpu.u_ras.tosw`              | RAS write pointer                            |
+|               | `u_bpu.u_ras.bos`               | RAS bottom of stack                          |
+|               | `u_bpu.u_ras.ras_rst_done`      | RAS reset done                               |
+|               | `u_bpu.w_ras_pred_val_p2.[0]`   | slot 0 presented to the RAS at p2            |
+|               | `u_bpu.w_ras_pred_val_p2.[1]`   | slot 1 presented to the RAS at p2            |
+|               | `u_bpu.w_br_type_p2.[0]`        | slot 0 branch type at p2                     |
+|               | `u_bpu.w_br_type_p2.[1]`        | slot 1 branch type at p2                     |
+|               | `u_bpu.u_ras.spec_ret_addr.[0]` | RAS entry 0 return address                   |
+|               | `u_bpu.u_ras.spec_ret_addr.[1]` | RAS entry 1 return address                   |
+|               | `u_bpu.u_ras.spec_ret_addr.[2]` | RAS entry 2 return address                   |
+|               | `u_bpu.u_ras.spec_ret_addr.[3]` | RAS entry 3 return address                   |
+|               | `u_bpu.u_ras.spec_rctr.[0]`     | RAS entry 0 recursion count                  |
+|               | `u_bpu.u_ras.spec_rctr.[1]`     | RAS entry 1 recursion count                  |
+|               | `u_bpu.u_ras.spec_rctr.[2]`     | RAS entry 2 recursion count                  |
+|               | `u_bpu.u_ras.spec_rctr.[3]`     | RAS entry 3 recursion count                  |
+| ftq           | `u_ftq.w_ok_pred_p1`            | the FTQ accepts the p1 prediction            |
+|               | `u_ftq.w_ok_slot_p2`            | the FTQ accepts the p2 group                 |
+|               | `u_ftq.w_ok_slot_p3`            | the FTQ accepts the p3 group                 |
+|               | `u_ftq.w_ok_redir_p2`           | the FTQ accepts the p2 redirect              |
+|               | `u_ftq.w_ok_redir_p3`           | the FTQ accepts the p3 redirect              |
+|               | `u_ftq.w_redir_val`             | a redirect the FTQ takes                     |
+|               | `u_ftq.w_redir_idx`             | FTQ index of the redirect                    |
+|               | `u_ftq.w_commit_ptr`            | FTQ commit pointer                           |
+|               | `ftq_full`                      | FTQ full                                     |
+|               | `ftq_empty`                     | FTQ empty                                    |
+| ras_commit    | `ras_commit_val`                | RAS commit valid                             |
+|               | `ras_commit_br_type`            | branch type of the RAS commit                |
+|               | `ras_commit_ret_addr`           | return address of the RAS commit             |
+|               | `u_bpu.u_ras.csp`               | commit stack pointer                         |
+|               | `u_bpu.u_ras.commit_top_valid`  | commit stack top valid                       |
+|               | `u_bpu.u_ras.commit_top_addr`   | commit stack top address                     |

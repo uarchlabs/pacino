@@ -10,7 +10,7 @@
  CONTACT: Jeff Nye
 ```
 
-## 1. What the scenario shows
+## 1. Introduction
 
 `fd22_sc_slot1` is the FD-22 scenario of the front-end demonstration.
 One fetch block holds two conditional branches. TAGE predicts both at
@@ -22,13 +22,43 @@ needs the second slot and runs on the two-slot model (`SCEN_2S` in the
 `Makefile`). demo_explainer.md describes how a scenario is built and
 run, and defines the terms used here.
 
-When the scenario passes, it prints one line. This is the line from a
-run on 2026-10-19, the run the cyc values below come from:
+### 1.1 Files
 
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                      |
+  |--------------------|-------------------------------------------|
+  | This file          | $DEMO/docs/fd22_sc_slot1.md               |
+  | Program (stimulus) | $DEMO/programs/fd22_sc_slot1.svh          |
+  | Surfer sucl        | $DEMO/waves/fd22_sc_slot1.sucl            |
+  | Log                | $DEMO/out/fd22_sc_slot1/fd22_sc_slot1.log |
+  | Waveform           | $DEMO/out/fd22_sc_slot1/fd22_sc_slot1.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.sucl) |
+
+---
+
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd22_sc_slot1
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd22_sc_slot1
+```
+
+Console output:
+```
+-I: fd22_sc_slot1 : PASS : cyc = 368
+```
+
+Log file output:
 ```
 -I: fd22_sc_slot1: PASS,
     p3 redirects from slot 1 reversed by SC behind a TAGE slot 0 8,
-    from slot 0 reversed by SC 1, cyc 368
+    from slot 0 reversed by SC 1, events checked 10 of 10, cyc 368
 ```
 
 The monitor, `tb/fe_demo_mon.svh` lines 583 to 601, counts a p3
@@ -50,7 +80,7 @@ there is no slot 1, and the scenario fails. The run took 368 cycles.
 
 ---
 
-## 2. The program
+## 3. The program
 
 The program is written by the task `prog_fd22` in
 `programs/fd22_sc_slot1.svh`. Between a short prologue and epilogue it
@@ -104,9 +134,9 @@ direction the program recorded; x6 is never read.
 
 ---
 
-## 3. Walkthrough
+## 4. Walkthrough
 
-### 3.1 Two conditionals in one prediction block
+### 4.1 Two conditionals in one prediction block
 
 The FTB records, for a block start address, up to `NUM_PRED_SLOTS`
 branches, each with its position. On the two-slot model the block at
@@ -125,7 +155,7 @@ is at cyc 45, in the `bp_cluster_p2` group. `tb.dut.bpu_slot_p2.[0]` is A at
 RTL: the placement of the FTB's conditional fields into slots is in
 `p2_class_comb`, `bp_cluster.sv` lines 1010 to 1046.
 
-### 3.2 SC answers at p3 for each slot
+### 4.2 SC answers at p3 for each slot
 
 SC answers one cycle after TAGE, at p3, separately for each slot. For
 a conditional slot with an SC hit, and no loop predictor direction at
@@ -162,7 +192,7 @@ taken (`tage_prm_comp` 1, `tage_prm_ctr` 3'b100 at cyc 113); SC
 predicts not taken, and the redirect is to 0x8000_0028, the block's
 fall-through.
 
-### 3.3 The reversals in the run
+### 4.3 The reversals in the run
 
 There are 9 p3 redirects in the run, all for the block at top:
 
@@ -188,7 +218,7 @@ RTL: the SC hit for slot s is `w_sc_hit_p3[s]`, `bp_cluster.sv` lines
 
 ---
 
-## 4. Events
+## 5. Events
 
 | # | cyc | Event                                                                              | Other              |
 |---|-----|------------------------------------------------------------------------------------|--------------------|
@@ -202,3 +232,84 @@ RTL: the SC hit for slot s is `w_sc_hit_p3[s]`, `bp_cluster.sv` lines
 | 7 | 204 | last backend misprediction of B; redirect to 0x8000_001A                           | backend            |
 | 8 | 358 | back edge falls through, a misprediction; redirect to 0x8000_0030                  | pass 47            |
 | 9 | 368 | the run ends                                                                       |                    |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd22_sc_slot1` opens
+`waves/fd22_sc_slot1.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group         | signal                                                               | description                                  |
+|---------------|----------------------------------------------------------------------|----------------------------------------------|
+| clock         | `tb.clk`                                                             | clock                                        |
+|               | `tb.rstn`                                                            | active low reset                             |
+|               | `tb.cyc`                                                             | cycle number                                 |
+| tage_p2       | `u_bpu.w_tage_pred_rdy_p2`                                           | TAGE response at p2                          |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp`      | slot 0 provider table, 0 is T0               |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_alt_comp`      | slot 0 alternate table, 0 is T0              |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_using_primary` | slot 0 is 0 when the alternate provides      |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_ctr`       | slot 0 provider CTR                          |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_pred_tkn`      | slot 0 TAGE direction                        |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_prm_comp`      | slot 1 provider table, 0 is T0               |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_alt_comp`      | slot 1 alternate table, 0 is T0              |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_using_primary` | slot 1 is 0 when the alternate provides      |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_prm_ctr`       | slot 1 provider CTR                          |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_pred_tkn`      | slot 1 TAGE direction                        |
+| bp_cluster_p2 | `u_bpu.r_val_p2`                                                     | p2 valid                                     |
+|               | `bpu_slot_val_p2`                                                    | slot valid mask                              |
+|               | `bpu_slot_idx_p2`                                                    | FTQ index of the p2 group                    |
+|               | `u_bpu.w_ftb_valid_p2`                                               | FTB hit at p2                                |
+|               | `bpu_slot_p2.[0].slot_valid`                                         | slot 0 holds a branch                        |
+|               | `bpu_slot_p2.[0].br_type`                                            | slot 0 branch type                           |
+|               | `bpu_slot_p2.[0].pos`                                                | slot 0 halfword position in the fetch block  |
+|               | `bpu_slot_p2.[0].taken`                                              | slot 0 predicted direction                   |
+|               | `bpu_slot_p2.[0].target`                                             | slot 0 predicted target                      |
+|               | `bpu_slot_p2.[0].pred_src`                                           | slot 0 predictor that supplied the direction |
+|               | `bpu_slot_p2.[1].slot_valid`                                         | slot 1 holds a branch                        |
+|               | `bpu_slot_p2.[1].br_type`                                            | slot 1 branch type                           |
+|               | `bpu_slot_p2.[1].pos`                                                | slot 1 halfword position in the fetch block  |
+|               | `bpu_slot_p2.[1].taken`                                              | slot 1 predicted direction                   |
+|               | `bpu_slot_p2.[1].target`                                             | slot 1 predicted target                      |
+|               | `bpu_slot_p2.[1].pred_src`                                           | slot 1 predictor that supplied the direction |
+|               | `bpu_redir_p2.[0].valid`                                             | p2 redirect from slot 0                      |
+|               | `bpu_redir_p2.[0].target_pc`                                         | p2 redirect target from slot 0               |
+|               | `bpu_redir_p2.[1].valid`                                             | p2 redirect from slot 1                      |
+|               | `bpu_redir_p2.[1].target_pc`                                         | p2 redirect target from slot 1               |
+|               | `bpu_redir_idx_p2`                                                   | FTQ index of the p2 redirect                 |
+| sc_p3         | `u_bpu.w_sc_pred_rdy_p3`                                             | SC response at p3                            |
+|               | `u_bpu.w_sc_hit_p3.[0]`                                              | SC response for slot 0                       |
+|               | `u_bpu.w_sc_hit_p3.[1]`                                              | SC response for slot 1                       |
+|               | `u_bpu.w_taken_p3.[0]`                                               | slot 0 direction at p3                       |
+|               | `u_bpu.w_taken_p3.[1]`                                               | slot 1 direction at p3                       |
+| bp_cluster_p3 | `u_bpu.r_val_p3`                                                     | p3 valid                                     |
+|               | `bpu_slot_val_p3`                                                    | slot valid mask                              |
+|               | `bpu_slot_idx_p3`                                                    | FTQ index of the p3 group                    |
+|               | `bpu_slot_p3.[0].slot_valid`                                         | slot 0 holds a branch                        |
+|               | `bpu_slot_p3.[0].br_type`                                            | slot 0 branch type                           |
+|               | `bpu_slot_p3.[0].pos`                                                | slot 0 halfword position in the fetch block  |
+|               | `bpu_slot_p3.[0].taken`                                              | slot 0 predicted direction                   |
+|               | `bpu_slot_p3.[0].target`                                             | slot 0 predicted target                      |
+|               | `bpu_slot_p3.[0].pred_src`                                           | slot 0 predictor that supplied the direction |
+|               | `bpu_slot_p3.[1].slot_valid`                                         | slot 1 holds a branch                        |
+|               | `bpu_slot_p3.[1].br_type`                                            | slot 1 branch type                           |
+|               | `bpu_slot_p3.[1].pos`                                                | slot 1 halfword position in the fetch block  |
+|               | `bpu_slot_p3.[1].taken`                                              | slot 1 predicted direction                   |
+|               | `bpu_slot_p3.[1].target`                                             | slot 1 predicted target                      |
+|               | `bpu_slot_p3.[1].pred_src`                                           | slot 1 predictor that supplied the direction |
+|               | `bpu_redir_p3.[0].valid`                                             | p3 redirect from slot 0                      |
+|               | `bpu_redir_p3.[0].target_pc`                                         | p3 redirect target from slot 0               |
+|               | `bpu_redir_p3.[1].valid`                                             | p3 redirect from slot 1                      |
+|               | `bpu_redir_p3.[1].target_pc`                                         | p3 redirect target from slot 1               |
+|               | `bpu_redir_idx_p3`                                                   | FTQ index of the p3 redirect                 |
+| ftq           | `u_ftq.w_ok_pred_p1`                                                 | the FTQ accepts the p1 prediction            |
+|               | `u_ftq.w_ok_slot_p2`                                                 | the FTQ accepts the p2 group                 |
+|               | `u_ftq.w_ok_slot_p3`                                                 | the FTQ accepts the p3 group                 |
+|               | `u_ftq.w_ok_redir_p2`                                                | the FTQ accepts the p2 redirect              |
+|               | `u_ftq.w_ok_redir_p3`                                                | the FTQ accepts the p3 redirect              |
+|               | `u_ftq.w_redir_val`                                                  | a redirect the FTQ takes                     |
+|               | `u_ftq.w_redir_idx`                                                  | FTQ index of the redirect                    |
+|               | `u_ftq.w_commit_ptr`                                                 | FTQ commit pointer                           |
+|               | `ftq_full`                                                           | FTQ full                                     |
+|               | `ftq_empty`                                                          | FTQ empty                                    |

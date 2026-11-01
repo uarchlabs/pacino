@@ -10,7 +10,7 @@
  CONTACT: Jeff Nye
 ```
 
-## 1. What the scenario shows
+## 1. Introduction
 
 `fd23_jump_cut` is the FD-23 scenario of the front-end demonstration.
 A fetch block holds two conditional branches followed by a jump. With
@@ -31,13 +31,43 @@ branches. Since BP-140 no entry the FTB writes holds a branch that no
 slot carries, the cut does not fire, and DOC-007 re-pointed the
 scenario at the split.
 
-When the scenario passes, it prints one line. This is the line from a
-run on 2026-10-19, the run the cyc values below come from:
+### 1.1 Files
 
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                      |
+  |--------------------|-------------------------------------------|
+  | This file          | $DEMO/docs/fd23_jump_cut.md               |
+  | Program (stimulus) | $DEMO/programs/fd23_jump_cut.svh          |
+  | Surfer sucl        | $DEMO/waves/fd23_jump_cut.sucl            |
+  | Log                | $DEMO/out/fd23_jump_cut/fd23_jump_cut.log |
+  | Waveform           | $DEMO/out/fd23_jump_cut/fd23_jump_cut.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.sucl) |
+
+---
+
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd23_jump_cut
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd23_jump_cut
+```
+
+Console output:
+```
+-I: fd23_jump_cut : PASS : cyc = 244
+```
+
+Log file output:
 ```
 -I: fd23_jump_cut: PASS, blocks the FTB ends at the jump 23,
     the jump predicted in slot 0 of the next block 21,
-    blocks cut by the cluster 0, cyc 244
+    blocks cut by the cluster 0, events checked 12 of 12, cyc 244
 ```
 
 The monitor, `tb/fe_demo_mon.svh` lines 602 to 628, counts in the p2
@@ -64,7 +94,7 @@ expects retires without error. On the one-slot model the counts are
 
 ---
 
-## 2. The program
+## 3. The program
 
 The program is written by the task `prog_fd23` in
 `programs/fd23_jump_cut.svh`. Between a short prologue and epilogue it
@@ -105,9 +135,9 @@ writes J, the program sets `jmp_pc` to J's address, 0x8000_0016.
 
 ---
 
-## 3. Walkthrough
+## 4. Walkthrough
 
-### 3.1 The FTB entry for top
+### 4.1 The FTB entry for top
 
 The FTB keeps one entry per block start. An update for a branch
 resolved in a block from that start adds the branch to the entry. When
@@ -133,7 +163,7 @@ cyc 65, in the `ftb_update` group, `tb.dut.ftb_upd_pc_u0` is
 `tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split` is 1 with `upd_cut_pos` 7.
 The entry keeps C1 and C2 and now ends at position 7, J's address.
 
-### 3.2 The block ends at the jump
+### 4.2 The block ends at the jump
 
 At p2 the cluster places each conditional field of the entry in its
 slot and the jump field in the lowest slot that holds no conditional
@@ -157,7 +187,7 @@ and 4, not taken, `pred_src` PRED_TAGE. The uBTB was split the same
 way: its p1 prediction for top, `tb.dut.bpu_pred_pft_p1`, is
 0x8000_0016 from cyc 70, so p1 and p2 agree.
 
-### 3.3 The next block predicts the jump
+### 4.3 The next block predicts the jump
 
 The next block starts at 0x8000_0016. The predictors have not seen
 this block start, so at first neither the uBTB nor the FTB answers for
@@ -168,7 +198,7 @@ From then on the FTB answers for 0x8000_0016 with J in its jump field,
 and the cluster places J in slot 0.
 
 The first counted pair is at cyc 97 and 98. At cyc 97 the block at top
-ends at 0x8000_0016, as in 3.2; at cyc 98, `r_pc_p2` is 0x8000_0016
+ends at 0x8000_0016, as in 4.2; at cyc 98, `r_pc_p2` is 0x8000_0016
 and `tb.dut.bpu_slot_p2.[0]` is DIRECT_UNC at `pos` 0, taken, with
 `target` 0x8000_0400 and `pred_src` PRED_FTB. The two blocks counted
 at cyc 71 and 84 ended at J before J's own entry existed; their next
@@ -181,7 +211,7 @@ block end is `w_pft_p2` in `bp_cluster.sv`; the monitor is
 
 ---
 
-## 4. Events
+## 5. Events
 
 | #  | cyc | Event                                                                             | Other                 |
 |----|-----|-----------------------------------------------------------------------------------|-----------------------|
@@ -197,3 +227,66 @@ block end is `w_pft_p2` in `bp_cluster.sv`; the monitor is
 | 9  | 98  | the block at 0x8000_0016 predicts J in slot 0, taken, to 0x8000_0400              | counted, `n_jmp_next` |
 | 10 | 234 | back edge falls through, a misprediction; redirect to 0x8000_040A                 | pass 23               |
 | 11 | 244 | the run ends                                                                      |                       |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd23_jump_cut` opens
+`waves/fd23_jump_cut.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group             | signal                                | description                                       |
+|-------------------|---------------------------------------|---------------------------------------------------|
+| clock             | `tb.clk`                              | clock                                             |
+|                   | `tb.rstn`                             | active low reset                                  |
+|                   | `tb.cyc`                              | cycle number                                      |
+| bp_cluster_p2_ftb | `u_bpu.r_pc_p2`                       | p2 fetch block start                              |
+|                   | `u_bpu.w_ftb_br_valid_p2.[0]`         | FTB conditional field 0 valid                     |
+|                   | `u_bpu.w_ftb_br_valid_p2.[1]`         | FTB conditional field 1 valid                     |
+|                   | `u_bpu.w_ftb_jmp_valid_p2`            | FTB jump field valid                              |
+|                   | `u_bpu.w_cut_p2`                      | the cluster's cut                                 |
+|                   | `bpu_blk_pft_p2`                      | p2 fetch block end, the first halfword after it   |
+| bp_cluster_p2     | `u_bpu.r_val_p2`                      | p2 valid                                          |
+|                   | `bpu_slot_val_p2`                     | slot valid mask                                   |
+|                   | `bpu_slot_idx_p2`                     | FTQ index of the p2 group                         |
+|                   | `u_bpu.w_ftb_valid_p2`                | FTB hit at p2                                     |
+|                   | `bpu_slot_p2.[0].slot_valid`          | slot 0 holds a branch                             |
+|                   | `bpu_slot_p2.[0].br_type`             | slot 0 branch type                                |
+|                   | `bpu_slot_p2.[0].pos`                 | slot 0 halfword position in the fetch block       |
+|                   | `bpu_slot_p2.[0].taken`               | slot 0 predicted direction                        |
+|                   | `bpu_slot_p2.[0].target`              | slot 0 predicted target                           |
+|                   | `bpu_slot_p2.[0].pred_src`            | slot 0 predictor that supplied the direction      |
+|                   | `bpu_slot_p2.[1].slot_valid`          | slot 1 holds a branch                             |
+|                   | `bpu_slot_p2.[1].br_type`             | slot 1 branch type                                |
+|                   | `bpu_slot_p2.[1].pos`                 | slot 1 halfword position in the fetch block       |
+|                   | `bpu_slot_p2.[1].taken`               | slot 1 predicted direction                        |
+|                   | `bpu_slot_p2.[1].target`              | slot 1 predicted target                           |
+|                   | `bpu_slot_p2.[1].pred_src`            | slot 1 predictor that supplied the direction      |
+|                   | `bpu_redir_p2.[0].valid`              | p2 redirect from slot 0                           |
+|                   | `bpu_redir_p2.[0].target_pc`          | p2 redirect target from slot 0                    |
+|                   | `bpu_redir_p2.[1].valid`              | p2 redirect from slot 1                           |
+|                   | `bpu_redir_p2.[1].target_pc`          | p2 redirect target from slot 1                    |
+|                   | `bpu_redir_idx_p2`                    | FTQ index of the p2 redirect                      |
+| ftq               | `u_ftq.w_ok_pred_p1`                  | the FTQ accepts the p1 prediction                 |
+|                   | `u_ftq.w_ok_slot_p2`                  | the FTQ accepts the p2 group                      |
+|                   | `u_ftq.w_ok_slot_p3`                  | the FTQ accepts the p3 group                      |
+|                   | `u_ftq.w_ok_redir_p2`                 | the FTQ accepts the p2 redirect                   |
+|                   | `u_ftq.w_ok_redir_p3`                 | the FTQ accepts the p3 redirect                   |
+|                   | `u_ftq.w_redir_val`                   | a redirect the FTQ takes                          |
+|                   | `u_ftq.w_redir_idx`                   | FTQ index of the redirect                         |
+|                   | `u_ftq.w_commit_ptr`                  | FTQ commit pointer                                |
+|                   | `ftq_full`                            | FTQ full                                          |
+|                   | `ftq_empty`                           | FTQ empty                                         |
+| bp_cluster_p0     | `ftq_pred_val_p0`                     | p0 request valid                                  |
+|                   | `ftq_pred_pc_p0`                      | p0 request PC                                     |
+|                   | `ftq_pred_idx_p0`                     | p0 request FTQ index                              |
+|                   | `u_ftq.u_npc.w_hold`                  | holds the p0 request                              |
+| ftb_update        | `ftb_upd_valid_u0`                    | FTB update valid                                  |
+|                   | `ftb_upd_pc_u0`                       | block start address of the FTB update             |
+|                   | `ftb_upd_pos_u0`                      | halfword position of the branch in the FTB update |
+|                   | `ftb_upd_is_br_u0`                    | the FTB update is for a conditional               |
+|                   | `ftb_upd_is_jmp_u0`                   | the FTB update is for a jump                      |
+|                   | `ftb_upd_hit_u0`                      | the FTB update hits an entry                      |
+|                   | `u_bpu.u_ftb.u_ftb_cntrl.upd_split`   | the FTB update splits the entry                   |
+|                   | `u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos` | position the split ends the entry at              |

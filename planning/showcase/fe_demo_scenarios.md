@@ -6,7 +6,7 @@
  FILE:    fe_demo_scenarios.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-11-01
  CONTACT: Jeff Nye
 ```
 
@@ -30,14 +30,17 @@ FD-0a  Every scenario runs on fe_top with the walker beside it and
 FD-0b  Each scenario has, in its program or its README entry:
          shows     the behaviour, in one sentence
          program   the code shape that produces it
-         waveform  the units whose signals make up its saved group
+         waveform  the units whose signals its Surfer command file
+                   shows, one group each (fe_demo_tb_decisions.md
+                   FDT-12a)
          trace     the events it must produce
          proof     the condition that shows the behaviour occurred
        Each program file's header carries the entry; its trace line
        lists the events the proof counts.
-FD-0c  A scenario's proof is checked at the end of its run. A run whose
-       proof fails reports it; it is a broken demonstration, not a test
-       failure.
+FD-0c  A scenario's proof and its event checks
+       (fe_demo_tb_decisions.md FDT-10c) are checked at the end of its
+       run. A run whose proof or an event check fails exits non-zero,
+       and the demonstration regression fails on it (FDT-2, FDT-2a).
 FD-0d  CSR state is set through csr_tb_pkg. A scenario that needs a
        non-reset value names it.
 
@@ -49,7 +52,7 @@ FD-0d  CSR state is set through csr_tb_pkg. A scenario that needs a
 FD-1   Reset and SRAM initialization
   shows     the full init walk of the predictor tables, ending with
             every predictor ready
-  program   a loop of 3000 passes over 7 instructions; reset without
+  program   a loop of 128 passes over 7 instructions; reset without
             the fast-init options
   waveform  sram_init, TAGE, ITTAGE, SC readies, first p0 request
   proof     every ready rises; the first prediction the FTQ accepts
@@ -310,4 +313,10 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
               History renumbered 7 and 8.
   2026-10-19  session-081, after DOC-007. FD-13 program re-timed (the
               filler after FENCE.I); FD-23 re-pointed at the split.
+  2026-11-01  session-083. FD-0b waveform names the Surfer command
+              file's groups; FD-0c a failed proof or event check fails
+              the demonstration regression (it read "not a test
+              failure", superseded by FDT-2 in session-082).
+  2026-11-01  session-083, after DOC-012. FD-1 program: 128 passes
+              (programs/fd01_reset_init.svh FD01_ITERS); it read 3000.
 ```

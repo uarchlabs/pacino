@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd21_commit` is the FD-21 demonstration scenario. It is a demo, not a
 verification test. Calls and returns retire in order. The backend's
 retirement watermark moves the FTQ commit pointer one entry per cycle,
@@ -19,16 +21,82 @@ commit pointer moves in at least 16 cycles and the commit stack
 changes.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd21_commit: PASS, cycles the commit pointer moved 42,
-    cycles the RAS commit stack changed 36, cyc 214
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                  |
+  |--------------------|---------------------------------------|
+  | This file          | $DEMO/docs/fd21_commit.md             |
+  | Program (stimulus) | $DEMO/programs/fd21_commit.svh        |
+  | Surfer sucl        | $DEMO/waves/fd21_commit.sucl          |
+  | Log                | $DEMO/out/fd21_commit/fd21_commit.log |
+  | Waveform           | $DEMO/out/fd21_commit/fd21_commit.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd21_commit
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd21_commit
+```
+
+Console output:
+```
+-I: fd21_commit : PASS : cyc = 214
+```
+
+Log file output:
+```
+-I: fd21_commit: PASS, cycles the commit pointer moved 42,
+    cycles the RAS commit stack changed 36, events checked 8 of 8, cyc 214
+```
+
+### 2.1 What the monitor counts
+
+The counts come from `tb/fe_demo_mon.svh:577-582`, sampled every cycle
+while `meas` is set. Both are counts of CYCLES.
+
+```
+n_commit_adv  u_ftq.w_commit_ptr differs from its value the cycle
+              before (pv_commit)
+n_csp_chg     u_bpu.u_ras.csp or u_ras.commit_top_addr differs from
+              the cycle before (pv_csp, pv_ctop)
+```
+
+`pv_commit`, `pv_csp` and `pv_ctop` are updated every cycle, inside or
+outside the measured window (`fe_demo_mon.svh:639-641`).
+
+The proof (`tb/fe_demo_proofs.svh:167`) is
+`n_commit_adv >= 16 && n_csp_chg > 0`. `tb_fe_demo.sv` also requires
+the whole stream to retire with no errors, and the backend checks every
+RAS commit against the retired call or return (the RAS commit check,
+`fe_tb_backend.svh:391-415`).
+
+### 2.2 Reading the numbers
+
+- `cycles the commit pointer moved 42`: since the walk frees one entry
+  per cycle, this is also the number of FTQ entries committed inside
+  the measured window.
+- `cycles the RAS commit stack changed 36` is 3 calls and 3 returns
+  times 6 passes (derived from the source; the run shows 36 RAS
+  commits, section 4.1). Each operation changes `csp` in its own cycle.
+- Departures from `planning/showcase/fe_demo_scenarios.md` FD-21:
+  - FD-21's proof is "commits advance; the commit stack changes". The
+    proof as built sets a floor of 16 cycles for the first; the number
+    is the testbench's, not FD-21's.
+
+---
+
+## 3. The program
 
 Source: `programs/fd21_commit.svh`, task `prog_fd21`, ported from
 tb_fe_top's `calls`. M-mode, bare. Offsets from RESET_VECTOR
@@ -62,7 +130,9 @@ f+0x42 ret                 f returns to main
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. The watermark. The backend raises `bkend_ftq_commit_val` with
    `bkend_ftq_commit_idx` the newest FTQ entry all of whose
@@ -88,47 +158,7 @@ f+0x42 ret                 f returns to main
    `ras_commit_val` is high in 36 cycles, 18 with `ras_commit_br_type`
    DIRECT_CALL and 18 with RETURN; `csp` reaches 2.
 
----
-
-## 3. What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:577-582`, sampled every cycle
-while `meas` is set. Both are counts of CYCLES.
-
-```
-n_commit_adv  u_ftq.w_commit_ptr differs from its value the cycle
-              before (pv_commit)
-n_csp_chg     u_bpu.u_ras.csp or u_ras.commit_top_addr differs from
-              the cycle before (pv_csp, pv_ctop)
-```
-
-`pv_commit`, `pv_csp` and `pv_ctop` are updated every cycle, inside or
-outside the measured window (`fe_demo_mon.svh:639-641`).
-
-The proof (`tb/fe_demo_proofs.svh:167`) is
-`n_commit_adv >= 16 && n_csp_chg > 0`. `tb_fe_demo.sv` also requires
-the whole stream to retire with no errors, and the backend checks every
-RAS commit against the retired call or return (the RAS commit check,
-`fe_tb_backend.svh:391-415`).
-
----
-
-## 4. Reading the numbers
-
-- `cycles the commit pointer moved 42`: since the walk frees one entry
-  per cycle, this is also the number of FTQ entries committed inside
-  the measured window.
-- `cycles the RAS commit stack changed 36` is 3 calls and 3 returns
-  times 6 passes (derived from the source; the run shows 36 RAS
-  commits, section 2). Each operation changes `csp` in its own cycle.
-- Departures from `planning/showcase/fe_demo_scenarios.md` FD-21:
-  - FD-21's proof is "commits advance; the commit stack changes". The
-    proof as built sets a floor of 16 cycles for the first; the number
-    is the testbench's, not FD-21's.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd21_commit.sucl`, which `make view
 S=fd21_commit` opens in Surfer. Look at:
@@ -145,7 +175,7 @@ S=fd21_commit` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                     | Other           |
 |---|-----|---------------------------------------------------------------------------|-----------------|
@@ -157,3 +187,50 @@ S=fd21_commit` opens in Surfer. Look at:
 | 5 | 62  | first RAS commit of a return                                              |                 |
 | 6 | 204 | back edge falls through, a misprediction; redirect to 0x8000_0026         | pass 5, backend |
 | 7 | 214 | the run ends                                                              |                 |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd21_commit` opens
+`waves/fd21_commit.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group      | signal                          | description                           |
+|------------|---------------------------------|---------------------------------------|
+| clock      | `tb.clk`                        | clock                                 |
+|            | `tb.rstn`                       | active low reset                      |
+|            | `tb.cyc`                        | cycle number                          |
+| backend    | `tb.bkend_ftq_redir_val`        | backend redirect                      |
+|            | `tb.bkend_ftq_redir_idx`        | FTQ index of the backend redirect     |
+|            | `tb.bkend_ftq_redir_pc`         | backend redirect PC                   |
+|            | `tb.bkend_ftq_redir_cause`      | backend redirect cause                |
+|            | `tb.bkend_ftq_redir_self`       | self flag of the backend redirect     |
+|            | `tb.bkend_ftq_rsv_val`          | resolution from the backend, per slot |
+|            | `tb.bkend_ftq_commit_val`       | commit watermark valid                |
+|            | `tb.bkend_ftq_commit_idx`       | commit watermark FTQ index            |
+| ftq        | `u_ftq.w_commit_ptr`            | FTQ commit pointer                    |
+|            | `ftq_full`                      | FTQ full                              |
+|            | `ftq_empty`                     | FTQ empty                             |
+|            | `ftq_pred_idx_p0`               | p0 request FTQ index                  |
+|            | `ftq_ifu_idx`                   | FTQ index of the block                |
+| ras_commit | `ras_commit_val`                | RAS commit valid                      |
+|            | `ras_commit_br_type`            | branch type of the RAS commit         |
+|            | `ras_commit_ret_addr`           | return address of the RAS commit      |
+|            | `u_bpu.u_ras.csp`               | commit stack pointer                  |
+|            | `u_bpu.u_ras.commit_top_valid`  | commit stack top valid                |
+|            | `u_bpu.u_ras.commit_top_addr`   | commit stack top address              |
+| ras        | `u_bpu.u_ras.tosr`              | RAS read pointer                      |
+|            | `u_bpu.u_ras.tosw`              | RAS write pointer                     |
+|            | `u_bpu.u_ras.bos`               | RAS bottom of stack                   |
+|            | `u_bpu.u_ras.ras_rst_done`      | RAS reset done                        |
+|            | `u_bpu.w_ras_pred_val_p2.[0]`   | slot 0 presented to the RAS at p2     |
+|            | `u_bpu.w_br_type_p2.[0]`        | slot 0 branch type at p2              |
+|            | `u_bpu.u_ras.spec_ret_addr.[0]` | RAS entry 0 return address            |
+|            | `u_bpu.u_ras.spec_ret_addr.[1]` | RAS entry 1 return address            |
+|            | `u_bpu.u_ras.spec_ret_addr.[2]` | RAS entry 2 return address            |
+|            | `u_bpu.u_ras.spec_ret_addr.[3]` | RAS entry 3 return address            |
+|            | `u_bpu.u_ras.spec_rctr.[0]`     | RAS entry 0 recursion count           |
+|            | `u_bpu.u_ras.spec_rctr.[1]`     | RAS entry 1 recursion count           |
+|            | `u_bpu.u_ras.spec_rctr.[2]`     | RAS entry 2 recursion count           |
+|            | `u_bpu.u_ras.spec_rctr.[3]`     | RAS entry 3 recursion count           |

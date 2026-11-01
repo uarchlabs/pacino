@@ -62,10 +62,9 @@ one result line (FDT-10):
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
 is the cycle count from the release of reset to the last retirement.
 The run's whole output goes to `out/<scenario>/<scenario>.log`; the
-console shows the result line only, except `fd01_reset_init` and
-`fd09_tage`, whose console line is the verdict and the cycle count,
-for example `-I: fd01_reset_init : PASS : cyc = <n>`, or
-`-E: fd01_reset_init : FAIL : cyc = <n>`.
+console shows one line for every scenario,
+`-I: <scenario> : PASS : cyc = <n>` or
+`-E: <scenario> : FAIL : cyc = <n>`.
 Every line the testbench prints begins with `-I:`, `-W:` or `-E:` and
 the scenario name, and is at most 80 columns; a longer message breaks
 after a comma and continues on lines indented four spaces (FDT-10a):
@@ -206,7 +205,8 @@ the full output.
 
 The command file (FDT-12a) shows the signals grouped by unit, in
 pipeline order, the clock group first, with tb.cyc, the cycle count
-from the release of reset (FDT-12b). Names have Surfer's name type
+from the release of reset (FDT-12b), and the markers group second
+(FDT-12c). Names have Surfer's name type
 Unique: the shortest suffix of the path that tells the signal apart
 from the others shown. The per-slot signals are those of the model
 that wrote the FST: slot 0 only on the one-slot model, and both slots
@@ -233,7 +233,8 @@ Every format comes from the table FORMATS in waves/fe_demo_sigs.py
 A signal the table does not match stops waves/mk_sucl.py.
 
 Every scenario also has one marker per event of its description's
-event table, named c<cyc>_<label>, and opens with the view at the
+event table, named c<cyc>_<label>, in a group named markers immediately
+after the clock group, in table order, and opens with the view at the
 first marker (FDT-12c). The table's rows are
 
     | # | cyc | event | other |
@@ -244,12 +245,10 @@ event's marker, 0 for the first event: waves/mk_sucl.py requires it to
 equal the event's position in the table, and waves/chk_sucl.py checks
 it against the number Surfer assigns. The table is the one of the
 description's level-2 section headed Events, with or without a section
-number, in the five-section form (FDT-13) or not (DOC-009): section 3
-of fd01_reset_init, section 5 of fd09_tage, section 4 of FD-22 to
-FD-24, section 6 of the others. A description that cites a cycle as
-cyc <n> with no Events section, or an Events table the script cannot
-read, stops waves/mk_sucl.py with the file and line; one with neither
-has no markers and opens on the whole run.
+number, section 5 of every description (FDT-13). A description that
+cites a cycle as cyc <n> with no Events section, or an Events table the
+script cannot read, stops waves/mk_sucl.py with the file and line; one
+with neither has no markers and opens on the whole run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
@@ -281,13 +280,12 @@ what it derives itself from fe_demo_sigs.py and the FST.
 
 ## 3. The scenarios and what to look for
 
-Each scenario has a description in docs/<scenario>.md: the program,
-why it produces the behaviour, what the monitor counts, how to read the
-result line and what to look at in the waveform. The descriptions of
-FD-22 to FD-24 are in the five-section form of FDT-13, and
-docs/fd09_tage.md is too, with an introduction ahead of the sections;
-the other twenty predate the form. The slots column is the model the
-scenario runs on.
+Each scenario has a description in docs/<scenario>.md, in the form of
+FDT-13: 1 Introduction, 1.1 Files, 2 Run the scenario, 3 The program
+(where the description has one), 4 Walkthrough, 5 Events and 6 Waveform,
+then any references and footnotes. A required section with no text yet
+reads "Not yet written." The slots column is the model the scenario runs
+on.
 
 ```
 scenario             FD     slots  title

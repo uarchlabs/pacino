@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-28
+ UPDATED: 2026-11-01
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,84 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-083, after DOC-012: descriptions, markers group, console line.
+
+DOC-012 COMPLETE (Jeff). 31m22s active; 41% context. Task file written
+by the PA.
+  regress.sh 274 targets PASS (pass not recorded: tree dirty).
+    regress_demo.sh 24 of 24, events 210 of 210. chk_sucl.py 24 of 24.
+    Every log, digest, marker name and time and opening view equal to
+    the baseline.
+  Built: the console line for all 24 (tb_fe_demo.sv console(), the
+    Makefile's [running] line removed); the markers group after clock
+    (mk_sucl.py, chk_sucl.py, which fails it moved or missing); the 24
+    descriptions in the FDT-13 form, Events section 5, section 6 tables
+    checked against the command files (1121 rows); README.md and
+    demo_explainer.md brought to them.
+  RULED after DOC-012 (Jeff): make's own lines around the console line
+    accepted; subsections 2.1, 2.2, 4.1, 4.2 allowed (FDT-13); the
+    removed "A recorded run:" captions and fd22 to fd24 lead-ins
+    accepted.
+  FD-1 corrected: 128 passes (programs/fd01_reset_init.svh FD01_ITERS).
+  For B11 (Jeff): fd01 section 4 "Not yet written."; fd01 section 2
+    has no text on the figures; 1047 section 6 descriptions written by
+    the IA from signal names, not checked against the RTL (least
+    certain: bkend_ftq_redir_self, ifu_ftq_cfi_val, b_fil_valid,
+    xq_val); headers SOURCE and UPDATED unchanged; stale line
+    citations; demo_explainer.md section 5 example lacks events
+    checked.
+  Follow-ons, not tasked: fd01_console and fd09_console in programs/
+    duplicate console(); the Makefile recompiles on every call after a
+    prerequisite edit that leaves the C++ unchanged (observed, cause
+    not proven); the site build with the new layout not run by the IA.
+  Jeff: the run time script breaks on a rejected permission; the IA
+    fixes it.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+fe_demo_scenarios.md.
+
+Next free: BP-141, SYS-003, DOC-013, INFRA-014, TOOLS-007, TD#196.
+
+---
+## Session-083: the description format, markers and console line.
+
+Documents only. No task run.
+RULED (Jeff):
+  Description format, fe_demo_tb_decisions.md FDT-13: sections 1
+    Introduction, 1.1 Files, 2 Run the scenario, 3 The program, 4
+    Walkthrough, 5 Events, 6 Waveform, then references and footnotes;
+    all but 3 required. fd01_reset_init.md and fd09_tage.md are the
+    models. Section 6 is a table | group | signal | description |, the
+    group named once. The Events table keeps its # column; the text
+    cites events by cyc value, as fd09_tage.md does.
+  Markers in a group named markers, immediately after the clock group
+    (FDT-12a, FDT-12c).
+  Console line for all 24 scenarios: -I: <scenario> : PASS : cyc = <n>;
+    the log's result line unchanged (FDT-10, FDT-10a).
+  CLAUDE.md: markdown tables are exempt from the 80-column limit
+    (Jeff's edit).
+RECORDED: the shown list, mkdocs.yml extra: showcase_shown, read by
+  tools/mkdocs_showcase.py and tools/publish_waves.py (Jeff's change,
+  session-082): showcase_release_decisions.md SR-13 to SR-16. Shown
+  today: fd01_reset_init, fd02_steady, fd09_tage.
+fe_demo_scenarios.md FD-0c: a failed proof fails the demonstration
+  regression; it read "not a test failure".
+Not changed, to check: FD-1's program line ("a loop of 3000 passes")
+  against programs/fd01_reset_init.svh; fd01 ends at cyc 2344.
+Found: showcase_release_decisions.md and fe_demo_tb_decisions.md as
+  sent differed from their check_planning.sh checksums before these
+  edits (Jeff's offline changes); the new checksums cover them.
+DOC-012 to be written: the console line, the markers group in
+  mk_sucl.py and chk_sucl.py, and the descriptions, waves and README.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLAUDE.md, fe_demo_tb_decisions.md,
+fe_demo_scenarios.md, showcase_release_decisions.md.
+
+Next free: BP-141, SYS-003, DOC-012, INFRA-014, TOOLS-007, TD#196.
 
 ---
 ## Session-082, after DOC-011: the RAS theory of operation.

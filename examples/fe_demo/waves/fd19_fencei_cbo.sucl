@@ -13,11 +13,29 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd19_fencei_cbo.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c71_the_FENCEI_reaches_the_L1I 745
+marker_set c74_first_invalidate_done 775
+marker_set c75_first_maintenance_acknowledgement 785
+marker_set c77_the_restart_after_the_FENCEI 805
+marker_set c79_fetch_starts_at_0x8000_0024 825
+marker_set c174_the_branch_at_0x8000_0040_mispredicted 1775
+marker_set c184_the_cboinval_reaches_the_L1I 1875
+marker_set c187_second_invalidate_done 1905
+marker_set c188_second_maintenance_acknowledgement 1915
+marker_set c190_the_restart_after_the_cboinval 1935
+marker_set c192_fetch_starts_at_0x8000_004A 1955
+marker_set c235_the_run_ends 2385
+item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus e
+item_focus bc
 group_marked backend
-item_focus f
+item_focus bd
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -36,9 +54,9 @@ item_set_format Unsigned
 item_unfocus
 # group maintenance
 variable_add tb.cmt_ifu_maint_val
-item_focus n
+item_focus bl
 group_marked maintenance
-item_focus o
+item_focus bm
 item_set_format Bit
 variable_add tb.cmt_ifu_maint_rdy
 item_set_format Bit
@@ -69,9 +87,9 @@ item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus bm
+item_focus ck
 group_marked ftq_ifu
-item_focus bn
+item_focus cl
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -94,9 +112,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus ch
+item_focus df
 group_marked ifu_l1i
-item_focus ci
+item_focus dg
 item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Bit
@@ -110,20 +128,5 @@ variable_add tb.dut.l1i_ifu_rsp_val
 item_set_format Bit
 variable_add tb.dut.l1i_ifu_rsp_id
 item_set_format Unsigned
-item_unfocus
-# markers, from docs/fd19_fencei_cbo.md section 6
-marker_set c0_reset_released 36
-marker_set c71_the_FENCEI_reaches_the_L1I 745
-marker_set c74_first_invalidate_done 775
-marker_set c75_first_maintenance_acknowledgement 785
-marker_set c77_the_restart_after_the_FENCEI 805
-marker_set c79_fetch_starts_at_0x8000_0024 825
-marker_set c174_the_branch_at_0x8000_0040_mispredicted 1775
-marker_set c184_the_cboinval_reaches_the_L1I 1875
-marker_set c187_second_invalidate_done 1905
-marker_set c188_second_maintenance_acknowledgement 1915
-marker_set c190_the_restart_after_the_cboinval 1935
-marker_set c192_fetch_starts_at_0x8000_004A 1955
-marker_set c235_the_run_ends 2385
 item_unfocus
 zoom_to 16 336

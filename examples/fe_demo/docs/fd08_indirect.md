@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd08_indirect` is the FD-8 demonstration scenario. It is a demo, not a
 verification test. Each of 40 passes runs an indirect jump and an
 indirect call whose targets alternate between two addresses from pass
@@ -20,15 +22,80 @@ supplies the right one at p2. The run passes if at least one retired
 indirect took its correct target from ITTAGE.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd08_indirect: PASS, indirect targets predicted by ITTAGE 50, cyc 1147
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                      |
+  |--------------------|-------------------------------------------|
+  | This file          | $DEMO/docs/fd08_indirect.md               |
+  | Program (stimulus) | $DEMO/programs/fd08_indirect.svh          |
+  | Surfer sucl        | $DEMO/waves/fd08_indirect.sucl            |
+  | Log                | $DEMO/out/fd08_indirect/fd08_indirect.log |
+  | Waveform           | $DEMO/out/fd08_indirect/fd08_indirect.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd08_indirect
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd08_indirect
+```
+
+Console output:
+```
+-I: fd08_indirect : PASS : cyc = 1147
+```
+
+Log file output:
+```
+-I: fd08_indirect: PASS, indirect targets predicted by ITTAGE 50,
+    events checked 7 of 7, cyc 1147
+```
+
+### 2.1 What the monitor counts
+
+At retirement (`tb/fe_demo_mon.svh:311-316`):
+
+```
+n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
+           final slot at its position is valid, has
+           pred_src == PRED_ITTAGE, is taken, and has the expected
+           target
+```
+
+The final slot is the last group the FTQ accepted for the entry, p1 then
+p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:270-279`).
+
+The proof (`tb/fe_demo_proofs.svh:83`) is `n_itt_ok > 0`.
+`tb_fe_demo.sv:160` also requires the whole stream to retire with no
+errors.
+
+### 2.2 Reading the numbers
+
+- 50 of the 80 retired indirects had their right target from ITTAGE.
+  The other 30 include the first executions of each, before ITTAGE has
+  allocated; their sources were not traced one by one. On the two-slot
+  model the same program gives 58 (DOC-007 run).
+- A target from ITTAGE that is wrong is not counted, and neither is one
+  that reached the entry's final slot from another predictor.
+- Departure from FD-8 in `planning/showcase/fe_demo_scenarios.md`: the
+  spec's program is "an indirect jump through a table with a repeating
+  target pattern". The build has no table: an indirect jump and an
+  indirect call whose targets alternate, each after a conditional that
+  alternates with it (tb_fe_top `indir`). The proof matches the spec.
+
+---
+
+## 3. The program
 
 Source: `programs/fd08_indirect.svh`, task `prog_fd08` (line 19).
 Addresses derived from the source (`RESET_VECTOR` 0x8000_0000); `odd` is
@@ -65,7 +132,9 @@ jn+18               jal x0,top         back to top on passes 0..38
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. The FTB jump slot holds one target per jump (`jmp.tgt`, written from
    `ftb_upd_jmp_target_u0`,
@@ -89,45 +158,7 @@ jn+18               jal x0,top         back to top on passes 0..38
    `PRED_FTB` (lines 1171-1174). `ittage_hit` is the primary-table hit
    (`ittage_cntrl.sv:557`).
 
----
-
-## 3. What the monitor counts
-
-At retirement (`tb/fe_demo_mon.svh:311-316`):
-
-```
-n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
-           final slot at its position is valid, has
-           pred_src == PRED_ITTAGE, is taken, and has the expected
-           target
-```
-
-The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:270-279`).
-
-The proof (`tb/fe_demo_proofs.svh:83`) is `n_itt_ok > 0`.
-`tb_fe_demo.sv:160` also requires the whole stream to retire with no
-errors.
-
----
-
-## 4. Reading the numbers
-
-- 50 of the 80 retired indirects had their right target from ITTAGE.
-  The other 30 include the first executions of each, before ITTAGE has
-  allocated; their sources were not traced one by one. On the two-slot
-  model the same program gives 58 (DOC-007 run).
-- A target from ITTAGE that is wrong is not counted, and neither is one
-  that reached the entry's final slot from another predictor.
-- Departure from FD-8 in `planning/showcase/fe_demo_scenarios.md`: the
-  spec's program is "an indirect jump through a table with a repeating
-  target pattern". The build has no table: an indirect jump and an
-  indirect call whose targets alternate, each after a conditional that
-  alternates with it (tb_fe_top `indir`). The proof matches the spec.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd08_indirect.sucl`, which `make view
 S=fd08_indirect` opens in Surfer. Look at:
@@ -143,7 +174,7 @@ S=fd08_indirect` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc  | Event                                                                                                 | Other               |
 |---|------|-------------------------------------------------------------------------------------------------------|---------------------|
@@ -154,3 +185,44 @@ S=fd08_indirect` opens in Surfer. Look at:
 | 4 | 267  | first target of J from ITTAGE: the jump's slot at p2 has `pred_src` PRED_ITTAGE                       | accepted by the FTQ |
 | 5 | 1138 | the loop exits: its last conditional taken on the last pass, a misprediction; redirect to 0x8000_0516 | pass 39, backend    |
 | 6 | 1147 | the run ends                                                                                          |                     |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd08_indirect` opens
+`waves/fd08_indirect.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group         | signal                                            | description                                  |
+|---------------|---------------------------------------------------|----------------------------------------------|
+| clock         | `tb.clk`                                          | clock                                        |
+|               | `tb.rstn`                                         | active low reset                             |
+|               | `tb.cyc`                                          | cycle number                                 |
+| ittage_p2     | `u_bpu.w_ittage_pred_rdy_p2`                      | ITTAGE response at p2                        |
+|               | `u_bpu.w_ittage_pred_meta_p2.[0].ittage_hit`      | slot 0 ITTAGE primary table hit              |
+|               | `u_bpu.w_ittage_pred_meta_p2.[0].ittage_prm_comp` | slot 0 ITTAGE primary table                  |
+|               | `u_bpu.w_ittage_pred_meta_p2.[0].ittage_prm_tgt`  | slot 0 ITTAGE primary target, VA[40:1]       |
+| bp_cluster_p2 | `u_bpu.r_val_p2`                                  | p2 valid                                     |
+|               | `bpu_slot_val_p2`                                 | slot valid mask                              |
+|               | `bpu_slot_idx_p2`                                 | FTQ index of the p2 group                    |
+|               | `u_bpu.w_ftb_valid_p2`                            | FTB hit at p2                                |
+|               | `bpu_slot_p2.[0].slot_valid`                      | slot 0 holds a branch                        |
+|               | `bpu_slot_p2.[0].br_type`                         | slot 0 branch type                           |
+|               | `bpu_slot_p2.[0].pos`                             | slot 0 halfword position in the fetch block  |
+|               | `bpu_slot_p2.[0].taken`                           | slot 0 predicted direction                   |
+|               | `bpu_slot_p2.[0].target`                          | slot 0 predicted target                      |
+|               | `bpu_slot_p2.[0].pred_src`                        | slot 0 predictor that supplied the direction |
+|               | `bpu_redir_p2.[0].valid`                          | p2 redirect from slot 0                      |
+|               | `bpu_redir_p2.[0].target_pc`                      | p2 redirect target from slot 0               |
+|               | `bpu_redir_idx_p2`                                | FTQ index of the p2 redirect                 |
+| ftq           | `u_ftq.w_ok_pred_p1`                              | the FTQ accepts the p1 prediction            |
+|               | `u_ftq.w_ok_slot_p2`                              | the FTQ accepts the p2 group                 |
+|               | `u_ftq.w_ok_slot_p3`                              | the FTQ accepts the p3 group                 |
+|               | `u_ftq.w_ok_redir_p2`                             | the FTQ accepts the p2 redirect              |
+|               | `u_ftq.w_ok_redir_p3`                             | the FTQ accepts the p3 redirect              |
+|               | `u_ftq.w_redir_val`                               | a redirect the FTQ takes                     |
+|               | `u_ftq.w_redir_idx`                               | FTQ index of the redirect                    |
+|               | `u_ftq.w_commit_ptr`                              | FTQ commit pointer                           |
+|               | `ftq_full`                                        | FTQ full                                     |
+|               | `ftq_empty`                                       | FTQ empty                                    |

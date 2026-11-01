@@ -409,63 +409,52 @@ of the alternate when the trigger is set and `uaon[s][3]` is 1 at line
 Surfer, with a marker at each event above. Signal paths below are under
 `tb.dut` unless they start with `tb.`.
 
-- group `clock`
-    - `tb.clk` - clock
-    - `tb.rstn` - active low reset
-    - `tb.cyc` - cycle number
-- group `bp_cluster_p0`
-    - `ftq_pred_val_p0` - p0 request valid
-    - `ftq_pred_pc_p0` - p0 request PC
-    - `ftq_pred_idx_p0` - p0 request FTQ index
-    - `u_ftq.u_npc.w_hold` - holds the p0 request: the FTQ or a predictor
-      queue full, an FTB update, a fault hold, or a predictor not ready
-      (`ftq_npc.sv` line 306)
-- group `tage_p2`, signals under `u_bpu.u_tage.u_tage_cntrl` except the
-  first
-    - `u_bpu.w_tage_pred_rdy_p2` - TAGE response at p2
-    - `tage_pred_meta_p2.[0].tage_prm_comp` - provider table, 0 is T0
-    - `tage_pred_meta_p2.[0].tage_alt_comp` - alternate table, 0 is T0
-    - `tage_pred_meta_p2.[0].tage_using_primary` - 0 when the alternate
-      provides
-    - `tage_pred_meta_p2.[0].tage_prm_ctr` - provider CTR
-    - `tage_pred_meta_p2.[0].tage_pred_tkn` - TAGE direction
-- group `bp_cluster_p2`
-    - `u_bpu.r_val_p2` - p2 valid
-    - `u_bpu.r_pc_p2` - p2 fetch block start
-    - `bpu_blk_pft_p2` - p2 fetch block end, the first halfword after it
-    - `bpu_slot_val_p2` - slot valid mask
-    - `bpu_slot_idx_p2` - FTQ index of the p2 group
-    - `u_bpu.w_ftb_valid_p2` - FTB hit at p2
-    - `bpu_slot_p2.[0].slot_valid` - slot 0 holds a branch
-    - `bpu_slot_p2.[0].br_type` - branch type
-    - `bpu_slot_p2.[0].pos` - halfword position in the fetch block
-    - `bpu_slot_p2.[0].taken` - predicted direction
-    - `bpu_slot_p2.[0].target` - predicted target
-    - `bpu_slot_p2.[0].pred_src` - predictor that supplied the direction
-    - `bpu_redir_p2.[0].valid` - p2 redirect
-    - `bpu_redir_p2.[0].target_pc` - p2 redirect target
-    - `bpu_redir_idx_p2` - FTQ index of the p2 redirect
-- group `backend`
-    - `tb.bkend_ftq_redir_val` - backend redirect
-    - `tb.bkend_ftq_redir_pc` - backend redirect PC
-    - `tb.bkend_ftq_redir_cause` - backend redirect cause
-- group `ftq_upd_conv`
-    - `u_ftq.u_upd_conv.lp_upd_p0.[0].pc` - address of the branch being
-      updated
-- group `tage_update`, signals under `u_bpu.u_tage.u_tage_cntrl`
-    - `trx_type` - 0 prediction cycle, 1 update cycle
-    - `tage_upd_val_u0` - TAGE update valid
-    - `tage_upd_inp_u0.[0].cond_mispredict` - TAGE misprediction
-    - `tage_upd_inp_u0.[0].resolved_taken` - resolved direction
-    - `tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_comp` - provider table
-    - `tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_comp` - alternate table
-    - `tage_upd_inp_u0.[0].tage_pred_meta.tage_pred_weak` - weak prediction
-    - `tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_tkn` - provider direction
-    - `tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_tkn` - alternate
-      direction
-    - `u_alc_wr.[0]` - allocation write
-    - `u_alc_comp.[0]` - allocation table
-    - `uaon.[0]` - use_alt_on_na counter
+| group         | signal                                                                        | description                                                                                                                            |
+|---------------|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| clock         | `tb.clk`                                                                      | clock                                                                                                                                  |
+|               | `tb.rstn`                                                                     | active low reset                                                                                                                       |
+|               | `tb.cyc`                                                                      | cycle number                                                                                                                           |
+| bp_cluster_p0 | `ftq_pred_val_p0`                                                             | p0 request valid                                                                                                                       |
+|               | `ftq_pred_pc_p0`                                                              | p0 request PC                                                                                                                          |
+|               | `ftq_pred_idx_p0`                                                             | p0 request FTQ index                                                                                                                   |
+|               | `u_ftq.u_npc.w_hold`                                                          | holds the p0 request: the FTQ or a predictor queue full, an FTB update, a fault hold, or a predictor not ready (`ftq_npc.sv` line 306) |
+| tage_p2       | `u_bpu.w_tage_pred_rdy_p2`                                                    | TAGE response at p2                                                                                                                    |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp`               | provider table, 0 is T0                                                                                                                |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_alt_comp`               | alternate table, 0 is T0                                                                                                               |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_using_primary`          | 0 when the alternate provides                                                                                                          |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_ctr`                | provider CTR                                                                                                                           |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_pred_tkn`               | TAGE direction                                                                                                                         |
+| bp_cluster_p2 | `u_bpu.r_val_p2`                                                              | p2 valid                                                                                                                               |
+|               | `u_bpu.r_pc_p2`                                                               | p2 fetch block start                                                                                                                   |
+|               | `bpu_blk_pft_p2`                                                              | p2 fetch block end, the first halfword after it                                                                                        |
+|               | `bpu_slot_val_p2`                                                             | slot valid mask                                                                                                                        |
+|               | `bpu_slot_idx_p2`                                                             | FTQ index of the p2 group                                                                                                              |
+|               | `u_bpu.w_ftb_valid_p2`                                                        | FTB hit at p2                                                                                                                          |
+|               | `bpu_slot_p2.[0].slot_valid`                                                  | slot 0 holds a branch                                                                                                                  |
+|               | `bpu_slot_p2.[0].br_type`                                                     | branch type                                                                                                                            |
+|               | `bpu_slot_p2.[0].pos`                                                         | halfword position in the fetch block                                                                                                   |
+|               | `bpu_slot_p2.[0].taken`                                                       | predicted direction                                                                                                                    |
+|               | `bpu_slot_p2.[0].target`                                                      | predicted target                                                                                                                       |
+|               | `bpu_slot_p2.[0].pred_src`                                                    | predictor that supplied the direction                                                                                                  |
+|               | `bpu_redir_p2.[0].valid`                                                      | p2 redirect                                                                                                                            |
+|               | `bpu_redir_p2.[0].target_pc`                                                  | p2 redirect target                                                                                                                     |
+|               | `bpu_redir_idx_p2`                                                            | FTQ index of the p2 redirect                                                                                                           |
+| backend       | `tb.bkend_ftq_redir_val`                                                      | backend redirect                                                                                                                       |
+|               | `tb.bkend_ftq_redir_pc`                                                       | backend redirect PC                                                                                                                    |
+|               | `tb.bkend_ftq_redir_cause`                                                    | backend redirect cause                                                                                                                 |
+| ftq_upd_conv  | `u_ftq.u_upd_conv.lp_upd_p0.[0].pc`                                           | address of the branch being updated                                                                                                    |
+| tage_update   | `u_bpu.u_tage.u_tage_cntrl.trx_type`                                          | 0 prediction cycle, 1 update cycle                                                                                                     |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0`                                   | TAGE update valid                                                                                                                      |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].cond_mispredict`               | TAGE misprediction                                                                                                                     |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].resolved_taken`                | resolved direction                                                                                                                     |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_comp`  | provider table                                                                                                                         |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_comp`  | alternate table                                                                                                                        |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_pred_weak` | weak prediction                                                                                                                        |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_tkn`   | provider direction                                                                                                                     |
+|               | `u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_tkn`   | alternate direction                                                                                                                    |
+|               | `u_bpu.u_tage.u_tage_cntrl.u_alc_wr.[0]`                                      | allocation write                                                                                                                       |
+|               | `u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[0]`                                    | allocation table                                                                                                                       |
+|               | `u_bpu.u_tage.u_tage_cntrl.uaon.[0]`                                          | use_alt_on_na counter                                                                                                                  |
 
 ---
 

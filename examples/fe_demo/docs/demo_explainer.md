@@ -206,9 +206,11 @@ scenarios run internal checks to verify that the waveforms and scenario
 descriptions match the current state of the design.
 
 A run passes when every expected instruction retires with no stream error and
-the scenario's checks pass. It prints a result line and exits with status 0.
-Otherwise it prints a failing result line and exits non-zero, which stops
-`make scenarios`.
+the scenario's checks pass. It writes a result line to its log,
+`out/<scenario>/<scenario>.log`, prints one console line,
+`-I: <scenario> : PASS : cyc = <n>`, and exits with status 0. Otherwise it
+writes a failing result line, prints `-E: <scenario> : FAIL : cyc = <n>` and
+exits non-zero, which stops `make scenarios`.
 
 A result line begins with `-I:` (information), `-W:` (warning) or `-E:`
 (error), then the scenario name. A passing line gives PASS, the counts the
@@ -262,7 +264,9 @@ shows slots 0 and 1. Encoded fields, such as `trx_type`, are shown as numbers;
 the descriptions that show one give its encoding.
 
 A scenario whose description has an event table opens with one marker per
-event, named `c<cyc>_<label>`, and the view at the first marker.
+event, named `c<cyc>_<label>`, in a group named `markers` immediately after
+the clock group, and the view at the first marker. The Events table is section
+5 of the description, and section 6 lists the waveform's signals.
 
 ---
 

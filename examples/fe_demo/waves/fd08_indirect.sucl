@@ -13,11 +13,23 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd08_indirect.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c20_first_misprediction_of_J 235
+marker_set c260_first_ITTAGE_tagged_hit_at_p2 2635
+marker_set c260_first_target_of_K_from_ITTAGE 2635
+marker_set c267_first_target_of_J_from_ITTAGE 2705
+marker_set c1138_the_loop_exits 11415
+marker_set c1147_the_run_ends 11505
+item_unfocus
 # group ittage_p2
 variable_add tb.dut.u_bpu.w_ittage_pred_rdy_p2
-item_focus e
+item_focus m
 group_marked ittage_p2
-item_focus f
+item_focus n
 item_set_format Bit
 variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[0].ittage_hit
 item_set_format Bit
@@ -28,9 +40,9 @@ item_set_format Hexadecimal
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus j
+item_focus bb
 group_marked bp_cluster_p2
-item_focus k
+item_focus bc
 item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
@@ -59,9 +71,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus bh
+item_focus bp
 group_marked ftq
-item_focus bi
+item_focus ca
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -81,14 +93,5 @@ variable_add tb.dut.ftq_full
 item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
-item_unfocus
-# markers, from docs/fd08_indirect.md section 6
-marker_set c0_reset_released 36
-marker_set c20_first_misprediction_of_J 235
-marker_set c260_first_ITTAGE_tagged_hit_at_p2 2635
-marker_set c260_first_target_of_K_from_ITTAGE 2635
-marker_set c267_first_target_of_J_from_ITTAGE 2705
-marker_set c1138_the_loop_exits 11415
-marker_set c1147_the_run_ends 11505
 item_unfocus
 zoom_to 16 336

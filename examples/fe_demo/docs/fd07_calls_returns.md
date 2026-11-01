@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd07_calls_returns` is the FD-7 demonstration scenario. It is a demo,
 not a verification test. Each of 8 passes makes nested calls, a
 recursion four calls deep from one call site, and a coroutine switch by
@@ -20,16 +22,100 @@ from the RAS, a recursion count above 1 was seen, and a p2 RETURN_CALL
 operation occurred.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd07_calls_returns: PASS, returns predicted by the RAS 64, p2 pushes 85,
-    p2 pops 125, p2 return-calls 16, highest recursion count 4, cyc 694
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                                |
+  |--------------------|-----------------------------------------------------|
+  | This file          | $DEMO/docs/fd07_calls_returns.md                    |
+  | Program (stimulus) | $DEMO/programs/fd07_calls_returns.svh               |
+  | Surfer sucl        | $DEMO/waves/fd07_calls_returns.sucl                 |
+  | Log                | $DEMO/out/fd07_calls_returns/fd07_calls_returns.log |
+  | Waveform           | $DEMO/out/fd07_calls_returns/fd07_calls_returns.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd07_calls_returns
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd07_calls_returns
+```
+
+Console output:
+```
+-I: fd07_calls_returns : PASS : cyc = 694
+```
+
+Log file output:
+```
+-I: fd07_calls_returns: PASS, returns predicted by the RAS 64, p2 pushes 85,
+    p2 pops 125, p2 return-calls 16, highest recursion count 4,
+    events checked 8 of 8, cyc 694
+```
+
+### 2.1 What the monitor counts
+
+At retirement (`tb/fe_demo_mon.svh:306-310`):
+
+```
+n_ras_ret_ok   a retired RETURN or RETURN_CALL whose FTQ entry's final
+               slot at its position is valid, has pred_src == PRED_RAS,
+               is taken, and has the expected target
+```
+
+Every cycle at p2 (`tb/fe_demo_mon.svh:464-487`), summed over the slots:
+
+```
+n_ras_push     w_ras_pred_val_p2[s] with w_br_type_p2[s] a call
+               (DIRECT_CALL, INDIRECT_CALL, RETURN_CALL)
+n_ras_pop      w_ras_pred_val_p2[s] with RETURN or RETURN_CALL
+n_rc_p2        w_ras_pred_val_p2[s] with RETURN_CALL
+max_rctr       the highest u_ras.spec_rctr[i] over all entries
+```
+
+The proof (`tb/fe_demo_proofs.svh:79`) is
+`n_ras_ret_ok > 0 && max_rctr > 1 && n_rc_p2 > 0`. `tb_fe_demo.sv:160`
+also requires the whole stream to retire with no errors.
+
+### 2.2 Reading the numbers
+
+- `returns predicted by the RAS` counts retired returns, at most 80 here
+  (section 3). 64 had their target from the RAS in the entry's final
+  slot.
+- `p2 pushes`, `pops` and `return-calls` count p2 operations presented
+  to the RAS, not retired instructions. `w_ras_pred_val_p2` is not gated
+  by the squash (`ras_p2_keep`, `bp_cluster.sv:1394-1395` and line
+  2027), so
+  operations of blocks squashed in the same cycle and of predicted paths
+  later redirected are included, and an operation is missing for a
+  call or return the p2 group did not hold (before the FTB learned it).
+  Pops (125) exceed the 80 retired returns plus return-calls; pushes
+  (85) exceed the 80 retired calls plus return-calls.
+- The sums are per slot (DOC-002). On the one-slot model a cycle holds
+  at most one RAS operation.
+- `highest recursion count 4`. On the correct path the program's
+  recursion gives 3: four recursive calls give one allocation and three
+  increments. 4 is reached in the first two episodes of section 4.1; the
+  four later episodes reach 3. The source of
+  the extra increment was not traced. On the two-slot model the same
+  program reaches 10 (DOC-007 run).
+- Departures from FD-7 in `planning/showcase/fe_demo_scenarios.md`: the
+  spec's "a tail return-call" is built as a coroutine switch by two
+  RETURN_CALLs (jalr x1,0(x5) and jalr x5,0(x1)), not a tail call. The
+  proof adds `n_rc_p2 > 0` to the spec's two conditions.
+
+---
+
+## 3. The program
 
 Source: `programs/fd07_calls_returns.svh`, task `prog_fd07` (line 23).
 Function addresses from the source (`RESET_VECTOR` 0x8000_0000):
@@ -72,7 +158,9 @@ A1+4   mixed(1); bne x6,x0,top          back edge, taken on passes 0..6
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 The RAS is `rtl/core/frontend/bpu/rtl/ras.sv`.
 
@@ -107,64 +195,7 @@ until cyc 374; entry 4 does the same from cyc 267 (4 at 273) and holds
 645. In four short ones (entries 11, 12, 10 and 11, from cyc 325 to
 477) the count reaches 1 and returns to 0 within six cycles.
 
----
-
-## 3. What the monitor counts
-
-At retirement (`tb/fe_demo_mon.svh:306-310`):
-
-```
-n_ras_ret_ok   a retired RETURN or RETURN_CALL whose FTQ entry's final
-               slot at its position is valid, has pred_src == PRED_RAS,
-               is taken, and has the expected target
-```
-
-Every cycle at p2 (`tb/fe_demo_mon.svh:464-487`), summed over the slots:
-
-```
-n_ras_push     w_ras_pred_val_p2[s] with w_br_type_p2[s] a call
-               (DIRECT_CALL, INDIRECT_CALL, RETURN_CALL)
-n_ras_pop      w_ras_pred_val_p2[s] with RETURN or RETURN_CALL
-n_rc_p2        w_ras_pred_val_p2[s] with RETURN_CALL
-max_rctr       the highest u_ras.spec_rctr[i] over all entries
-```
-
-The proof (`tb/fe_demo_proofs.svh:79`) is
-`n_ras_ret_ok > 0 && max_rctr > 1 && n_rc_p2 > 0`. `tb_fe_demo.sv:160`
-also requires the whole stream to retire with no errors.
-
----
-
-## 4. Reading the numbers
-
-- `returns predicted by the RAS` counts retired returns, at most 80 here
-  (section 1). 64 had their target from the RAS in the entry's final
-  slot.
-- `p2 pushes`, `pops` and `return-calls` count p2 operations presented
-  to the RAS, not retired instructions. `w_ras_pred_val_p2` is not gated
-  by the squash (`ras_p2_keep`, `bp_cluster.sv:1394-1395` and line
-  2027), so
-  operations of blocks squashed in the same cycle and of predicted paths
-  later redirected are included, and an operation is missing for a
-  call or return the p2 group did not hold (before the FTB learned it).
-  Pops (125) exceed the 80 retired returns plus return-calls; pushes
-  (85) exceed the 80 retired calls plus return-calls.
-- The sums are per slot (DOC-002). On the one-slot model a cycle holds
-  at most one RAS operation.
-- `highest recursion count 4`. On the correct path the program's
-  recursion gives 3: four recursive calls give one allocation and three
-  increments. 4 is reached in the first two episodes of section 2; the
-  four later episodes reach 3. The source of
-  the extra increment was not traced. On the two-slot model the same
-  program reaches 10 (DOC-007 run).
-- Departures from FD-7 in `planning/showcase/fe_demo_scenarios.md`: the
-  spec's "a tail return-call" is built as a coroutine switch by two
-  RETURN_CALLs (jalr x1,0(x5) and jalr x5,0(x1)), not a tail call. The
-  proof adds `n_rc_p2 > 0` to the spec's two conditions.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd07_calls_returns.sucl`, which `make view
 S=fd07_calls_returns` opens in Surfer. Look at:
@@ -181,7 +212,7 @@ S=fd07_calls_returns` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                    | Other               |
 |---|-----|------------------------------------------------------------------------------------------|---------------------|
@@ -193,3 +224,70 @@ S=fd07_calls_returns` opens in Surfer. Look at:
 | 5 | 162 | first return predicted from the RAS at p2: `pred_src` PRED_RAS, accepted by the FTQ      |                     |
 | 6 | 256 | first RETURN_CALL at p2, presented to the RAS                                            | coroutine switch    |
 | 7 | 694 | the run ends                                                                             |                     |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd07_calls_returns` opens
+`waves/fd07_calls_returns.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group         | signal                            | description                                     |
+|---------------|-----------------------------------|-------------------------------------------------|
+| clock         | `tb.clk`                          | clock                                           |
+|               | `tb.rstn`                         | active low reset                                |
+|               | `tb.cyc`                          | cycle number                                    |
+| bp_cluster_p1 | `bpu_pred_val_p1`                 | p1 prediction valid                             |
+|               | `bpu_pred_idx_p1`                 | FTQ index of the p1 prediction                  |
+|               | `u_bpu.r_ubtb_blk_p1.hit`         | uBTB hit at p1                                  |
+|               | `bpu_pred_pft_p1`                 | p1 fetch block end, the first halfword after it |
+|               | `bpu_pred_slot_p1.[0].slot_valid` | slot 0 holds a branch                           |
+|               | `bpu_pred_slot_p1.[0].br_type`    | slot 0 branch type                              |
+|               | `bpu_pred_slot_p1.[0].pos`        | slot 0 halfword position in the fetch block     |
+|               | `bpu_pred_slot_p1.[0].taken`      | slot 0 predicted direction                      |
+|               | `bpu_pred_slot_p1.[0].target`     | slot 0 predicted target                         |
+|               | `bpu_pred_slot_p1.[0].pred_src`   | slot 0 predictor that supplied the direction    |
+| ras           | `u_bpu.u_ras.tosr`                | RAS read pointer                                |
+|               | `u_bpu.u_ras.tosw`                | RAS write pointer                               |
+|               | `u_bpu.u_ras.bos`                 | RAS bottom of stack                             |
+|               | `u_bpu.u_ras.ras_rst_done`        | RAS reset done                                  |
+|               | `u_bpu.w_ras_pred_val_p2.[0]`     | slot 0 presented to the RAS at p2               |
+|               | `u_bpu.w_br_type_p2.[0]`          | slot 0 branch type at p2                        |
+|               | `u_bpu.u_ras.spec_ret_addr.[0]`   | RAS entry 0 return address                      |
+|               | `u_bpu.u_ras.spec_ret_addr.[1]`   | RAS entry 1 return address                      |
+|               | `u_bpu.u_ras.spec_ret_addr.[2]`   | RAS entry 2 return address                      |
+|               | `u_bpu.u_ras.spec_ret_addr.[3]`   | RAS entry 3 return address                      |
+|               | `u_bpu.u_ras.spec_rctr.[0]`       | RAS entry 0 recursion count                     |
+|               | `u_bpu.u_ras.spec_rctr.[1]`       | RAS entry 1 recursion count                     |
+|               | `u_bpu.u_ras.spec_rctr.[2]`       | RAS entry 2 recursion count                     |
+|               | `u_bpu.u_ras.spec_rctr.[3]`       | RAS entry 3 recursion count                     |
+| bp_cluster_p2 | `u_bpu.r_val_p2`                  | p2 valid                                        |
+|               | `bpu_slot_val_p2`                 | slot valid mask                                 |
+|               | `bpu_slot_idx_p2`                 | FTQ index of the p2 group                       |
+|               | `u_bpu.w_ftb_valid_p2`            | FTB hit at p2                                   |
+|               | `bpu_slot_p2.[0].slot_valid`      | slot 0 holds a branch                           |
+|               | `bpu_slot_p2.[0].br_type`         | slot 0 branch type                              |
+|               | `bpu_slot_p2.[0].pos`             | slot 0 halfword position in the fetch block     |
+|               | `bpu_slot_p2.[0].taken`           | slot 0 predicted direction                      |
+|               | `bpu_slot_p2.[0].target`          | slot 0 predicted target                         |
+|               | `bpu_slot_p2.[0].pred_src`        | slot 0 predictor that supplied the direction    |
+|               | `bpu_redir_p2.[0].valid`          | p2 redirect from slot 0                         |
+|               | `bpu_redir_p2.[0].target_pc`      | p2 redirect target from slot 0                  |
+|               | `bpu_redir_idx_p2`                | FTQ index of the p2 redirect                    |
+| ftq           | `u_ftq.w_ok_pred_p1`              | the FTQ accepts the p1 prediction               |
+|               | `u_ftq.w_ok_slot_p2`              | the FTQ accepts the p2 group                    |
+|               | `u_ftq.w_ok_slot_p3`              | the FTQ accepts the p3 group                    |
+|               | `u_ftq.w_ok_redir_p2`             | the FTQ accepts the p2 redirect                 |
+|               | `u_ftq.w_ok_redir_p3`             | the FTQ accepts the p3 redirect                 |
+|               | `u_ftq.w_redir_val`               | a redirect the FTQ takes                        |
+|               | `u_ftq.w_redir_idx`               | FTQ index of the redirect                       |
+|               | `u_ftq.w_commit_ptr`              | FTQ commit pointer                              |
+|               | `ftq_full`                        | FTQ full                                        |
+|               | `ftq_empty`                       | FTQ empty                                       |
+| ras_commit    | `ras_commit_val`                  | RAS commit valid                                |
+|               | `ras_commit_br_type`              | branch type of the RAS commit                   |
+|               | `ras_commit_ret_addr`             | return address of the RAS commit                |
+|               | `u_bpu.u_ras.csp`                 | commit stack pointer                            |
+|               | `u_bpu.u_ras.commit_top_valid`    | commit stack top valid                          |
+|               | `u_bpu.u_ras.commit_top_addr`     | commit stack top address                        |

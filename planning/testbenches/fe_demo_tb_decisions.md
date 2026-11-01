@@ -6,7 +6,7 @@
  FILE:    fe_demo_tb_decisions.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-10-28
+ UPDATED: 2026-11-01
  CONTACT: Jeff Nye
 ```
 
@@ -129,6 +129,17 @@ FDT-10 Each run ends by checking the scenario's proof (FD-0b). It
        stops. A pass is -I: <scenario>: PASS, then the figures; a
        failure is -E: <scenario>: FAIL, then the figures. The figures
        include events checked <n> of <m> (FDT-10c).
+       The run's whole output, the result line included, goes to
+       out/<scenario>/<scenario>.log. The console shows one line for
+       every scenario, the verdict and the result line's cycle count
+       (Jeff, session-083):
+         -I: <scenario> : PASS : cyc = <n>
+         -E: <scenario> : FAIL : cyc = <n>
+       tb/tb_fe_demo.sv console() prints it for every scenario
+       (DOC-012). The log's result line is unchanged. make's own lines
+       around it are accepted: its directory lines under make -C, its
+       error line after a FAIL, and a rebuild's [compiling] line (Jeff,
+       session-083).
 FDT-10a Every line the testbench prints is at most 80 columns. A line
        begins with -I:, -W: or -E:, then the scenario name and a colon.
        Items are separated by commas and named in full words; the
@@ -144,7 +155,9 @@ FDT-10a Every line the testbench prints is at most 80 columns. A line
        failing result line the simulator prints the lines of $fatal,
        which are outside this format. The shared models'
        (rtl/core/frontend/fe_top/tb/models/) ERROR: and +TRACE lines
-       keep tb_fe_top's format.
+       keep tb_fe_top's format. The console line of FDT-10 is outside
+       this format: its fields are separated by " : " and its cycle
+       count is cyc = <n>.
 FDT-10b The monitor counts, from the cycle the three init readies are
        all high: the cycles the p0 request is withheld, in total and
        by cause as ftq_decisions.md 4.5 numbers them (H1 per
@@ -195,7 +208,8 @@ FDT-12 Surfer is the one supported viewer. GTKWave is not supported:
        dependency.
 FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
        the scenario's waveform entry (fe_demo_scenarios.md FD-0b), in
-       pipeline order, in groups named by unit, the clock first. Names
+       pipeline order, in groups named by unit, the clock first and the
+       markers group second (FDT-12c). Names
        are shown with name type Unique, the shortest suffix of the
        path that identifies the signal. make view loads it with the
        FST. Formats:
@@ -223,9 +237,12 @@ FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
 FDT-12b Every Surfer file shows the testbench cycle counter cyc, which
        counts cycles from the release of reset.
 FDT-12c A Surfer file places one marker per event of the scenario's
-       event table (FDT-13 section 4), at the first time in the
+       event table (FDT-13 section 5), at the first time in the
        scenario's FST at which cyc equals the event's value with rstn
-       high (for cyc 0, the release of reset). It opens with the view
+       high (for cyc 0, the release of reset). The markers are in a
+       group named markers, placed immediately after the clock group,
+       in table order (Jeff, session-083); a scenario with no events
+       has no markers group. It opens with the view
        from two cycles before the first marker to thirty after it;
        Surfer 0.7 cannot open at a marker with goto_marker in a command
        file, which it parses before it runs. The table in
@@ -240,17 +257,12 @@ FDT-12c A Surfer file places one marker per event of the scenario's
        words, joined by '_'. The event table is the table of the
        description's level-2 section headed Events, with or without a
        section number, whether or not the description is in the FDT-13
-       form (Jeff, session-082). A description is in the FDT-13 form
-       when its level-2 headings are the five of FDT-13, in order,
-       section 5 optional, after an optional leading "0. Introduction"
-       (Jeff, session-081, DOC-007). A description with no Events
-       section that cites no cycle as cyc <n> has no events and no
-       markers. A description that cites a cycle as cyc <n> and has no
-       Events section, or whose Events table mk_sucl.py cannot read,
-       stops the generator with an error naming the file and row. A
-       second Events section is an error. In a description out of the
-       FDT-13 form the Events section is the last, numbered after the
-       others (DOC-009: section 6).
+       form (Jeff, session-082). A description with no Events section
+       that cites no cycle as cyc <n> has no events and no markers. A
+       description that cites a cycle as cyc <n> and has no Events
+       section, or whose Events table mk_sucl.py cannot read, stops the
+       generator with an error naming the file and row. A second Events
+       section is an error.
 
 ---
 
@@ -259,24 +271,42 @@ FDT-12c A Surfer file places one marker per event of the scenario's
 FDT-13 docs/<scenario>.md describes one scenario. Its reader is
        skilled in decoupled front ends and branch prediction and is
        working out how the pacino front end works. After the header
-       block it has five sections, which may follow an introduction,
-       section 0 (Jeff, session-081, DOC-007):
-         1  What the scenario shows: the behaviour, the result line
-            the run prints, and what must happen for it to pass.
-         2  The program: the listing, every instruction written out
-            with its address and purpose, and an explanation of it.
-         3  Walkthrough: the theory of operation of each behaviour,
-            and where to see it in the waveform, by the value of cyc;
-            each point ends with the RTL file and signal that
-            implement it.
-         4  Events: a table, column 0 cyc, column 1 description,
-            column 2 other details where needed. The first row is cyc
-            0, the release of reset. Each row with a cyc value starts
-            an event; a row with an empty cyc continues it. Each event
-            is a marker in the Surfer file (FDT-12c) and is checked by
-            the scenario's program (FDT-10c).
-         5  Notes: present only when there is something the reader
-            must act on, and it says what to do.
+       block it has these numbered sections, in this order; those
+       marked required are in every description (Jeff, session-083).
+       fd01_reset_init.md and fd09_tage.md are the models.
+         1    Introduction, required: the behaviour the scenario
+              shows, the program in outline, and the build it runs on
+              (NUM_PRED_SLOTS).
+         1.1  Files, required, a level-3 section of 1: a table of the
+              description, the program, the Surfer command file, the
+              log, the waveform and its online link.
+         2    Run the scenario, required: the make commands that run
+              it and open its waveform, the console line and the log's
+              result line (FDT-10), and what the result line's figures
+              count.
+         3    The program: the listing, every instruction written out
+              with its address and purpose, and an explanation of it.
+         4    Walkthrough, required: the theory of operation of each
+              behaviour, and where to see it in the waveform, by the
+              value of cyc; each point ends with the RTL file and
+              signal that implement it. The text cites an event by its
+              cyc value, not by its number.
+         5    Events, required: a table | # | cyc | event | other |.
+              # numbers the events from 0 in table order and is the
+              event's marker number (FDT-12c). The first row is cyc 0,
+              the release of reset. A row with a cyc value starts an
+              event; a row with an empty # and cyc continues it. Each
+              event is a marker in the Surfer file (FDT-12c) and is
+              checked by the scenario's program (FDT-10c).
+         6    Waveform, required: a table | group | signal |
+              description |, one row per signal of the Surfer file, in
+              its order. A group is named on the first row of its
+              signals only. The markers group is not listed; its
+              markers are the events of section 5.
+       References and footnotes follow, unnumbered, when the
+       description has any. Sections 2 and 4 may have numbered level-3
+       subsections, 2.1 and 4.1 onward (Jeff, session-083, after
+       DOC-012).
 FDT-13a The descriptions are written in full sentences, with no jargon
        and no abbreviation the text has not introduced. A testbench
        variable, task or file is named explicitly with where it is
@@ -358,4 +388,13 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               example line; FDT-10c the cycle of an event and the
               label match; FDT-12c a second Events section, and its
               place out of the FDT-13 form.
+  2026-11-01  session-083 (Jeff). FDT-10 the console line for every
+              scenario, FDT-10a its format the exception; FDT-12a,
+              FDT-12c the markers group after clock; FDT-13 the
+              description sections 1 to 6, the Notes section and the
+              introduction as section 0 retired; FDT-12c the FDT-13
+              form definition and the section 6 note removed.
+  2026-11-01  session-083, after DOC-012 (Jeff). FDT-10 the console
+              line as built and make's own lines accepted; FDT-13
+              subsections under sections 2 and 4.
 ```

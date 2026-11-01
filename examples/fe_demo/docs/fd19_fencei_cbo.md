@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd19_fencei_cbo` is the FD-19 demonstration scenario. It is a demo,
 not a verification test. A function is called, rewritten by a store,
 and called again after a FENCE.I; a second function is treated the same
@@ -20,17 +22,90 @@ restarts fetch at the next instruction. The run passes if both
 invalidates complete and fetch restarts after each.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd19_fencei_cbo: PASS, whole-cache invalidates 1, line invalidates 1,
-    invalidates done 2, maintenance acknowledgements 2,
-    restarts at the next instruction 2, cyc 235
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                          |
+  |--------------------|-----------------------------------------------|
+  | This file          | $DEMO/docs/fd19_fencei_cbo.md                 |
+  | Program (stimulus) | $DEMO/programs/fd19_fencei_cbo.svh            |
+  | Surfer sucl        | $DEMO/waves/fd19_fencei_cbo.sucl              |
+  | Log                | $DEMO/out/fd19_fencei_cbo/fd19_fencei_cbo.log |
+  | Waveform           | $DEMO/out/fd19_fencei_cbo/fd19_fencei_cbo.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd19_fencei_cbo
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd19_fencei_cbo
+```
+
+Console output:
+```
+-I: fd19_fencei_cbo : PASS : cyc = 235
+```
+
+Log file output:
+```
+-I: fd19_fencei_cbo: PASS, whole-cache invalidates 1, line invalidates 1,
+    invalidates done 2, maintenance acknowledgements 2,
+    restarts at the next instruction 2, events checked 13 of 13, cyc 235
+```
+
+### 2.1 What the monitor counts
+
+The counts come from `tb/fe_demo_mon.svh:555-570`, sampled every cycle
+while `meas` is set.
+
+```
+n_inv_all    ifu_l1i_inv_val && ifu_l1i_inv_rdy && ifu_l1i_inv_all
+n_inv_line   ifu_l1i_inv_val && ifu_l1i_inv_rdy && !ifu_l1i_inv_all
+n_inv_done   l1i_ifu_inv_done
+n_mt_ack     ifu_cmt_maint_ack; arms mt_wait with mt_pc, the PC of
+             the maintenance entry + 4
+n_restart    the first fetch the FTQ presents after the ack
+             (ftq_ifu_req_val && ftq_ifu_req_rdy && !ftq_ifu_flush_val)
+             starts at mt_pc
+```
+
+The proof (`tb/fe_demo_proofs.svh:152-153`) is `n_inv_all > 0 &&
+n_inv_line > 0 && n_inv_done >= 2 && n_restart >= 2`. `n_mt_ack` is
+only reported. `tb_fe_demo.sv` also requires the whole stream to retire
+with no errors, which here includes the new bodies of f and g.
+
+### 2.2 Reading the numbers
+
+- One FENCE.I, one cbo.inval: `whole-cache invalidates 1, line
+  invalidates 1`, a done and an ack for each, and each followed by a
+  fetch at the next instruction.
+- The drains had nothing to wait for. At the FENCE.I take
+  `mt_busy_any` was 0. At the cbo.inval take `mt_busy_any` was 1 (the
+  fills of the code after it), but inv_line waits only for
+  `busy_line`, which was 0: no register held line 0x8000_0C40. So
+  M_DRAIN lasted one cycle both times. The program's comment ("so fills
+  are in flight when the L1I takes the invalidate") holds for
+  `mt_busy_any`; it does not make the line drain wait.
+- Departures from `planning/showcase/fe_demo_scenarios.md` FD-19:
+  - FD-19's program is "code modified then FENCE.I; a cbo.inval of a
+    code line". The program does both, and also reruns the modified
+    code, so the stream check shows each invalidate took effect.
+  - FD-19's proof is "the invalidate completes and fetch restarts".
+    The proof as built asks for both kinds, two dones and two restarts
+    at the next instruction. It is stronger.
+
+---
+
+## 3. The program
 
 Source: `programs/fd19_fencei_cbo.svh`, task `prog_fd19`, with the
 self-modifying-code tasks `smc_*` (`tb/fe_demo_lib.svh:148-187`, after
@@ -72,7 +147,9 @@ Addresses derived from the source.
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. The backend. When a maintenance entry retires it stops taking
    decode's output (`mt_pend`) and raises `cmt_ifu_maint_val` with the
@@ -111,54 +188,7 @@ cycle  FENCE.I                       cbo.inval
   The taken branch at +0x40 is resolved as a mispredict: a backend
   redirect to +0x46 with cause 0 at cycle 174.
 
----
-
-## 3. What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:555-570`, sampled every cycle
-while `meas` is set.
-
-```
-n_inv_all    ifu_l1i_inv_val && ifu_l1i_inv_rdy && ifu_l1i_inv_all
-n_inv_line   ifu_l1i_inv_val && ifu_l1i_inv_rdy && !ifu_l1i_inv_all
-n_inv_done   l1i_ifu_inv_done
-n_mt_ack     ifu_cmt_maint_ack; arms mt_wait with mt_pc, the PC of
-             the maintenance entry + 4
-n_restart    the first fetch the FTQ presents after the ack
-             (ftq_ifu_req_val && ftq_ifu_req_rdy && !ftq_ifu_flush_val)
-             starts at mt_pc
-```
-
-The proof (`tb/fe_demo_proofs.svh:152-153`) is `n_inv_all > 0 &&
-n_inv_line > 0 && n_inv_done >= 2 && n_restart >= 2`. `n_mt_ack` is
-only reported. `tb_fe_demo.sv` also requires the whole stream to retire
-with no errors, which here includes the new bodies of f and g.
-
----
-
-## 4. Reading the numbers
-
-- One FENCE.I, one cbo.inval: `whole-cache invalidates 1, line
-  invalidates 1`, a done and an ack for each, and each followed by a
-  fetch at the next instruction.
-- The drains had nothing to wait for. At the FENCE.I take
-  `mt_busy_any` was 0. At the cbo.inval take `mt_busy_any` was 1 (the
-  fills of the code after it), but inv_line waits only for
-  `busy_line`, which was 0: no register held line 0x8000_0C40. So
-  M_DRAIN lasted one cycle both times. The program's comment ("so fills
-  are in flight when the L1I takes the invalidate") holds for
-  `mt_busy_any`; it does not make the line drain wait.
-- Departures from `planning/showcase/fe_demo_scenarios.md` FD-19:
-  - FD-19's program is "code modified then FENCE.I; a cbo.inval of a
-    code line". The program does both, and also reruns the modified
-    code, so the stream check shows each invalidate took effect.
-  - FD-19's proof is "the invalidate completes and fetch restarts".
-    The proof as built asks for both kinds, two dones and two restarts
-    at the next instruction. It is stronger.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd19_fencei_cbo.sucl`, which `make view
 S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 71-79 and
@@ -178,7 +208,7 @@ S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 71-79 and
 
 ---
 
-## 6. Events
+## 5. Events
 
 | #  | cyc | Event                                                                                  | Other                  |
 |----|-----|----------------------------------------------------------------------------------------|------------------------|
@@ -195,3 +225,56 @@ S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 71-79 and
 | 10 | 190 | the restart after the cbo.inval: a backend redirect to 0x8000_004A, cause RC_REPLAY    | backend                |
 | 11 | 192 | fetch starts at 0x8000_004A, the next instruction                                      |                        |
 | 12 | 235 | the run ends                                                                           |                        |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd19_fencei_cbo` opens
+`waves/fd19_fencei_cbo.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group       | signal                     | description                                       |
+|-------------|----------------------------|---------------------------------------------------|
+| clock       | `tb.clk`                   | clock                                             |
+|             | `tb.rstn`                  | active low reset                                  |
+|             | `tb.cyc`                   | cycle number                                      |
+| backend     | `tb.bkend_ftq_redir_val`   | backend redirect                                  |
+|             | `tb.bkend_ftq_redir_idx`   | FTQ index of the backend redirect                 |
+|             | `tb.bkend_ftq_redir_pc`    | backend redirect PC                               |
+|             | `tb.bkend_ftq_redir_cause` | backend redirect cause                            |
+|             | `tb.bkend_ftq_redir_self`  | self flag of the backend redirect                 |
+|             | `tb.bkend_ftq_rsv_val`     | resolution from the backend, per slot             |
+|             | `tb.bkend_ftq_commit_val`  | commit watermark valid                            |
+|             | `tb.bkend_ftq_commit_idx`  | commit watermark FTQ index                        |
+| maintenance | `tb.cmt_ifu_maint_val`     | maintenance request from the backend model        |
+|             | `tb.cmt_ifu_maint_rdy`     | the IFU takes the request                         |
+|             | `tb.cmt_ifu_maint_op`      | operation: 0 FENCE.I, 1 cbo.inval                 |
+|             | `tb.cmt_ifu_maint_paddr`   | physical address of a cbo.inval                   |
+|             | `u_ifu.u_maint.r_st`       | IFU maintenance state                             |
+|             | `ifu_l1i_inv_val`          | IFU invalidate request to the L1I                 |
+|             | `ifu_l1i_inv_rdy`          | the L1I takes the invalidate                      |
+|             | `ifu_l1i_inv_all`          | invalidate every line                             |
+|             | `ifu_l1i_inv_paddr`        | physical address of a line invalidate             |
+|             | `u_l1i.u_maint.r_st`       | L1I maintenance state                             |
+|             | `u_l1i.mt_busy_any`        | a fill is in flight                               |
+|             | `u_l1i.mt_busy_line`       | a fill of the named line is in flight             |
+|             | `l1i_ifu_inv_done`         | invalidate done                                   |
+|             | `tb.ifu_cmt_maint_ack`     | maintenance acknowledgement                       |
+| ftq_ifu     | `ftq_ifu_req_val`          | FTQ presents a block to the IFU                   |
+|             | `ftq_ifu_req_rdy`          | the IFU takes the block                           |
+|             | `ftq_ifu_idx`              | FTQ index of the block                            |
+|             | `ftq_ifu_start_pc`         | block start address                               |
+|             | `ftq_ifu_next_pc`          | address after the block                           |
+|             | `ftq_ifu_taken_val`        | the block holds a predicted-taken transfer        |
+|             | `ftq_ifu_taken_pos`        | halfword position of the predicted-taken transfer |
+|             | `ftq_ifu_flush_val`        | flush of the blocks younger than the named entry  |
+|             | `ftq_ifu_flush_idx`        | FTQ index the flush names                         |
+|             | `ftq_ifu_commit_ptr`       | FTQ commit pointer as the IFU sees it             |
+| ifu_l1i     | `ifu_l1i_req_val`          | IFU request to the L1I                            |
+|             | `ifu_l1i_req_rdy`          | the L1I takes the request                         |
+|             | `ifu_l1i_req_id`           | request id                                        |
+|             | `ifu_l1i_req_paddr`        | physical address of the requested line            |
+|             | `ifu_l1i_req_uncached`     | the request is uncached                           |
+|             | `l1i_ifu_rsp_val`          | L1I response                                      |
+|             | `l1i_ifu_rsp_id`           | id of the request answered                        |

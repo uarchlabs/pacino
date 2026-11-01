@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd15_faults` is the FD-15 demonstration scenario. It is a demo, not a
 verification test. Three indirect jumps fetch from targets that fault:
 an unmapped page (instruction page fault), a mapped page whose physical
@@ -20,16 +22,82 @@ block through the IFU to decode in `ifu_pd_pkt_t`. The run passes if
 each cause reaches decode on its packet with the expected cause and VA.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd15_faults: PASS, page faults at decode 1, guest-page faults at decode 1,
-    access faults at decode 1, cyc 700
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                  |
+  |--------------------|---------------------------------------|
+  | This file          | $DEMO/docs/fd15_faults.md             |
+  | Program (stimulus) | $DEMO/programs/fd15_faults.svh        |
+  | Surfer sucl        | $DEMO/waves/fd15_faults.sucl          |
+  | Log                | $DEMO/out/fd15_faults/fd15_faults.log |
+  | Waveform           | $DEMO/out/fd15_faults/fd15_faults.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd15_faults.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd15_faults.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd15_faults
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd15_faults
+```
+
+Console output:
+```
+-I: fd15_faults : PASS : cyc = 700
+```
+
+Log file output:
+```
+-I: fd15_faults: PASS, page faults at decode 1, guest-page faults at decode 1,
+    access faults at decode 1, events checked 12 of 12, cyc 700
+```
+
+### 2.1 What the monitor counts
+
+The counts come from the backend's retirement hook,
+`tb/fe_demo_mon.svh:317-323`, called for every retired expected entry
+while the stream is being measured.
+
+```
+n_flt_page    an expected PAGE fault entry retired with
+              fault_cause == expected and fault_va == expected
+n_flt_guest   the same, GUEST_PAGE
+n_flt_acc     the same, ACCESS
+```
+
+The proof (`tb/fe_demo_proofs.svh:129`) is
+`n_flt_page > 0 && n_flt_guest > 0 && n_flt_acc > 0`. The backend also
+checks every retired entry against the expected stream, the guest-page
+fault's GPA included, and `tb_fe_demo.sv` requires the whole stream to
+retire with no errors before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- Each figure is 1: one faulting fetch of each kind, as the program
+  has.
+- The walker is asked twice for each of VPN 0x80400 (cyc 90 and 107)
+  and VPN 0x80800 (cyc 399 and 493), each time answering the
+  fault. The run does not show which lookup starts the second walk;
+  faults are not installed (section 4.1, step 1), so any later lookup of
+  the page walks again.
+- A V=1 walk for VPN 0x80020 (page H) starts at cyc 201, the cycle
+  before the redirect to V, for a fetch younger than the ecall; it answers
+  a fault at cyc 278 that nothing delivers. FD-14 shows the same.
+- The program is FD-15's as `planning/showcase/fe_demo_scenarios.md`
+  gives it. The proof as built also checks each packet's VA.
+
+---
+
+## 3. The program
 
 Source: `programs/fd15_faults.svh`, task `prog_fd15`. The address map
 is `tb/fe_demo_lib.svh:91-106`: C 0x8001_0000, H 0x8002_0000 (handlers
@@ -70,7 +138,9 @@ V+0x1000     mixed(4), jal x0,0                     halt
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 Each `jalr` is first mispredicted (no target known), so the backend
 redirects to the target; its fetch then faults. In the run (cyc is
@@ -107,47 +177,7 @@ redirects to the target; its fetch then faults. In the run (cyc is
    (`ifu_fault_e`,
    `rtl/core/frontend/bpu/rtl/bp_structs_pkg.sv:563-566`).
 
----
-
-## 3. What the monitor counts
-
-The counts come from the backend's retirement hook,
-`tb/fe_demo_mon.svh:317-323`, called for every retired expected entry
-while the stream is being measured.
-
-```
-n_flt_page    an expected PAGE fault entry retired with
-              fault_cause == expected and fault_va == expected
-n_flt_guest   the same, GUEST_PAGE
-n_flt_acc     the same, ACCESS
-```
-
-The proof (`tb/fe_demo_proofs.svh:129`) is
-`n_flt_page > 0 && n_flt_guest > 0 && n_flt_acc > 0`. The backend also
-checks every retired entry against the expected stream, the guest-page
-fault's GPA included, and `tb_fe_demo.sv` requires the whole stream to
-retire with no errors before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- Each figure is 1: one faulting fetch of each kind, as the program
-  has.
-- The walker is asked twice for each of VPN 0x80400 (cyc 90 and 107)
-  and VPN 0x80800 (cyc 399 and 493), each time answering the
-  fault. The run does not show which lookup starts the second walk;
-  faults are not installed (section 2, step 1), so any later lookup of
-  the page walks again.
-- A V=1 walk for VPN 0x80020 (page H) starts at cyc 201, the cycle
-  before the redirect to V, for a fetch younger than the ecall; it answers
-  a fault at cyc 278 that nothing delivers. FD-14 shows the same.
-- The program is FD-15's as `planning/showcase/fe_demo_scenarios.md`
-  gives it. The proof as built also checks each packet's VA.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd15_faults.sucl`, which `make view
 S=fd15_faults` opens in Surfer. Groups: clock, itlb, walker, ifu_xlate,
@@ -160,7 +190,7 @@ ifu_fault, decode, backend. Look at:
   succeeded before PMP refused it.
 - `xq_fault0` on the translation queue entry, `ifu_ftq_fault_val`.
 - `pd_out.[0].fault_cause` and `pd_out.[0].fault_va` at the cycles of
-  section 2, step 4. After each, `bkend_ftq_redir_val` with cause
+  section 4.1, step 4. After each, `bkend_ftq_redir_val` with cause
   RC_TRAP to the handler.
 - The encoded fields are shown as numbers (DOC-006):
   - `itlb_ifu_status` (`planning/interfaces/itlb_ifu_interfaces.md`
@@ -176,7 +206,7 @@ ifu_fault, decode, backend. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | #  | cyc | Event                                                                                     | Other          |
 |----|-----|-------------------------------------------------------------------------------------------|----------------|
@@ -192,3 +222,64 @@ ifu_fault, decode, backend. Look at:
 | 9  | 490 | the walker answers cause 20, a guest-page fault: the G-stage does not map GPA 0x2000_0000 | status 1       |
 | 10 | 494 | the third fault reaches decode: lane 0 at 0x8080_0010, IFU_FAULT_GUEST_PAGE               |                |
 | 11 | 700 | the run ends                                                                              |                |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd15_faults` opens
+`waves/fd15_faults.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group     | signal                      | description                                           |
+|-----------|-----------------------------|-------------------------------------------------------|
+| clock     | `tb.clk`                    | clock                                                 |
+|           | `tb.rstn`                   | active low reset                                      |
+|           | `tb.cyc`                    | cycle number                                          |
+| itlb      | `ifu_itlb_req_val`          | IFU lookup in the ITLB                                |
+|           | `ifu_itlb_req_rdy`          | the ITLB takes the lookup                             |
+|           | `ifu_itlb_vpn`              | virtual page number of the lookup                     |
+|           | `itlb_ifu_rsp_val`          | ITLB response                                         |
+|           | `itlb_ifu_status`           | ITLB status: 0 hit, 1 miss, 2 fault, 3 reserved       |
+|           | `itlb_ifu_ppn`              | physical page number of the response                  |
+|           | `itlb_ifu_cause`            | fault cause: 1 access, 12 page, 20 guest-page         |
+| walker    | `tb.itlb_l2t_req_val`       | ITLB request to the walker                            |
+|           | `tb.itlb_l2t_req_rdy`       | the walker takes the request                          |
+|           | `tb.itlb_l2t_vpn`           | virtual page number of the walk                       |
+|           | `tb.itlb_l2t_v`             | the walk is for V=1, two-stage when hgatp is not Bare |
+|           | `tb.itlb_l2t_priv`          | privilege of the walk: 0 U, 1 S                       |
+|           | `tb.u_ptw.r_st`             | walker state                                          |
+|           | `tb.u_ptw.r_g_on`           | G-stage enabled for the walk                          |
+|           | `tb.l2t_itlb_rsp_val`       | walker response                                       |
+|           | `tb.l2t_itlb_status`        | walker status: 0 hit, 1 fault, 2 retry, 3 reserved    |
+|           | `tb.l2t_itlb_ppn`           | physical page number of the walk                      |
+|           | `tb.l2t_itlb_cause`         | fault cause: 1 access, 12 page, 20 guest-page         |
+| ifu_xlate | `u_ifu.u_xlate.xq_val`      | translation queue head valid                          |
+|           | `u_ifu.u_xlate.xq_pop`      | translation queue pop                                 |
+|           | `u_ifu.u_xlate.xq_idx`      | FTQ index of the queue entry                          |
+|           | `u_ifu.u_xlate.xq_pc`       | block start address of the queue entry                |
+|           | `u_ifu.u_xlate.xq_cross`    | the block crosses a page                              |
+|           | `u_ifu.u_xlate.xq_ppn0`     | physical page number of the first page                |
+|           | `u_ifu.u_xlate.xq_ppn1`     | physical page number of the second page               |
+|           | `u_ifu.u_xlate.xq_fault0`   | the first page faulted                                |
+|           | `u_ifu.u_xlate.xq_fault1`   | the second page faulted                               |
+|           | `u_ifu.u_xlate.xq_uc`       | the page is uncached                                  |
+| ifu_fault | `ifu_ftq_fault_val`         | the IFU reports a fetch fault to the FTQ              |
+|           | `ifu_ftq_fault_pos`         | halfword position of the fault                        |
+| decode    | `tb.dec_ibuf_rdy`           | the backend model takes the bundle                    |
+|           | `tb.pd_out.[0].valid`       | lane 0 valid                                          |
+|           | `tb.pd_out.[0].start_pc`    | lane 0 instruction address                            |
+|           | `tb.pd_out.[0].ftq_idx`     | lane 0 FTQ index                                      |
+|           | `tb.pd_out.[0].pos`         | lane 0 halfword position in the fetch block           |
+|           | `tb.pd_out.[0].instr`       | lane 0 instruction, expanded if compressed            |
+|           | `tb.pd_out.[0].is_rvc`      | lane 0 instruction is 16-bit                          |
+|           | `tb.pd_out.[0].fault_cause` | lane 0 fetch fault cause                              |
+|           | `tb.pd_out.[0].fault_va`    | lane 0 fetch fault virtual address                    |
+| backend   | `tb.bkend_ftq_redir_val`    | backend redirect                                      |
+|           | `tb.bkend_ftq_redir_idx`    | FTQ index of the backend redirect                     |
+|           | `tb.bkend_ftq_redir_pc`     | backend redirect PC                                   |
+|           | `tb.bkend_ftq_redir_cause`  | backend redirect cause                                |
+|           | `tb.bkend_ftq_redir_self`   | self flag of the backend redirect                     |
+|           | `tb.bkend_ftq_rsv_val`      | resolution from the backend, per slot                 |
+|           | `tb.bkend_ftq_commit_val`   | commit watermark valid                                |
+|           | `tb.bkend_ftq_commit_idx`   | commit watermark FTQ index                            |

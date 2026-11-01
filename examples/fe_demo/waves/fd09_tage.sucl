@@ -13,11 +13,31 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd09_tage.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c2_first_TAGE_response_at_p2 55
+marker_set c20_first_allocation_write 235
+marker_set c21_first_backend_misprediction 245
+marker_set c32_the_back_edge_resolved_from_top 355
+marker_set c34_first_FTB_hit_at_p2 375
+marker_set c46_first_p2_group_at_0x8000_0016 495
+marker_set c72_first_taken_B_resolved 755
+marker_set c73_its_allocation_write 765
+marker_set c115_first_prediction_from_a_tagged_table 1185
+marker_set c225_uaon_first_increments 2285
+marker_set c441_uaon_reaches_8 4445
+marker_set c460_first_prediction_from_T0 4635
+marker_set c1355_back_edge_falls_through 13585
+marker_set c1364_the_run_ends 13675
+item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus e
+item_focus be
 group_marked bp_cluster_p0
-item_focus f
+item_focus bf
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
@@ -28,9 +48,9 @@ item_set_format Bit
 item_unfocus
 # group tage_p2
 variable_add tb.dut.u_bpu.w_tage_pred_rdy_p2
-item_focus j
+item_focus bj
 group_marked tage_p2
-item_focus k
+item_focus bk
 item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp
 item_set_format Unsigned
@@ -45,9 +65,9 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus ba
+item_focus ca
 group_marked bp_cluster_p2
-item_focus bb
+item_focus cb
 item_set_format Bit
 variable_add tb.dut.u_bpu.r_pc_p2
 item_set_format Hexadecimal
@@ -80,9 +100,9 @@ item_set_format Unsigned
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus ca
+item_focus da
 group_marked backend
-item_focus cb
+item_focus db
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_pc
 item_set_format Hexadecimal
@@ -91,16 +111,16 @@ item_set_format Enum
 item_unfocus
 # group ftq_upd_conv
 variable_add tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[0].pc
-item_focus ce
+item_focus de
 group_marked ftq_upd_conv
-item_focus cf
+item_focus df
 item_set_format Hexadecimal
 item_unfocus
 # group tage_update
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.trx_type
-item_focus cg
+item_focus dg
 group_marked tage_update
-item_focus ch
+item_focus dh
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0
 item_set_format Bit
@@ -124,22 +144,5 @@ variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[0]
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]
 item_set_format Unsigned
-item_unfocus
-# markers, from docs/fd09_tage.md section 5
-marker_set c0_reset_released 36
-marker_set c2_first_TAGE_response_at_p2 55
-marker_set c20_first_allocation_write 235
-marker_set c21_first_backend_misprediction 245
-marker_set c32_the_back_edge_resolved_from_top 355
-marker_set c34_first_FTB_hit_at_p2 375
-marker_set c46_first_p2_group_at_0x8000_0016 495
-marker_set c72_first_taken_B_resolved 755
-marker_set c73_its_allocation_write 765
-marker_set c115_first_prediction_from_a_tagged_table 1185
-marker_set c225_uaon_first_increments 2285
-marker_set c441_uaon_reaches_8 4445
-marker_set c460_first_prediction_from_T0 4635
-marker_set c1355_back_edge_falls_through 13585
-marker_set c1364_the_run_ends 13675
 item_unfocus
 zoom_to 16 336

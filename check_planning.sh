@@ -154,6 +154,11 @@
 # (PROJECT_STATUS.md, PROJECT_CORE.md). Updated after DOC-011,
 # session-082 (PROJECT_STATUS.md, ras_decisions.md, ras_interfaces.md,
 # bp_arb_spec.md, and ras_theory_of_operation.md as DOC-011 wrote it).
+# Updated in session-083 (PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+# fe_demo_scenarios.md, showcase_release_decisions.md), and for
+# CLAUDE.md as Jeff edited it (tables exempt from 80 columns). Updated
+# after DOC-012, session-083 (PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+# fe_demo_scenarios.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -176,9 +181,9 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   bfd51475d3cd
-PLAN  PROJECT_STATUS.md                 a099d6392524
+PLAN  PROJECT_STATUS.md                 0d5091833fb5
 
-UNKN  CLAUDE.md                         625e50425ef6
+UNKN  CLAUDE.md                         b79ebafb114a
 
 ARCH  bp_arb_spec.md                    e948ad56ba7e
 ARCH  bp_cluster.md                     187952e94e30
@@ -216,7 +221,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f90a7b3ce267
-TEST  fe_demo_tb_decisions.md           26012408c403
+TEST  fe_demo_tb_decisions.md           45d03a27059f
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
@@ -246,8 +251,8 @@ INTF  ubtb_interfaces.md          a8e591bbeda2
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
-SHOW  fe_demo_scenarios.md            7a55ae56d56a
-SHOW  showcase_release_decisions.md   c95e204e27c3
+SHOW  fe_demo_scenarios.md            adaffdd98b26
+SHOW  showcase_release_decisions.md   4708b8db70e0
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

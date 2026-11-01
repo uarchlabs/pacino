@@ -13,11 +13,23 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd16_page_cross.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c46_walk_for_VPN_0x80010 495
+marker_set c70_walk_for_VPN_0x80011 735
+marker_set c93_L1I_request_for_0x8100_0FC0 965
+marker_set c94_the_translation_queue_entry_of_the 975
+marker_set c94_L1I_request_for_0x8120_5000 975
+marker_set c112_the_run_ends 1155
+item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus e
+item_focus m
 group_marked ftq_ifu
-item_focus f
+item_focus n
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -40,9 +52,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_xlate
 variable_add tb.dut.u_ifu.u_xlate.xq_val
-item_focus p
+item_focus bh
 group_marked ifu_xlate
-item_focus ba
+item_focus bi
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_xlate.xq_pop
 item_set_format Bit
@@ -65,9 +77,9 @@ item_set_format Bit
 item_unfocus
 # group itlb
 variable_add tb.dut.ifu_itlb_req_val
-item_focus bk
+item_focus cc
 group_marked itlb
-item_focus bl
+item_focus cd
 item_set_format Bit
 variable_add tb.dut.ifu_itlb_req_rdy
 item_set_format Bit
@@ -84,9 +96,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus cc
+item_focus ck
 group_marked ifu_l1i
-item_focus cd
+item_focus cl
 item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Bit
@@ -103,9 +115,9 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus ck
+item_focus dc
 group_marked decode
-item_focus cl
+item_focus dd
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -123,14 +135,5 @@ variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
-item_unfocus
-# markers, from docs/fd16_page_cross.md section 6
-marker_set c0_reset_released 36
-marker_set c46_walk_for_VPN_0x80010 495
-marker_set c70_walk_for_VPN_0x80011 735
-marker_set c93_L1I_request_for_0x8100_0FC0 965
-marker_set c94_the_translation_queue_entry_of_the 975
-marker_set c94_L1I_request_for_0x8120_5000 975
-marker_set c112_the_run_ends 1155
 item_unfocus
 zoom_to 16 336

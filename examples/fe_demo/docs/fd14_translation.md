@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd14_translation` is the FD-14 demonstration scenario. It is a demo,
 not a verification test. Code runs at S-mode under satp Sv39; its code
 page has a leaf with A clear and menvcfg.ADUE set, so the walk sets A
@@ -19,16 +21,81 @@ stages. The run passes if a single-stage walk, a walk with V=1 that
 evaluates G-stage PTEs, and a CAS each happen at least once.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd14_translation: PASS, single-stage walks 2, two-stage walks 2,
-    G-stage page table entry evaluations 21, compare-and-swaps 1, cyc 285
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                            |
+  |--------------------|-------------------------------------------------|
+  | This file          | $DEMO/docs/fd14_translation.md                  |
+  | Program (stimulus) | $DEMO/programs/fd14_translation.svh             |
+  | Surfer sucl        | $DEMO/waves/fd14_translation.sucl               |
+  | Log                | $DEMO/out/fd14_translation/fd14_translation.log |
+  | Waveform           | $DEMO/out/fd14_translation/fd14_translation.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd14_translation.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd14_translation.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd14_translation
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd14_translation
+```
+
+Console output:
+```
+-I: fd14_translation : PASS : cyc = 285
+```
+
+Log file output:
+```
+-I: fd14_translation: PASS, single-stage walks 2, two-stage walks 2,
+    G-stage page table entry evaluations 21, compare-and-swaps 1,
+    events checked 11 of 11, cyc 285
+```
+
+### 2.1 What the monitor counts
+
+The counts come from `tb/fe_demo_mon.svh:527-534`, sampled every cycle
+while the stream is being measured (`meas`).
+
+```
+n_walk_s   itlb_l2t_req_val && itlb_l2t_req_rdy && !itlb_l2t_v
+n_walk_g   itlb_l2t_req_val && itlb_l2t_req_rdy &&  itlb_l2t_v
+n_g_eval   cycles with u_ptw.r_st == S_G_EVAL
+n_cas      ptw_mem_req_val && ptw_mem_req_rdy && ptw_mem_req_op
+```
+
+The proof (`tb/fe_demo_proofs.svh:122-123`) is
+`n_walk_s > 0 && n_walk_g > 0 && n_g_eval > 0 && n_cas > 0`.
+`tb_fe_demo.sv` also requires the whole stream to retire with no errors
+before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- Walks are walker requests taken, wrong path included. Of the two
+  V=1 walks one is the flushed fetch of C described in section 4.1; the
+  proof's V=1 condition would be met by either.
+- `n_g_eval` counts cycles in `S_G_EVAL`, one per G-stage PTE
+  evaluated: 21 = 9 + 12 over the two V=1 walks.
+- The wrong-path V=1 walk occupies the walker from cyc 91 to 168,
+  so the walk for V starts at cyc 170, about 80 cycles after the
+  redirect. This is reported for the design owner; the demonstration
+  does not depend on it.
+- The program is FD-14's as `planning/showcase/fe_demo_scenarios.md`
+  gives it, the regime change on the ecall's trap included. The proof
+  as built adds a G-stage evaluation count to "a walk of each kind".
+
+---
+
+## 3. The program
 
 Source: `programs/fd14_translation.svh`, task `prog_fd14`. The address
 map constants are in `tb/fe_demo_lib.svh:91-97`.
@@ -59,7 +126,9 @@ V            mixed(8), jal x0,0           halt
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. Single-stage walks. The first fetch of the reset page and of C miss
    the ITLB and walk with V=0 (`itlb_l2t_v` 0). In the run: VPN 0x80000
@@ -89,45 +158,7 @@ V            mixed(8), jal x0,0           halt
      cyc 267.
    The first walk spends 9 cycles in `S_G_EVAL`, the second 12.
 
----
-
-## 3. What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:527-534`, sampled every cycle
-while the stream is being measured (`meas`).
-
-```
-n_walk_s   itlb_l2t_req_val && itlb_l2t_req_rdy && !itlb_l2t_v
-n_walk_g   itlb_l2t_req_val && itlb_l2t_req_rdy &&  itlb_l2t_v
-n_g_eval   cycles with u_ptw.r_st == S_G_EVAL
-n_cas      ptw_mem_req_val && ptw_mem_req_rdy && ptw_mem_req_op
-```
-
-The proof (`tb/fe_demo_proofs.svh:122-123`) is
-`n_walk_s > 0 && n_walk_g > 0 && n_g_eval > 0 && n_cas > 0`.
-`tb_fe_demo.sv` also requires the whole stream to retire with no errors
-before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- Walks are walker requests taken, wrong path included. Of the two
-  V=1 walks one is the flushed fetch of C described in section 2; the
-  proof's V=1 condition would be met by either.
-- `n_g_eval` counts cycles in `S_G_EVAL`, one per G-stage PTE
-  evaluated: 21 = 9 + 12 over the two V=1 walks.
-- The wrong-path V=1 walk occupies the walker from cyc 91 to 168,
-  so the walk for V starts at cyc 170, about 80 cycles after the
-  redirect. This is reported for the design owner; the demonstration
-  does not depend on it.
-- The program is FD-14's as `planning/showcase/fe_demo_scenarios.md`
-  gives it, the regime change on the ecall's trap included. The proof
-  as built adds a G-stage evaluation count to "a walk of each kind".
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd14_translation.sucl`, which `make view
 S=fd14_translation` opens in Surfer. Groups: clock, ifu_xlate, itlb,
@@ -160,7 +191,7 @@ walker, walker_mem. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | #  | cyc | Event                                                                                  | Other             |
 |----|-----|----------------------------------------------------------------------------------------|-------------------|
@@ -175,3 +206,53 @@ walker, walker_mem. Look at:
 | 8  | 170 | walk for V: VPN 0x80050, nested                                                        |                   |
 | 9  | 267 | the walk for V answers PPN 0x81600                                                     | status 0, hit     |
 | 10 | 285 | the run ends                                                                           |                   |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd14_translation` opens
+`waves/fd14_translation.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group      | signal                    | description                                           |
+|------------|---------------------------|-------------------------------------------------------|
+| clock      | `tb.clk`                  | clock                                                 |
+|            | `tb.rstn`                 | active low reset                                      |
+|            | `tb.cyc`                  | cycle number                                          |
+| ifu_xlate  | `u_ifu.u_xlate.xq_val`    | translation queue head valid                          |
+|            | `u_ifu.u_xlate.xq_pop`    | translation queue pop                                 |
+|            | `u_ifu.u_xlate.xq_idx`    | FTQ index of the queue entry                          |
+|            | `u_ifu.u_xlate.xq_pc`     | block start address of the queue entry                |
+|            | `u_ifu.u_xlate.xq_cross`  | the block crosses a page                              |
+|            | `u_ifu.u_xlate.xq_ppn0`   | physical page number of the first page                |
+|            | `u_ifu.u_xlate.xq_ppn1`   | physical page number of the second page               |
+|            | `u_ifu.u_xlate.xq_fault0` | the first page faulted                                |
+|            | `u_ifu.u_xlate.xq_fault1` | the second page faulted                               |
+|            | `u_ifu.u_xlate.xq_uc`     | the page is uncached                                  |
+| itlb       | `ifu_itlb_req_val`        | IFU lookup in the ITLB                                |
+|            | `ifu_itlb_req_rdy`        | the ITLB takes the lookup                             |
+|            | `ifu_itlb_vpn`            | virtual page number of the lookup                     |
+|            | `itlb_ifu_rsp_val`        | ITLB response                                         |
+|            | `itlb_ifu_status`         | ITLB status: 0 hit, 1 miss, 2 fault, 3 reserved       |
+|            | `itlb_ifu_ppn`            | physical page number of the response                  |
+|            | `itlb_ifu_cause`          | fault cause: 1 access, 12 page, 20 guest-page         |
+| walker     | `tb.itlb_l2t_req_val`     | ITLB request to the walker                            |
+|            | `tb.itlb_l2t_req_rdy`     | the walker takes the request                          |
+|            | `tb.itlb_l2t_vpn`         | virtual page number of the walk                       |
+|            | `tb.itlb_l2t_v`           | the walk is for V=1, two-stage when hgatp is not Bare |
+|            | `tb.itlb_l2t_priv`        | privilege of the walk: 0 U, 1 S                       |
+|            | `tb.u_ptw.r_st`           | walker state                                          |
+|            | `tb.u_ptw.r_g_on`         | G-stage enabled for the walk                          |
+|            | `tb.l2t_itlb_rsp_val`     | walker response                                       |
+|            | `tb.l2t_itlb_status`      | walker status: 0 hit, 1 fault, 2 retry, 3 reserved    |
+|            | `tb.l2t_itlb_ppn`         | physical page number of the walk                      |
+|            | `tb.l2t_itlb_cause`       | fault cause: 1 access, 12 page, 20 guest-page         |
+| walker_mem | `tb.ptw_mem_req_val`      | walker memory request                                 |
+|            | `tb.ptw_mem_req_rdy`      | memory takes the request                              |
+|            | `tb.ptw_mem_req_op`       | 1 for a compare-and-swap                              |
+|            | `tb.ptw_mem_req_paddr`    | physical address of the request                       |
+|            | `tb.ptw_mem_req_cmp`      | compare value of a compare-and-swap                   |
+|            | `tb.ptw_mem_req_swap`     | swap value of a compare-and-swap                      |
+|            | `tb.mem_ptw_rsp_val`      | memory response to the walker                         |
+|            | `tb.mem_ptw_rsp_data`     | data of the response                                  |

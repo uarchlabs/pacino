@@ -13,11 +13,22 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd20_backpressure.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c18_decode_first_holds_a_bundle 215
+marker_set c71_the_instruction_buffer_first_refuses_the 745
+marker_set c138_the_FTQ_first_full 1415
+marker_set c526_back_edge_falls_through 5295
+marker_set c537_the_run_ends 5405
+item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus e
+item_focus l
 group_marked bp_cluster_p0
-item_focus f
+item_focus m
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
@@ -28,9 +39,9 @@ item_set_format Bit
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_commit_ptr
-item_focus j
+item_focus ba
 group_marked ftq
-item_focus k
+item_focus bb
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
 item_set_format Bit
@@ -43,9 +54,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus p
+item_focus bg
 group_marked ftq_ifu
-item_focus ba
+item_focus bh
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -68,9 +79,9 @@ item_set_format Unsigned
 item_unfocus
 # group ibuf
 variable_add tb.dut.ifu_ibuf_val
-item_focus bk
+item_focus cb
 group_marked ibuf
-item_focus bl
+item_focus cc
 item_set_format Bit
 variable_add tb.dut.ifu_ibuf_en
 item_set_format Binary
@@ -85,9 +96,9 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus cb
+item_focus ci
 group_marked decode
-item_focus cc
+item_focus cj
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -105,13 +116,5 @@ variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
-item_unfocus
-# markers, from docs/fd20_backpressure.md section 6
-marker_set c0_reset_released 36
-marker_set c18_decode_first_holds_a_bundle 215
-marker_set c71_the_instruction_buffer_first_refuses_the 745
-marker_set c138_the_FTQ_first_full 1415
-marker_set c526_back_edge_falls_through 5295
-marker_set c537_the_run_ends 5405
 item_unfocus
 zoom_to 16 336

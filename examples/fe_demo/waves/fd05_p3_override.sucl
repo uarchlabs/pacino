@@ -13,11 +13,24 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd05_p3_override.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c47_first_p3_redirect_from_an_SC 505
+marker_set c178_A_reversed_to_not_taken_before 1815
+marker_set c261_the_split 2645
+marker_set c292_A_reversed_to_not_taken_after 2955
+marker_set c822_last_p3_redirect_from_an_SC 8255
+marker_set c965_back_edge_falls_through 9685
+marker_set c975_the_run_ends 9785
+item_unfocus
 # group tage_p2
 variable_add tb.dut.u_bpu.w_tage_pred_rdy_p2
-item_focus e
+item_focus n
 group_marked tage_p2
-item_focus f
+item_focus o
 item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp
 item_set_format Unsigned
@@ -32,9 +45,9 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus l
+item_focus be
 group_marked bp_cluster_p2
-item_focus m
+item_focus bf
 item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
@@ -63,9 +76,9 @@ item_set_format Unsigned
 item_unfocus
 # group sc_p3
 variable_add tb.dut.u_bpu.w_sc_pred_rdy_p3
-item_focus bj
+item_focus cc
 group_marked sc_p3
-item_focus bk
+item_focus cd
 item_set_format Bit
 variable_add tb.dut.u_bpu.w_sc_hit_p3.[0]
 item_set_format Bit
@@ -74,9 +87,9 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p3
 variable_add tb.dut.u_bpu.r_val_p3
-item_focus bn
+item_focus cg
 group_marked bp_cluster_p3
-item_focus bo
+item_focus ch
 item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p3
 item_set_format Bit
@@ -103,9 +116,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus ck
+item_focus dd
 group_marked ftq
-item_focus cl
+item_focus de
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -125,15 +138,5 @@ variable_add tb.dut.ftq_full
 item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
-item_unfocus
-# markers, from docs/fd05_p3_override.md section 6
-marker_set c0_reset_released 36
-marker_set c47_first_p3_redirect_from_an_SC 505
-marker_set c178_A_reversed_to_not_taken_before 1815
-marker_set c261_the_split 2645
-marker_set c292_A_reversed_to_not_taken_after 2955
-marker_set c822_last_p3_redirect_from_an_SC 8255
-marker_set c965_back_edge_falls_through 9685
-marker_set c975_the_run_ends 9785
 item_unfocus
 zoom_to 16 336

@@ -13,11 +13,25 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd11_be_mispredict.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c19_first_history_rollback 225
+marker_set c20_first_misprediction_of_A_taken 235
+marker_set c49_the_return_mispredicted 525
+marker_set c53_fetch_restarts_at_0x8000_0014 565
+marker_set c60_the_back_edge_mispredicted 635
+marker_set c86_first_misprediction_of_A_not_taken 895
+marker_set c471_the_loop_exits 4745
+marker_set c480_the_run_ends 4835
+item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus e
+item_focus o
 group_marked decode
-item_focus f
+item_focus p
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -38,9 +52,9 @@ item_set_format Hexadecimal
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus o
+item_focus bi
 group_marked backend
-item_focus p
+item_focus bj
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -59,9 +73,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus bh
+item_focus cb
 group_marked ftq
-item_focus bi
+item_focus cc
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -84,9 +98,9 @@ item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus cc
+item_focus cm
 group_marked ftq_ifu
-item_focus cd
+item_focus cn
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -109,9 +123,9 @@ item_set_format Unsigned
 item_unfocus
 # group bp_history_ras
 variable_add tb.dut.ftq_rollback_val
-item_focus cn
+item_focus dh
 group_marked bp_history_ras
-item_focus co
+item_focus di
 item_set_format Bit
 variable_add tb.dut.ftq_rollback_idx
 item_set_format Unsigned
@@ -130,9 +144,9 @@ item_set_format Unsigned
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus dg
+item_focus ea
 group_marked bp_cluster_p0
-item_focus dh
+item_focus eb
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
@@ -140,16 +154,5 @@ variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
-item_unfocus
-# markers, from docs/fd11_be_mispredict.md section 6
-marker_set c0_reset_released 36
-marker_set c19_first_history_rollback 225
-marker_set c20_first_misprediction_of_A_taken 235
-marker_set c49_the_return_mispredicted 525
-marker_set c53_fetch_restarts_at_0x8000_0014 565
-marker_set c60_the_back_edge_mispredicted 635
-marker_set c86_first_misprediction_of_A_not_taken 895
-marker_set c471_the_loop_exits 4745
-marker_set c480_the_run_ends 4835
 item_unfocus
 zoom_to 16 336

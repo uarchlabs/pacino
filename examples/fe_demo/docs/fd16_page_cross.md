@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd16_page_cross` is the FD-16 demonstration scenario. It is a demo,
 not a verification test. A jump lands 16 bytes before the end of a
 4 KiB page whose virtual successor is mapped to a non-adjacent physical
@@ -20,15 +22,75 @@ translation-queue entry is popped with two translations of different
 PPNs.
 
 The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
-A recorded run:
 
-```
--I: fd16_page_cross: PASS, blocks translated twice 1, cyc 112
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                          |
+  |--------------------|-----------------------------------------------|
+  | This file          | $DEMO/docs/fd16_page_cross.md                 |
+  | Program (stimulus) | $DEMO/programs/fd16_page_cross.svh            |
+  | Surfer sucl        | $DEMO/waves/fd16_page_cross.sucl              |
+  | Log                | $DEMO/out/fd16_page_cross/fd16_page_cross.log |
+  | Waveform           | $DEMO/out/fd16_page_cross/fd16_page_cross.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd16_page_cross
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd16_page_cross
+```
+
+Console output:
+```
+-I: fd16_page_cross : PASS : cyc = 112
+```
+
+Log file output:
+```
+-I: fd16_page_cross: PASS, blocks translated twice 1, events checked 7 of 7,
+    cyc 112
+```
+
+### 2.1 What the monitor counts
+
+The count comes from `tb/fe_demo_mon.svh:535-539`, sampled every cycle
+while the stream is being measured (`meas`).
+
+```
+n_xq_cross   u_ifu.u_xlate.xq_val && xq_pop && xq_cross
+             && xq_ppn0 != xq_ppn1
+             a translation-queue entry popped with two translations
+             of different physical pages
+```
+
+The proof (`tb/fe_demo_proofs.svh:133`) is `n_xq_cross > 0`.
+`tb_fe_demo.sv` also requires the whole stream to retire with no errors
+before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- The figure is 1: the program has one crossing block, and the run's
+  translation queue shows no other entry popped with `xq_cross` set.
+- The monitor also requires the two PPNs to differ, so the count shows
+  two translations, not one page's result read twice. Here they are
+  0x81000 and 0x81205.
+- The program meets FD-16 of `planning/showcase/fe_demo_scenarios.md`
+  (a block that starts within 32 bytes of a page end); the proof is
+  FD-16's. No departure.
+
+---
+
+## 3. The program
 
 Source: `programs/fd16_page_cross.svh`, task `prog_fd16`. S-mode under
 satp Sv39 (begin_scen use_sv39 = 1).
@@ -54,7 +116,9 @@ b+0x1002     mixed(8), jal x0,0             halt
 
 ---
 
-## 2. Why the program produces the behavior
+## 4. Walkthrough
+
+### 4.1 Why the program produces the behavior
 
 1. The block crosses. `ifu_xlate` marks a block as crossing when its
    start PC's page offset is at least `CROSS_FROM` 0xFE0, 32 bytes
@@ -79,40 +143,7 @@ The backend compares every retired instruction with the expected
 stream, so the 32-bit instruction at b+0xFFE retired with its expected
 encoding.
 
----
-
-## 3. What the monitor counts
-
-The count comes from `tb/fe_demo_mon.svh:535-539`, sampled every cycle
-while the stream is being measured (`meas`).
-
-```
-n_xq_cross   u_ifu.u_xlate.xq_val && xq_pop && xq_cross
-             && xq_ppn0 != xq_ppn1
-             a translation-queue entry popped with two translations
-             of different physical pages
-```
-
-The proof (`tb/fe_demo_proofs.svh:133`) is `n_xq_cross > 0`.
-`tb_fe_demo.sv` also requires the whole stream to retire with no errors
-before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- The figure is 1: the program has one crossing block, and the run's
-  translation queue shows no other entry popped with `xq_cross` set.
-- The monitor also requires the two PPNs to differ, so the count shows
-  two translations, not one page's result read twice. Here they are
-  0x81000 and 0x81205.
-- The program meets FD-16 of `planning/showcase/fe_demo_scenarios.md`
-  (a block that starts within 32 bytes of a page end); the proof is
-  FD-16's. No departure.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd16_page_cross.sucl`, which `make view
 S=fd16_page_cross` opens in Surfer. Groups: clock, ftq_ifu, ifu_xlate,
@@ -132,7 +163,7 @@ itlb, ifu_l1i, decode. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                                                       | Other        |
 |---|-----|-----------------------------------------------------------------------------------------------------------------------------|--------------|
@@ -143,3 +174,60 @@ itlb, ifu_l1i, decode. Look at:
 | 4 | 94  | the translation queue entry of the block at 0x8001_0FF0 popped with two translations: `xq_cross` 1, PPN 0x81000 and 0x81205 | counted      |
 | 5 | 94  | L1I request for 0x8120_5000, the second page's first line                                                                   | second page  |
 | 6 | 112 | the run ends                                                                                                                |              |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd16_page_cross` opens
+`waves/fd16_page_cross.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group     | signal                      | description                                       |
+|-----------|-----------------------------|---------------------------------------------------|
+| clock     | `tb.clk`                    | clock                                             |
+|           | `tb.rstn`                   | active low reset                                  |
+|           | `tb.cyc`                    | cycle number                                      |
+| ftq_ifu   | `ftq_ifu_req_val`           | FTQ presents a block to the IFU                   |
+|           | `ftq_ifu_req_rdy`           | the IFU takes the block                           |
+|           | `ftq_ifu_idx`               | FTQ index of the block                            |
+|           | `ftq_ifu_start_pc`          | block start address                               |
+|           | `ftq_ifu_next_pc`           | address after the block                           |
+|           | `ftq_ifu_taken_val`         | the block holds a predicted-taken transfer        |
+|           | `ftq_ifu_taken_pos`         | halfword position of the predicted-taken transfer |
+|           | `ftq_ifu_flush_val`         | flush of the blocks younger than the named entry  |
+|           | `ftq_ifu_flush_idx`         | FTQ index the flush names                         |
+|           | `ftq_ifu_commit_ptr`        | FTQ commit pointer as the IFU sees it             |
+| ifu_xlate | `u_ifu.u_xlate.xq_val`      | translation queue head valid                      |
+|           | `u_ifu.u_xlate.xq_pop`      | translation queue pop                             |
+|           | `u_ifu.u_xlate.xq_idx`      | FTQ index of the queue entry                      |
+|           | `u_ifu.u_xlate.xq_pc`       | block start address of the queue entry            |
+|           | `u_ifu.u_xlate.xq_cross`    | the block crosses a page                          |
+|           | `u_ifu.u_xlate.xq_ppn0`     | physical page number of the first page            |
+|           | `u_ifu.u_xlate.xq_ppn1`     | physical page number of the second page           |
+|           | `u_ifu.u_xlate.xq_fault0`   | the first page faulted                            |
+|           | `u_ifu.u_xlate.xq_fault1`   | the second page faulted                           |
+|           | `u_ifu.u_xlate.xq_uc`       | the page is uncached                              |
+| itlb      | `ifu_itlb_req_val`          | IFU lookup in the ITLB                            |
+|           | `ifu_itlb_req_rdy`          | the ITLB takes the lookup                         |
+|           | `ifu_itlb_vpn`              | virtual page number of the lookup                 |
+|           | `itlb_ifu_rsp_val`          | ITLB response                                     |
+|           | `itlb_ifu_status`           | ITLB status: 0 hit, 1 miss, 2 fault, 3 reserved   |
+|           | `itlb_ifu_ppn`              | physical page number of the response              |
+|           | `itlb_ifu_cause`            | fault cause: 1 access, 12 page, 20 guest-page     |
+| ifu_l1i   | `ifu_l1i_req_val`           | IFU request to the L1I                            |
+|           | `ifu_l1i_req_rdy`           | the L1I takes the request                         |
+|           | `ifu_l1i_req_id`            | request id                                        |
+|           | `ifu_l1i_req_paddr`         | physical address of the requested line            |
+|           | `ifu_l1i_req_uncached`      | the request is uncached                           |
+|           | `l1i_ifu_rsp_val`           | L1I response                                      |
+|           | `l1i_ifu_rsp_id`            | id of the request answered                        |
+| decode    | `tb.dec_ibuf_rdy`           | the backend model takes the bundle                |
+|           | `tb.pd_out.[0].valid`       | lane 0 valid                                      |
+|           | `tb.pd_out.[0].start_pc`    | lane 0 instruction address                        |
+|           | `tb.pd_out.[0].ftq_idx`     | lane 0 FTQ index                                  |
+|           | `tb.pd_out.[0].pos`         | lane 0 halfword position in the fetch block       |
+|           | `tb.pd_out.[0].instr`       | lane 0 instruction, expanded if compressed        |
+|           | `tb.pd_out.[0].is_rvc`      | lane 0 instruction is 16-bit                      |
+|           | `tb.pd_out.[0].fault_cause` | lane 0 fetch fault cause                          |
+|           | `tb.pd_out.[0].fault_va`    | lane 0 fetch fault virtual address                |

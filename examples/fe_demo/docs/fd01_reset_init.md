@@ -72,7 +72,13 @@ Log file output:
 
 ---
 
-## 3. Events
+## 4. Walkthrough
+
+Not yet written.
+
+---
+
+## 5. Events
 
 | # | cyc  | Event                                                                                                    | Other                                 |
 |---|------|----------------------------------------------------------------------------------------------------------|---------------------------------------|
@@ -88,48 +94,41 @@ Log file output:
 
 ---
 
-## 4. Waveform
+## 6. Waveform
 
 `make -C examples/fe_demo view S=fd01_reset_init` opens
 `waves/fd01_reset_init.sucl` in Surfer, with a marker at each event above.
 Signal paths below are under `tb.dut` unless they start with `tb.`.
 
-- group `clock`
-    - `tb.clk` - clock
-    - `tb.rstn` - active low reset
-    - `tb.cyc` - cycle number
-- group `tage_init`, signals under `u_bpu.u_tage`, then the ready
-    - `u_sram_init.state` - initialization FSM state
-    - `tbl_ri_wr` - RAM write enable, high cyc 1 to 2048
-    - `u_sram_init.waddr` - RAM address
-    - `tbl_ri_wd` - T1-T4 RAM write data, 0 (entry invalid, u = 0)
-    - `u_tage_bim.tbl_ri_wd` - T0 RAM write data, 2 (`2'b10`, weakly taken)
-    - `bpu_tage_rdy` - TAGE ready
-- group `ittage_init`, signals under `u_bpu.u_ittage`, then the ready
-    - `u_sram_init.state` - initialization FSM state
-    - `ri_wr` - RAM write enable, high cyc 1 to 512; ITTAGE gates it per
-      table
-    - `u_sram_init.waddr` - RAM address
-    - `ri_wd` - RAM write data, 0; ITTAGE slices it per table
-    - `bpu_ittage_rdy` - ITTAGE ready
-- group `sc_init`, signals under `u_bpu.u_sc`, then the ready
-    - `u_sram_init.state` - initialization FSM state
-    - `tbl_ri_wr` - RAM write enable, high cyc 1 to 1024
-    - `u_sram_init.waddr` - RAM address
-    - `tbl_ri_wd` - RAM write data, 0
-    - `bpu_sc_ready` - SC ready
-- group `ras_init`
-    - `u_bpu.u_ras.ras_rst_done` - RAS reset done, high from cyc 1
-- group `bp_cluster_p0`
-    - `ftq_pred_val_p0` - p0 request valid
-    - `ftq_pred_pc_p0` - p0 request PC
-    - `ftq_pred_idx_p0` - p0 request FTQ index
-    - `u_ftq.u_npc.w_hold` - holds the p0 request until all three readies
-      are high
-- group `request_stages`, one request from p0 to p3
-    - `ftq_pred_val_p0` - p0 request valid
-    - `bpu_pred_val_p1` - p1 prediction valid
-    - `u_ftq.w_ok_pred_p1` - the FTQ accepts the p1 prediction
-    - `u_bpu.w_tage_pred_rdy_p2` - TAGE response at p2
-    - `u_bpu.w_ittage_pred_rdy_p2` - ITTAGE response at p2
-    - `u_bpu.w_sc_pred_rdy_p3` - SC response at p3
+| group          | signal                              | description                                                    |
+|----------------|-------------------------------------|----------------------------------------------------------------|
+| clock          | `tb.clk`                            | clock                                                          |
+|                | `tb.rstn`                           | active low reset                                               |
+|                | `tb.cyc`                            | cycle number                                                   |
+| tage_init      | `u_bpu.u_tage.u_sram_init.state`    | initialization FSM state                                       |
+|                | `u_bpu.u_tage.tbl_ri_wr`            | RAM write enable, high cyc 1 to 2048                           |
+|                | `u_bpu.u_tage.u_sram_init.waddr`    | RAM address                                                    |
+|                | `u_bpu.u_tage.tbl_ri_wd`            | T1-T4 RAM write data, 0 (entry invalid, u = 0)                 |
+|                | `u_bpu.u_tage.u_tage_bim.tbl_ri_wd` | T0 RAM write data, 2 (`2'b10`, weakly taken)                   |
+|                | `bpu_tage_rdy`                      | TAGE ready                                                     |
+| ittage_init    | `u_bpu.u_ittage.u_sram_init.state`  | initialization FSM state                                       |
+|                | `u_bpu.u_ittage.ri_wr`              | RAM write enable, high cyc 1 to 512; ITTAGE gates it per table |
+|                | `u_bpu.u_ittage.u_sram_init.waddr`  | RAM address                                                    |
+|                | `u_bpu.u_ittage.ri_wd`              | RAM write data, 0; ITTAGE slices it per table                  |
+|                | `bpu_ittage_rdy`                    | ITTAGE ready                                                   |
+| sc_init        | `u_bpu.u_sc.u_sram_init.state`      | initialization FSM state                                       |
+|                | `u_bpu.u_sc.tbl_ri_wr`              | RAM write enable, high cyc 1 to 1024                           |
+|                | `u_bpu.u_sc.u_sram_init.waddr`      | RAM address                                                    |
+|                | `u_bpu.u_sc.tbl_ri_wd`              | RAM write data, 0                                              |
+|                | `bpu_sc_ready`                      | SC ready                                                       |
+| ras_init       | `u_bpu.u_ras.ras_rst_done`          | RAS reset done, high from cyc 1                                |
+| bp_cluster_p0  | `ftq_pred_val_p0`                   | p0 request valid                                               |
+|                | `ftq_pred_pc_p0`                    | p0 request PC                                                  |
+|                | `ftq_pred_idx_p0`                   | p0 request FTQ index                                           |
+|                | `u_ftq.u_npc.w_hold`                | holds the p0 request until all three readies are high          |
+| request_stages | `ftq_pred_val_p0`                   | p0 request valid                                               |
+|                | `bpu_pred_val_p1`                   | p1 prediction valid                                            |
+|                | `u_ftq.w_ok_pred_p1`                | the FTQ accepts the p1 prediction                              |
+|                | `u_bpu.w_tage_pred_rdy_p2`          | TAGE response at p2                                            |
+|                | `u_bpu.w_ittage_pred_rdy_p2`        | ITTAGE response at p2                                          |
+|                | `u_bpu.w_sc_pred_rdy_p3`            | SC response at p3                                              |

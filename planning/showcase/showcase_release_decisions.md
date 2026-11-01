@@ -4,9 +4,9 @@
 # Showcase Release Decisions
 ```
  FILE:    showcase_release_decisions.md
- SOURCE:  session-082
+ SOURCE:  session-082, session-083
  STATUS:  DRAFT
- UPDATED: 2026-10-29
+ UPDATED: 2026-11-01
  CONTACT: Jeff Nye
 ```
 
@@ -18,10 +18,8 @@ show, and the waveform staleness check. The showcase is
 examples/fe_demo/ (planning/testbenches/fe_demo_tb_decisions.md,
 planning/showcase/fe_demo_scenarios.md).
 
-Scenarios are shown on the site and published to pacino-waves only when named
-in main's mkdocs.yml extra: showcase_shown; the rest are left out of the build,
-nav, landing table, Frontend-demo links and the waves publish, without changing
-their source.
+Which scenarios are shown on the site and published is section 4, the
+shown list.
 
 ---
 
@@ -109,14 +107,44 @@ SR-12  The digests are recorded per scenario in manifest.json. Before a
 
 ---
 
-## 4. Open
+## 4. The shown list
+
+SR-13  The site shows, and tools/publish_waves.py publishes, only the
+       scenarios named in the list extra: showcase_shown of the
+       repository's mkdocs.yml, each as fdNN_<name>; the rest are
+       hidden until they are reviewed. With no list, every scenario is
+       shown (Jeff, session-082, recorded session-083).
+SR-14  The list is read from the mkdocs.yml of main, also when the
+       Showcase pages come from a tag (SR-6), so a scenario is shown or
+       hidden without a new tag. This is the one exception to SR-5:
+       the tag sets what the pages and waveforms show, and main's list
+       sets which of them appear.
+SR-15  A hidden scenario's page is left out of the site build, with its
+       nav entry and its search entry, and so is each file of
+       examples/fe_demo/docs/ named for its number, fdNN_*, unless a
+       shown scenario has that number. A list item or table row that
+       links a hidden page is dropped from every page: the landing
+       page's scenario table and the architecture pages' "Frontend
+       demo:" items. Any other link to it becomes plain text. Nothing
+       under examples/fe_demo/ is changed. tools/mkdocs_showcase.py,
+       THE SHOWN LIST.
+SR-16  tools/publish_waves.py builds every scenario and digests,
+       reports and publishes only the shown ones; manifest.json lists
+       only them (SR-9, SR-12). A name in the list that is not a
+       scenario, or a list that is not a list of names, stops both the
+       build and the publish. SHOWCASE_SHOW_ALL=1 shows every scenario
+       in a local build, for review; CI never sets it.
+
+---
+
+## 5. Open
 
 SR-U1  A GitHub Release per tag with a short changelog. Optional; not
        tasked (Jeff, session-082).
 
 ---
 
-## 5. Document History
+## 6. Document History
 
 ```
   2026-10-28  session-082. Created (Jeff's rulings; DOC-008).
@@ -126,4 +154,8 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
               git (Jeff); SR-12 the digest version.
   2026-10-29  session-082, after DOC-010. SR-9a the status form and
               the outside-change warning; SR-10 --untagged.
+  2026-11-01  session-083. Section 4, the shown list, SR-13 to SR-16,
+              from Jeff's change to mkdocs.yml, mkdocs_showcase.py and
+              publish_waves.py; it replaces the paragraph under the
+              registry line. Open and History renumbered 5 and 6.
 ```

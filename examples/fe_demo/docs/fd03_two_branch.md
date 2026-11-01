@@ -10,6 +10,8 @@
  CONTACT: Jeff Nye
 ```
 
+## 1. Introduction
+
 `fd03_two_branch` is the FD-3 demonstration scenario. It is a demo, not a
 verification test. It runs a loop through two blocks, X and Y, each
 holding two conditional branches within its first 32 bytes. Once the
@@ -20,16 +22,83 @@ valid.
 
 The scenario needs two prediction slots and runs on the two-slot model
 (Makefile `SCEN_2S`, DOC-006); on the one-slot model both counts are 0
-and it fails. A recorded run:
+and it fails.
 
-```
--I: fd03_two_branch: PASS, blocks with both slots valid at p1 78, at p2 74,
-    cyc 539
-```
+### 1.1 Files
+
+`DEMO=$RVA_ROOT/examples/fe_demo`
+
+  | File               | Path                                          |
+  |--------------------|-----------------------------------------------|
+  | This file          | $DEMO/docs/fd03_two_branch.md                 |
+  | Program (stimulus) | $DEMO/programs/fd03_two_branch.svh            |
+  | Surfer sucl        | $DEMO/waves/fd03_two_branch.sucl              |
+  | Log                | $DEMO/out/fd03_two_branch/fd03_two_branch.log |
+  | Waveform           | $DEMO/out/fd03_two_branch/fd03_two_branch.fst |
+  | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd03_two_branch.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd03_two_branch.sucl) |
 
 ---
 
-## 1. The program
+## 2. Run the scenario
+
+Run simulation:
+```
+make -C examples/fe_demo fd03_two_branch
+```
+
+View the waveform (runs simulation first if FST is not up to date):
+```
+make -C examples/fe_demo view S=fd03_two_branch
+```
+
+Console output:
+```
+-I: fd03_two_branch : PASS : cyc = 539
+```
+
+Log file output:
+```
+-I: fd03_two_branch: PASS, blocks with both slots valid at p1 78, at p2 74,
+    events checked 6 of 6, cyc 539
+```
+
+### 2.1 What the monitor counts
+
+The counts come from `tb/fe_demo_mon.svh:415-423`, taken inside the
+`meas` window.
+
+```
+n_two_p1   u_ftq.w_ok_pred_p1 && bpu_pred_slot_p1[0].slot_valid
+           && bpu_pred_slot_p1[1].slot_valid
+           a p1 prediction the FTQ accepted, both slots valid
+n_two_p2   u_ftq.w_ok_slot_p2 && bpu_slot_p2[0].slot_valid
+           && bpu_slot_p2[1].slot_valid
+           a p2 slot group the FTQ accepted, both slots valid
+```
+
+The proof (`tb/fe_demo_proofs.svh:55-59`) is
+`n_two_p1 + n_two_p2 > 0`. `tb_fe_demo.sv` also requires the whole
+stream to retire with no errors before it accepts the proof.
+
+### 2.2 Reading the numbers
+
+- The counts are of groups the FTQ accepted. X is executed once per
+  pass, 24 times, and shows 27 two-slot p2 groups; the count includes
+  repeated predictions of the same block.
+- The counters do not check the slot types. Of the 78 p1 groups (FST),
+  27 are X, 27 are Y, 21 are Y+8 and 3 are Y+6. The block at `top`
+  (0x80000008) holds only the JAL, and its entry, which is its own
+  since each block start has one (BP-140), has one slot.
+- Departure from `planning/showcase/fe_demo_scenarios.md` FD-3: the
+  program is "two conditional branches within one 32-byte block, in a
+  loop"; as built there are two such blocks, X (not taken, then taken)
+  and Y (alternating, then not taken). The proof "a block predicted
+  with both slots valid" is met by any two valid slots, including a
+  JAL in one of them, as the Y+6 and Y+8 counts show.
+
+---
+
+## 3. The program
 
 Source: `programs/fd03_two_branch.svh`, task `prog_fd03` (tb_fe_top's
 twocond). `X = RESET_VECTOR + 0x400`, `Y = RESET_VECTOR + 0x440`,
@@ -71,7 +140,9 @@ Y+16             jal x0,back                                 pos 8
 
 ---
 
-## 2. Why the program fills both slots
+## 4. Walkthrough
+
+### 4.1 Why the program fills both slots
 
 1. Two branch fields per entry. On the two-slot model a prediction
    block has `NUM_PRED_SLOTS` = 2 slots (`bp_defines_pkg.sv:65`), each a
@@ -111,47 +182,7 @@ taken: Y.c2 at its position 0 and the JAL to back at position 4. Y+6
 is the block fetched after the backend corrects a Y.c1 predicted
 taken: Y.c2 at its position 1 and the JAL at position 5.
 
----
-
-## 3. What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:415-423`, taken inside the
-`meas` window.
-
-```
-n_two_p1   u_ftq.w_ok_pred_p1 && bpu_pred_slot_p1[0].slot_valid
-           && bpu_pred_slot_p1[1].slot_valid
-           a p1 prediction the FTQ accepted, both slots valid
-n_two_p2   u_ftq.w_ok_slot_p2 && bpu_slot_p2[0].slot_valid
-           && bpu_slot_p2[1].slot_valid
-           a p2 slot group the FTQ accepted, both slots valid
-```
-
-The proof (`tb/fe_demo_proofs.svh:55-59`) is
-`n_two_p1 + n_two_p2 > 0`. `tb_fe_demo.sv` also requires the whole
-stream to retire with no errors before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- The counts are of groups the FTQ accepted. X is executed once per
-  pass, 24 times, and shows 27 two-slot p2 groups; the count includes
-  repeated predictions of the same block.
-- The counters do not check the slot types. Of the 78 p1 groups (FST),
-  27 are X, 27 are Y, 21 are Y+8 and 3 are Y+6. The block at `top`
-  (0x80000008) holds only the JAL, and its entry, which is its own
-  since each block start has one (BP-140), has one slot.
-- Departure from `planning/showcase/fe_demo_scenarios.md` FD-3: the
-  program is "two conditional branches within one 32-byte block, in a
-  loop"; as built there are two such blocks, X (not taken, then taken)
-  and Y (alternating, then not taken). The proof "a block predicted
-  with both slots valid" is met by any two valid slots, including a
-  JAL in one of them, as the Y+6 and Y+8 counts show.
-
----
-
-## 5. Waveform
+### 4.2 Reading the waveform
 
 The saved view is `waves/fd03_two_branch.sucl`, which `make view
 S=fd03_two_branch` opens in Surfer. Look at:
@@ -166,7 +197,7 @@ S=fd03_two_branch` opens in Surfer. Look at:
 
 ---
 
-## 6. Events
+## 5. Events
 
 | # | cyc | Event                                                                                              | Other                        |
 |---|-----|----------------------------------------------------------------------------------------------------|------------------------------|
@@ -176,3 +207,64 @@ S=fd03_two_branch` opens in Surfer. Look at:
 | 3 | 107 | first p2 group for Y with both slots: Y.c1 at position 1 and Y.c2 at position 4, both conditionals | accepted, FTB, Y 0x8000_0440 |
 | 4 | 529 | back edge falls through, a misprediction; redirect to 0x8000_0014                                  | pass 23                      |
 | 5 | 539 | the run ends                                                                                       |                              |
+
+---
+
+## 6. Waveform
+
+`make -C examples/fe_demo view S=fd03_two_branch` opens
+`waves/fd03_two_branch.sucl` in Surfer, with a marker at each event above.
+Signal paths below are under `tb.dut` unless they start with `tb.`.
+
+| group              | signal                            | description                                     |
+|--------------------|-----------------------------------|-------------------------------------------------|
+| clock              | `tb.clk`                          | clock                                           |
+|                    | `tb.rstn`                         | active low reset                                |
+|                    | `tb.cyc`                          | cycle number                                    |
+| bp_cluster_p1_ubtb | `bpu_pred_val_p1`                 | p1 prediction valid                             |
+|                    | `bpu_pred_idx_p1`                 | FTQ index of the p1 prediction                  |
+|                    | `u_bpu.r_ubtb_blk_p1.hit`         | uBTB hit at p1                                  |
+|                    | `bpu_pred_pft_p1`                 | p1 fetch block end, the first halfword after it |
+|                    | `bpu_pred_slot_p1.[0].slot_valid` | slot 0 holds a branch                           |
+|                    | `bpu_pred_slot_p1.[0].br_type`    | slot 0 branch type                              |
+|                    | `bpu_pred_slot_p1.[0].pos`        | slot 0 halfword position in the fetch block     |
+|                    | `bpu_pred_slot_p1.[0].taken`      | slot 0 predicted direction                      |
+|                    | `bpu_pred_slot_p1.[0].target`     | slot 0 predicted target                         |
+|                    | `bpu_pred_slot_p1.[0].pred_src`   | slot 0 predictor that supplied the direction    |
+|                    | `bpu_pred_slot_p1.[1].slot_valid` | slot 1 holds a branch                           |
+|                    | `bpu_pred_slot_p1.[1].br_type`    | slot 1 branch type                              |
+|                    | `bpu_pred_slot_p1.[1].pos`        | slot 1 halfword position in the fetch block     |
+|                    | `bpu_pred_slot_p1.[1].taken`      | slot 1 predicted direction                      |
+|                    | `bpu_pred_slot_p1.[1].target`     | slot 1 predicted target                         |
+|                    | `bpu_pred_slot_p1.[1].pred_src`   | slot 1 predictor that supplied the direction    |
+| bp_cluster_p2_ftb  | `u_bpu.r_val_p2`                  | p2 valid                                        |
+|                    | `bpu_slot_val_p2`                 | slot valid mask                                 |
+|                    | `bpu_slot_idx_p2`                 | FTQ index of the p2 group                       |
+|                    | `u_bpu.w_ftb_valid_p2`            | FTB hit at p2                                   |
+|                    | `bpu_slot_p2.[0].slot_valid`      | slot 0 holds a branch                           |
+|                    | `bpu_slot_p2.[0].br_type`         | slot 0 branch type                              |
+|                    | `bpu_slot_p2.[0].pos`             | slot 0 halfword position in the fetch block     |
+|                    | `bpu_slot_p2.[0].taken`           | slot 0 predicted direction                      |
+|                    | `bpu_slot_p2.[0].target`          | slot 0 predicted target                         |
+|                    | `bpu_slot_p2.[0].pred_src`        | slot 0 predictor that supplied the direction    |
+|                    | `bpu_slot_p2.[1].slot_valid`      | slot 1 holds a branch                           |
+|                    | `bpu_slot_p2.[1].br_type`         | slot 1 branch type                              |
+|                    | `bpu_slot_p2.[1].pos`             | slot 1 halfword position in the fetch block     |
+|                    | `bpu_slot_p2.[1].taken`           | slot 1 predicted direction                      |
+|                    | `bpu_slot_p2.[1].target`          | slot 1 predicted target                         |
+|                    | `bpu_slot_p2.[1].pred_src`        | slot 1 predictor that supplied the direction    |
+|                    | `bpu_redir_p2.[0].valid`          | p2 redirect from slot 0                         |
+|                    | `bpu_redir_p2.[0].target_pc`      | p2 redirect target from slot 0                  |
+|                    | `bpu_redir_p2.[1].valid`          | p2 redirect from slot 1                         |
+|                    | `bpu_redir_p2.[1].target_pc`      | p2 redirect target from slot 1                  |
+|                    | `bpu_redir_idx_p2`                | FTQ index of the p2 redirect                    |
+| ftq                | `u_ftq.w_ok_pred_p1`              | the FTQ accepts the p1 prediction               |
+|                    | `u_ftq.w_ok_slot_p2`              | the FTQ accepts the p2 group                    |
+|                    | `u_ftq.w_ok_slot_p3`              | the FTQ accepts the p3 group                    |
+|                    | `u_ftq.w_ok_redir_p2`             | the FTQ accepts the p2 redirect                 |
+|                    | `u_ftq.w_ok_redir_p3`             | the FTQ accepts the p3 redirect                 |
+|                    | `u_ftq.w_redir_val`               | a redirect the FTQ takes                        |
+|                    | `u_ftq.w_redir_idx`               | FTQ index of the redirect                       |
+|                    | `u_ftq.w_commit_ptr`              | FTQ commit pointer                              |
+|                    | `ftq_full`                        | FTQ full                                        |
+|                    | `ftq_empty`                       | FTQ empty                                       |

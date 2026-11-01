@@ -13,11 +13,25 @@ item_set_format Bit
 variable_add tb.cyc
 item_set_format Unsigned
 item_unfocus
+# group markers, from docs/fd24_call_slot1.md section 5
+marker_set c0_reset_released 36
+item_focus e
+group_marked markers
+item_focus f
+marker_set c19_predecode_redirect_to_0x8000_0400 225
+marker_set c40_first_return_mispredicted 435
+marker_set c51_back_edge_mispredicted 545
+marker_set c76_C_mispredicted_taken 795
+marker_set c90_first_RAS_push_from_slot_1 935
+marker_set c91_TOSR_1 945
+marker_set c261_back_edge_falls_through 2645
+marker_set c270_the_run_ends 2735
+item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus e
+item_focus o
 group_marked bp_cluster_p2
-item_focus f
+item_focus p
 item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
@@ -62,9 +76,9 @@ item_set_format Unsigned
 item_unfocus
 # group ras
 variable_add tb.dut.u_bpu.u_ras.tosr
-item_focus bk
+item_focus ce
 group_marked ras
-item_focus bl
+item_focus cf
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.tosw
 item_set_format Unsigned
@@ -99,9 +113,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus cl
+item_focus df
 group_marked ftq
-item_focus cm
+item_focus dg
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -124,9 +138,9 @@ item_set_format Bit
 item_unfocus
 # group ras_commit
 variable_add tb.dut.ras_commit_val
-item_focus dg
+item_focus ea
 group_marked ras_commit
-item_focus dh
+item_focus eb
 item_set_format Bit
 variable_add tb.dut.ras_commit_br_type
 item_set_format Enum
@@ -138,16 +152,5 @@ variable_add tb.dut.u_bpu.u_ras.commit_top_valid
 item_set_format Bit
 variable_add tb.dut.u_bpu.u_ras.commit_top_addr
 item_set_format Hexadecimal
-item_unfocus
-# markers, from docs/fd24_call_slot1.md section 4
-marker_set c0_reset_released 36
-marker_set c19_predecode_redirect_to_0x8000_0400 225
-marker_set c40_first_return_mispredicted 435
-marker_set c51_back_edge_mispredicted 545
-marker_set c76_C_mispredicted_taken 795
-marker_set c90_first_RAS_push_from_slot_1 935
-marker_set c91_TOSR_1 945
-marker_set c261_back_edge_falls_through 2645
-marker_set c270_the_run_ends 2735
 item_unfocus
 zoom_to 16 336
