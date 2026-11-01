@@ -24,6 +24,7 @@ theme:
     - navigation.indexes
     - search.suggest
     - search.highlight
+    - content.footnote.tooltips
 
 markdown_extensions:
   - admonition
@@ -32,6 +33,7 @@ markdown_extensions:
   - tables
   - pymdownx.details
   - pymdownx.superfences
+  - footnotes
 
 hooks:
   - tools/mkdocs_showcase.py

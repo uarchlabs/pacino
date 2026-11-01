@@ -162,21 +162,16 @@ walker, walker_mem. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | S-mode, Sv39       |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 4   | first walk: VPN 0x80000, the reset page,         |                    |
-|     | single-stage (`itlb_l2t_v` 0)                    |                    |
-| 46  | walk for C: VPN 0x80010, single-stage            |                    |
-| 67  | the CAS: the walker sets the A bit of C's leaf   | paddr 0x8F00_9080  |
-|     | (`ptw_mem_req_op` 1)                             |                    |
-| 73  | the walk for C answers PPN 0x81000               | status 0, hit      |
-| 91  | first nested walk: VPN 0x80010 with `itlb_l2t_v` | wrong path         |
-|     | 1, for a fetch younger than the ecall            |                    |
-| 92  | the ecall's trap redirect to V, 0x8005_0000      | backend            |
-| 168 | the nested walk for C ends with a fault, cause   | status 1           |
-|     | 12; nothing delivers it                          |                    |
-| 170 | walk for V: VPN 0x80050, nested                  |                    |
-| 267 | the walk for V answers PPN 0x81600               | status 0, hit      |
-| 285 | the run ends                                     |                    |
+| #  | cyc | Event                                                                                  | Other             |
+|----|-----|----------------------------------------------------------------------------------------|-------------------|
+| 0  | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                | S-mode, Sv39      |
+| 1  | 4   | first walk: VPN 0x80000, the reset page, single-stage (`itlb_l2t_v` 0)                 |                   |
+| 2  | 46  | walk for C: VPN 0x80010, single-stage                                                  |                   |
+| 3  | 67  | the CAS: the walker sets the A bit of C's leaf (`ptw_mem_req_op` 1)                    | paddr 0x8F00_9080 |
+| 4  | 73  | the walk for C answers PPN 0x81000                                                     | status 0, hit     |
+| 5  | 91  | first nested walk: VPN 0x80010 with `itlb_l2t_v` 1, for a fetch younger than the ecall | wrong path        |
+| 6  | 92  | the ecall's trap redirect to V, 0x8005_0000                                            | backend           |
+| 7  | 168 | the nested walk for C ends with a fault, cause 12; nothing delivers it                 | status 1          |
+| 8  | 170 | walk for V: VPN 0x80050, nested                                                        |                   |
+| 9  | 267 | the walk for V answers PPN 0x81600                                                     | status 0, hit     |
+| 10 | 285 | the run ends                                                                           |                   |

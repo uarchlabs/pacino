@@ -156,21 +156,14 @@ RTL: the slot-1 presentation is `w_ras_pred_val_p2[1]` in
 
 ## 4. Events
 
-| cyc | Event                                           | Other            |
-|-----|-------------------------------------------------|------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests    | fast init        |
-|     | 0x8000_0000 the same cycle                      |                  |
-| 19  | predecode redirect to 0x8000_0400: the call     | pass 0           |
-|     | found at F3, not yet known to the predictors    |                  |
-| 40  | first return mispredicted, cold; redirect to    | backend          |
-|     | 0x8000_0014                                     |                  |
-| 51  | back edge mispredicted, cold; redirect to       | backend          |
-|     | 0x8000_0008                                     |                  |
-| 76  | C mispredicted taken; redirect to 0x8000_000E   | backend          |
-| 90  | first RAS push from slot 1, behind C not taken; | counted          |
-|     | the first p2 group for top with both slots      |                  |
-| 91  | TOSR 1, TOSW 2; entry 1 holds 0x8000_0014;      | PRED_RAS         |
-|     | first return predicted from the RAS             |                  |
-| 261 | back edge falls through, a misprediction;       | pass 23          |
-|     | redirect to 0x8000_001E                         |                  |
-| 270 | the run ends                                    |                  |
+| # | cyc | Event                                                                                      | Other     |
+|---|-----|--------------------------------------------------------------------------------------------|-----------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                    | fast init |
+| 1 | 19  | predecode redirect to 0x8000_0400: the call found at F3, not yet known to the predictors   | pass 0    |
+| 2 | 40  | first return mispredicted, cold; redirect to 0x8000_0014                                   | backend   |
+| 3 | 51  | back edge mispredicted, cold; redirect to 0x8000_0008                                      | backend   |
+| 4 | 76  | C mispredicted taken; redirect to 0x8000_000E                                              | backend   |
+| 5 | 90  | first RAS push from slot 1, behind C not taken; the first p2 group for top with both slots | counted   |
+| 6 | 91  | TOSR 1, TOSW 2; entry 1 holds 0x8000_0014; first return predicted from the RAS             | PRED_RAS  |
+| 7 | 261 | back edge falls through, a misprediction; redirect to 0x8000_001E                          | pass 23   |
+| 8 | 270 | the run ends                                                                               |           |

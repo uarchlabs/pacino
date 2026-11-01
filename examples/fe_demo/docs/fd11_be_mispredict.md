@@ -154,21 +154,14 @@ S=fd11_be_mispredict` opens in Surfer. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 19  | first history rollback (`ftq_rollback_val`),     | a predecode        |
-|     | with its RAS restore (`ras_restore_val`)         | redirect           |
-| 20  | first misprediction of A taken; redirect to      | pass 0, backend    |
-|     | 0x8000_0010                                      |                    |
-| 49  | the return mispredicted; redirect to 0x8000_0014 | backend            |
-| 53  | fetch restarts at 0x8000_0014: the FTQ presents  | `ftq_ifu_start_pc` |
-|     | a block from the redirect address to the IFU     |                    |
-| 60  | the back edge mispredicted, cold; redirect to    | backend            |
-|     | 0x8000_0008                                      |                    |
-| 86  | first misprediction of A not taken; redirect to  | backend            |
-|     | 0x8000_000E                                      |                    |
-| 471 | the loop exits: the back edge falls through, a   | pass 31, backend   |
-|     | misprediction; redirect to 0x8000_001A           |                    |
-| 480 | the run ends                                     |                    |
+| # | cyc | Event                                                                                        | Other                |
+|---|-----|----------------------------------------------------------------------------------------------|----------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                      | fast init            |
+| 1 | 19  | first history rollback (`ftq_rollback_val`), with its RAS restore (`ras_restore_val`)        | a predecode redirect |
+| 2 | 20  | first misprediction of A taken; redirect to 0x8000_0010                                      | pass 0, backend      |
+| 3 | 49  | the return mispredicted; redirect to 0x8000_0014                                             | backend              |
+| 4 | 53  | fetch restarts at 0x8000_0014: the FTQ presents a block from the redirect address to the IFU | `ftq_ifu_start_pc`   |
+| 5 | 60  | the back edge mispredicted, cold; redirect to 0x8000_0008                                    | backend              |
+| 6 | 86  | first misprediction of A not taken; redirect to 0x8000_000E                                  | backend              |
+| 7 | 471 | the loop exits: the back edge falls through, a misprediction; redirect to 0x8000_001A        | pass 31, backend     |
+| 8 | 480 | the run ends                                                                                 |                      |

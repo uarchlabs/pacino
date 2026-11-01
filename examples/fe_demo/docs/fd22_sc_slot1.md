@@ -190,21 +190,15 @@ RTL: the SC hit for slot s is `w_sc_hit_p3[s]`, `bp_cluster.sv` lines
 
 ## 4. Events
 
-| cyc | Event                                           | Other            |
-|-----|-------------------------------------------------|------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests    | fast init        |
-|     | 0x8000_0000 the same cycle                      |                  |
-| 22  | first backend misprediction, the back edge;     | pass 0           |
-|     | redirect to 0x8000_0008                         |                  |
-| 45  | first p2 group for the block at top with both   | A slot 0, B      |
-|     | slots: A and B, `pred_src` PRED_TAGE            | slot 1           |
-| 46  | first p3 redirect: SC reverses A in slot 0      | to 0x8000_0014   |
-| 56  | A mispredicted; redirect to 0x8000_0012         | backend          |
-| 110 | first p3 redirect from slot 1: SC reverses B    | to 0x8000_001C   |
-|     | from not taken to taken                         |                  |
-| 114 | SC corrects TAGE's taken for B, provider T1     | to 0x8000_0028   |
-| 204 | last backend misprediction of B; redirect to    | backend          |
-|     | 0x8000_001A                                     |                  |
-| 358 | back edge falls through, a misprediction;       | pass 47          |
-|     | redirect to 0x8000_0030                         |                  |
-| 368 | the run ends                                    |                  |
+| # | cyc | Event                                                                              | Other              |
+|---|-----|------------------------------------------------------------------------------------|--------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle            | fast init          |
+| 1 | 22  | first backend misprediction, the back edge; redirect to 0x8000_0008                | pass 0             |
+| 2 | 45  | first p2 group for the block at top with both slots: A and B, `pred_src` PRED_TAGE | A slot 0, B slot 1 |
+| 3 | 46  | first p3 redirect: SC reverses A in slot 0                                         | to 0x8000_0014     |
+| 4 | 56  | A mispredicted; redirect to 0x8000_0012                                            | backend            |
+| 5 | 110 | first p3 redirect from slot 1: SC reverses B from not taken to taken               | to 0x8000_001C     |
+| 6 | 114 | SC corrects TAGE's taken for B, provider T1                                        | to 0x8000_0028     |
+| 7 | 204 | last backend misprediction of B; redirect to 0x8000_001A                           | backend            |
+| 8 | 358 | back edge falls through, a misprediction; redirect to 0x8000_0030                  | pass 47            |
+| 9 | 368 | the run ends                                                                       |                    |

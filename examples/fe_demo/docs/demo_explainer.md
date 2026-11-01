@@ -40,7 +40,8 @@ scenario list is found in `planning/showcase/fe_demo_scenarios.md`, numbered
 FD-1 to FD-24. Each scenario has an associated make target in
 `examples/fe_demo/Makefile`. The targets are of the form `fdNN_<name>`.
 
-A scenario has three files, the "program", the wave control file and the writeup:
+A scenario has three files, the "program", the wave control file and the
+writeup:
 
 - `programs/fdNN_<name>.svh`
     - contains the task `prog_fdNN` which populates the models memory
@@ -83,6 +84,26 @@ analysis.
 
 FD-3, FD-22, FD-23 and FD-24 run the dual prediction model.
 
+<a id="fast-init"></a>**Fast initialization.** The predictor tables need an
+initial value before they can predict. In the design, TAGE, ITTAGE and SC
+each walk their tables after reset, writing one entry per cycle, and raise a
+ready when the walk ends: ITTAGE at cyc 513, SC at cyc 1025 and TAGE at cyc
+2049 (FD-1). Until all three readies are high, the FTQ holds its p0 request
+(`u_ftq.u_npc.w_hold`).
+
+Every scenario except FD-1 skips the walk. The Makefile passes
+`+TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1` (`FE_FAST_INIT`,
+`rtl/core/frontend/fe_top/fe_top_srcs.mk`). With these, a SystemVerilog
+`initial` block in each table writes its initial values at time 0, and each
+predictor ties its ready to 1 (`tage.sv` line 333, and the same mux in
+`ittage.sv` and `sc.sv`).
+Prediction starts on the first cycle after reset instead of about 2048 cycles
+later.
+
+One effect shows in the waveforms: with the readies 1 from time 0,
+`ftq_pred_val_p0` is already 1 while `tb.rstn` is low. Nothing captures the
+request until reset is released, and the first p1 prediction is at cyc 1.
+
 ---
 
 ## <span style="color: var(--md-accent-fg-color)">2. The program writer</span>
@@ -114,9 +135,9 @@ each program with an instruction which jumps to itself, a halt.
 
 The memory image is written before reset is released.
 
-The writer appends each instruction to the expected execution list only if it executes.
-Instructions skipped by a taken branch are in the memory image but not in the
-execution list, and a loop appears in the list once per iteration.
+The writer appends each instruction to the expected execution list only if it
+executes. Instructions skipped by a taken branch are in the memory image but
+not in the execution list, and a loop appears in the list once per iteration.
 
 Each branch's direction is set by the program when it writes the branch.
 Register values are never computed (section 3), so a branch's comparison has
@@ -147,7 +168,8 @@ is also an entry. The entry type is `ex_t` in `models/fe_tb_writer.svh`.
 The backend is an abstract model. It does not execute instructions. The backend
 model accepts up to 8 instructions from the frontend via decoder port
 `tb.pd_out` and checks these instructions against the expected execution list
-and retires them in order.  The backend model raises `tb.dec_ibuf_rdy` when it is ready to accept more instructions.
+and retires them in order.  The backend model raises `tb.dec_ibuf_rdy` when it
+is ready to accept more instructions.
 
 A prediction determines which instruction the frontend fetches after a branch
 or jump. The model checks the prediction by comparing the next instruction

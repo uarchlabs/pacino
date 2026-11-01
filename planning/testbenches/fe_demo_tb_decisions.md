@@ -229,24 +229,28 @@ FDT-12c A Surfer file places one marker per event of the scenario's
        from two cycles before the first marker to thirty after it;
        Surfer 0.7 cannot open at a marker with goto_marker in a command
        file, which it parses before it runs. The table in
-       docs/<scenario>.md is the source: mk_sucl.py reads it, a row
-       with a cyc value starts an event and a row with an empty cyc
-       continues the one above. A marker is named c<cyc>_<label>, the
-       label being the event text up to its first ';', ':', ',' or '(',
-       at most six words, joined by '_'. The event table is the table
-       of the description's level-2 section headed Events, with or
-       without a section number, whether or not the description is in
-       the FDT-13 form (Jeff, session-082). A description is in the
-       FDT-13 form when its level-2 headings are the five of FDT-13, in
-       order, section 5 optional, after an optional leading
-       "0. Introduction" (Jeff, session-081, DOC-007). A description
-       with no Events section that cites no cycle as cyc <n> has no
-       events and no markers. A description that cites a cycle as
-       cyc <n> and has no Events section, or whose Events table
-       mk_sucl.py cannot read, stops the generator with an error naming
-       the file and row. A second Events section is an error. In a
-       description out of the FDT-13 form the Events section is the
-       last, numbered after the others (DOC-009: section 6).
+       docs/<scenario>.md is the source: mk_sucl.py reads it. Its rows
+       are | # | cyc | event | other |, one row per event; mk_sucl.py
+       still joins a row with an empty # and cyc onto the one above. #
+       is the event's marker number as Surfer shows it, 0 for the first
+       event: mk_sucl.py requires it to equal the event's position in
+       the table, and chk_sucl.py checks it against the number Surfer
+       assigns. A marker is named c<cyc>_<label>, the label being the
+       event text up to its first ';', ':', ',' or '(', at most six
+       words, joined by '_'. The event table is the table of the
+       description's level-2 section headed Events, with or without a
+       section number, whether or not the description is in the FDT-13
+       form (Jeff, session-082). A description is in the FDT-13 form
+       when its level-2 headings are the five of FDT-13, in order,
+       section 5 optional, after an optional leading "0. Introduction"
+       (Jeff, session-081, DOC-007). A description with no Events
+       section that cites no cycle as cyc <n> has no events and no
+       markers. A description that cites a cycle as cyc <n> and has no
+       Events section, or whose Events table mk_sucl.py cannot read,
+       stops the generator with an error naming the file and row. A
+       second Events section is an error. In a description out of the
+       FDT-13 form the Events section is the last, numbered after the
+       others (DOC-009: section 6).
 
 ---
 

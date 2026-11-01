@@ -170,19 +170,13 @@ opens in Surfer. Groups: clock, ftq_ifu, ifu_l1i, l1i. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 5   | first L1I miss (`b_mis_valid`), the cold line    |                    |
-|     | 0x8000_0000                                      |                    |
-| 26  | first L1I hit (`b_rsp_valid`)                    |                    |
-| 151 | the invalidate is done (`l1i_ifu_inv_done`): the |                    |
-|     | FENCE.I has made every line invalid              |                    |
-| 154 | the restart after the FENCE.I: a backend         | backend            |
-|     | redirect to 0x8000_0030, the next instruction    |                    |
-| 176 | the fourth call found at F3 after the restart;   | the last           |
-|     | predecode redirect to 0x8000_0830, X+0x30        |                    |
-| 183 | the merge: the predicted block at X requests     | the one merge      |
-|     | line X while its miss is in flight (`mrg_hit`)   |                    |
-| 214 | the run ends                                     |                    |
+| # | cyc | Event                                                                                       | Other         |
+|---|-----|---------------------------------------------------------------------------------------------|---------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                     | fast init     |
+| 1 | 5   | first L1I miss (`b_mis_valid`), the cold line 0x8000_0000                                   |               |
+| 2 | 26  | first L1I hit (`b_rsp_valid`)                                                               |               |
+| 3 | 151 | the invalidate is done (`l1i_ifu_inv_done`): the FENCE.I has made every line invalid        |               |
+| 4 | 154 | the restart after the FENCE.I: a backend redirect to 0x8000_0030, the next instruction      | backend       |
+| 5 | 176 | the fourth call found at F3 after the restart; predecode redirect to 0x8000_0830, X+0x30    | the last      |
+| 6 | 183 | the merge: the predicted block at X requests line X while its miss is in flight (`mrg_hit`) | the one merge |
+| 7 | 214 | the run ends                                                                                |               |

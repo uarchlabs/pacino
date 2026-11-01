@@ -467,6 +467,11 @@ def scenarios(n):
                  D + '.ftb_upd_pos_u0', D + '.ftb_upd_is_br_u0',
                  D + '.ftb_upd_is_jmp_u0', D + '.ftb_upd_hit_u0',
                  FC + '.upd_split', FC + '.upd_cut_pos']
+    # fd09: bpu_p2 with the p2 block's start and end, which the
+    # description's fetch block figure (docs/fd09_blocks.svg) is read
+    # from. A copy, so the other scenarios' lists are unchanged.
+    bpu_p2_blk = bpu_p2[:1] + [B + '.r_pc_p2', D + '.bpu_blk_pft_p2'] + \
+        bpu_p2[1:]
 
     return [
         ('fd01_reset_init', [('clock', clk), ('tage_init', tage_init),
@@ -497,8 +502,9 @@ def scenarios(n):
                                 ('ftq', ftq), ('ras_commit', ras_cmt)]),
         ('fd08_indirect', [('clock', clk), ('ittage_p2', itt_p2),
                            ('bp_cluster_p2', bpu_p2), ('ftq', ftq)]),
-        ('fd09_tage', [('clock', clk), ('tage_p2', tage_p2),
-                       ('bp_cluster_p2', bpu_p2), ('backend', be_redir),
+        ('fd09_tage', [('clock', clk), ('bp_cluster_p0', bpu_p0),
+                       ('tage_p2', tage_p2),
+                       ('bp_cluster_p2', bpu_p2_blk), ('backend', be_redir),
                        ('ftq_upd_conv', upd_pc), ('tage_update', tage_upd)]),
         ('fd10_pd_redirect', [('clock', clk), ('ftq_ifu', ftq_ifu),
                               ('ifu_f3', ifu_f3), ('ftq', ftq),

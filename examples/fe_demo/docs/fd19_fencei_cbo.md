@@ -180,28 +180,18 @@ S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 71-79 and
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 71  | the FENCE.I reaches the L1I: it takes the        | `mt_busy_any` 0    |
-|     | invalidate of every line (`ifu_l1i_inv_all`)     |                    |
-| 74  | first invalidate done (`l1i_ifu_inv_done`)       | after M_DRAIN,     |
-|     |                                                  | M_CLEAR            |
-| 75  | first maintenance acknowledgement                |                    |
-|     | (`ifu_cmt_maint_ack`)                            |                    |
-| 77  | the restart after the FENCE.I: a backend         | backend            |
-|     | redirect to 0x8000_0024, cause RC_REPLAY         |                    |
-| 79  | fetch starts at 0x8000_0024, the next            | `ftq_ifu_start_pc` |
-|     | instruction                                      |                    |
-| 174 | the branch at 0x8000_0040 mispredicted; redirect | backend            |
-|     | to 0x8000_0046, the cbo.inval                    |                    |
-| 184 | the cbo.inval reaches the L1I: it takes the      | `mt_busy_line` 0   |
-|     | invalidate of line 0x8000_0C40                   |                    |
-| 187 | second invalidate done                           |                    |
-| 188 | second maintenance acknowledgement               |                    |
-| 190 | the restart after the cbo.inval: a backend       | backend            |
-|     | redirect to 0x8000_004A, cause RC_REPLAY         |                    |
-| 192 | fetch starts at 0x8000_004A, the next            |                    |
-|     | instruction                                      |                    |
-| 235 | the run ends                                     |                    |
+| #  | cyc | Event                                                                                  | Other                  |
+|----|-----|----------------------------------------------------------------------------------------|------------------------|
+| 0  | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                | fast init              |
+| 1  | 71  | the FENCE.I reaches the L1I: it takes the invalidate of every line (`ifu_l1i_inv_all`) | `mt_busy_any` 0        |
+| 2  | 74  | first invalidate done (`l1i_ifu_inv_done`)                                             | after M_DRAIN, M_CLEAR |
+| 3  | 75  | first maintenance acknowledgement (`ifu_cmt_maint_ack`)                                |                        |
+| 4  | 77  | the restart after the FENCE.I: a backend redirect to 0x8000_0024, cause RC_REPLAY      | backend                |
+| 5  | 79  | fetch starts at 0x8000_0024, the next instruction                                      | `ftq_ifu_start_pc`     |
+| 6  | 174 | the branch at 0x8000_0040 mispredicted; redirect to 0x8000_0046, the cbo.inval         | backend                |
+| 7  | 184 | the cbo.inval reaches the L1I: it takes the invalidate of line 0x8000_0C40             | `mt_busy_line` 0       |
+| 8  | 187 | second invalidate done                                                                 |                        |
+| 9  | 188 | second maintenance acknowledgement                                                     |                        |
+| 10 | 190 | the restart after the cbo.inval: a backend redirect to 0x8000_004A, cause RC_REPLAY    | backend                |
+| 11 | 192 | fetch starts at 0x8000_004A, the next instruction                                      |                        |
+| 12 | 235 | the run ends                                                                           |                        |

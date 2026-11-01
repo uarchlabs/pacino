@@ -178,25 +178,17 @@ ifu_fault, decode, backend. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | S-mode, Sv39       |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 90  | walk for VPN 0x80400, the page of tgt(0),        | nothing mapped     |
-|     | single-stage                                     |                    |
-| 104 | the walker answers a page fault, cause 12        | status 1           |
-| 108 | the page fault reaches decode: lane 0 at         |                    |
-|     | 0x8040_0010, `fault_cause` IFU_FAULT_PAGE        |                    |
-| 166 | walk for VPN 0x80600, the page of tgt(1)         |                    |
-| 187 | the walker answers a hit, PPN 0x81400; the       | status 0           |
-|     | ITLB's PMP check refuses it                      |                    |
-| 191 | the access fault reaches decode: lane 0 at       |                    |
-|     | 0x8060_0010, IFU_FAULT_ACCESS                    |                    |
-| 202 | the ecall's trap redirect to V, 0x8005_0000      | backend            |
-| 399 | walk for VPN 0x80800, the page of tgt(2), with   | nested             |
-|     | `itlb_l2t_v` 1                                   |                    |
-| 490 | the walker answers cause 20, a guest-page fault: | status 1           |
-|     | the G-stage does not map GPA 0x2000_0000         |                    |
-| 494 | the third fault reaches decode: lane 0 at        |                    |
-|     | 0x8080_0010, IFU_FAULT_GUEST_PAGE                |                    |
-| 700 | the run ends                                     |                    |
+| #  | cyc | Event                                                                                     | Other          |
+|----|-----|-------------------------------------------------------------------------------------------|----------------|
+| 0  | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                   | S-mode, Sv39   |
+| 1  | 90  | walk for VPN 0x80400, the page of tgt(0), single-stage                                    | nothing mapped |
+| 2  | 104 | the walker answers a page fault, cause 12                                                 | status 1       |
+| 3  | 108 | the page fault reaches decode: lane 0 at 0x8040_0010, `fault_cause` IFU_FAULT_PAGE        |                |
+| 4  | 166 | walk for VPN 0x80600, the page of tgt(1)                                                  |                |
+| 5  | 187 | the walker answers a hit, PPN 0x81400; the ITLB's PMP check refuses it                    | status 0       |
+| 6  | 191 | the access fault reaches decode: lane 0 at 0x8060_0010, IFU_FAULT_ACCESS                  |                |
+| 7  | 202 | the ecall's trap redirect to V, 0x8005_0000                                               | backend        |
+| 8  | 399 | walk for VPN 0x80800, the page of tgt(2), with `itlb_l2t_v` 1                             | nested         |
+| 9  | 490 | the walker answers cause 20, a guest-page fault: the G-stage does not map GPA 0x2000_0000 | status 1       |
+| 10 | 494 | the third fault reaches decode: lane 0 at 0x8080_0010, IFU_FAULT_GUEST_PAGE               |                |
+| 11 | 700 | the run ends                                                                              |                |

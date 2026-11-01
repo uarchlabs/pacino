@@ -36,6 +36,13 @@
     demo_go(200000);
   endtask
 
+  // The console line (console(), tb_fe_demo.sv): the verdict and the
+  // cycle count only; the full result line stays in the log.
+  function automatic void fd09_console(input logic pass, input int c);
+    $fdisplay(FD_STDERR, "-%s: fd09_tage : %s : cyc = %0d",
+              pass ? "I" : "E", pass ? "PASS" : "FAIL", c);
+  endfunction
+
   // =================================================================
   // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
   // the Events table of docs/fd09_tage.md, in table order. The block

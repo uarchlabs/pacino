@@ -39,7 +39,7 @@
 #     of the FDT-13 form (DOC-009), none when it has no such section; in
 #     table order, each named c<cyc>_<label>, at a time where the FST has
 #     tb.cyc equal to <cyc> with tb.rstn high and did not have it just
-#     before (FDT-12c)
+#     before (FDT-12c), and numbered by Surfer as the row's # column
 #   - the view: zoomed in and holding the first marker; the whole run
 #     when there are no markers
 import os
@@ -84,10 +84,11 @@ def enum_paths(fst):
     return paths
 
 
-# The cyc values of the events in docs/<s>.md's Events section (its
+# The (#, cyc) values of the events in docs/<s>.md's Events section (its
 # level-2 heading "Events", numbered or not; FDT-12c, DOC-009), in table
 # order, up to the next level-1 or level-2 heading; [] when the
-# description is absent or has no such section.
+# description is absent or has no such section. # is the row's marker
+# number, the first column.
 def event_cycs(scen):
     path = os.path.join(DOCS, scen + '.md')
     if not os.path.exists(path):
@@ -97,7 +98,8 @@ def event_cycs(scen):
     if not m:
         return []
     sec = re.split(r'^#{1,2} ', text[m.end():], maxsplit=1, flags=re.M)[0]
-    return [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', sec, re.M)]
+    return [(int(n), int(c)) for n, c in
+            re.findall(r'^\|\s*(\d+)\s*\|\s*(\d+)\s*\|', sec, re.M)]
 
 
 # A BigInt as the saved state writes it: (sign, [32-bit digits]).
@@ -140,7 +142,8 @@ def state(text):
             nm = re.search(r'name: Some\("([^"]*)"\)', body)
             idx = re.search(r'idx: (\d+)', body).group(1)
             items[m.group(1)] = ('Marker', (nm.group(1) if nm else None,
-                                            mk.get(idx)), None, None)
+                                            mk.get(idx), int(idx)),
+                                 None, None)
         else:
             nm = re.search(r'name: "([^"]*)"', body)
             items[m.group(1)] = (m.group(2), nm.group(1) if nm else '',
@@ -189,9 +192,13 @@ def check_markers(scen, fst, got, view):
                     % (len(mk), scen, len(cycs)))
     v = fst_values(fst, ['tb.rstn', 'tb.cyc'])
     end = v['tb.cyc'][-1][0]
-    for (name, t), c in zip(mk, cycs):
+    for (name, t, idx), (num, c) in zip(mk, cycs):
         if not name or not re.fullmatch(r'c%d_\w+' % c, name):
             errs.append('marker %s: name is not c%d_<label>' % (name, c))
+        # the table's # column is the number Surfer shows on the marker
+        if idx != num:
+            errs.append('marker %s: Surfer number %d, docs/%s.md # %d'
+                        % (name, idx, scen, num))
         if t is None:
             errs.append('marker %s: no time' % name)
             continue

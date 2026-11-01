@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="576" viewBox="0 0 1100 576">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="1100" height="576" fill="#ffffff"/>
+
+<!-- title -->
+<text x="30" y="40" class="sans" font-size="22" font-weight="bold" fill="#1f2328">pacino TAGE: one tagged table entry (T1-T4)</text>
+<text x="30" y="62" class="sans" font-size="12" fill="#59636e">tage_table.sv entry layout, bit 0 = LSB. Widths from bp_defines_pkg.sv TAGE_TBL_TAG, _EPC, _USE, _CTR. ALLOC_DATA_WIDTH = 16.</text>
+
+<!-- bit numbers: bit b is centered at x = 110 + (15 - b) * 52 -->
+<g class="mono" font-size="11" fill="#59636e" text-anchor="middle">
+<text x="110" y="112">15</text><text x="162" y="112">14</text><text x="214" y="112">13</text><text x="266" y="112">12</text>
+<text x="318" y="112">11</text><text x="370" y="112">10</text><text x="422" y="112">9</text><text x="474" y="112">8</text>
+<text x="526" y="112">7</text><text x="578" y="112">6</text><text x="630" y="112">5</text><text x="682" y="112">4</text>
+<text x="734" y="112">3</text><text x="786" y="112">2</text><text x="838" y="112">1</text><text x="890" y="112">0</text>
+</g>
+
+<!-- bit cells -->
+<g fill="none" stroke="#8c959f" stroke-width="1">
+<rect x="84" y="120" width="832" height="16"/>
+<line x1="136" y1="120" x2="136" y2="136"/><line x1="188" y1="120" x2="188" y2="136"/>
+<line x1="240" y1="120" x2="240" y2="136"/><line x1="292" y1="120" x2="292" y2="136"/>
+<line x1="344" y1="120" x2="344" y2="136"/><line x1="396" y1="120" x2="396" y2="136"/>
+<line x1="448" y1="120" x2="448" y2="136"/><line x1="500" y1="120" x2="500" y2="136"/>
+<line x1="552" y1="120" x2="552" y2="136"/><line x1="604" y1="120" x2="604" y2="136"/>
+<line x1="656" y1="120" x2="656" y2="136"/><line x1="708" y1="120" x2="708" y2="136"/>
+<line x1="760" y1="120" x2="760" y2="136"/><line x1="812" y1="120" x2="812" y2="136"/>
+<line x1="864" y1="120" x2="864" y2="136"/>
+</g>
+
+<!-- fields -->
+<rect x="84"  y="136" width="416" height="64" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="500" y="136" width="104" height="64" fill="#ebe0f5" stroke="#6f4f99" stroke-width="1.5"/>
+<rect x="604" y="136" width="104" height="64" fill="#dcefdc" stroke="#3f7f45" stroke-width="1.5"/>
+<rect x="708" y="136" width="156" height="64" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<rect x="864" y="136" width="52"  height="64" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5"/>
+
+<g class="sans" font-size="16" font-weight="bold" fill="#1f2328" text-anchor="middle">
+<text x="292" y="164">TAG</text><text x="552" y="164">EPC</text><text x="656" y="164">USE</text>
+<text x="786" y="164">CTR</text><text x="890" y="164">VAL</text>
+</g>
+<g class="mono" font-size="11" fill="#1f2328" text-anchor="middle">
+<text x="292" y="186">[15:8]  8 b</text><text x="552" y="186">[7:6]  2 b</text>
+<text x="656" y="186">[5:4]  2 b</text><text x="786" y="186">[3:1]  3 b</text>
+<text x="890" y="186">[0]</text>
+</g>
+
+<!-- field descriptions -->
+<g class="sans" font-size="12" fill="#1f2328">
+<rect x="30" y="232" width="14" height="14" fill="#dbe9f7" stroke="#3b6ea5"/>
+<text x="54" y="244" font-weight="bold">TAG</text>
+<text x="110" y="244">Partial tag. tag = (pc &gt;&gt; THIS_INDEX_BITS) ^ fh1 ^ (fh2 &lt;&lt; 1), low THIS_TAG_BITS bits, computed at p0.</text>
+<text x="110" y="260">fh1 and fh2 are folded histories from the history module, bp_history.sv. A tag match makes the entry</text>
+<text x="110" y="276">a candidate primary (longest history) or alternate prediction.</text>
+
+<rect x="30" y="298" width="14" height="14" fill="#ebe0f5" stroke="#6f4f99"/>
+<text x="54" y="310" font-weight="bold">EPC</text>
+<text x="110" y="310">Epoch in which USE was written. age = (lcl_epoch[s] - EPC) mod 4; lcl_epoch[s] increments each</text>
+<text x="110" y="326">tage_aging_interval TAGE answers when aging is enabled (tage_cntrl.sv aging_ff).</text>
+
+<rect x="30" y="348" width="14" height="14" fill="#dcefdc" stroke="#3f7f45"/>
+<text x="54" y="360" font-weight="bold">USE</text>
+<text x="110" y="360">Useful counter, aged by EPC: u_eff = USE at age 0, USE &gt;&gt; 1 at age 1, 0 at age 2 or more (ueff_p1).</text>
+<text x="110" y="376">An allocation may replace an entry whose u_eff is 0.</text>
+
+<rect x="30" y="398" width="14" height="14" fill="#f7ead2" stroke="#a0702a"/>
+<text x="54" y="410" font-weight="bold">CTR</text>
+<text x="110" y="410">Prediction counter. MSB = predicted direction, lower bits = confidence.</text>
+<text x="110" y="426">3'b100 is the weakest taken value, 3'b011 the weakest not-taken value.</text>
+
+<rect x="30" y="448" width="14" height="14" fill="#f2f3f5" stroke="#8c959f"/>
+<text x="54" y="460" font-weight="bold">VAL</text>
+<text x="110" y="460">Entry valid. 0 after the init walk: the tagged tables are written with TAGE_SRAM_INIT_VALUE = 0.</text>
+</g>
+
+<!-- footer -->
+<line x1="30" y1="492" x2="1070" y2="492" stroke="#8c959f" stroke-width="1"/>
+<g class="sans" font-size="11" fill="#59636e">
+<text x="30" y="512">Each of T1-T4 holds 2048 entries in 2 banks (TAGE_TBL_ENTRIES, TAGE_TBL_BANKS), one RAM per prediction slot (g_slot[s].u_ram).</text>
+<text x="30" y="528">T0 is untagged: a 2-bit counter per entry and no TAG, EPC, USE or VAL (tage_bim.sv, TAGE_TBL_CTR[0] = 2).</text>
+<text x="30" y="544">Sources: rtl/core/frontend/bpu/rtl/tage_table.sv lines 15-23 and 102-111; bp_defines_pkg.sv lines 377-387 and 405-418;</text>
+<text x="30" y="560">tage_cntrl.sv lines 397-423.</text>
+</g>
+</svg>

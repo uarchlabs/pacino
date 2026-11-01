@@ -140,17 +140,11 @@ S=fd20_backpressure` opens in Surfer. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 18  | decode first holds a bundle: `pd_out.[0].valid`  | decode stall       |
-|     | with `dec_ibuf_rdy` low                          |                    |
-| 71  | the instruction buffer first refuses the IFU:    | buffer full        |
-|     | `ifu_ibuf_val` with `ibuf_ifu_rdy` low,          |                    |
-|     | `r_count` 52                                     |                    |
-| 138 | the FTQ first full (`ftq_full`); the p0 request  | FTQ full           |
-|     | is withheld                                      |                    |
-| 526 | back edge falls through, a misprediction;        | pass 39, backend   |
-|     | redirect to 0x8000_004A                          |                    |
-| 537 | the run ends                                     |                    |
+| # | cyc | Event                                                                                              | Other            |
+|---|-----|----------------------------------------------------------------------------------------------------|------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                            | fast init        |
+| 1 | 18  | decode first holds a bundle: `pd_out.[0].valid` with `dec_ibuf_rdy` low                            | decode stall     |
+| 2 | 71  | the instruction buffer first refuses the IFU: `ifu_ibuf_val` with `ibuf_ifu_rdy` low, `r_count` 52 | buffer full      |
+| 3 | 138 | the FTQ first full (`ftq_full`); the p0 request is withheld                                        | FTQ full         |
+| 4 | 526 | back edge falls through, a misprediction; redirect to 0x8000_004A                                  | pass 39, backend |
+| 5 | 537 | the run ends                                                                                       |                  |

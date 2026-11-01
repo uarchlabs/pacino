@@ -46,6 +46,8 @@ read_pass
 need_run=0
 for r in "${refs[@]}"; do
   sha=${r##* }
+  # An annotated tag pushes its tag object; compare the commit it names
+  sha=$(git rev-parse "${sha}^{commit}") || exit 1
   [ "$sha" = "$pass_sha" ] && continue
   if [ "$sha" != "$HEAD_SHA" ]; then
     echo "pre-push: ${r% *} ($sha) is not HEAD; the regression tests HEAD."

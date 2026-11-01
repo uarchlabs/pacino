@@ -183,27 +183,17 @@ block end is `w_pft_p2` in `bp_cluster.sv`; the monitor is
 
 ## 4. Events
 
-| cyc | Event                                           | Other            |
-|-----|-------------------------------------------------|------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests    | fast init        |
-|     | 0x8000_0000 the same cycle                      |                  |
-| 19  | predecode redirect to 0x8000_0400: J found at   | pass 0           |
-|     | F3, not yet known to the predictors             |                  |
-| 41  | first backend misprediction, the back edge;     | pass 0           |
-|     | redirect to 0x8000_0008                         |                  |
-| 52  | FTB entry for top allocated with C1; C2 added   | `ftb_update`     |
-|     | at cyc 53                                       |                  |
-| 56  | first p2 group for top: C1 and C2 in slots 0    | predicted taken  |
-|     | and 1, end 0x8000_0028                          |                  |
-| 57  | SC reverses both at p3; redirect to 0x8000_0028 | p3 redirect      |
-| 65  | J resolved from top: the split, `upd_split` 1,  | `upd_cut_pos` 7  |
-|     | the entry ends at 0x8000_0016                   |                  |
-| 71  | first p2 group for top ending at 0x8000_0016,   | counted,         |
-|     | C1 and C2 not taken, `w_cut_p2` 0               | `n_jmp_end`      |
-| 91  | FTB entry for 0x8000_0016 allocated with J at   | `ftb_update`     |
-|     | position 0                                      |                  |
-| 98  | the block at 0x8000_0016 predicts J in slot 0,  | counted,         |
-|     | taken, to 0x8000_0400                           | `n_jmp_next`     |
-| 234 | back edge falls through, a misprediction;       | pass 23          |
-|     | redirect to 0x8000_040A                         |                  |
-| 244 | the run ends                                    |                  |
+| #  | cyc | Event                                                                             | Other                 |
+|----|-----|-----------------------------------------------------------------------------------|-----------------------|
+| 0  | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle           | fast init             |
+| 1  | 19  | predecode redirect to 0x8000_0400: J found at F3, not yet known to the predictors | pass 0                |
+| 2  | 41  | first backend misprediction, the back edge; redirect to 0x8000_0008               | pass 0                |
+| 3  | 52  | FTB entry for top allocated with C1; C2 added at cyc 53                           | `ftb_update`          |
+| 4  | 56  | first p2 group for top: C1 and C2 in slots 0 and 1, end 0x8000_0028               | predicted taken       |
+| 5  | 57  | SC reverses both at p3; redirect to 0x8000_0028                                   | p3 redirect           |
+| 6  | 65  | J resolved from top: the split, `upd_split` 1, the entry ends at 0x8000_0016      | `upd_cut_pos` 7       |
+| 7  | 71  | first p2 group for top ending at 0x8000_0016, C1 and C2 not taken, `w_cut_p2` 0   | counted, `n_jmp_end`  |
+| 8  | 91  | FTB entry for 0x8000_0016 allocated with J at position 0                          | `ftb_update`          |
+| 9  | 98  | the block at 0x8000_0016 predicts J in slot 0, taken, to 0x8000_0400              | counted, `n_jmp_next` |
+| 10 | 234 | back edge falls through, a misprediction; redirect to 0x8000_040A                 | pass 23               |
+| 11 | 244 | the run ends                                                                      |                       |

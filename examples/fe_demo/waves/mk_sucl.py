@@ -52,8 +52,10 @@
 # section number ("## 4. Events", "## Events"), whether or not the
 # description is in the FDT-13 form (Jeff, session-082, DOC-009). The
 # section ends at the next level-1 or level-2 heading. The table's rows
-# are | cyc | event | other |; a row with a cyc value starts an event and
-# a row with an empty cyc continues the one above. Each event is a
+# are | # | cyc | event | other |; a row with a cyc value starts an event
+# and a row with an empty # and cyc continues the one above. # is the
+# event's marker number as Surfer shows it, 0 for the first event, and
+# must equal the event's position in the table. Each event is a
 # marker
 #   marker_set c<cyc>_<label> <time>
 # <label> is the event text up to its first ';', ':', ',' or '(',
@@ -141,24 +143,32 @@ def events(path):
         if not ln.endswith('|'):
             raise TableError('row does not end in |', n)
         c = [x.strip() for x in ln[1:-1].split('|')]
-        if len(c) != 3:
-            raise TableError('%d columns, not 3' % len(c), n)
+        if len(c) != 4:
+            raise TableError('%d columns, not 4' % len(c), n)
         return c
 
     if len(rows) < 3:
         raise TableError('no event table in the Events section', start)
     head = cells(*rows[0])
-    if head[0] != 'cyc':
-        raise TableError('column 0 is "%s", not "cyc"' % head[0], rows[0][0])
+    if head[:2] != ['#', 'cyc']:
+        raise TableError('columns 0 and 1 are "%s" and "%s", not "#" and '
+                         '"cyc"' % tuple(head[:2]), rows[0][0])
     if not all(re.fullmatch(r':?-+:?', c) for c in cells(*rows[1])):
         raise TableError('no separator row under the header', rows[1][0])
     ev = []
     for n, ln in rows[2:]:
-        cyc, text, _ = cells(n, ln)
+        mnum, cyc, text, _ = cells(n, ln)
         if cyc:
             if not re.fullmatch(r'\d+', cyc):
                 raise TableError('cyc "%s" is not a number' % cyc, n)
+            # the marker number: Surfer numbers the markers from 0 in the
+            # order marker_set creates them, which is table order
+            if mnum != str(len(ev)):
+                raise TableError('# is "%s", not %d, the marker number'
+                                 % (mnum, len(ev)), n)
             ev.append([n, int(cyc), text])
+        elif mnum:
+            raise TableError('# "%s" on a continuation row' % mnum, n)
         elif not ev:
             raise TableError('a continuation row before any event', n)
         else:

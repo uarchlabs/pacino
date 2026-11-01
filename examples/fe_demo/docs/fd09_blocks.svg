@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="640" viewBox="0 0 1060 640">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="1060" height="640" fill="#ffffff"/>
+<text x="30" y="40" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd09_tage: the loop's fetch blocks and branch positions</text>
+<text x="30" y="62" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One cell per halfword. The numbers in a fetch block are positions: halfwords from the block start. NUM_PRED_SLOTS = 1. Read from out/fd09_tage/fd09_tage.fst at p2.</text>
+<text x="50" y="86" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">address 0x8000_00xx, the low byte of each halfword:</text>
+<text x="70" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">08</text>
+<text x="110" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">0A</text>
+<text x="150" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">0C</text>
+<text x="190" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">0E</text>
+<text x="230" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">10</text>
+<text x="270" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">12</text>
+<text x="310" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">14</text>
+<text x="350" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">16</text>
+<text x="390" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">18</text>
+<text x="430" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">1A</text>
+<text x="470" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">1C</text>
+<text x="510" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">1E</text>
+<text x="550" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">20</text>
+<text x="590" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">22</text>
+<text x="630" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">24</text>
+<text x="670" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">26</text>
+<text x="710" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">28</text>
+<text x="750" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">2A</text>
+<text x="790" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">2C</text>
+<text x="830" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">2E</text>
+<text x="870" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">30</text>
+<text x="910" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">32</text>
+<text x="950" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">34</text>
+<text x="990" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">36</text>
+<rect x="50" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="70" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="70" y="136" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">top</text>
+<rect x="90" y="108" width="80" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="130" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<rect x="170" y="108" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="210" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">bne</text>
+<text x="210" y="136" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">B</text>
+<rect x="250" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="270" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="270" y="136" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">ft</text>
+<rect x="290" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="310" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="310" y="136" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">dest</text>
+<rect x="330" y="108" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="370" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">bne</text>
+<text x="370" y="136" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">BE</text>
+<rect x="410" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="430" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<rect x="450" y="108" width="80" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="490" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<rect x="530" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="550" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<rect x="570" y="108" width="80" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="610" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">jal x0, hold</text>
+<text x="610" y="136" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">hold</text>
+<rect x="650" y="108" width="360" height="34" fill="#f2f3f5" stroke="#8c959f" stroke-dasharray="4 3"/>
+<text x="830" y="129" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">not part of the program</text>
+<text x="50" y="160" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Labels as in the section 3 listing. Loop body top to BE, epilogue from 0x8000_001A. B targets dest, BE targets top.</text>
+<line x1="330" y1="168" x2="330" y2="534" stroke="#8c959f" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="334" y="178" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">BE, 0x8000_0016: the split</text>
+<text x="50" y="204" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">top, before the split</tspan> (cyc 23, FTB miss): a 32-byte fetch block, 0x8000_0008 to 0x8000_0028. B at position 3, BE at 7.</text>
+<rect x="50" y="212" width="640" height="34" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect x="170" y="212" width="80" height="34" fill="#f7ead2" stroke="#a0702a"/>
+<text x="210" y="241" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">B</text>
+<rect x="330" y="212" width="80" height="34" fill="#f7ead2" stroke="#a0702a"/>
+<text x="370" y="241" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">BE</text>
+<text x="70" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<line x1="90" y1="212" x2="90" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="110" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<line x1="130" y1="212" x2="130" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="150" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="170" y1="212" x2="170" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="190" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<text x="230" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="250" y1="212" x2="250" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="270" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<line x1="290" y1="212" x2="290" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="310" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<line x1="330" y1="212" x2="330" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="350" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<text x="390" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<line x1="410" y1="212" x2="410" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="430" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<line x1="450" y1="212" x2="450" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="470" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<line x1="490" y1="212" x2="490" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="510" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<line x1="530" y1="212" x2="530" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="550" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<line x1="570" y1="212" x2="570" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="590" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<line x1="610" y1="212" x2="610" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="630" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<line x1="650" y1="212" x2="650" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="670" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<text x="50" y="276" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">top, after the split</tspan> (FTB hit from cyc 34, 349 p2 cycles): 0x8000_0008 to 0x8000_0016. Slot 0 is B, position 3.</text>
+<rect x="50" y="284" width="280" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="170" y="284" width="80" height="34" fill="#f7ead2" stroke="#a0702a"/>
+<text x="210" y="313" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">B</text>
+<text x="70" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<line x1="90" y1="284" x2="90" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="110" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<line x1="130" y1="284" x2="130" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="150" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="170" y1="284" x2="170" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="190" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<text x="230" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="250" y1="284" x2="250" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="270" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<line x1="290" y1="284" x2="290" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="310" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<text x="50" y="348" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">ft</tspan>, after a backend redirect for B resolved not taken (FTB hit from cyc 127, 14 p2 cycles): 0x8000_0012 to 0x8000_0032. Slot 0 is BE, position 2.</text>
+<rect x="250" y="356" width="640" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="330" y="356" width="80" height="34" fill="#f7ead2" stroke="#a0702a"/>
+<text x="370" y="385" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">BE</text>
+<text x="270" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<line x1="290" y1="356" x2="290" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="310" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<line x1="330" y1="356" x2="330" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="350" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<text x="390" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<line x1="410" y1="356" x2="410" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="430" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="450" y1="356" x2="450" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="470" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<line x1="490" y1="356" x2="490" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="510" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<line x1="530" y1="356" x2="530" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="550" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<line x1="570" y1="356" x2="570" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="590" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<line x1="610" y1="356" x2="610" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="630" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<line x1="650" y1="356" x2="650" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="670" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<line x1="690" y1="356" x2="690" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="710" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<line x1="730" y1="356" x2="730" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="750" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<line x1="770" y1="356" x2="770" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="790" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<line x1="810" y1="356" x2="810" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="830" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<line x1="850" y1="356" x2="850" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="870" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<text x="50" y="420" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">dest</tspan>, B taken (FTB hit from cyc 88, 55 p2 cycles): 0x8000_0014 to 0x8000_0034. Slot 0 is BE, position 1.</text>
+<rect x="290" y="428" width="640" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="330" y="428" width="80" height="34" fill="#f7ead2" stroke="#a0702a"/>
+<text x="370" y="457" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">BE</text>
+<text x="310" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<line x1="330" y1="428" x2="330" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="350" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<text x="390" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="410" y1="428" x2="410" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="430" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<line x1="450" y1="428" x2="450" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="470" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="490" y1="428" x2="490" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="510" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<line x1="530" y1="428" x2="530" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="550" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<line x1="570" y1="428" x2="570" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="590" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<line x1="610" y1="428" x2="610" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="630" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<line x1="650" y1="428" x2="650" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="670" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<line x1="690" y1="428" x2="690" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="710" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<line x1="730" y1="428" x2="730" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="750" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<line x1="770" y1="428" x2="770" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="790" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<line x1="810" y1="428" x2="810" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="830" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<line x1="850" y1="428" x2="850" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="870" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<line x1="890" y1="428" x2="890" y2="462" stroke="#8c959f" stroke-width="0.5"/>
+<text x="910" y="443" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<text x="50" y="492" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">BE</tspan>, the fall-through of top (FTB hit from cyc 46, 308 p2 cycles): 0x8000_0016 to 0x8000_0036. Slot 0 is BE, position 0.</text>
+<rect x="330" y="500" width="640" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="330" y="500" width="80" height="34" fill="#f7ead2" stroke="#a0702a"/>
+<text x="370" y="529" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">BE</text>
+<text x="350" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="390" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<line x1="410" y1="500" x2="410" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="430" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="450" y1="500" x2="450" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="470" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<line x1="490" y1="500" x2="490" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="510" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="530" y1="500" x2="530" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="550" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<line x1="570" y1="500" x2="570" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="590" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<line x1="610" y1="500" x2="610" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="630" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<line x1="650" y1="500" x2="650" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="670" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<line x1="690" y1="500" x2="690" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="710" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<line x1="730" y1="500" x2="730" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="750" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<line x1="770" y1="500" x2="770" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="790" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<line x1="810" y1="500" x2="810" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="830" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<line x1="850" y1="500" x2="850" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="870" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<line x1="890" y1="500" x2="890" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="910" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<line x1="930" y1="500" x2="930" y2="534" stroke="#8c959f" stroke-width="0.5"/>
+<text x="950" y="515" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<rect x="50" y="549" width="14" height="14" fill="#dbe9f7" stroke="#3b6ea5"/>
+<text x="70" y="560" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="normal">fetch block with an FTB entry</text>
+<rect x="260" y="549" width="14" height="14" fill="#f2f3f5" stroke="#8c959f" stroke-dasharray="3 2"/>
+<text x="280" y="560" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="normal">FTB miss: a 32-byte fetch block with no branch</text>
+<rect x="570" y="549" width="14" height="14" fill="#f7ead2" stroke="#a0702a"/>
+<text x="590" y="560" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="normal">conditional branch, labeled in its first halfword below</text>
+<line x1="30" y1="576" x2="1030" y2="576" stroke="#8c959f" stroke-width="1"/>
+<text x="30" y="594" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Start: u_bpu.r_pc_p2. End: bpu_blk_pft_p2, the first halfword after the fetch block. Position: bpu_slot_p2.[0].pos, in halfwords from the block start.</text>
+<text x="30" y="610" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">A block's p2 cycles are those with r_val_p2 and w_ftb_valid_p2 at that start, wrong-path cycles included. An FTB miss gives no slot (slot_valid 0).</text>
+<text x="30" y="626" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">The split is ftb_decisions.md section 3, at cyc 32: from then on the fetch block at top ends at BE, and BE starts a fetch block of its own.</text>
+</svg>

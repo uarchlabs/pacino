@@ -154,14 +154,10 @@ opens in Surfer. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 21  | the straddling instruction reaches decode: lane  | `r_strad_val`      |
-|     | 4, the 32-bit addi at 0x8000_003E, position 15;  |                    |
-|     | the straddle register holds 0x8000_0040          |                    |
-| 22  | the next bundle starts on its tail: lane 0 at    |                    |
-|     | 0x8000_0042, position 1                          |                    |
-| 28  | first fetch of fn, 0x8000_0400, after the c.jalr | `ftq_ifu_start_pc` |
-| 198 | the run ends                                     |                    |
+| # | cyc | Event                                                                                                                                   | Other              |
+|---|-----|-----------------------------------------------------------------------------------------------------------------------------------------|--------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                                                                 | fast init          |
+| 1 | 21  | the straddling instruction reaches decode: lane 4, the 32-bit addi at 0x8000_003E, position 15; the straddle register holds 0x8000_0040 | `r_strad_val`      |
+| 2 | 22  | the next bundle starts on its tail: lane 0 at 0x8000_0042, position 1                                                                   |                    |
+| 3 | 28  | first fetch of fn, 0x8000_0400, after the c.jalr                                                                                        | `ftq_ifu_start_pc` |
+| 4 | 198 | the run ends                                                                                                                            |                    |

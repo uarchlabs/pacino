@@ -62,8 +62,9 @@ one result line (FDT-10):
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
 is the cycle count from the release of reset to the last retirement.
 The run's whole output goes to `out/<scenario>/<scenario>.log`; the
-console shows the result line only, except `fd01_reset_init`, whose
-console line is `-I: fd01_reset_init : PASS : cyc = <n>`, or
+console shows the result line only, except `fd01_reset_init` and
+`fd09_tage`, whose console line is the verdict and the cycle count,
+for example `-I: fd01_reset_init : PASS : cyc = <n>`, or
 `-E: fd01_reset_init : FAIL : cyc = <n>`.
 Every line the testbench prints begins with `-I:`, `-W:` or `-E:` and
 the scenario name, and is at most 80 columns; a longer message breaks
@@ -82,9 +83,10 @@ writer, the expected stream, the backend model, the result line and
 
 THE EVENT CHECKS (FDT-10c, DOC-009). Every description, docs/fdNN_*.md,
 has an Events section with a table of the scenario's events, one row
-per event with its cyc. The program of the scenario checks each event:
-a condition on signals of the run, written for that event in
-programs/fdNN_*.svh, whose first cycle is compared with the row's cyc.
+per event with its marker number and cyc. The program of the scenario
+checks each event: a condition on signals of the run, written for that
+event in programs/fdNN_*.svh, whose first cycle is compared with the
+row's cyc.
 Every event is checked for order; cyc 0, the release of reset, must
 match exactly, and any other cycle must fall within plus or minus a
 tenth of its value, and at least 8 cycles. A row and its check are
@@ -231,15 +233,23 @@ Every format comes from the table FORMATS in waves/fe_demo_sigs.py
 A signal the table does not match stops waves/mk_sucl.py.
 
 Every scenario also has one marker per event of its description's
-event table (a row with a cyc value), named c<cyc>_<label>, and opens
-with the view at the first marker (FDT-12c). The table is the one of
-the description's level-2 section headed Events, with or without a
-section number, in the five-section form (FDT-13) or not (DOC-009):
-section 4 of fd09_tage and FD-22 to FD-24, section 6 of the others. A
-description that cites a cycle as cyc <n> with no Events section, or an
-Events table the script cannot read, stops waves/mk_sucl.py with the
-file and line; one with neither has no markers and opens on the whole
-run.
+event table, named c<cyc>_<label>, and opens with the view at the
+first marker (FDT-12c). The table's rows are
+
+    | # | cyc | event | other |
+
+one row per event; waves/mk_sucl.py still joins a row with an empty #
+and cyc onto the one above. # is the number Surfer shows on the
+event's marker, 0 for the first event: waves/mk_sucl.py requires it to
+equal the event's position in the table, and waves/chk_sucl.py checks
+it against the number Surfer assigns. The table is the one of the
+description's level-2 section headed Events, with or without a section
+number, in the five-section form (FDT-13) or not (DOC-009): section 3
+of fd01_reset_init, section 5 of fd09_tage, section 4 of FD-22 to
+FD-24, section 6 of the others. A description that cites a cycle as
+cyc <n> with no Events section, or an Events table the script cannot
+read, stops waves/mk_sucl.py with the file and line; one with neither
+has no markers and opens on the whole run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`

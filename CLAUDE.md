@@ -67,6 +67,7 @@ production-quality outputs.
 - Line width:   80 column maximum. Use all 80 columns when available
                 do not format against 60 columns when you have room for
                 the remainder.
+- Table line width: The 80 column maximum does not apply for markdown tables.  
 - Indent:       2 spaces. No tabs anywhere.
 - Comments:     ASCII only. No Unicode, no special characters.
                 Use -> instead of arrows or dashes with angle brackets.

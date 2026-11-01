@@ -186,21 +186,13 @@ S=fd18_uncached` opens in Surfer. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | S-mode, Sv39       |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 111 | first uncached request: the first block on page  | NC page            |
-|     | u asks the L1I for line 0x8120_3000              |                    |
-|     | (`ifu_l1i_req_uncached`)                         |                    |
-| 126 | first uncached block closed after one            |                    |
-|     | instruction: F3 ends it (`ifu_ftq_uc_end`), and  |                    |
-|     | the next entry starts at the next instruction    |                    |
-| 306 | first request for 0x8120_3200, the loop at       | NC page            |
-|     | u+0x200                                          |                    |
-| 555 | first request for 0x8120_3400, the function at   | NC page            |
-|     | u+0x400                                          |                    |
-| 647 | first uncached request from the IO page, line    | IO page            |
-|     | 0x8120_4000                                      |                    |
-| 772 | last uncached request                            | the 38th           |
-| 797 | the run ends                                     |                    |
+| # | cyc | Event                                                                                                                               | Other        |
+|---|-----|-------------------------------------------------------------------------------------------------------------------------------------|--------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                                                             | S-mode, Sv39 |
+| 1 | 111 | first uncached request: the first block on page u asks the L1I for line 0x8120_3000 (`ifu_l1i_req_uncached`)                        | NC page      |
+| 2 | 126 | first uncached block closed after one instruction: F3 ends it (`ifu_ftq_uc_end`), and the next entry starts at the next instruction |              |
+| 3 | 306 | first request for 0x8120_3200, the loop at u+0x200                                                                                  | NC page      |
+| 4 | 555 | first request for 0x8120_3400, the function at u+0x400                                                                              | NC page      |
+| 5 | 647 | first uncached request from the IO page, line 0x8120_4000                                                                           | IO page      |
+| 6 | 772 | last uncached request                                                                                                               | the 38th     |
+| 7 | 797 | the run ends                                                                                                                        |              |

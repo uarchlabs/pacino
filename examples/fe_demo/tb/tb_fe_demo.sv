@@ -28,7 +28,7 @@
 // THE LOG AND THE CONSOLE. Everything goes to stdout, which the Makefile
 // writes to out/<s>/<s>.log. The console (stderr) gets one result line
 // only (console() below): the result line itself, or the scenario's own
-// shorter form; fd01_reset_init prints
+// shorter form; fd01_reset_init and fd09_tage print
 //   -I: fd01_reset_init : PASS : cyc = <n>
 //   -E: fd01_reset_init : FAIL : cyc = <n>
 //
@@ -226,7 +226,8 @@ module tb;
                                   input int c);
     case (nm)
       "fd01_reset_init": fd01_console(pass, c);
-      default:           say_to(1'b1, sev, nm, body);
+      "fd09_tage":       fd09_console(pass, c);
+      default:          say_to(1'b1, sev, nm, body);
     endcase
   endfunction
 

@@ -179,18 +179,11 @@ S=fd04_p2_override` opens in Surfer. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 182 | first p2 redirect, from b[0] to b[1]             | accepted by the    |
-|     | (0x8000_1800): the FTB successor differs from    | FTQ                |
-|     | the p1 successor                                 |                    |
-| 193 | first p2 redirect to 0x8000_480A: b[7]'s         | from b[7]          |
-|     | conditional predicted taken at p2                |                    |
-| 293 | first p2 redirect to the jal, 0x8000_4806: the   | from b[7]          |
-|     | end of the FTB entry for b[7] after the split    |                    |
-| 513 | the chain exits: b[7]'s conditional taken on the | pass 15, backend   |
-|     | last pass, a misprediction; redirect to          |                    |
-|     | 0x8000_480A                                      |                    |
-| 522 | the run ends                                     |                    |
+| # | cyc | Event                                                                                                | Other               |
+|---|-----|------------------------------------------------------------------------------------------------------|---------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                              | fast init           |
+| 1 | 182 | first p2 redirect, from b[0] to b[1] (0x8000_1800): the FTB successor differs from the p1 successor  | accepted by the FTQ |
+| 2 | 193 | first p2 redirect to 0x8000_480A: b[7]'s conditional predicted taken at p2                           | from b[7]           |
+| 3 | 293 | first p2 redirect to the jal, 0x8000_4806: the end of the FTB entry for b[7] after the split         | from b[7]           |
+| 4 | 513 | the chain exits: b[7]'s conditional taken on the last pass, a misprediction; redirect to 0x8000_480A | pass 15, backend    |
+| 5 | 522 | the run ends                                                                                         |                     |

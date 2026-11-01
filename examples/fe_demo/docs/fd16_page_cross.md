@@ -134,18 +134,12 @@ itlb, ifu_l1i, decode. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | S-mode, Sv39       |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 46  | walk for VPN 0x80010, the first page of the      |                    |
-|     | crossing block                                   |                    |
-| 70  | walk for VPN 0x80011, the second page            |                    |
-| 93  | L1I request for 0x8100_0FC0, the line of the     | first page         |
-|     | block's start                                    |                    |
-| 94  | the translation queue entry of the block at      | counted            |
-|     | 0x8001_0FF0 popped with two translations:        |                    |
-|     | `xq_cross` 1, PPN 0x81000 and 0x81205            |                    |
-| 94  | L1I request for 0x8120_5000, the second page's   | second page        |
-|     | first line                                       |                    |
-| 112 | the run ends                                     |                    |
+| # | cyc | Event                                                                                                                       | Other        |
+|---|-----|-----------------------------------------------------------------------------------------------------------------------------|--------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                                                     | S-mode, Sv39 |
+| 1 | 46  | walk for VPN 0x80010, the first page of the crossing block                                                                  |              |
+| 2 | 70  | walk for VPN 0x80011, the second page                                                                                       |              |
+| 3 | 93  | L1I request for 0x8100_0FC0, the line of the block's start                                                                  | first page   |
+| 4 | 94  | the translation queue entry of the block at 0x8001_0FF0 popped with two translations: `xq_cross` 1, PPN 0x81000 and 0x81205 | counted      |
+| 5 | 94  | L1I request for 0x8120_5000, the second page's first line                                                                   | second page  |
+| 6 | 112 | the run ends                                                                                                                |              |

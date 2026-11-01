@@ -168,18 +168,11 @@ S=fd03_two_branch` opens in Surfer. Look at:
 
 ## 6. Events
 
-| cyc | Event                                            | Other              |
-|-----|--------------------------------------------------|--------------------|
-| 0   | reset released (`tb.rstn`); the FTQ requests     | fast init          |
-|     | 0x8000_0000 the same cycle                       |                    |
-| 83  | first p1 prediction for X with both slots valid, | uBTB, X            |
-|     | accepted by the FTQ                              | 0x8000_0400        |
-| 84  | first p2 group for X with both slots: X.c1 at    | accepted, FTB      |
-|     | position 1 and X.c2 at position 4, both          |                    |
-|     | conditionals                                     |                    |
-| 107 | first p2 group for Y with both slots: Y.c1 at    | accepted, FTB, Y   |
-|     | position 1 and Y.c2 at position 4, both          | 0x8000_0440        |
-|     | conditionals                                     |                    |
-| 529 | back edge falls through, a misprediction;        | pass 23            |
-|     | redirect to 0x8000_0014                          |                    |
-| 539 | the run ends                                     |                    |
+| # | cyc | Event                                                                                              | Other                        |
+|---|-----|----------------------------------------------------------------------------------------------------|------------------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                            | fast init                    |
+| 1 | 83  | first p1 prediction for X with both slots valid, accepted by the FTQ                               | uBTB, X 0x8000_0400          |
+| 2 | 84  | first p2 group for X with both slots: X.c1 at position 1 and X.c2 at position 4, both conditionals | accepted, FTB                |
+| 3 | 107 | first p2 group for Y with both slots: Y.c1 at position 1 and Y.c2 at position 4, both conditionals | accepted, FTB, Y 0x8000_0440 |
+| 4 | 529 | back edge falls through, a misprediction; redirect to 0x8000_0014                                  | pass 23                      |
+| 5 | 539 | the run ends                                                                                       |                              |

@@ -39,6 +39,8 @@
 
 # debug information files
 *.dwo
+# vim files
+*.swp
 # --------------------------------------------------------------------
 # claude settings
 .claude/tmp
