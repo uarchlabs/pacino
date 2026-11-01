@@ -518,3 +518,19 @@ and given --tag and --commit it takes them as given with no git call
 (SR-10). tools/publish_waves.py --help lists the options, and its
 header documents every key of manifest.json, the digest and the
 staleness report.
+
+THE SHOWN LIST. Only the scenarios named in the repository's mkdocs.yml
+under extra: showcase_shown are public; the rest stay hidden until they
+are reviewed. A hidden scenario's page is left out of the site build,
+with its nav entry, its search entry, its row of the landing page's
+scenario table and every architecture page's "Frontend demo:" link to
+it. tools/publish_waves.py still builds every scenario, but publishes
+only the shown ones' waveforms. Nothing in examples/fe_demo/ is changed
+or deleted. To show a scenario, add its name, fdNN_<name>, to the list
+and push main: the docs workflow rebuilds on a change to mkdocs.yml,
+and the list is read from main even when the pages come from a tag, so
+no new tag is needed for the pages. Its waveform is hosted from the
+next publish (step 5). With no showcase_shown, every scenario is shown.
+To preview the hidden pages locally:
+    SHOWCASE_SHOW_ALL=1 mkdocs serve
+tools/mkdocs_showcase.py, THE SHOWN LIST, documents the rules.

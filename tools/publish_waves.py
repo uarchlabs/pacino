@@ -68,7 +68,12 @@
 #      main and force-push it, so the repo never keeps old binaries in its
 #      history
 #
-# The scenario list is the Makefile's SCENARIOS, read through make.
+# The scenario list is the Makefile's SCENARIOS, read through make. All
+# of them are built; only those mkdocs.yml extra: showcase_shown names
+# are digested, reported and published (tools/mkdocs_showcase.py, THE
+# SHOWN LIST). With no showcase_shown, every scenario is published. A
+# name that is not in SCENARIOS stops the script before anything is
+# built. Reading mkdocs.yml needs PyYAML, which MkDocs installs.
 #
 # MANIFEST.JSON, one JSON object:
 #   scenarios       the scenario names, in FD order
@@ -325,6 +330,28 @@ def scenarios(env):
     return scen
 
 
+def shown(scen, mkdocs_yml=os.path.join(ROOT, "mkdocs.yml")):
+    """The scenarios of scen that mkdocs.yml extra: showcase_shown names,
+    in scen's order; all of scen when there is no such list."""
+    try:
+        import yaml
+    except ImportError:
+        die("PyYAML is needed to read showcase_shown from mkdocs.yml"
+            " (pip install pyyaml)")
+    with open(mkdocs_yml) as f:
+        cfg = yaml.safe_load(f) or {}
+    names = (cfg.get("extra") or {}).get("showcase_shown")
+    if names is None:
+        return list(scen)
+    if not isinstance(names, list):
+        die(f"{mkdocs_yml}: extra: showcase_shown is not a list")
+    unknown = [n for n in names if n not in scen]
+    if unknown:
+        die(f"{mkdocs_yml}: showcase_shown names no scenario of"
+            f" examples/fe_demo/Makefile: {', '.join(map(str, unknown))}")
+    return [s for s in scen if s in names]
+
+
 # ---------------------------------------------------------------------
 # The digest (SR-11)
 # ---------------------------------------------------------------------
@@ -556,12 +583,16 @@ def main():
     env = dict(os.environ, RVA_ROOT=ROOT)
     published = read_published(args.published) if args.published else None
 
-    scen = scenarios(env)
+    every = scenarios(env)
+    scen = shown(every)
+    if len(scen) < len(every):
+        print(f"[shown]      {len(scen)} of {len(every)} scenarios"
+              f" (mkdocs.yml showcase_shown): {' '.join(scen)}")
     if args.no_build:
-        print(f"[not built]  {len(scen)} scenarios; using the FSTs in"
+        print(f"[not built]  {len(every)} scenarios; using the FSTs in"
               f" {os.path.join(DEMO, 'out')}")
     else:
-        print(f"[building]   {len(scen)} scenarios in {DEMO}")
+        print(f"[building]   {len(every)} scenarios in {DEMO}")
         run(["make", "-C", DEMO, "scenarios"], env=env)
     for s in scen:
         for src in (os.path.join(DEMO, "out", s, f"{s}.fst"),

@@ -41,6 +41,22 @@
 # no tag. A local build (mkdocs serve) sets none of these: the pages come
 # through the symlink and the landing page keeps its own text, which says
 # it shows the branch.
+#
+# THE SHOWN LIST. mkdocs.yml extra: showcase_shown names the scenarios
+# the site shows, as fdNN_<name>; every other scenario is hidden. With
+# no showcase_shown, every scenario is shown. A hidden scenario's page,
+# and each file of docs/ whose name starts with its fdNN_ (a figure such
+# as fd09_blocks.svg), is left out of the build: it has no page, no nav
+# entry and no search entry. A list item or table row that links it, in
+# the site or its source on GitHub, is dropped from every page: the
+# landing page's scenario table and the architecture pages' "Frontend
+# demo:" items. Any other link to it becomes plain text.
+# Nothing in the source is changed or deleted. The list is read from
+# the mkdocs.yml of the checkout, main in CI, so a scenario is hidden or
+# shown without a new tag; tools/publish_waves.py reads the same list
+# and publishes only the shown scenarios' waveforms. A name that is not
+# a scenario page stops the build. SHOWCASE_SHOW_ALL=1 shows every
+# scenario, for a local preview of the hidden pages; CI never sets it.
 
 import os
 import re
@@ -57,6 +73,120 @@ DEMO_REPO = "examples/fe_demo"
 SCEN_RE = re.compile(r"^(fd\d\d_[a-z0-9_]+)\.md$")
 RELEASE_RE = re.compile(
     r"(<!-- RELEASE_BEGIN -->\n).*?(\n<!-- RELEASE_END -->)", re.S)
+# A Markdown link to a scenario page: text, then the scenario's name.
+SCEN_LINK_RE = re.compile(
+    r"\[([^\]]*)\]\((?:[^)\s]*/)?(fd\d\d_[a-z0-9_]+)\.md(?:#[^)\s]*)?\)")
+NUM_RE = re.compile(r"^(fd\d\d)_")
+
+# The scenarios to show, from on_config: None shows every one.
+SHOWN = None
+# The hidden scenarios, from on_files.
+HIDDEN = set()
+
+
+def shown_list(config):
+    """The showcase_shown names of mkdocs.yml extra, or None when every
+    scenario is shown (no list, or SHOWCASE_SHOW_ALL=1)."""
+    if os.environ.get("SHOWCASE_SHOW_ALL") == "1":
+        return None
+    names = (config.get("extra") or {}).get("showcase_shown")
+    if names is None:
+        return None
+    if not isinstance(names, list) or not all(
+            isinstance(n, str) and SCEN_RE.match(n + ".md") for n in names):
+        raise ValueError("mkdocs.yml extra: showcase_shown must be a list"
+                         " of scenario names, fdNN_<name>")
+    return set(names)
+
+
+def hidden_page(uri, shown):
+    """True when uri is a scenario page of showcase/fe_demo/ not shown."""
+    if shown is None or not uri.startswith(SHOWCASE):
+        return False
+    m = SCEN_RE.match(uri[len(SHOWCASE):])
+    return bool(m) and m.group(1) not in shown
+
+
+def drop_nav(nav, shown):
+    """nav without the entries of hidden scenario pages; a section left
+    empty is dropped too."""
+    out = []
+    for item in nav:
+        if isinstance(item, str):
+            if not hidden_page(item, shown):
+                out.append(item)
+            continue
+        if not isinstance(item, dict):
+            out.append(item)
+            continue
+        kept = {}
+        for title, val in item.items():
+            if isinstance(val, list):
+                sub = drop_nav(val, shown)
+                if sub:
+                    kept[title] = sub
+            elif not (isinstance(val, str) and hidden_page(val, shown)):
+                kept[title] = val
+        if kept:
+            out.append(kept)
+    return out
+
+
+def on_config(config):
+    global SHOWN, HIDDEN
+    SHOWN = shown_list(config)
+    HIDDEN = set()
+    if SHOWN is not None and config.get("nav"):
+        config["nav"] = drop_nav(config["nav"], SHOWN)
+    return config
+
+
+def drop_hidden(files):
+    """files without the hidden scenarios' pages and fdNN_ files; sets
+    HIDDEN. A shown name with no page stops the build."""
+    global HIDDEN
+    if SHOWN is None:
+        HIDDEN = set()
+        return files
+    scen = {}
+    for f in files:
+        if f.src_uri.startswith(SHOWCASE):
+            m = SCEN_RE.match(f.src_uri[len(SHOWCASE):])
+            if m:
+                scen[m.group(1)] = NUM_RE.match(m.group(1)).group(1)
+    missing = sorted(SHOWN - set(scen))
+    if missing:
+        raise ValueError("mkdocs.yml extra: showcase_shown names no"
+                         " scenario page: " + ", ".join(missing))
+    HIDDEN = set(scen) - SHOWN
+    shown_nums = {scen[s] for s in SHOWN}
+    hidden_nums = {scen[s] for s in HIDDEN} - shown_nums
+    for f in list(files):
+        if not f.src_uri.startswith(SHOWCASE):
+            continue
+        rel = f.src_uri[len(SHOWCASE):]
+        m = NUM_RE.match(rel)
+        if "/" not in rel and m and m.group(1) in hidden_nums:
+            files.remove(f)
+    return files
+
+
+def unlink_hidden(markdown):
+    """A list item or table row that links a hidden scenario's page (in
+    the site or its source on GitHub) is dropped: the landing page's
+    scenario table, an architecture page's "Frontend demo:" item. Any
+    other link to one becomes plain text."""
+    if not HIDDEN:
+        return markdown
+    lines = []
+    for line in markdown.split("\n"):
+        hit = any(m.group(2) in HIDDEN for m in SCEN_LINK_RE.finditer(line))
+        if hit and line.lstrip().startswith(("|", "- ", "* ")):
+            continue
+        lines.append(line)
+    return SCEN_LINK_RE.sub(
+        lambda m: m.group(1) if m.group(2) in HIDDEN else m.group(0),
+        "\n".join(lines))
 
 
 def release():
@@ -82,10 +212,11 @@ def release_text(ci, tag, repo):
 
 def on_files(files, config):
     """In CI with a tag, every showcase/fe_demo/ file from the tag's
-    docs/ (SHOWCASE_DEMO_DIR) instead of from the symlink."""
+    docs/ (SHOWCASE_DEMO_DIR) instead of from the symlink. Either way,
+    without the hidden scenarios (drop_hidden)."""
     _, _, demo = release()
     if demo is None:
-        return files
+        return drop_hidden(files)
     docs = os.path.join(demo, "docs")
     if not os.path.isdir(docs):
         raise OSError(f"SHOWCASE_DEMO_DIR has no docs/: {docs}")
@@ -101,7 +232,7 @@ def on_files(files, config):
             files.append(File.generated(config, SHOWCASE + rel,
                                         abs_src_path=path,
                                         inclusion=InclusionLevel.INCLUDED))
-    return files
+    return drop_hidden(files)
 
 
 def wave_url(scen):
@@ -151,6 +282,7 @@ def on_page_markdown(markdown, page, config, files):
     src = page.file.src_uri
     ci, tag, demo = release()
     repo = config.get("repo_url", "").rstrip("/")
+    markdown = unlink_hidden(markdown)
     if src == LANDING:
         text = release_text(ci, tag, repo)
         if text is None:

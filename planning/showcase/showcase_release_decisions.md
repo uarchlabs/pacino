@@ -18,6 +18,11 @@ show, and the waveform staleness check. The showcase is
 examples/fe_demo/ (planning/testbenches/fe_demo_tb_decisions.md,
 planning/showcase/fe_demo_scenarios.md).
 
+Scenarios are shown on the site and published to pacino-waves only when named
+in main's mkdocs.yml extra: showcase_shown; the rest are left out of the build,
+nav, landing table, Frontend-demo links and the waves publish, without changing
+their source.
+
 ---
 
 ## 1. Tags

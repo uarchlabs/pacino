@@ -6,7 +6,8 @@
 # test_publish_waves.py -- tools/publish_waves.py: the tag gate, the dry
 # run, the manifest record, the digest and the staleness report (DOC-008,
 # SR-9 to SR-12), and a publish's tag check and dirty-tree refusal
-# (DOC-010, SR-9a, SR-10).
+# (DOC-010, SR-9a, SR-10), and the shown list, mkdocs.yml extra:
+# showcase_shown: only the scenarios it names are staged.
 #
 # Every run of the script has tools/tests/git_standin first on PATH: a
 # git that records each call and exits 1, or prints a test's answers.
@@ -40,7 +41,9 @@ import publish_waves as pw  # noqa: E402
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 SHA2 = "89abcdef0123456789abcdef0123456789abcdef"
-SCEN = pw.scenarios(dict(os.environ, RVA_ROOT=ROOT))
+EVERY = pw.scenarios(dict(os.environ, RVA_ROOT=ROOT))
+# The scenarios a run publishes: those mkdocs.yml showcase_shown names.
+SCEN = pw.shown(EVERY)
 OLD_KEYS = ["scenarios", "files", "pacino_commit", "build_date"]
 
 
@@ -532,13 +535,65 @@ class TestStaleness(unittest.TestCase):
         digests = {s: "0" * 64 for s in SCEN}
         got = pw.staleness(digests, background_manifest())
         self.assertEqual(set(got.values()), {"no published digest"})
-        self.assertEqual(len(got), 24)
+        self.assertEqual(len(got), len(SCEN))
 
     def test_other_digest_version_not_compared(self):
         pub = {"scenarios": ["s1"], "digest_version": 2,
                "digests": {"s1": "a"}}
         self.assertEqual(pw.staleness({"s1": "a"}, pub),
                          {"s1": "no published digest"})
+
+
+# ---------------------------------------------------------------------
+# The shown list (mkdocs.yml extra: showcase_shown)
+# ---------------------------------------------------------------------
+class TestShown(unittest.TestCase):
+    ALL = ["fd01_a", "fd02_b", "fd03_c"]
+
+    def shown(self, text):
+        with tempfile.NamedTemporaryFile("w", suffix=".yml",
+                                         delete=False) as f:
+            f.write(text)
+        try:
+            return pw.shown(self.ALL, f.name)
+        finally:
+            os.remove(f.name)
+
+    def test_no_list_shows_all(self):
+        self.assertEqual(self.shown("site_name: x\n"), self.ALL)
+        self.assertEqual(self.shown("extra:\n  other: 1\n"), self.ALL)
+
+    def test_list_in_scenario_order(self):
+        got = self.shown("extra:\n  showcase_shown:\n    - fd03_c\n"
+                         "    - fd01_a\n")
+        self.assertEqual(got, ["fd01_a", "fd03_c"])
+
+    def test_unknown_name_stops(self):
+        with self.assertRaises(SystemExit):
+            self.shown("extra:\n  showcase_shown: [fd01_a, fd99_x]\n")
+        with self.assertRaises(SystemExit):
+            self.shown("extra:\n  showcase_shown: fd01_a\n")
+
+    def test_repo_list(self):
+        # The repo's mkdocs.yml: a subset of the Makefile's scenarios.
+        self.assertTrue(set(SCEN) <= set(EVERY))
+        self.assertTrue(SCEN)
+
+    def test_dry_run_stages_shown_only(self):
+        tmp = tempfile.mkdtemp(prefix="test_publish_waves.")
+        out = os.path.join(tmp, "stage")
+        try:
+            r = Run(tmp, ["--tag", "fe-1.0.0", "--commit", SHA,
+                          "--dry-run", "--no-build", "--out", out])
+            self.assertEqual(r.rc, 0, r.out + r.err)
+            staged = os.listdir(out)
+            for s in EVERY:
+                self.assertEqual(f"{s}.fst" in staged, s in SCEN, s)
+            if len(SCEN) < len(EVERY):
+                self.assertIn(f"[shown]      {len(SCEN)} of {len(EVERY)}",
+                              r.out)
+        finally:
+            shutil.rmtree(tmp)
 
 
 # ---------------------------------------------------------------------

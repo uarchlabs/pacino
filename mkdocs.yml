@@ -38,6 +38,16 @@ markdown_extensions:
 hooks:
   - tools/mkdocs_showcase.py
 
+# The Showcase scenarios the site shows and tools/publish_waves.py
+# publishes; every other scenario is hidden until it is reviewed. The
+# pages stay in the repo and in the nav below. Remove the list to show
+# every scenario (tools/mkdocs_showcase.py, THE SHOWN LIST).
+extra:
+  showcase_shown:
+    - fd01_reset_init
+    - fd02_steady
+    - fd09_tage
+
 nav:
   - Home: index.md
   - Overview: overview.md
