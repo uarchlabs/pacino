@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-# <span style="color: var(--md-accent-fg-color)">fe_top Connectivity Inventory</span>
+# fe_top Connectivity Inventory
 ```
  FILE:    signal_map.md
  SOURCE:  DOC-002, DOC-006
@@ -21,7 +21,7 @@ testbench places beside `fe_top`.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">1. Notation</span>
+## 1. Notation
 
 Notation:
 
@@ -39,9 +39,9 @@ nets between instances (section 3) and 75 top-level ports
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">2. Instances, parameters and types</span>
+## 2. Instances, parameters and types
 
-### <span style="color: var(--md-accent-fg-color)">2.1 Instances in fe_top</span>
+### 2.1 Instances in fe_top
 
 ```
 inst     module         instantiated    module file
@@ -63,7 +63,7 @@ Notes:
 
 FE-15 (planning/arch/fe_decisions.md:1333) names the same seven units.
 
-### <span style="color: var(--md-accent-fg-color)">2.2 Parameters (package values)</span>
+### 2.2 Parameters (package values)
 
 ```
 VA_WIDTH         41   bp_defines_pkg.sv:25
@@ -99,7 +99,7 @@ bp_defines_pkg.sv and bp_structs_pkg.sv are in
 rtl/core/frontend/bpu/rtl/, decode_pkg.sv in
 rtl/core/frontend/decode/rtl/, csr_pkg.sv in rtl/core/csr/rtl/.
 
-### <span style="color: var(--md-accent-fg-color)">2.3 Types (elaborated width of one element)</span>
+### 2.3 Types (elaborated width of one element)
 
 ```
 type                width  declared
@@ -131,14 +131,14 @@ ptw_csr_t                  csr_pkg.sv:264 (walker only, section 7)
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">3. Connections between instances, by interface</span>
+## 3. Connections between instances, by interface
 
 Every net here is declared in fe_top.sv:219-395 and bound to exactly
 two instance ports, one output and one input, except where a group
 note says otherwise. The groups follow the interface documents and
 the comments of fe_top.sv:219, 320, 352, 373, 389.
 
-### <span style="color: var(--md-accent-fg-color)">3.1 FTQ -> BPU prediction request, p0</span>
+### 3.1 FTQ -> BPU prediction request, p0
 
 Specified by:
 
@@ -156,7 +156,7 @@ ftq_pred_idx_p0  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:224)
   to   u_bpu.ftq_pred_idx_p0  bp_cluster.sv:112  (bind fe_top.sv:405)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.2 BPU -> FTQ RAM init readies (BP-137)</span>
+### 3.2 BPU -> FTQ RAM init readies (BP-137)
 
 Specified by:
 
@@ -174,7 +174,7 @@ bpu_sc_ready  logic  1 bits  (fe_top.sv:311)
   to   u_ftq.sc_ready  ftq.sv:97  (bind fe_top.sv:516)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.3 BPU -> FTQ queue status</span>
+### 3.3 BPU -> FTQ queue status
 
 Specified by:
 
@@ -201,7 +201,7 @@ bpu_sc_upd_rdy  logic [NUM_PRED_SLOTS-1:0]  2 bits  (fe_top.sv:316)
   to   u_ftq.sc_upd_rdy  ftq.sv:198  (bind fe_top.sv:573)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.4 BPU -> FTQ initial prediction, p1</span>
+### 3.4 BPU -> FTQ initial prediction, p1
 
 Specified by:
 
@@ -225,7 +225,7 @@ bpu_pred_pft_p1  logic [VA_WIDTH-1:0]  41 bits  (fe_top.sv:229)
   to   u_ftq.bpu_pred_pft_p1  ftq.sv:105  (bind fe_top.sv:521)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.5 BPU -> FTQ slot correction, p2 and p3</span>
+### 3.5 BPU -> FTQ slot correction, p2 and p3
 
 Specified by:
 
@@ -252,7 +252,7 @@ bpu_slot_p3  bp_ftq_slot_t  2 x 57 bits  (fe_top.sv:239)
   to   u_ftq.bpu_slot_p3  ftq.sv:117  (bind fe_top.sv:529)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.6 BPU -> FTQ block-scalar correction, p2</span>
+### 3.6 BPU -> FTQ block-scalar correction, p2
 
 Specified by:
 
@@ -273,7 +273,7 @@ bpu_blk_pft_p2  logic [VA_WIDTH-1:0]  41 bits  (fe_top.sv:243)
   to   u_ftq.bpu_blk_pft_p2  ftq.sv:125  (bind fe_top.sv:533)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.7 BPU -> FTQ redirects, p2 and p3</span>
+### 3.7 BPU -> FTQ redirects, p2 and p3
 
 Specified by:
 
@@ -294,7 +294,7 @@ bpu_redir_idx_p3  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:233)
   to   u_ftq.bpu_redir_idx_p3  ftq.sv:131  (bind fe_top.sv:537)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.8 BPU -> FTQ prediction metadata, p2 and p3</span>
+### 3.8 BPU -> FTQ prediction metadata, p2 and p3
 
 Specified by:
 
@@ -331,7 +331,7 @@ bpu_meta_sc_p3  sc_pred_meta_t  2 x 112 bits  (fe_top.sv:252)
   to   u_ftq.bpu_meta_sc_p3  ftq.sv:146  (bind fe_top.sv:546)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.9 FTQ -> BPU per-predictor updates, u0</span>
+### 3.9 FTQ -> BPU per-predictor updates, u0
 
 Specified by:
 
@@ -367,7 +367,7 @@ sc_upd_inp_u0  sc_upd_inp_t  2 x 125 bits  (fe_top.sv:300)
   to   u_bpu.sc_upd_inp_u0  bp_cluster.sv:223  (bind fe_top.sv:459)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.10 FTQ -> BPU FTB update, u0</span>
+### 3.10 FTQ -> BPU FTB update, u0
 
 Specified by:
 
@@ -426,7 +426,7 @@ ftb_upd_pft_addr_u0  logic [VA_WIDTH-1:0]  41 bits  (fe_top.sv:289)
   to   u_bpu.ftb_upd_pft_addr_u0  bp_cluster.sv:211  (bind fe_top.sv:452)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.11 FTQ -> BPU RAS commit and restore</span>
+### 3.11 FTQ -> BPU RAS commit and restore
 
 Specified by:
 
@@ -454,7 +454,7 @@ ras_restore_snapshot  bp_ras_snapshot_t  12 bits  (fe_top.sv:264)
   to   u_bpu.ras_restore_snapshot  bp_cluster.sv:228  (bind fe_top.sv:461)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.12 FTQ <-> BPU history rollback and checkpoint</span>
+### 3.12 FTQ <-> BPU history rollback and checkpoint
 
 Specified by:
 
@@ -493,7 +493,7 @@ ckpt_phist_ptr  logic [PHIST_PTR_BITS-1:0]  5 bits  (fe_top.sv:262)
   to   u_ftq.ckpt_phist_ptr  ftq.sv:109  (bind fe_top.sv:523)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.13 FTQ -> IFU translation request</span>
+### 3.13 FTQ -> IFU translation request
 
 Specified by:
 
@@ -514,7 +514,7 @@ ftq_ifu_xlate_idx  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:325)
   to   u_ifu.ftq_ifu_xlate_idx  ifu.sv:70  (bind fe_top.sv:643)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.14 FTQ -> IFU fetch request</span>
+### 3.14 FTQ -> IFU fetch request
 
 Specified by:
 
@@ -550,7 +550,7 @@ ftq_ifu_commit_ptr  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:334)
   to   u_ifu.ftq_ifu_commit_ptr  ifu.sv:81  (bind fe_top.sv:652)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.15 FTQ -> IFU flush</span>
+### 3.15 FTQ -> IFU flush
 
 Specified by:
 
@@ -565,7 +565,7 @@ ftq_ifu_flush_idx  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:336)
   to   u_ifu.ftq_ifu_flush_idx  ifu.sv:85  (bind fe_top.sv:654)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.16 IFU -> FTQ predecode writeback</span>
+### 3.16 IFU -> FTQ predecode writeback
 
 Specified by:
 
@@ -613,7 +613,7 @@ ifu_ftq_uc_end  logic  1 bits  (fe_top.sv:349)
   to   u_ftq.ifu_ftq_uc_end  ftq.sv:252  (bind fe_top.sv:617)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.17 IFU -> L1I fetch request</span>
+### 3.17 IFU -> L1I fetch request
 
 Specified by:
 
@@ -640,7 +640,7 @@ ifu_l1i_req_uncached  logic  1 bits  (fe_top.sv:361)
   to   u_l1i.core_uncached  l1i.sv:57  (bind fe_top.sv:718)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.18 L1I -> IFU response</span>
+### 3.18 L1I -> IFU response
 
 Specified by:
 
@@ -661,7 +661,7 @@ l1i_ifu_rsp_err  logic  1 bits  (fe_top.sv:370)
   to   u_ifu.l1i_ifu_rsp_err  ifu.sv:112  (bind fe_top.sv:677)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.19 IFU -> L1I maintenance</span>
+### 3.19 IFU -> L1I maintenance
 
 Specified by:
 
@@ -685,7 +685,7 @@ l1i_ifu_inv_done  logic  1 bits  (fe_top.sv:366)
   to   u_ifu.l1i_ifu_inv_done  ifu.sv:119  (bind fe_top.sv:682)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.20 IFU <-> ITLB</span>
+### 3.20 IFU <-> ITLB
 
 Specified by:
 
@@ -730,7 +730,7 @@ itlb_ifu_pma  logic [PMA_WIDTH-1:0]  4 bits  (fe_top.sv:386)
   to   u_ifu.itlb_ifu_pma  ifu.sv:140  (bind fe_top.sv:699)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.21 IFU -> ibuf</span>
+### 3.21 IFU -> ibuf
 
 Specified by:
 
@@ -751,7 +751,7 @@ ibuf_ifu_rdy  logic  1 bits  (fe_top.sv:394)
   to   u_ifu.ibuf_ifu_rdy  ifu.sv:146  (bind fe_top.sv:703)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">3.22 ibuf -> decode</span>
+### 3.22 ibuf -> decode
 
 Specified by:
 
@@ -765,7 +765,7 @@ ibuf_dec_slot  ifu_pd_pkt_t  8 x 190 bits  (fe_top.sv:395)
 ```
 ---
 
-## <span style="color: var(--md-accent-fg-color)">4. The fe_top boundary</span>
+## 4. The fe_top boundary
 
 The ports are declared at fe_top.sv:96-217 and grouped as FE-17
 (planning/arch/fe_decisions.md:1378) and FE-20
@@ -784,7 +784,7 @@ L1I's `mem` port is section 4.8. Two outputs are in no group
 `bkend_ftq_redir_val` is the one fe_top net with two readers: the
 FTQ and the ibuf clear (fe_top.sv:44-45, IBUF-13).
 
-### <span style="color: var(--md-accent-fg-color)">4.1 Clock and reset</span>
+### 4.1 Clock and reset
 
 Specified by:
 
@@ -799,7 +799,7 @@ rstn  in   logic  1 bits  (fe_top.sv:98)
      (binds fe_top.sv:402, 507, 639, 713, 756, 804)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.2 backend: decode to rename (FE-17), with the read ready (FE-20 outward)</span>
+### 4.2 backend: decode to rename (FE-17), with the read ready (FE-20 outward)
 
 Specified by:
 
@@ -823,7 +823,7 @@ dec_ibuf_rdy  in   logic  1 bits  (fe_top.sv:108)
   -> u_ibuf.dec_ibuf_rdy  ibuf.sv:74  (bind fe_top.sv:811)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.3 backend: FTQ resolution (FE-17)</span>
+### 4.3 backend: FTQ resolution (FE-17)
 
 Specified by:
 
@@ -839,7 +839,7 @@ ftq_bkend_rsv_rdy  out  logic [NUM_RESOLVE_PORTS-1:0]  2 bits  (fe_top.sv:116)
   <- u_ftq.ftq_bkend_rsv_rdy  ftq.sv:260  (bind fe_top.sv:620)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.4 backend: FTQ redirect (FE-17)</span>
+### 4.4 backend: FTQ redirect (FE-17)
 
 Specified by:
 
@@ -864,7 +864,7 @@ bkend_ftq_redir_taken  in   logic  1 bits  (fe_top.sv:125)
   -> u_ftq.bkend_ftq_redir_taken  ftq.sv:270  (bind fe_top.sv:627)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.5 backend: FTQ commit (FE-17)</span>
+### 4.5 backend: FTQ commit (FE-17)
 
 Specified by:
 
@@ -877,7 +877,7 @@ bkend_ftq_commit_idx  in   logic [FTQ_PTR_BITS-1:0]  7 bits  (fe_top.sv:127)
   -> u_ftq.bkend_ftq_commit_idx  ftq.sv:275  (bind fe_top.sv:629)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.6 backend: commit stage to IFU, FENCE.I and cbo.inval (FE-17)</span>
+### 4.6 backend: commit stage to IFU, FENCE.I and cbo.inval (FE-17)
 
 Specified by:
 
@@ -896,7 +896,7 @@ ifu_cmt_maint_ack  out  logic  1 bits  (fe_top.sv:137)
   <- u_ifu.ifu_cmt_maint_ack  ifu.sv:126  (bind fe_top.sv:687)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.7 translation: ITLB to the page table walker (FE-17)</span>
+### 4.7 translation: ITLB to the page table walker (FE-17)
 
 Specified by:
 
@@ -944,7 +944,7 @@ l2t_itlb_gpa_imp  in   logic [1:0]  2 bits  (fe_top.sv:161)
   -> u_itlb.l2t_itlb_gpa_imp  itlb.sv:208  (bind fe_top.sv:787)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.8 instruction: the L1I l2-side link (FE-17, FE-21)</span>
+### 4.8 instruction: the L1I l2-side link (FE-17, FE-21)
 
 Specified by:
 
@@ -995,7 +995,7 @@ l1i_mem_d_corrupt  in   logic  1 bits  (fe_top.sv:186)
   -> u_l1i.mem_d_corrupt  l1i.sv:91  (bind fe_top.sv:748)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.9 csr: fe_csr_t (FE-20)</span>
+### 4.9 csr: fe_csr_t (FE-20)
 
 Specified by:
 
@@ -1007,7 +1007,7 @@ fe_csr  in   fe_csr_t  733 bits  (fe_top.sv:192)
   -> u_itlb.fe_csr  itlb.sv:215  (bind fe_top.sv:788)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.10 config: fe_cfg_t (FE-20)</span>
+### 4.10 config: fe_cfg_t (FE-20)
 
 Specified by:
 
@@ -1034,7 +1034,7 @@ fe_cfg  in   fe_cfg_t  84 bits  (fe_top.sv:199)
       instr_decoder.sv:95  (bind fe_top.sv:818)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.11 maintenance: ITLB invalidate (FE-20)</span>
+### 4.11 maintenance: ITLB invalidate (FE-20)
 
 Specified by:
 
@@ -1058,7 +1058,7 @@ bkend_itlb_inv_vmid  in   logic [VMID_WIDTH-1:0]  14 bits  (fe_top.sv:210)
   -> u_itlb.bkend_itlb_inv_vmid  itlb.sv:224  (bind fe_top.sv:795)
 ```
 
-### <span style="color: var(--md-accent-fg-color)">4.12 observation: not in FE-17 or FE-20</span>
+### 4.12 observation: not in FE-17 or FE-20
 
 Specified by:
 
@@ -1073,9 +1073,9 @@ ftq_empty  out  logic  1 bits  (fe_top.sv:216)
 ```
 ---
 
-## <span style="color: var(--md-accent-fg-color)">5. Unread outputs, member selects and constants</span>
+## 5. Unread outputs, member selects and constants
 
-### <span style="color: var(--md-accent-fg-color)">5.1 Cluster outputs that end on unread wires</span>
+### 5.1 Cluster outputs that end on unread wires
 
 Declared at fe_top.sv:302-317; each is bound to one bp_cluster
 output and read by nothing (fe_top.sv:80-83).
@@ -1104,7 +1104,7 @@ the section 9 outputs of ftq_bpu_interfaces.md (lines 1115-1120);
 only the checkpoint pair `ckpt_ghist_ptr` / `ckpt_phist_ptr` has a
 consumer, the FTQ (section 3.12).
 
-### <span style="color: var(--md-accent-fg-color)">5.2 fe_cfg member selects</span>
+### 5.2 fe_cfg member selects
 
 `fe_cfg` (fe_cfg_t, csr_pkg.sv:224-232) is not passed whole. Its
 members drive existing instance ports by member select
@@ -1114,7 +1114,7 @@ member with two readers, the cluster and the FTQ (fe_top.sv:486,
 (fe_csr_t, csr_pkg.sv:236-247) is passed whole to the ITLB
 (fe_top.sv:788).
 
-### <span style="color: var(--md-accent-fg-color)">5.3 Constant inputs</span>
+### 5.3 Constant inputs
 
 ```
 u_bpu.ftb_flush_px        1'b0  bp_cluster.sv:212  (fe_top.sv:453)
@@ -1131,14 +1131,14 @@ the same reason (FE-14).
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">6. Inside bp_cluster</span>
+## 6. Inside bp_cluster
 
 The cluster is a four-stage pipeline (p0 to p3) with an update stage
 u0 and its write u1 (bp_cluster.sv:55-61). The FTQ-facing ports are
 grouped in the port list as follows; the predictor instances are at
 bp_cluster.sv:1812-2035.
 
-### <span style="color: var(--md-accent-fg-color)">6.1 bp_cluster port groups</span>
+### 6.1 bp_cluster port groups
 
 ```
 group                                       ports at       spec
@@ -1160,7 +1160,7 @@ ST  status: init readies, queue status      :281-300   ftq_bpu 3, 8
 
 `ftq_bpu` is planning/interfaces/ftq_bpu_interfaces.md.
 
-### <span style="color: var(--md-accent-fg-color)">6.2 Predictor instances</span>
+### 6.2 Predictor instances
 
 ```
 inst           module      line  stage
@@ -1182,7 +1182,7 @@ Stages are bp_cluster.sv:55-61 and the comments above each instance
 is instantiated with `N_SLOTS = NUM_PRED_SLOTS`
 (bp_cluster.sv:1844-1846).
 
-### <span style="color: var(--md-accent-fg-color)">6.3 Which cluster port groups each predictor serves</span>
+### 6.3 Which cluster port groups each predictor serves
 
 ```
 u_bp_history
@@ -1262,7 +1262,7 @@ channel (bp_cluster.sv:1732-1746, upd_br_type at 1609-1618).
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">7. The walker beside fe_top in the testbench</span>
+## 7. The walker beside fe_top in the testbench
 
 `fe_top` has no walker; the testbench instantiates one beside it
 (FE-17 translation, planning/arch/fe_decisions.md:1391; MMU-1a). The
@@ -1304,7 +1304,7 @@ planning/arch/fe_decisions.md:1490, ptw_mem_interfaces.md WM-10, line
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">8. Disagreements between the RTL and the planning documents</span>
+## 8. Disagreements between the RTL and the planning documents
 
 The RTL is what sections 2 to 7 record.
 

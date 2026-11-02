@@ -3,4 +3,11 @@
 {% block extrahead %}
   <script data-goatcounter="https://uarchlabs.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
+  {% if page and page.file.src_uri.startswith('showcase/fe_demo/') %}
+    <style>
+      .md-typeset h1, .md-typeset h2, .md-typeset h3 {
+        color: var(--md-accent-fg-color);
+      }
+    </style>
+  {% endif %}
 {% endblock %}

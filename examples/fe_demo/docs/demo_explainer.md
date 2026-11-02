@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-# <span style="color: var(--md-accent-fg-color)">Scenario Common Description</span>
+# Scenario Common Description
 ```
  FILE:    demo_explainer.md
  SOURCE:  DOC-003, session-080, DOC-006, DOC-007
@@ -33,7 +33,7 @@ shortened to `models/` below.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">1. The scenario</span>
+## 1. The scenario
 
 A scenario exercises isolated aspects of the Pacino frontend (FE). The full
 scenario list is found in `planning/showcase/fe_demo_scenarios.md`, numbered
@@ -106,7 +106,7 @@ request until reset is released, and the first p1 prediction is at cyc 1.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">2. The program writer</span>
+## 2. The program writer
 
 The program writer builds the memory image and the expected execution list.
 
@@ -150,7 +150,7 @@ randomize the taken/not taken state.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">3. The expected execution list</span>
+## 3. The expected execution list
 
 The testbench does not model the instruction set. The expected execution list
 is the reference instead. This list contains the instructions the program
@@ -163,7 +163,7 @@ is also an entry. The entry type is `ex_t` in `models/fe_tb_writer.svh`.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">4. The backend model</span>
+## 4. The backend model
 
 The backend is an abstract model. It does not execute instructions. The backend
 model accepts up to 8 instructions from the frontend via decoder port
@@ -198,7 +198,7 @@ lines are for debugging and do not follow the result-line format.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">5. The result line</span>
+## 5. The result line
 
 To maintain stability in the scenarios, they are developed against tagged
 versions of the RTL. The Showcase landing page specifies the current tag. The
@@ -235,7 +235,7 @@ use a different format.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">6. The cycle counter cyc</span>
+## 6. The cycle counter cyc
 
 `tb.cyc` counts clock cycles from the release of reset and is shown next to
 the clock in every waveform.
@@ -246,7 +246,7 @@ period shows its new value from cyc N + 1.
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">7. Reading the waveforms</span>
+## 7. Reading the waveforms
 
 Each scenario description has an "Open waveform" link that opens the
 scenario in Surfer in the browser.
@@ -270,7 +270,7 @@ the clock group, and the view at the first marker. The Events table is section
 
 ---
 
-## <span style="color: var(--md-accent-fg-color)">8. Glossary</span>
+## 8. Glossary
 
 Standard RISC-V terms (Sv39, Sv39x4, VS-stage and G-stage translation, PBMT,
 PMP, Svadu, link registers) are used as the specifications define them. The

@@ -10,7 +10,7 @@
  CONTACT: Jeff Nye
 ```
 
-## 1. <span style="color: var(--md-accent-fg-color)">Introduction</span>
+## 1. Introduction
 
 Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs
 in the TAGE, ITTAGE and SC. These branch predictor tables require an initial
@@ -50,7 +50,7 @@ operations are the same in either 1 or 2 prediction slots.
 
 ---
 
-## 2. <span style="color: var(--md-accent-fg-color)">Run the scenario</span>
+## 2. Run the scenario
 
 Run simulation:
 ```
@@ -80,14 +80,14 @@ Log file output:
 ```
 
 ---
-## 3. <span style="color: var(--md-accent-fg-color)">The program</span>
+## 3. The program
 
 The program, `prog_fd01`, is a loop of 128 passes over 7 instructions. It only
 provides requests after initialization completes, and nothing in the loop
 depends on the initialization.
 
 ---
-## 4. <span style="color: var(--md-accent-fg-color)">Operation</span>
+## 4. Operation
 
 Signal paths are as given in section 6. Event numbers refer to section 5.
 
@@ -122,7 +122,7 @@ events show the first predictor responses and the end of the run.
 
 ---
 
-## 5. <span style="color: var(--md-accent-fg-color)">Events</span>
+## 5. Events
 
 | # | cyc  | Event                                                                                                    | Other                                 |
 |---|------|----------------------------------------------------------------------------------------------------------|---------------------------------------|
@@ -138,7 +138,7 @@ events show the first predictor responses and the end of the run.
 
 ---
 
-## 6. <span style="color: var(--md-accent-fg-color)">Waveform</span>
+## 6. Waveform
 
 `make -C examples/fe_demo view S=fd01_reset_init` opens
 `waves/fd01_reset_init.sucl` in Surfer, with a marker at each event above.
