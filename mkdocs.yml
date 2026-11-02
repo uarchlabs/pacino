@@ -47,6 +47,7 @@ extra:
     - fd01_reset_init
     - fd02_steady
     - fd03_two_branch
+    - fd04_p2_override
     - fd09_tage
 
 nav:

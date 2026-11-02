@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1066" height="410" viewBox="0 0 1066 410">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="1066" height="410" fill="#ffffff"/>
+<text x="30" y="34" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd04_p2_override: uBTB set 0 around the split at b[7]</text>
+<text x="30" y="56" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One column per cycle. Each way holds one region at a time, and an update for a region the set does not hold replaces the next way in turn.</text>
+<text x="145" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">180</text>
+<text x="255" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">190</text>
+<text x="365" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">200</text>
+<text x="475" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">210</text>
+<text x="585" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">220</text>
+<text x="695" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">230</text>
+<text x="805" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">240</text>
+<text x="915" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">250</text>
+<text x="1025" y="156" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">260</text>
+<text x="86" y="156" class="sans" font-size="11" fill="#59636e" text-anchor="end" font-weight="normal">cyc</text>
+<text x="86" y="128" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">p1 request</text>
+<rect x="151" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="156" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="173" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="178" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">1</text>
+<rect x="195" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="200" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">2</text>
+<rect x="217" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="222" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">3</text>
+<rect x="239" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="244" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<rect x="250" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="255" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<rect x="261" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="266" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<rect x="272" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="277" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<rect x="503" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="508" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="525" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="530" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">1</text>
+<rect x="547" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="552" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">2</text>
+<rect x="569" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="574" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">3</text>
+<rect x="591" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="596" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<rect x="602" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="607" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<rect x="613" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="618" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<rect x="624" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="629" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<rect x="657" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="662" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="690" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="695" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="778" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="783" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">2</text>
+<rect x="800" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="805" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">3</text>
+<rect x="822" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="827" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">4</text>
+<rect x="844" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="849" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<rect x="855" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="860" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<rect x="866" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="871" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<rect x="899" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="904" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="910" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="915" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">1</text>
+<rect x="943" y="112" width="11" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="948" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<rect x="1031" y="112" width="11" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="1036" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">3</text>
+<text x="86" y="189" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">way 0</text>
+<rect x="96" y="168" width="44" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="118" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[3]</text>
+<rect x="140" y="168" width="209" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="244" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[7]</text>
+<rect x="349" y="168" width="44" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="371" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[3]</text>
+<rect x="393" y="168" width="319" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="552" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[7]</text>
+<rect x="712" y="168" width="44" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="734" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[3]</text>
+<rect x="756" y="168" width="198" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="855" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[7]</text>
+<rect x="954" y="168" width="44" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="976" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[3]</text>
+<rect x="998" y="168" width="44" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="1020" y="189" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[7]</text>
+<text x="86" y="227" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">way 1</text>
+<rect x="96" y="206" width="220" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="206" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[4]</text>
+<rect x="316" y="206" width="44" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="338" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[0]</text>
+<rect x="360" y="206" width="308" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="514" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[4]</text>
+<rect x="668" y="206" width="55" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="695" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[0]</text>
+<rect x="723" y="206" width="66" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="756" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[4]</text>
+<rect x="789" y="206" width="176" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="877" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[0]</text>
+<rect x="965" y="206" width="55" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="992" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[4]</text>
+<rect x="1020" y="206" width="22" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="86" y="265" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">way 2</text>
+<rect x="96" y="244" width="231" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="211" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[5]</text>
+<rect x="327" y="244" width="44" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="349" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[1]</text>
+<rect x="371" y="244" width="308" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="525" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[5]</text>
+<rect x="679" y="244" width="55" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="706" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[1]</text>
+<rect x="734" y="244" width="187" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="827" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[5]</text>
+<rect x="921" y="244" width="55" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="948" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[1]</text>
+<rect x="976" y="244" width="66" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="1009" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[5]</text>
+<text x="86" y="303" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">way 3</text>
+<rect x="96" y="282" width="33" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="112" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[2]</text>
+<rect x="129" y="282" width="209" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="233" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[6]</text>
+<rect x="338" y="282" width="44" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="360" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[2]</text>
+<rect x="382" y="282" width="319" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="541" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[6]</text>
+<rect x="701" y="282" width="44" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="723" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[2]</text>
+<rect x="745" y="282" width="187" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="838" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[6]</text>
+<rect x="932" y="282" width="55" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="959" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[2]</text>
+<rect x="987" y="282" width="55" height="32" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="1014" y="303" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">b[6]</text>
+<rect x="145" y="92" width="1" height="222" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="145" y="88" class="mono" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">4</text>
+<rect x="167" y="92" width="1" height="222" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="167" y="88" class="mono" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">5</text>
+<rect x="277" y="92" width="1" height="222" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="277" y="88" class="mono" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">6</text>
+<rect x="343" y="92" width="1" height="222" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="343" y="88" class="mono" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">9</text>
+<rect x="387" y="92" width="1" height="222" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="387" y="88" class="mono" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">10</text>
+<rect x="640" y="92" width="1" height="222" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="640" y="88" class="mono" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">11</text>
+<text x="86" y="88" class="sans" font-size="11" fill="#ff6e42" text-anchor="end" font-weight="normal">event</text>
+<rect x="30" y="332" width="34" height="16" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="72" y="345" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">p1 request, uBTB hit (the digit k is b[k])</text>
+<rect x="380" y="332" width="34" height="16" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="422" y="345" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">p1 request, uBTB miss; in way 0, the b[3] and b[7] turns</text>
+<text x="30" y="370" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">p1 request: u_bpu.r_pc_p1 with u_ftq.w_ok_pred_p1; hit: u_bpu.r_ubtb_blk_p1.hit. Events 7 and 8 are at cyc 193, beside event 6.</text>
+<text x="30" y="388" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">The way contents are modeled from u_bpu.ubtb_upd_u0 with the round-robin rule of ubtb.sv; the model matches all 131 p1 hits and misses at b[k].</text>
+</svg>

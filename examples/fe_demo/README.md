@@ -55,8 +55,8 @@ events of its description's event table (FDT-10c, below), and prints
 one result line (FDT-10):
 
 ```
-  -I: fd04_p2_override: PASS, p2 redirects 49, events checked 6 of 6,
-      cyc 522
+  -I: fd04_p2_override: PASS, p2 redirects 64, events checked 14 of 14,
+      cyc 520
 ```
 
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`

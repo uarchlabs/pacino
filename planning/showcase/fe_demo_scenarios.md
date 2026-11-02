@@ -6,7 +6,7 @@
  FILE:    fe_demo_scenarios.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-11-01
+ UPDATED: 2026-11-02
  CONTACT: Jeff Nye
 ```
 
@@ -76,8 +76,9 @@ FD-3   Two branches in one block
 
 FD-4   p2 override
   shows     the FTB disagreeing with the uBTB and the p2 redirect
-  program   eight blocks 0x800 apart chained by taken conditionals,
-            sharing one 4-way uBTB set; the FTB holds all eight
+  program   eight blocks 0x800 apart sharing one 4-way uBTB set, the
+            FTB holding all eight: b[0] to b[6] each end in a JAL to
+            the next; b[7] holds a conditional, then a JAL back to b[0]
   waveform  uBTB p1, FTB p2, bpu_redir_p2, FTQ rewrite
   proof     a p2 redirect
 
@@ -319,4 +320,8 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
               failure", superseded by FDT-2 in session-082).
   2026-11-01  session-083, after DOC-012. FD-1 program: 128 passes
               (programs/fd01_reset_init.svh FD01_ITERS); it read 3000.
+  2026-11-02  session-084. FD-4 program: b[0] to b[6] chained by JALs,
+              b[7] a conditional then a JAL back to b[0] (Jeff, after
+              scratch runs of both forms); it read "chained by taken
+              conditionals".
 ```

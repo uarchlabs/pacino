@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-01
+ UPDATED: 2026-11-02
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,33 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-084: FD-4 chained by JALs.
+
+FD-4 PROGRAM CHANGED (Jeff, after scratch runs of both forms), by
+the IA outside a task: in programs/fd04_p2_override.svh, b[0] to b[6]
+end in a JAL to the next block instead of an always-taken
+conditional. b[7] unchanged: a conditional, then a JAL back to b[0].
+One-slot build, as before.
+  Reason: the conditionals had no recorded reason (DOC-002 chose
+    them; FD-4 named no branch type), and they made a p2 redirect
+    depend on TAGE's direction as well as the FTB. With JALs, every
+    uBTB miss with an FTB hit at b[0] to b[6] raises a p2 redirect.
+    The b[7] split behaviour is kept.
+  Result: -I: fd04_p2_override: PASS, p2 redirects 64, events checked
+    14 of 14, cyc 520. Of the 64, 49 follow a uBTB miss and 15 a uBTB
+    hit at b[7] (TD#193). regress_demo.sh 24 of 24, events 227 of 227.
+    regress.sh not run; no rtl/ file changed.
+  docs/fd04_p2_override.md: its "Departure from FD-4" note removed
+    (it quoted an earlier FD-4 program line).
+  fe_demo_scenarios.md FD-4 program line rewritten to name the JAL
+    chain and b[7]'s conditional, longer than the IA's proposed line.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_scenarios.md.
+
+Next free: BP-141, SYS-003, DOC-013, INFRA-014, TOOLS-007, TD#196.
 
 ---
 ## Session-083, after DOC-012: descriptions, markers group, console line.
