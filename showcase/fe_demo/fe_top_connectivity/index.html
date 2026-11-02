@@ -6828,7 +6828,7 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-<h1 id="fe_top-connectivity-inventory"><span style="color: var(--md-accent-fg-color)">fe_top Connectivity Inventory</span><a class="headerlink" href="#fe_top-connectivity-inventory" title="Permanent link">&para;</a></h1>
+<h1 id="fe_top-connectivity-inventory">fe_top Connectivity Inventory<a class="headerlink" href="#fe_top-connectivity-inventory" title="Permanent link">&para;</a></h1>
 <p>This file records the net-level connectivity of <code>fe_top</code>. The block
 diagrams docs/fe_block.svg and docs/fe_pipe.svg use it as the
 reference for connections between blocks.</p>
@@ -6837,7 +6837,7 @@ reference for connections between blocks.</p>
 <code>bp_cluster</code>, and section 7 describes the page table walker that the
 testbench places beside <code>fe_top</code>.</p>
 <hr />
-<h2 id="1-notation"><span style="color: var(--md-accent-fg-color)">1. Notation</span><a class="headerlink" href="#1-notation" title="Permanent link">&para;</a></h2>
+<h2 id="1-notation">1. Notation<a class="headerlink" href="#1-notation" title="Permanent link">&para;</a></h2>
 <p>Notation:</p>
 <ul>
 <li><code>W bits</code> is the packed width. <code>N x W bits</code> is an unpacked array of
@@ -6852,8 +6852,8 @@ testbench places beside <code>fe_top</code>.</p>
 nets between instances (section 3) and 75 top-level ports
 (section 4).</p>
 <hr />
-<h2 id="2-instances-parameters-and-types"><span style="color: var(--md-accent-fg-color)">2. Instances, parameters and types</span><a class="headerlink" href="#2-instances-parameters-and-types" title="Permanent link">&para;</a></h2>
-<h3 id="21-instances-in-fe_top"><span style="color: var(--md-accent-fg-color)">2.1 Instances in fe_top</span><a class="headerlink" href="#21-instances-in-fe_top" title="Permanent link">&para;</a></h3>
+<h2 id="2-instances-parameters-and-types">2. Instances, parameters and types<a class="headerlink" href="#2-instances-parameters-and-types" title="Permanent link">&para;</a></h2>
+<h3 id="21-instances-in-fe_top">2.1 Instances in fe_top<a class="headerlink" href="#21-instances-in-fe_top" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>inst     module         instantiated    module file
 u_bpu    bp_cluster     fe_top.sv:400   rtl/core/frontend/bpu/rtl/bp_cluster.sv
 u_ftq    ftq            fe_top.sv:505   rtl/core/frontend/ftq/rtl/ftq.sv
@@ -6871,7 +6871,7 @@ u_dec    instr_decoder  fe_top.sv:817   rtl/core/frontend/decode/rtl/
 <li>The PMP/PMA checker is instantiated in the ITLB <code>u_itlb</code></li>
 </ul>
 <p>FE-15 (planning/arch/fe_decisions.md:1333) names the same seven units.</p>
-<h3 id="22-parameters-package-values"><span style="color: var(--md-accent-fg-color)">2.2 Parameters (package values)</span><a class="headerlink" href="#22-parameters-package-values" title="Permanent link">&para;</a></h3>
+<h3 id="22-parameters-package-values">2.2 Parameters (package values)<a class="headerlink" href="#22-parameters-package-values" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>VA_WIDTH         41   bp_defines_pkg.sv:25
 PA_WIDTH         36   bp_defines_pkg.sv:573
 FTQ_DEPTH        64   bp_defines_pkg.sv:30
@@ -6903,7 +6903,7 @@ PMA_WIDTH         4   bp_defines_pkg.sv:605
 <p>bp_defines_pkg.sv and bp_structs_pkg.sv are in
 rtl/core/frontend/bpu/rtl/, decode_pkg.sv in
 rtl/core/frontend/decode/rtl/, csr_pkg.sv in rtl/core/csr/rtl/.</p>
-<h3 id="23-types-elaborated-width-of-one-element"><span style="color: var(--md-accent-fg-color)">2.3 Types (elaborated width of one element)</span><a class="headerlink" href="#23-types-elaborated-width-of-one-element" title="Permanent link">&para;</a></h3>
+<h3 id="23-types-elaborated-width-of-one-element">2.3 Types (elaborated width of one element)<a class="headerlink" href="#23-types-elaborated-width-of-one-element" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>type                width  declared
 decode_pkt_t          133  decode_pkg.sv:311
 vec_decode_pkt_t       46  decode_pkg.sv:678
@@ -6931,12 +6931,12 @@ fe_cfg_t               84  csr_pkg.sv:232
 ptw_csr_t                  csr_pkg.sv:264 (walker only, section 7)
 </code></pre></div>
 <hr />
-<h2 id="3-connections-between-instances-by-interface"><span style="color: var(--md-accent-fg-color)">3. Connections between instances, by interface</span><a class="headerlink" href="#3-connections-between-instances-by-interface" title="Permanent link">&para;</a></h2>
+<h2 id="3-connections-between-instances-by-interface">3. Connections between instances, by interface<a class="headerlink" href="#3-connections-between-instances-by-interface" title="Permanent link">&para;</a></h2>
 <p>Every net here is declared in fe_top.sv:219-395 and bound to exactly
 two instance ports, one output and one input, except where a group
 note says otherwise. The groups follow the interface documents and
 the comments of fe_top.sv:219, 320, 352, 373, 389.</p>
-<h3 id="31-ftq-bpu-prediction-request-p0"><span style="color: var(--md-accent-fg-color)">3.1 FTQ -&gt; BPU prediction request, p0</span><a class="headerlink" href="#31-ftq-bpu-prediction-request-p0" title="Permanent link">&para;</a></h3>
+<h3 id="31-ftq-bpu-prediction-request-p0">3.1 FTQ -&gt; BPU prediction request, p0<a class="headerlink" href="#31-ftq-bpu-prediction-request-p0" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 3 (line 81)</li>
@@ -6951,7 +6951,7 @@ ftq_pred_idx_p0  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:224)
   from u_ftq.ftq_pred_idx_p0  ftq.sv:81  (bind fe_top.sv:510)
   to   u_bpu.ftq_pred_idx_p0  bp_cluster.sv:112  (bind fe_top.sv:405)
 </code></pre></div>
-<h3 id="32-bpu-ftq-ram-init-readies-bp-137"><span style="color: var(--md-accent-fg-color)">3.2 BPU -&gt; FTQ RAM init readies (BP-137)</span><a class="headerlink" href="#32-bpu-ftq-ram-init-readies-bp-137" title="Permanent link">&para;</a></h3>
+<h3 id="32-bpu-ftq-ram-init-readies-bp-137">3.2 BPU -&gt; FTQ RAM init readies (BP-137)<a class="headerlink" href="#32-bpu-ftq-ram-init-readies-bp-137" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 3 (lines 100-108)</li>
@@ -6966,7 +6966,7 @@ bpu_sc_ready  logic  1 bits  (fe_top.sv:311)
   from u_bpu.sc_ready  bp_cluster.sv:285  (bind fe_top.sv:490)
   to   u_ftq.sc_ready  ftq.sv:97  (bind fe_top.sv:516)
 </code></pre></div>
-<h3 id="33-bpu-ftq-queue-status"><span style="color: var(--md-accent-fg-color)">3.3 BPU -&gt; FTQ queue status</span><a class="headerlink" href="#33-bpu-ftq-queue-status" title="Permanent link">&para;</a></h3>
+<h3 id="33-bpu-ftq-queue-status">3.3 BPU -&gt; FTQ queue status<a class="headerlink" href="#33-bpu-ftq-queue-status" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 8 (lines 935-958)</li>
@@ -6990,7 +6990,7 @@ bpu_sc_upd_rdy  logic [NUM_PRED_SLOTS-1:0]  2 bits  (fe_top.sv:316)
   from u_bpu.sc_upd_rdy  bp_cluster.sv:299  (bind fe_top.sv:498)
   to   u_ftq.sc_upd_rdy  ftq.sv:198  (bind fe_top.sv:573)
 </code></pre></div>
-<h3 id="34-bpu-ftq-initial-prediction-p1"><span style="color: var(--md-accent-fg-color)">3.4 BPU -&gt; FTQ initial prediction, p1</span><a class="headerlink" href="#34-bpu-ftq-initial-prediction-p1" title="Permanent link">&para;</a></h3>
+<h3 id="34-bpu-ftq-initial-prediction-p1">3.4 BPU -&gt; FTQ initial prediction, p1<a class="headerlink" href="#34-bpu-ftq-initial-prediction-p1" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 4 (line 142)</li>
@@ -7011,7 +7011,7 @@ bpu_pred_pft_p1  logic [VA_WIDTH-1:0]  41 bits  (fe_top.sv:229)
   from u_bpu.bpu_pred_pft_p1  bp_cluster.sv:123  (bind fe_top.sv:410)
   to   u_ftq.bpu_pred_pft_p1  ftq.sv:105  (bind fe_top.sv:521)
 </code></pre></div>
-<h3 id="35-bpu-ftq-slot-correction-p2-and-p3"><span style="color: var(--md-accent-fg-color)">3.5 BPU -&gt; FTQ slot correction, p2 and p3</span><a class="headerlink" href="#35-bpu-ftq-slot-correction-p2-and-p3" title="Permanent link">&para;</a></h3>
+<h3 id="35-bpu-ftq-slot-correction-p2-and-p3">3.5 BPU -&gt; FTQ slot correction, p2 and p3<a class="headerlink" href="#35-bpu-ftq-slot-correction-p2-and-p3" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 4a (line 276)</li>
@@ -7035,7 +7035,7 @@ bpu_slot_p3  bp_ftq_slot_t  2 x 57 bits  (fe_top.sv:239)
   from u_bpu.bpu_slot_p3  bp_cluster.sv:149  (bind fe_top.sv:420)
   to   u_ftq.bpu_slot_p3  ftq.sv:117  (bind fe_top.sv:529)
 </code></pre></div>
-<h3 id="36-bpu-ftq-block-scalar-correction-p2"><span style="color: var(--md-accent-fg-color)">3.6 BPU -&gt; FTQ block-scalar correction, p2</span><a class="headerlink" href="#36-bpu-ftq-block-scalar-correction-p2" title="Permanent link">&para;</a></h3>
+<h3 id="36-bpu-ftq-block-scalar-correction-p2">3.6 BPU -&gt; FTQ block-scalar correction, p2<a class="headerlink" href="#36-bpu-ftq-block-scalar-correction-p2" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 4c (line 360)</li>
@@ -7053,7 +7053,7 @@ bpu_blk_pft_p2  logic [VA_WIDTH-1:0]  41 bits  (fe_top.sv:243)
   from u_bpu.bpu_blk_pft_p2  bp_cluster.sv:160  (bind fe_top.sv:424)
   to   u_ftq.bpu_blk_pft_p2  ftq.sv:125  (bind fe_top.sv:533)
 </code></pre></div>
-<h3 id="37-bpu-ftq-redirects-p2-and-p3"><span style="color: var(--md-accent-fg-color)">3.7 BPU -&gt; FTQ redirects, p2 and p3</span><a class="headerlink" href="#37-bpu-ftq-redirects-p2-and-p3" title="Permanent link">&para;</a></h3>
+<h3 id="37-bpu-ftq-redirects-p2-and-p3">3.7 BPU -&gt; FTQ redirects, p2 and p3<a class="headerlink" href="#37-bpu-ftq-redirects-p2-and-p3" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 6 (line 643)</li>
@@ -7071,7 +7071,7 @@ bpu_redir_idx_p3  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:233)
   from u_bpu.bpu_redir_idx_p3  bp_cluster.sv:131  (bind fe_top.sv:414)
   to   u_ftq.bpu_redir_idx_p3  ftq.sv:131  (bind fe_top.sv:537)
 </code></pre></div>
-<h3 id="38-bpu-ftq-prediction-metadata-p2-and-p3"><span style="color: var(--md-accent-fg-color)">3.8 BPU -&gt; FTQ prediction metadata, p2 and p3</span><a class="headerlink" href="#38-bpu-ftq-prediction-metadata-p2-and-p3" title="Permanent link">&para;</a></h3>
+<h3 id="38-bpu-ftq-prediction-metadata-p2-and-p3">3.8 BPU -&gt; FTQ prediction metadata, p2 and p3<a class="headerlink" href="#38-bpu-ftq-prediction-metadata-p2-and-p3" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 7.1 (line 716)</li>
@@ -7105,7 +7105,7 @@ bpu_meta_sc_p3  sc_pred_meta_t  2 x 112 bits  (fe_top.sv:252)
   from u_bpu.bpu_meta_sc_p3  bp_cluster.sv:181  (bind fe_top.sv:433)
   to   u_ftq.bpu_meta_sc_p3  ftq.sv:146  (bind fe_top.sv:546)
 </code></pre></div>
-<h3 id="39-ftq-bpu-per-predictor-updates-u0"><span style="color: var(--md-accent-fg-color)">3.9 FTQ -&gt; BPU per-predictor updates, u0</span><a class="headerlink" href="#39-ftq-bpu-per-predictor-updates-u0" title="Permanent link">&para;</a></h3>
+<h3 id="39-ftq-bpu-per-predictor-updates-u0">3.9 FTQ -&gt; BPU per-predictor updates, u0<a class="headerlink" href="#39-ftq-bpu-per-predictor-updates-u0" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 8 (line 841)</li>
@@ -7138,7 +7138,7 @@ sc_upd_inp_u0  sc_upd_inp_t  2 x 125 bits  (fe_top.sv:300)
   from u_ftq.sc_upd_inp_u0  ftq.sv:194  (bind fe_top.sv:570)
   to   u_bpu.sc_upd_inp_u0  bp_cluster.sv:223  (bind fe_top.sv:459)
 </code></pre></div>
-<h3 id="310-ftq-bpu-ftb-update-u0"><span style="color: var(--md-accent-fg-color)">3.10 FTQ -&gt; BPU FTB update, u0</span><a class="headerlink" href="#310-ftq-bpu-ftb-update-u0" title="Permanent link">&para;</a></h3>
+<h3 id="310-ftq-bpu-ftb-update-u0">3.10 FTQ -&gt; BPU FTB update, u0<a class="headerlink" href="#310-ftq-bpu-ftb-update-u0" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 8 (line 841;
@@ -7194,7 +7194,7 @@ ftb_upd_pft_addr_u0  logic [VA_WIDTH-1:0]  41 bits  (fe_top.sv:289)
   from u_ftq.ftb_upd_pft_addr_u0  ftq.sv:216  (bind fe_top.sv:589)
   to   u_bpu.ftb_upd_pft_addr_u0  bp_cluster.sv:211  (bind fe_top.sv:452)
 </code></pre></div>
-<h3 id="311-ftq-bpu-ras-commit-and-restore"><span style="color: var(--md-accent-fg-color)">3.11 FTQ -&gt; BPU RAS commit and restore</span><a class="headerlink" href="#311-ftq-bpu-ras-commit-and-restore" title="Permanent link">&para;</a></h3>
+<h3 id="311-ftq-bpu-ras-commit-and-restore">3.11 FTQ -&gt; BPU RAS commit and restore<a class="headerlink" href="#311-ftq-bpu-ras-commit-and-restore" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 8 (RAS commit
@@ -7219,7 +7219,7 @@ ras_restore_snapshot  bp_ras_snapshot_t  12 bits  (fe_top.sv:264)
   from u_ftq.ras_restore_snapshot  ftq.sv:170  (bind fe_top.sv:556)
   to   u_bpu.ras_restore_snapshot  bp_cluster.sv:228  (bind fe_top.sv:461)
 </code></pre></div>
-<h3 id="312-ftq-bpu-history-rollback-and-checkpoint"><span style="color: var(--md-accent-fg-color)">3.12 FTQ &lt;-&gt; BPU history rollback and checkpoint</span><a class="headerlink" href="#312-ftq-bpu-history-rollback-and-checkpoint" title="Permanent link">&para;</a></h3>
+<h3 id="312-ftq-bpu-history-rollback-and-checkpoint">3.12 FTQ &lt;-&gt; BPU history rollback and checkpoint<a class="headerlink" href="#312-ftq-bpu-history-rollback-and-checkpoint" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_bpu_interfaces.md 9 (line 974)</li>
@@ -7255,7 +7255,7 @@ ckpt_phist_ptr  logic [PHIST_PTR_BITS-1:0]  5 bits  (fe_top.sv:262)
   from u_bpu.ckpt_phist_ptr  bp_cluster.sv:269  (bind fe_top.sv:479)
   to   u_ftq.ckpt_phist_ptr  ftq.sv:109  (bind fe_top.sv:523)
 </code></pre></div>
-<h3 id="313-ftq-ifu-translation-request"><span style="color: var(--md-accent-fg-color)">3.13 FTQ -&gt; IFU translation request</span><a class="headerlink" href="#313-ftq-ifu-translation-request" title="Permanent link">&para;</a></h3>
+<h3 id="313-ftq-ifu-translation-request">3.13 FTQ -&gt; IFU translation request<a class="headerlink" href="#313-ftq-ifu-translation-request" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_ifu_interfaces.md 4.1 (line 174)</li>
@@ -7273,7 +7273,7 @@ ftq_ifu_xlate_idx  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:325)
   from u_ftq.ftq_ifu_xlate_idx  ftq.sv:224  (bind fe_top.sv:593)
   to   u_ifu.ftq_ifu_xlate_idx  ifu.sv:70  (bind fe_top.sv:643)
 </code></pre></div>
-<h3 id="314-ftq-ifu-fetch-request"><span style="color: var(--md-accent-fg-color)">3.14 FTQ -&gt; IFU fetch request</span><a class="headerlink" href="#314-ftq-ifu-fetch-request" title="Permanent link">&para;</a></h3>
+<h3 id="314-ftq-ifu-fetch-request">3.14 FTQ -&gt; IFU fetch request<a class="headerlink" href="#314-ftq-ifu-fetch-request" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_ifu_interfaces.md 4 (line 126)</li>
@@ -7306,7 +7306,7 @@ ftq_ifu_commit_ptr  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:334)
   from u_ftq.ftq_ifu_commit_ptr  ftq.sv:235  (bind fe_top.sv:602)
   to   u_ifu.ftq_ifu_commit_ptr  ifu.sv:81  (bind fe_top.sv:652)
 </code></pre></div>
-<h3 id="315-ftq-ifu-flush"><span style="color: var(--md-accent-fg-color)">3.15 FTQ -&gt; IFU flush</span><a class="headerlink" href="#315-ftq-ifu-flush" title="Permanent link">&para;</a></h3>
+<h3 id="315-ftq-ifu-flush">3.15 FTQ -&gt; IFU flush<a class="headerlink" href="#315-ftq-ifu-flush" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_ifu_interfaces.md 5 (line 252)</li>
@@ -7318,7 +7318,7 @@ ftq_ifu_flush_idx  logic [FTQ_IDX_BITS-1:0]  6 bits  (fe_top.sv:336)
   from u_ftq.ftq_ifu_flush_idx  ftq.sv:238  (bind fe_top.sv:604)
   to   u_ifu.ftq_ifu_flush_idx  ifu.sv:85  (bind fe_top.sv:654)
 </code></pre></div>
-<h3 id="316-ifu-ftq-predecode-writeback"><span style="color: var(--md-accent-fg-color)">3.16 IFU -&gt; FTQ predecode writeback</span><a class="headerlink" href="#316-ifu-ftq-predecode-writeback" title="Permanent link">&para;</a></h3>
+<h3 id="316-ifu-ftq-predecode-writeback">3.16 IFU -&gt; FTQ predecode writeback<a class="headerlink" href="#316-ifu-ftq-predecode-writeback" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_ifu_interfaces.md 6 (line 329)</li>
@@ -7363,7 +7363,7 @@ ifu_ftq_uc_end  logic  1 bits  (fe_top.sv:349)
   from u_ifu.ifu_ftq_uc_end  ifu.sv:100  (bind fe_top.sv:667)
   to   u_ftq.ifu_ftq_uc_end  ftq.sv:252  (bind fe_top.sv:617)
 </code></pre></div>
-<h3 id="317-ifu-l1i-fetch-request"><span style="color: var(--md-accent-fg-color)">3.17 IFU -&gt; L1I fetch request</span><a class="headerlink" href="#317-ifu-l1i-fetch-request" title="Permanent link">&para;</a></h3>
+<h3 id="317-ifu-l1i-fetch-request">3.17 IFU -&gt; L1I fetch request<a class="headerlink" href="#317-ifu-l1i-fetch-request" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/l1i_ifu_interfaces.md 4.1 (line 213)</li>
@@ -7387,7 +7387,7 @@ ifu_l1i_req_uncached  logic  1 bits  (fe_top.sv:361)
   from u_ifu.ifu_l1i_req_uncached  ifu.sv:108  (bind fe_top.sv:673)
   to   u_l1i.core_uncached  l1i.sv:57  (bind fe_top.sv:718)
 </code></pre></div>
-<h3 id="318-l1i-ifu-response"><span style="color: var(--md-accent-fg-color)">3.18 L1I -&gt; IFU response</span><a class="headerlink" href="#318-l1i-ifu-response" title="Permanent link">&para;</a></h3>
+<h3 id="318-l1i-ifu-response">3.18 L1I -&gt; IFU response<a class="headerlink" href="#318-l1i-ifu-response" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/l1i_ifu_interfaces.md 5.1 (line 340)</li>
@@ -7405,7 +7405,7 @@ l1i_ifu_rsp_err  logic  1 bits  (fe_top.sv:370)
   from u_l1i.core_rerr  l1i.sv:62  (bind fe_top.sv:723)
   to   u_ifu.l1i_ifu_rsp_err  ifu.sv:112  (bind fe_top.sv:677)
 </code></pre></div>
-<h3 id="319-ifu-l1i-maintenance"><span style="color: var(--md-accent-fg-color)">3.19 IFU -&gt; L1I maintenance</span><a class="headerlink" href="#319-ifu-l1i-maintenance" title="Permanent link">&para;</a></h3>
+<h3 id="319-ifu-l1i-maintenance">3.19 IFU -&gt; L1I maintenance<a class="headerlink" href="#319-ifu-l1i-maintenance" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/l1i_ifu_interfaces.md 10.1 (line 578)</li>
@@ -7426,7 +7426,7 @@ l1i_ifu_inv_done  logic  1 bits  (fe_top.sv:366)
   from u_l1i.core_inv_done  l1i.sv:69  (bind fe_top.sv:728)
   to   u_ifu.l1i_ifu_inv_done  ifu.sv:119  (bind fe_top.sv:682)
 </code></pre></div>
-<h3 id="320-ifu-itlb"><span style="color: var(--md-accent-fg-color)">3.20 IFU &lt;-&gt; ITLB</span><a class="headerlink" href="#320-ifu-itlb" title="Permanent link">&para;</a></h3>
+<h3 id="320-ifu-itlb">3.20 IFU &lt;-&gt; ITLB<a class="headerlink" href="#320-ifu-itlb" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/itlb_ifu_interfaces.md 2 (line 34)</li>
@@ -7468,7 +7468,7 @@ itlb_ifu_pma  logic [PMA_WIDTH-1:0]  4 bits  (fe_top.sv:386)
   from u_itlb.itlb_ifu_pma  itlb.sv:187  (bind fe_top.sv:768)
   to   u_ifu.itlb_ifu_pma  ifu.sv:140  (bind fe_top.sv:699)
 </code></pre></div>
-<h3 id="321-ifu-ibuf"><span style="color: var(--md-accent-fg-color)">3.21 IFU -&gt; ibuf</span><a class="headerlink" href="#321-ifu-ibuf" title="Permanent link">&para;</a></h3>
+<h3 id="321-ifu-ibuf">3.21 IFU -&gt; ibuf<a class="headerlink" href="#321-ifu-ibuf" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ifu_ibuf_interfaces.md 2 (line 30)</li>
@@ -7486,7 +7486,7 @@ ibuf_ifu_rdy  logic  1 bits  (fe_top.sv:394)
   from u_ibuf.ibuf_ifu_rdy  ibuf.sv:67  (bind fe_top.sv:808)
   to   u_ifu.ibuf_ifu_rdy  ifu.sv:146  (bind fe_top.sv:703)
 </code></pre></div>
-<h3 id="322-ibuf-decode"><span style="color: var(--md-accent-fg-color)">3.22 ibuf -&gt; decode</span><a class="headerlink" href="#322-ibuf-decode" title="Permanent link">&para;</a></h3>
+<h3 id="322-ibuf-decode">3.22 ibuf -&gt; decode<a class="headerlink" href="#322-ibuf-decode" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/ibuf_decisions.md IBUF-10 (line 95)</li>
@@ -7496,7 +7496,7 @@ ibuf_ifu_rdy  logic  1 bits  (fe_top.sv:394)
   from u_ibuf.ibuf_dec_slot  ibuf.sv:73  (bind fe_top.sv:810)
   to   u_dec.pd_bundle  instr_decoder.sv:100  (bind fe_top.sv:819)
 </code></pre></div><a class="headerlink" href="#ibuf_dec_slot-ifu_pd_pkt_t-8-x-190-bits-fe_topsv395-from-u_ibufibuf_dec_slot-ibufsv73-bind-fe_topsv810-to-u_decpd_bundle-instr_decodersv100-bind-fe_topsv819" title="Permanent link">&para;</a></h2>
-<h2 id="4-the-fe_top-boundary"><span style="color: var(--md-accent-fg-color)">4. The fe_top boundary</span><a class="headerlink" href="#4-the-fe_top-boundary" title="Permanent link">&para;</a></h2>
+<h2 id="4-the-fe_top-boundary">4. The fe_top boundary<a class="headerlink" href="#4-the-fe_top-boundary" title="Permanent link">&para;</a></h2>
 <p>The ports are declared at fe_top.sv:96-217 and grouped as FE-17
 (planning/arch/fe_decisions.md:1378) and FE-20
 (planning/arch/fe_decisions.md:1445) group them; fe_top.sv:29-60
@@ -7511,7 +7511,7 @@ L1I's <code>mem</code> port is section 4.8. Two outputs are in no group
 (section 4.12).</p>
 <p><code>bkend_ftq_redir_val</code> is the one fe_top net with two readers: the
 FTQ and the ibuf clear (fe_top.sv:44-45, IBUF-13).</p>
-<h3 id="41-clock-and-reset"><span style="color: var(--md-accent-fg-color)">4.1 Clock and reset</span><a class="headerlink" href="#41-clock-and-reset" title="Permanent link">&para;</a></h3>
+<h3 id="41-clock-and-reset">4.1 Clock and reset<a class="headerlink" href="#41-clock-and-reset" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>not grouped by FE-17 or FE-20</li>
@@ -7523,7 +7523,7 @@ rstn  in   logic  1 bits  (fe_top.sv:98)
   -&gt; u_bpu, u_ftq, u_ifu, u_l1i, u_itlb, u_ibuf
      (binds fe_top.sv:402, 507, 639, 713, 756, 804)
 </code></pre></div>
-<h3 id="42-backend-decode-to-rename-fe-17-with-the-read-ready-fe-20-outward"><span style="color: var(--md-accent-fg-color)">4.2 backend: decode to rename (FE-17), with the read ready (FE-20 outward)</span><a class="headerlink" href="#42-backend-decode-to-rename-fe-17-with-the-read-ready-fe-20-outward" title="Permanent link">&para;</a></h3>
+<h3 id="42-backend-decode-to-rename-fe-17-with-the-read-ready-fe-20-outward">4.2 backend: decode to rename (FE-17), with the read ready (FE-20 outward)<a class="headerlink" href="#42-backend-decode-to-rename-fe-17-with-the-read-ready-fe-20-outward" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-17 backend (line 1410)</li>
@@ -7544,7 +7544,7 @@ vtype_hazard  out  logic            [SLOTS-1:0]  8 bits  (fe_top.sv:107)
 dec_ibuf_rdy  in   logic  1 bits  (fe_top.sv:108)
   -&gt; u_ibuf.dec_ibuf_rdy  ibuf.sv:74  (bind fe_top.sv:811)
 </code></pre></div>
-<h3 id="43-backend-ftq-resolution-fe-17"><span style="color: var(--md-accent-fg-color)">4.3 backend: FTQ resolution (FE-17)</span><a class="headerlink" href="#43-backend-ftq-resolution-fe-17" title="Permanent link">&para;</a></h3>
+<h3 id="43-backend-ftq-resolution-fe-17">4.3 backend: FTQ resolution (FE-17)<a class="headerlink" href="#43-backend-ftq-resolution-fe-17" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-17 backend (line 1410)</li>
@@ -7557,7 +7557,7 @@ bkend_ftq_rsv  in   ftq_resolve_t  2 x 57 bits  (fe_top.sv:114)
 ftq_bkend_rsv_rdy  out  logic [NUM_RESOLVE_PORTS-1:0]  2 bits  (fe_top.sv:116)
   &lt;- u_ftq.ftq_bkend_rsv_rdy  ftq.sv:260  (bind fe_top.sv:620)
 </code></pre></div>
-<h3 id="44-backend-ftq-redirect-fe-17"><span style="color: var(--md-accent-fg-color)">4.4 backend: FTQ redirect (FE-17)</span><a class="headerlink" href="#44-backend-ftq-redirect-fe-17" title="Permanent link">&para;</a></h3>
+<h3 id="44-backend-ftq-redirect-fe-17">4.4 backend: FTQ redirect (FE-17)<a class="headerlink" href="#44-backend-ftq-redirect-fe-17" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_backend_interfaces.md 5 (line 172)</li>
@@ -7579,7 +7579,7 @@ bkend_ftq_redir_cause  in   ftq_redir_cause_e  2 bits  (fe_top.sv:122)
 bkend_ftq_redir_taken  in   logic  1 bits  (fe_top.sv:125)
   -&gt; u_ftq.bkend_ftq_redir_taken  ftq.sv:270  (bind fe_top.sv:627)
 </code></pre></div>
-<h3 id="45-backend-ftq-commit-fe-17"><span style="color: var(--md-accent-fg-color)">4.5 backend: FTQ commit (FE-17)</span><a class="headerlink" href="#45-backend-ftq-commit-fe-17" title="Permanent link">&para;</a></h3>
+<h3 id="45-backend-ftq-commit-fe-17">4.5 backend: FTQ commit (FE-17)<a class="headerlink" href="#45-backend-ftq-commit-fe-17" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/ftq_backend_interfaces.md 6 (line 313)</li>
@@ -7589,7 +7589,7 @@ bkend_ftq_redir_taken  in   logic  1 bits  (fe_top.sv:125)
 bkend_ftq_commit_idx  in   logic [FTQ_PTR_BITS-1:0]  7 bits  (fe_top.sv:127)
   -&gt; u_ftq.bkend_ftq_commit_idx  ftq.sv:275  (bind fe_top.sv:629)
 </code></pre></div>
-<h3 id="46-backend-commit-stage-to-ifu-fencei-and-cboinval-fe-17"><span style="color: var(--md-accent-fg-color)">4.6 backend: commit stage to IFU, FENCE.I and cbo.inval (FE-17)</span><a class="headerlink" href="#46-backend-commit-stage-to-ifu-fencei-and-cboinval-fe-17" title="Permanent link">&para;</a></h3>
+<h3 id="46-backend-commit-stage-to-ifu-fencei-and-cboinval-fe-17">4.6 backend: commit stage to IFU, FENCE.I and cbo.inval (FE-17)<a class="headerlink" href="#46-backend-commit-stage-to-ifu-fencei-and-cboinval-fe-17" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/interfaces/l1i_ifu_interfaces.md 11.2 (line 690)</li>
@@ -7605,7 +7605,7 @@ cmt_ifu_maint_paddr  in   logic [PA_WIDTH-1:0]  36 bits  (fe_top.sv:136)
 ifu_cmt_maint_ack  out  logic  1 bits  (fe_top.sv:137)
   &lt;- u_ifu.ifu_cmt_maint_ack  ifu.sv:126  (bind fe_top.sv:687)
 </code></pre></div>
-<h3 id="47-translation-itlb-to-the-page-table-walker-fe-17"><span style="color: var(--md-accent-fg-color)">4.7 translation: ITLB to the page table walker (FE-17)</span><a class="headerlink" href="#47-translation-itlb-to-the-page-table-walker-fe-17" title="Permanent link">&para;</a></h3>
+<h3 id="47-translation-itlb-to-the-page-table-walker-fe-17">4.7 translation: ITLB to the page table walker (FE-17)<a class="headerlink" href="#47-translation-itlb-to-the-page-table-walker-fe-17" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-17 translation (line 1391)</li>
@@ -7650,7 +7650,7 @@ l2t_itlb_gpa  in   logic [FAULT_GPA_WIDTH-1:0]  56 bits  (fe_top.sv:160)
 l2t_itlb_gpa_imp  in   logic [1:0]  2 bits  (fe_top.sv:161)
   -&gt; u_itlb.l2t_itlb_gpa_imp  itlb.sv:208  (bind fe_top.sv:787)
 </code></pre></div>
-<h3 id="48-instruction-the-l1i-l2-side-link-fe-17-fe-21"><span style="color: var(--md-accent-fg-color)">4.8 instruction: the L1I l2-side link (FE-17, FE-21)</span><a class="headerlink" href="#48-instruction-the-l1i-l2-side-link-fe-17-fe-21" title="Permanent link">&para;</a></h3>
+<h3 id="48-instruction-the-l1i-l2-side-link-fe-17-fe-21">4.8 instruction: the L1I l2-side link (FE-17, FE-21)<a class="headerlink" href="#48-instruction-the-l1i-l2-side-link-fe-17-fe-21" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-17 instruction (line 1385)</li>
@@ -7698,7 +7698,7 @@ l1i_mem_d_data  in   logic [255:0]  256 bits  (fe_top.sv:185)
 l1i_mem_d_corrupt  in   logic  1 bits  (fe_top.sv:186)
   -&gt; u_l1i.mem_d_corrupt  l1i.sv:91  (bind fe_top.sv:748)
 </code></pre></div>
-<h3 id="49-csr-fe_csr_t-fe-20"><span style="color: var(--md-accent-fg-color)">4.9 csr: fe_csr_t (FE-20)</span><a class="headerlink" href="#49-csr-fe_csr_t-fe-20" title="Permanent link">&para;</a></h3>
+<h3 id="49-csr-fe_csr_t-fe-20">4.9 csr: fe_csr_t (FE-20)<a class="headerlink" href="#49-csr-fe_csr_t-fe-20" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-20 csr (line 1450)</li>
@@ -7707,7 +7707,7 @@ l1i_mem_d_corrupt  in   logic  1 bits  (fe_top.sv:186)
 <div class="highlight"><pre><span></span><code>fe_csr  in   fe_csr_t  733 bits  (fe_top.sv:192)
   -&gt; u_itlb.fe_csr  itlb.sv:215  (bind fe_top.sv:788)
 </code></pre></div>
-<h3 id="410-config-fe_cfg_t-fe-20"><span style="color: var(--md-accent-fg-color)">4.10 config: fe_cfg_t (FE-20)</span><a class="headerlink" href="#410-config-fe_cfg_t-fe-20" title="Permanent link">&para;</a></h3>
+<h3 id="410-config-fe_cfg_t-fe-20">4.10 config: fe_cfg_t (FE-20)<a class="headerlink" href="#410-config-fe_cfg_t-fe-20" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-20 config (line 1459)</li>
@@ -7731,7 +7731,7 @@ l1i_mem_d_corrupt  in   logic  1 bits  (fe_top.sv:186)
   .ext_enable -&gt; u_dec.ext_enable
       instr_decoder.sv:95  (bind fe_top.sv:818)
 </code></pre></div>
-<h3 id="411-maintenance-itlb-invalidate-fe-20"><span style="color: var(--md-accent-fg-color)">4.11 maintenance: ITLB invalidate (FE-20)</span><a class="headerlink" href="#411-maintenance-itlb-invalidate-fe-20" title="Permanent link">&para;</a></h3>
+<h3 id="411-maintenance-itlb-invalidate-fe-20">4.11 maintenance: ITLB invalidate (FE-20)<a class="headerlink" href="#411-maintenance-itlb-invalidate-fe-20" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>planning/arch/fe_decisions.md FE-20 maintenance (line 1472)</li>
@@ -7752,7 +7752,7 @@ bkend_itlb_inv_asid  in   logic [ASID_WIDTH-1:0]  16 bits  (fe_top.sv:209)
 bkend_itlb_inv_vmid  in   logic [VMID_WIDTH-1:0]  14 bits  (fe_top.sv:210)
   -&gt; u_itlb.bkend_itlb_inv_vmid  itlb.sv:224  (bind fe_top.sv:795)
 </code></pre></div>
-<h3 id="412-observation-not-in-fe-17-or-fe-20"><span style="color: var(--md-accent-fg-color)">4.12 observation: not in FE-17 or FE-20</span><a class="headerlink" href="#412-observation-not-in-fe-17-or-fe-20" title="Permanent link">&para;</a></h3>
+<h3 id="412-observation-not-in-fe-17-or-fe-20">4.12 observation: not in FE-17 or FE-20<a class="headerlink" href="#412-observation-not-in-fe-17-or-fe-20" title="Permanent link">&para;</a></h3>
 <p>Specified by:</p>
 <ul>
 <li>no planning document</li>
@@ -7763,8 +7763,8 @@ bkend_itlb_inv_vmid  in   logic [VMID_WIDTH-1:0]  14 bits  (fe_top.sv:210)
 ftq_empty  out  logic  1 bits  (fe_top.sv:216)
   &lt;- u_ftq.ftq_empty  ftq.sv:282  (bind fe_top.sv:631)
 </code></pre></div><a class="headerlink" href="#ftq_full-out-logic-1-bits-fe_topsv215-u_ftqftq_full-ftqsv281-bind-fe_topsv630-ftq_empty-out-logic-1-bits-fe_topsv216-u_ftqftq_empty-ftqsv282-bind-fe_topsv631" title="Permanent link">&para;</a></h2>
-<h2 id="5-unread-outputs-member-selects-and-constants"><span style="color: var(--md-accent-fg-color)">5. Unread outputs, member selects and constants</span><a class="headerlink" href="#5-unread-outputs-member-selects-and-constants" title="Permanent link">&para;</a></h2>
-<h3 id="51-cluster-outputs-that-end-on-unread-wires"><span style="color: var(--md-accent-fg-color)">5.1 Cluster outputs that end on unread wires</span><a class="headerlink" href="#51-cluster-outputs-that-end-on-unread-wires" title="Permanent link">&para;</a></h3>
+<h2 id="5-unread-outputs-member-selects-and-constants">5. Unread outputs, member selects and constants<a class="headerlink" href="#5-unread-outputs-member-selects-and-constants" title="Permanent link">&para;</a></h2>
+<h3 id="51-cluster-outputs-that-end-on-unread-wires">5.1 Cluster outputs that end on unread wires<a class="headerlink" href="#51-cluster-outputs-that-end-on-unread-wires" title="Permanent link">&para;</a></h3>
 <p>Declared at fe_top.sv:302-317; each is bound to one bp_cluster
 output and read by nothing (fe_top.sv:80-83).</p>
 <div class="highlight"><pre><span></span><code>bpu_ghist_ptr          8 bits  fe_top.sv:305  &lt;- u_bpu.ghist_ptr
@@ -7788,7 +7788,7 @@ lines 905-907; fe_top.sv:81-83). The history pointers and buffers are
 the section 9 outputs of ftq_bpu_interfaces.md (lines 1115-1120);
 only the checkpoint pair <code>ckpt_ghist_ptr</code> / <code>ckpt_phist_ptr</code> has a
 consumer, the FTQ (section 3.12).</p>
-<h3 id="52-fe_cfg-member-selects"><span style="color: var(--md-accent-fg-color)">5.2 fe_cfg member selects</span><a class="headerlink" href="#52-fe_cfg-member-selects" title="Permanent link">&para;</a></h3>
+<h3 id="52-fe_cfg-member-selects">5.2 fe_cfg member selects<a class="headerlink" href="#52-fe_cfg-member-selects" title="Permanent link">&para;</a></h3>
 <p><code>fe_cfg</code> (fe_cfg_t, csr_pkg.sv:224-232) is not passed whole. Its
 members drive existing instance ports by member select
 (fe_top.sv:52-59, CSR-6): see section 4.10. <code>sc_enable</code> is the one
@@ -7796,7 +7796,7 @@ member with two readers, the cluster and the FTQ (fe_top.sv:486,
 561; FE-20 config, planning/arch/fe_decisions.md:1459). <code>fe_csr</code>
 (fe_csr_t, csr_pkg.sv:236-247) is passed whole to the ITLB
 (fe_top.sv:788).</p>
-<h3 id="53-constant-inputs"><span style="color: var(--md-accent-fg-color)">5.3 Constant inputs</span><a class="headerlink" href="#53-constant-inputs" title="Permanent link">&para;</a></h3>
+<h3 id="53-constant-inputs">5.3 Constant inputs<a class="headerlink" href="#53-constant-inputs" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>u_bpu.ftb_flush_px        1'b0  bp_cluster.sv:212  (fe_top.sv:453)
 u_bpu.ras_flush_val       1'b0  bp_cluster.sv:233  (fe_top.sv:466)
 u_bpu.ras_flush_snapshot  '0    bp_cluster.sv:234  (fe_top.sv:467)
@@ -7808,12 +7808,12 @@ planning/interfaces/ftq_bpu_interfaces.md 8, lines 966-970;
 planning/arch/ras_decisions.md 4.4.2, line 570), and ftb_flush_px for
 the same reason (FE-14).</p>
 <hr />
-<h2 id="6-inside-bp_cluster"><span style="color: var(--md-accent-fg-color)">6. Inside bp_cluster</span><a class="headerlink" href="#6-inside-bp_cluster" title="Permanent link">&para;</a></h2>
+<h2 id="6-inside-bp_cluster">6. Inside bp_cluster<a class="headerlink" href="#6-inside-bp_cluster" title="Permanent link">&para;</a></h2>
 <p>The cluster is a four-stage pipeline (p0 to p3) with an update stage
 u0 and its write u1 (bp_cluster.sv:55-61). The FTQ-facing ports are
 grouped in the port list as follows; the predictor instances are at
 bp_cluster.sv:1812-2035.</p>
-<h3 id="61-bp_cluster-port-groups"><span style="color: var(--md-accent-fg-color)">6.1 bp_cluster port groups</span><a class="headerlink" href="#61-bp_cluster-port-groups" title="Permanent link">&para;</a></h3>
+<h3 id="61-bp_cluster-port-groups">6.1 bp_cluster port groups<a class="headerlink" href="#61-bp_cluster-port-groups" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>group                                       ports at       spec
 P0  prediction request, FTQ -&gt; BPU          bp_cluster.sv:109-112
                                             ftq_bpu 3
@@ -7831,7 +7831,7 @@ CF  configuration inputs                    :273-279   FE-20 config
 ST  status: init readies, queue status      :281-300   ftq_bpu 3, 8
 </code></pre></div>
 <p><code>ftq_bpu</code> is planning/interfaces/ftq_bpu_interfaces.md.</p>
-<h3 id="62-predictor-instances"><span style="color: var(--md-accent-fg-color)">6.2 Predictor instances</span><a class="headerlink" href="#62-predictor-instances" title="Permanent link">&para;</a></h3>
+<h3 id="62-predictor-instances">6.2 Predictor instances<a class="headerlink" href="#62-predictor-instances" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>inst           module      line  stage
 u_bp_history   bp_history  1815  p1 checkpoint write; history
                                  advance per predicted branch
@@ -7849,7 +7849,7 @@ u_ras          ras         2013  p0 top-of-stack read, p2 push/pop,
 (bp_cluster.sv:1813, 1839, 1856, 1882, 1933, 1955, 1977, 2009). <code>ubtb</code>
 is instantiated with <code>N_SLOTS = NUM_PRED_SLOTS</code>
 (bp_cluster.sv:1844-1846).</p>
-<h3 id="63-which-cluster-port-groups-each-predictor-serves"><span style="color: var(--md-accent-fg-color)">6.3 Which cluster port groups each predictor serves</span><a class="headerlink" href="#63-which-cluster-port-groups-each-predictor-serves" title="Permanent link">&para;</a></h3>
+<h3 id="63-which-cluster-port-groups-each-predictor-serves">6.3 Which cluster port groups each predictor serves<a class="headerlink" href="#63-which-cluster-port-groups-each-predictor-serves" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>u_bp_history
   RB  rollback_valid, _ckpt_idx, _corr, _n, _tkn, _pbit
       (bp_cluster.sv:1823-1828; formed at 1370, 1385, rb_corr_mux 1413)
@@ -7924,7 +7924,7 @@ ittage_pq_not_full</code> (bp_cluster.sv:634-635). The update fan-out by
 resolved branch type is rederived from the uBTB payload of each
 channel (bp_cluster.sv:1732-1746, upd_br_type at 1609-1618).</p>
 <hr />
-<h2 id="7-the-walker-beside-fe_top-in-the-testbench"><span style="color: var(--md-accent-fg-color)">7. The walker beside fe_top in the testbench</span><a class="headerlink" href="#7-the-walker-beside-fe_top-in-the-testbench" title="Permanent link">&para;</a></h2>
+<h2 id="7-the-walker-beside-fe_top-in-the-testbench">7. The walker beside fe_top in the testbench<a class="headerlink" href="#7-the-walker-beside-fe_top-in-the-testbench" title="Permanent link">&para;</a></h2>
 <p><code>fe_top</code> has no walker; the testbench instantiates one beside it
 (FE-17 translation, planning/arch/fe_decisions.md:1391; MMU-1a). The
 shared model rtl/core/frontend/fe_top/tb/models/fe_tb_dut.svh holds
@@ -7957,7 +7957,7 @@ planning/arch/fe_decisions.md:1490, ptw_mem_interfaces.md WM-10, line
 143). <code>fe_csr</code> and <code>ptw_csr</code> are packed from the one csr_tb_pkg shadow
 (fe_tb_dut.svh:119-121).</p>
 <hr />
-<h2 id="8-disagreements-between-the-rtl-and-the-planning-documents"><span style="color: var(--md-accent-fg-color)">8. Disagreements between the RTL and the planning documents</span><a class="headerlink" href="#8-disagreements-between-the-rtl-and-the-planning-documents" title="Permanent link">&para;</a></h2>
+<h2 id="8-disagreements-between-the-rtl-and-the-planning-documents">8. Disagreements between the RTL and the planning documents<a class="headerlink" href="#8-disagreements-between-the-rtl-and-the-planning-documents" title="Permanent link">&para;</a></h2>
 <p>The RTL is what sections 2 to 7 record.</p>
 <div class="highlight"><pre><span></span><code>D1  FTB update port count.
     RTL: 15 payload ports plus the valid (fe_top.sv:274-289;

@@ -5771,7 +5771,7 @@
 <h1 id="fd01_reset_init-reset-and-sram-initialization">fd01_reset_init: Reset and SRAM Initialization<a class="headerlink" href="#fd01_reset_init-reset-and-sram-initialization" title="Permanent link">&para;</a></h1>
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
-<h2 id="1-introduction">1. <span style="color: var(--md-accent-fg-color)">Introduction</span><a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
+<h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
 <p>Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs
 in the TAGE, ITTAGE and SC. These branch predictor tables require an initial
 value before they are trained by executed branch behavior. </p>
@@ -5824,7 +5824,7 @@ operations are the same in either 1 or 2 prediction slots.</p>
 </tbody>
 </table>
 <hr />
-<h2 id="2-run-the-scenario">2. <span style="color: var(--md-accent-fg-color)">Run the scenario</span><a class="headerlink" href="#2-run-the-scenario" title="Permanent link">&para;</a></h2>
+<h2 id="2-run-the-scenario">2. Run the scenario<a class="headerlink" href="#2-run-the-scenario" title="Permanent link">&para;</a></h2>
 <p>Run simulation:
 <div class="highlight"><pre><span></span><code>make -C examples/fe_demo fd01_reset_init
 </code></pre></div></p>
@@ -5844,12 +5844,12 @@ operations are the same in either 1 or 2 prediction slots.</p>
     events checked 9 of 9, cyc 2344
 </code></pre></div>
 <hr />
-<h2 id="3-the-program">3. <span style="color: var(--md-accent-fg-color)">The program</span><a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
+<h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
 <p>The program, <code>prog_fd01</code>, is a loop of 128 passes over 7 instructions. It only
 provides requests after initialization completes, and nothing in the loop
 depends on the initialization.</p>
 <hr />
-<h2 id="4-operation">4. <span style="color: var(--md-accent-fg-color)">Operation</span><a class="headerlink" href="#4-operation" title="Permanent link">&para;</a></h2>
+<h2 id="4-operation">4. Operation<a class="headerlink" href="#4-operation" title="Permanent link">&para;</a></h2>
 <p>Signal paths are as given in section 6. Event numbers refer to section 5.</p>
 <p>Reset is deasserted at cyc 0 (event 0). <code>u_ftq.u_npc.w_hold</code> is asserted
 because the predictors are not ready, so <code>ftq_pred_val_p0</code> remains deasserted
@@ -5907,7 +5907,7 @@ FTQ issues its first prediction request with <code>ftq_pred_pc_p0</code> = 0x800
 The FTQ accepts the first p1 prediction at cyc 2050 (event 5). The remaining
 events show the first predictor responses and the end of the run.</p>
 <hr />
-<h2 id="5-events">5. <span style="color: var(--md-accent-fg-color)">Events</span><a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
+<h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -5975,7 +5975,7 @@ events show the first predictor responses and the end of the run.</p>
 </tbody>
 </table>
 <hr />
-<h2 id="6-waveform">6. <span style="color: var(--md-accent-fg-color)">Waveform</span><a class="headerlink" href="#6-waveform" title="Permanent link">&para;</a></h2>
+<h2 id="6-waveform">6. Waveform<a class="headerlink" href="#6-waveform" title="Permanent link">&para;</a></h2>
 <p><code>make -C examples/fe_demo view S=fd01_reset_init</code> opens
 <code>waves/fd01_reset_init.sucl</code> in Surfer, with a marker at each event above.
 Signal paths below are under <code>tb.dut</code> unless they start with <code>tb.</code>.</p>
@@ -6148,7 +6148,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd01_reset_init</code> runs the scenario; <code>make view S=fd01_reset_init</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd01_reset_init.svh</code>, <code>waves/fd01_reset_init.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.2/examples/fe_demo/docs/fd01_reset_init.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.3/examples/fe_demo/docs/fd01_reset_init.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

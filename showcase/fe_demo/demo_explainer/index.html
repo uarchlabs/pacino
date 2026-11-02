@@ -5778,7 +5778,7 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-<h1 id="scenario-common-description"><span style="color: var(--md-accent-fg-color)">Scenario Common Description</span><a class="headerlink" href="#scenario-common-description" title="Permanent link">&para;</a></h1>
+<h1 id="scenario-common-description">Scenario Common Description<a class="headerlink" href="#scenario-common-description" title="Permanent link">&para;</a></h1>
 <p>This document explains the operation of the functions used by the scenarios:</p>
 <ul>
 <li>the program writer</li>
@@ -5822,7 +5822,7 @@
 <p>The shared testbench models are found in <code>rtl/core/frontend/fe_top/tb/models/</code>,
 shortened to <code>models/</code> below. </p>
 <hr />
-<h2 id="1-the-scenario"><span style="color: var(--md-accent-fg-color)">1. The scenario</span><a class="headerlink" href="#1-the-scenario" title="Permanent link">&para;</a></h2>
+<h2 id="1-the-scenario">1. The scenario<a class="headerlink" href="#1-the-scenario" title="Permanent link">&para;</a></h2>
 <p>A scenario exercises isolated aspects of the Pacino frontend (FE). The full
 scenario list is found in <code>planning/showcase/fe_demo_scenarios.md</code>, numbered
 FD-1 to FD-24. Each scenario has an associated make target in
@@ -5889,7 +5889,7 @@ later.</p>
 <code>ftq_pred_val_p0</code> is already 1 while <code>tb.rstn</code> is low. Nothing captures the
 request until reset is released, and the first p1 prediction is at cyc 1.</p>
 <hr />
-<h2 id="2-the-program-writer"><span style="color: var(--md-accent-fg-color)">2. The program writer</span><a class="headerlink" href="#2-the-program-writer" title="Permanent link">&para;</a></h2>
+<h2 id="2-the-program-writer">2. The program writer<a class="headerlink" href="#2-the-program-writer" title="Permanent link">&para;</a></h2>
 <p>The program writer builds the memory image and the expected execution list.</p>
 <p>The memory image is a byte array indexed by physical address. The expected
 execution list is the sequence of instructions the program retires, in order.
@@ -5920,7 +5920,7 @@ decision of a branch.</p>
 predictor behavior under those conditions; the testbench uses an LFSR to
 randomize the taken/not taken state.</p>
 <hr />
-<h2 id="3-the-expected-execution-list"><span style="color: var(--md-accent-fg-color)">3. The expected execution list</span><a class="headerlink" href="#3-the-expected-execution-list" title="Permanent link">&para;</a></h2>
+<h2 id="3-the-expected-execution-list">3. The expected execution list<a class="headerlink" href="#3-the-expected-execution-list" title="Permanent link">&para;</a></h2>
 <p>The testbench does not model the instruction set. The expected execution list
 is the reference instead. This list contains the instructions the program
 retires, in order. The backend model retires an instruction when it matches
@@ -5929,7 +5929,7 @@ the next entry (section 4).</p>
 type, its direction and its target. A fetch fault or a trap the program expects
 is also an entry. The entry type is <code>ex_t</code> in <code>models/fe_tb_writer.svh</code>.</p>
 <hr />
-<h2 id="4-the-backend-model"><span style="color: var(--md-accent-fg-color)">4. The backend model</span><a class="headerlink" href="#4-the-backend-model" title="Permanent link">&para;</a></h2>
+<h2 id="4-the-backend-model">4. The backend model<a class="headerlink" href="#4-the-backend-model" title="Permanent link">&para;</a></h2>
 <p>The backend is an abstract model. It does not execute instructions. The backend
 model accepts up to 8 instructions from the frontend via decoder port
 <code>tb.pd_out</code> and checks these instructions against the expected execution list
@@ -5955,7 +5955,7 @@ stream error: the model prints a line that begins <code>ERROR:</code> and the ru
 instruction and each misprediction, with the cycle count first. These
 lines are for debugging and do not follow the result-line format.</p>
 <hr />
-<h2 id="5-the-result-line"><span style="color: var(--md-accent-fg-color)">5. The result line</span><a class="headerlink" href="#5-the-result-line" title="Permanent link">&para;</a></h2>
+<h2 id="5-the-result-line">5. The result line<a class="headerlink" href="#5-the-result-line" title="Permanent link">&para;</a></h2>
 <p>To maintain stability in the scenarios, they are developed against tagged
 versions of the RTL. The Showcase landing page specifies the current tag. The
 scenarios run internal checks to verify that the waveforms and scenario
@@ -5981,14 +5981,14 @@ first:</p>
 <p>The <code>ERROR:</code> lines for stream errors and the <code>+TRACE</code> debug lines (section 4)
 use a different format.</p>
 <hr />
-<h2 id="6-the-cycle-counter-cyc"><span style="color: var(--md-accent-fg-color)">6. The cycle counter cyc</span><a class="headerlink" href="#6-the-cycle-counter-cyc" title="Permanent link">&para;</a></h2>
+<h2 id="6-the-cycle-counter-cyc">6. The cycle counter cyc<a class="headerlink" href="#6-the-cycle-counter-cyc" title="Permanent link">&para;</a></h2>
 <p><code>tb.cyc</code> counts clock cycles from the release of reset and is shown next to
 the clock in every waveform.</p>
 <p>Scenario descriptions give times as values of <code>cyc</code>. An event "at cyc N" occurs
 in the clock period in which <code>tb.cyc</code> shows N; a register written in that
 period shows its new value from cyc N + 1.</p>
 <hr />
-<h2 id="7-reading-the-waveforms"><span style="color: var(--md-accent-fg-color)">7. Reading the waveforms</span><a class="headerlink" href="#7-reading-the-waveforms" title="Permanent link">&para;</a></h2>
+<h2 id="7-reading-the-waveforms">7. Reading the waveforms<a class="headerlink" href="#7-reading-the-waveforms" title="Permanent link">&para;</a></h2>
 <p>Each scenario description has an "Open waveform" link that opens the
 scenario in Surfer in the browser.</p>
 <p>From the command line, <code>make view S=&lt;scenario&gt;</code> opens it in a
@@ -6005,7 +6005,7 @@ event, named <code>c&lt;cyc&gt;_&lt;label&gt;</code>, in a group named <code>mar
 the clock group, and the view at the first marker. The Events table is section
 5 of the description, and section 6 lists the waveform's signals.</p>
 <hr />
-<h2 id="8-glossary"><span style="color: var(--md-accent-fg-color)">8. Glossary</span><a class="headerlink" href="#8-glossary" title="Permanent link">&para;</a></h2>
+<h2 id="8-glossary">8. Glossary<a class="headerlink" href="#8-glossary" title="Permanent link">&para;</a></h2>
 <p>Standard RISC-V terms (Sv39, Sv39x4, VS-stage and G-stage translation, PBMT,
 PMP, Svadu, link registers) are used as the specifications define them. The
 entries below give Pacino's parameters, conventions and signal names.</p>
