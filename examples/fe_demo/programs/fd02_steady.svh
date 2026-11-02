@@ -44,7 +44,7 @@
     evt_def("first_full_decode_bundle", EV_WINDOW);
     evt_def("second_full_bundle", EV_WINDOW);
     evt_def("the_halt_block_reaches_decode", EV_WINDOW);
-    evt_def("the_run_ends", EV_WINDOW);
+    evt_def("the_last_instruction_retires", EV_END);
   endfunction
 
   function automatic logic [EV_MAX-1:0] fd02_evt_now();

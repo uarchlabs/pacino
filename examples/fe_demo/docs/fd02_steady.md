@@ -12,15 +12,18 @@
 
 ## 1. Introduction
 
-`fd02_steady` is the FD-2 demonstration scenario. It is a demo, not a
-verification test. It runs 2 KiB of straight-line code. With no branch
-to predict, every uBTB lookup misses, the p1 prediction is the lookup PC
-plus one 32-byte block, and the FTQ allocates one entry per cycle on the
-zero-bubble path. Once the IBUF is filled, decode delivers eight
-instructions per cycle. The run passes if both happen for at least four
-consecutive cycles.
+`fd02_steady` (FD-2) runs 2 KB of straight-line code. There are no branches,
+therefore every uBTB lookup will miss. Consequently the p1 prediction address
+returned is the fall-through address, the lookup PC + 32 bytes returned in p1
+on `bpu_pred_pft_p1`.
 
-The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+In this scenario the FTQ allocates one entry per cycle. The front end reaches
+steady state at cyc 20, when decode begins delivering eight instructions per
+cycle.
+
+The simulation executes 513 instructions, 512 `addi` and the halt `jal`. Once
+these instructions have retired the front end fetches for 100 more cycles, and
+the simulation finishes.
 
 ### 1.1 Files
 
@@ -60,108 +63,104 @@ Log file output:
     full decode bundles 64, longest bundle run 63, events checked 6 of 6, cyc 84
 ```
 
-### 2.1 What the monitor counts
-
-The counts come from `tb/fe_demo_mon.svh:398-414`, taken only inside
-the `meas` window (out of reset, the backend taking decode's output,
-the stream not yet retired).
-
-```
-n_alloc         cycles with u_ftq.w_ok_pred_p1 (an FTQ allocation)
-max_run_alloc   the longest run of consecutive such cycles
-n_dec8          cycles with dec_ibuf_rdy and all SLOTS pd_out[i].valid
-max_run_dec8    the longest run of consecutive such cycles
-```
-
-The proof (`tb/fe_demo_proofs.svh:49-54`) is
-`max_run_alloc >= 4 && max_run_dec8 >= 4`. `tb_fe_demo.sv` also
-requires the whole stream to retire with no errors before it accepts
-the proof.
-
-### 2.2 Reading the numbers
-
-- `full decode bundles 64`: every instruction of the 64 code blocks was
-  delivered in a full bundle. `longest bundle run 63`: the one break is
-  cyc 19, after the first bundle (from the FST).
-- `allocations 83, longest allocation run 83`: an allocation on every
-  measured cycle but one. The program has 65 blocks: the 64 of code and
-  the halt block. The other allocations are fall-through blocks past 0x80000800
-  (0x80000820 onward), which the FTQ goes on predicting until the halt
-  JAL is found; at cyc 84 `ftq_pred_pc_p0` returns to 0x80000800 (from
-  the FST). Those entries are counted as allocations although they are
-  not on the retired path.
-- `cyc 84`: from the release of reset to the last retirement.
-- Departure from `planning/showcase/fe_demo_scenarios.md` FD-2: its
-  proof reads "consecutive allocations; 8 instructions decoded per cycle
-  once the IBUF is filled". As built, the proof is a threshold, four
-  consecutive cycles of each; the run reaches 83 and 63. The program
-  ("straight-line code with no branches, longer than one line") is as
-  specified.
-
 ---
 
 ## 3. The program
 
 Source: `programs/fd02_steady.svh`, task `prog_fd02`.
 
-```
-RESET_VECTOR+0x000   addi t0 x 512      32-bit, 2048 bytes, 64 blocks
-RESET_VECTOR+0x800   jal x0,0           halt (demo_go -> W.halt)
-```
+The `RESET_VECTOR` parameter is 0x8000_0000.
 
-- `W.i32(ADDI_T0)` 512 times: 512 32-bit instructions, 2 KiB, 32 L1I
-  lines of 64 bytes, 64 FTB blocks of 32 bytes (`FTB_BLOCK_BYTES = 32`,
-  `bp_defines_pkg.sv:173`), 8 instructions per block.
-- There is no branch until the halt JAL at `RESET_VECTOR + 0x800`
-  (0x80000800).
+```
+0x8000_0000   addi t0 x 512      32-bit instruction
+...           (addi)             2048 bytes in 32B prediction blocks
+0x8000_0800   jal x0,0           halt, loop to self
+```
 
 ---
 
-## 4. Walkthrough
+## 4. Operation
 
-### 4.1 Why the program produces one block per cycle
+Signal paths are as given in section 6. Event numbers refer to section 5.
 
-1. p1 prediction on a uBTB miss. `rtl/core/frontend/bpu/rtl/
-   bp_cluster.sv:876-878`: `w_pft_p1` is `r_ubtb_blk_p1.pft_addr` on a
-   hit and `r_pc_p1 + FTB_BLOCK_BYTES` on a miss. With no branch in the
-   code no lookup hits (`r_ubtb_blk_p1.hit` is low on cycles 1 to 84 in
-   the FST), so each p1 prediction names the next 32-byte block and
-   carries no slot.
-2. FTQ acceptance. `rtl/core/frontend/ftq/rtl/ftq_shadow.sv:204-205`:
-   `ok_pred_p1` (`w_ok_pred_p1` in `ftq.sv`) is the p1 group valid with
-   the stage-1 shadow valid and its pointer matching `bpu_pred_idx_p1`.
-3. Next request. `ftq_npc.sv:356-360`, arm 5, "the zero-bubble path":
-   with no redirect and `p1_val`, the next p0 PC is the p1 successor,
-   so a p0 request issues every cycle. `ftq_pred_val_p0 = ~w_hold`
-   (line 377); `u_npc.w_hold` (lines 306-309) and `ftq_full` are low
-   on every cycle from 1 to 84 (FST).
-4. Decode width. `SLOTS = 8` (`rtl/core/frontend/decode/rtl/
-   decode_pkg.sv:21`). A 32-byte block of 32-bit instructions is
-   exactly eight instructions, one full `pd_out` bundle.
+### 4.1 Prediction and FTQ allocation
 
-From the FST: `w_ok_pred_p1` is high from cycle 1 to cycle 84,
-`ftq_pred_pc_p0` stepping by 0x20 each cycle. The first full bundle
-(block 0x80000000) is at cycle 18; cycle 19 has none; cycles 20 to 82
-deliver one full bundle each (blocks 0x80000020 to 0x800007E0). Cycle 83
-delivers the halt block, one instruction.
+Reset is deasserted at cyc 0 (event 0). No hold condition is active, so
+`ftq_pred_val_p0` is asserted and the FTQ issues its first prediction request,
+with `ftq_pred_pc_p0` = 0x8000_0000 and `ftq_pred_idx_p0` = 0.[^1]
 
-### 4.2 Reading the waveform
+The BPU returns the p1 prediction at cyc 1 (event 1), with `bpu_pred_val_p1`
+asserted. The uBTB lookup misses: `u_bpu.r_ubtb_blk_p1.hit` and
+`bpu_pred_slot_p1.[0].slot_valid` are deasserted, and `bpu_pred_pft_p1` is the
+lookup PC + 0x20. `u_ftq.w_ok_pred_p1` asserts when `bpu_pred_idx_p1` matches
+the outstanding request, and this writes the prediction into the FTQ entry.[^2]
 
-The saved view is `waves/fd02_steady.sucl`, which `make view
-S=fd02_steady` opens in Surfer. Look at:
+In the same cycle, `bpu_pred_pft_p1` drives `ftq_pred_pc_p0` combinationally.
+This is the zero-bubble path: the next request is presented in the cycle in
+which the current prediction is formed, so no idle cycle separates consecutive
+prediction blocks.[^3] As a result, `ftq_pred_pc_p0` increments by 0x20 per
+cycle and `u_ftq.w_ok_pred_p1` remains asserted from cyc 1.
+`u_ftq.u_npc.w_hold`, `ftq_full`, `u_ftq.w_ok_slot_p2` and `u_ftq.w_ok_slot_p3`
+remain deasserted throughout.
 
-- group `bp_cluster_p0`: `ftq_pred_val_p0` high and `ftq_pred_pc_p0`
-  advancing by 0x20 per cycle; `ftq_pred_idx_p0` counting.
-- group `bp_cluster_p1`: `bpu_pred_val_p1` every cycle,
-  `r_ubtb_blk_p1.hit` low, `bpu_pred_pft_p1` the lookup PC + 0x20,
-  the one slot, `bpu_pred_slot_p1.[0]`, with `slot_valid` low.
-- group `ftq`: `w_ok_pred_p1` high cycle after cycle.
-- groups `ftq_ifu`, `ifu_l1i`, `ifu_f3`, `ibuf`: the blocks moving
-  through the IFU and the IBUF occupancy (`u_ibuf.w_n_pres`).
-- group `decode`: all eight `pd_out.[i].valid` high together with
-  `dec_ibuf_rdy` from cyc 20, and `pd_out.[0].start_pc` stepping by 0x20,
-  one block per bundle. The group shows the first lane's PC only
-  (DOC-006).
+### 4.2 Instruction fetch
+
+The FTQ presents entries to the IFU from cyc 3. `ftq_ifu_req_val` and
+`ftq_ifu_req_rdy` are asserted, so one block transfers per cycle, with
+`ftq_ifu_next_pc` equal to `ftq_ifu_start_pc` + 0x20.
+
+Each block fetch covers 34 bytes: the 32-byte block plus one halfword, for a
+32-bit instruction that crosses the block end. A block that starts in the upper
+half of a 64-byte L1I line therefore requires two lines, and it reuses the first
+if the previous block requested it. Block 0x8000_0000 requests line 0x8000_0000
+at cyc 4 and block 0x8000_0020 requests line 0x8000_0040 at cyc 5. Thereafter,
+only the upper-half blocks issue requests, so `ifu_l1i_req_val` asserts on odd
+cycles from cyc 7. `l1i_ifu_rsp_val` first asserts at cyc 16 and then asserts
+every second cycle.[^5]
+
+### 4.3 Delivery to decode
+
+The block at 0x8000_0000 reaches the IBUF at cyc 18 (event 2). `ifu_ibuf_val` is
+asserted and `u_ibuf.w_n_pres` is 8, so all eight `tb.pd_out.[i].valid` lanes
+are asserted. `tb.dec_ibuf_rdy` is asserted, so `u_ibuf.w_n_pop` is also 8. Each
+block passes through the IBUF without accumulating, and `u_ibuf.r_count` remains
+0.
+
+No block is delivered at cyc 19, because block 0x8000_0020 also requires line
+0x8000_0040, which is returned at cyc 18 and is readable from cyc 19. From
+cyc 20 (event 3) through cyc 82, one full bundle is delivered every cycle, with
+`tb.pd_out.[0].start_pc` incrementing by 0x20. This is the steady state: one
+line every two cycles, at two blocks per line and eight instructions per block,
+delivers eight instructions per cycle.
+
+Predecode writes back to the FTQ one cycle after each bundle, with
+`ifu_ftq_pdwb_val` asserted and `ifu_ftq_cfi_val` deasserted until the halt.
+`u_ftq.w_commit_ptr` advances one entry per cycle from cyc 23.
+
+### 4.4 Halt
+
+Prediction continues past the halt JAL, which has not been trained into the BPU.
+`ftq_pred_pc_p0` reaches 0x8000_0800 at cyc 64 and continues along the
+fall-through path to 0x8000_0a60.
+
+The halt block reaches decode at cyc 83 (event 4). `u_ibuf.w_n_pres` is 1, so
+only lane 0 is valid. At cyc 84 the predecode writeback identifies the JAL:
+`ifu_ftq_cfi_val` and `ifu_ftq_mis_val` are asserted, `ifu_ftq_mis_pos` is 0 and
+`ifu_ftq_target` is 0x8000_0800. This asserts `u_ftq.w_pd_redir_val`,
+`u_ftq.w_redir_val` and `ftq_ifu_flush_val`, and redirects `ftq_pred_pc_p0` to
+0x8000_0800.
+
+The last instruction has retired by cyc 84 (event 5), so `tb.dec_ibuf_rdy`
+deasserts.[^4]
+
+[^1]: `rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309`, `:377`
+[^2]: `rtl/core/frontend/ftq/rtl/ftq_shadow.sv:204-205`,
+      `rtl/core/frontend/ftq/rtl/ftq.sv:576`
+[^3]: `rtl/core/frontend/bpu/rtl/bp_cluster.sv:876-878`, `:953`,
+      `rtl/core/frontend/ftq/rtl/ftq_npc.sv:356-360`
+[^4]: `examples/fe_demo/tb/fe_demo_lib.svh:92-98`,
+      `rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:463`
+[^5]: `rtl/core/frontend/ifu/rtl/ifu_fetch.sv:281`, `:289-293`
 
 ---
 
@@ -170,11 +169,11 @@ S=fd02_steady` opens in Surfer. Look at:
 | # | cyc | Event                                                                                            | Other                             |
 |---|-----|--------------------------------------------------------------------------------------------------|-----------------------------------|
 | 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                          | fast init                         |
-| 1 | 1   | first p1 prediction the FTQ accepts; one in every cycle from here to the end of the run          | uBTB miss, the next 32-byte block |
+| 1 | 1   | first p1 prediction the FTQ accepts; one in every cycle from here to the end of the simulation   | uBTB miss, the next 32-byte block |
 | 2 | 18  | first full decode bundle, the block at 0x8000_0000: all eight lanes of `pd_out` valid            |                                   |
 | 3 | 20  | second full bundle, the block at 0x8000_0020; one full bundle in every cycle from here to cyc 82 |                                   |
 | 4 | 83  | the halt block reaches decode, one instruction in lane 0                                         | 0x8000_0800                       |
-| 5 | 84  | the run ends                                                                                     |                                   |
+| 5 | 84  | the last instruction retires                                                                     |                                   |
 
 ---
 
@@ -196,18 +195,18 @@ Signal paths below are under `tb.dut` unless they start with `tb.`.
 | bp_cluster_p1 | `bpu_pred_val_p1`                 | p1 prediction valid                               |
 |               | `bpu_pred_idx_p1`                 | FTQ index of the p1 prediction                    |
 |               | `u_bpu.r_ubtb_blk_p1.hit`         | uBTB hit at p1                                    |
-|               | `bpu_pred_pft_p1`                 | p1 fetch block end, the first halfword after it   |
+|               | `bpu_pred_pft_p1`                 | p1 prediction block end, next halfword after it   |
 |               | `bpu_pred_slot_p1.[0].slot_valid` | slot 0 holds a branch                             |
 |               | `bpu_pred_slot_p1.[0].br_type`    | slot 0 branch type                                |
-|               | `bpu_pred_slot_p1.[0].pos`        | slot 0 halfword position in the fetch block       |
+|               | `bpu_pred_slot_p1.[0].pos`        | slot 0 halfword position in the prediction block  |
 |               | `bpu_pred_slot_p1.[0].taken`      | slot 0 predicted direction                        |
 |               | `bpu_pred_slot_p1.[0].target`     | slot 0 predicted target                           |
 |               | `bpu_pred_slot_p1.[0].pred_src`   | slot 0 predictor that supplied the direction      |
 | ftq           | `u_ftq.w_ok_pred_p1`              | the FTQ accepts the p1 prediction                 |
 |               | `u_ftq.w_ok_slot_p2`              | the FTQ accepts the p2 group                      |
 |               | `u_ftq.w_ok_slot_p3`              | the FTQ accepts the p3 group                      |
-|               | `u_ftq.w_ok_redir_p2`             | the FTQ accepts the p2 redirect                   |
-|               | `u_ftq.w_ok_redir_p3`             | the FTQ accepts the p3 redirect                   |
+|               | `u_ftq.w_ok_redir_p2`             | a live p2 request matches the redirect index      |
+|               | `u_ftq.w_ok_redir_p3`             | a live p3 request matches the redirect index      |
 |               | `u_ftq.w_redir_val`               | a redirect the FTQ takes                          |
 |               | `u_ftq.w_redir_idx`               | FTQ index of the redirect                         |
 |               | `u_ftq.w_commit_ptr`              | FTQ commit pointer                                |
@@ -254,3 +253,8 @@ Signal paths below are under `tb.dut` unless they start with `tb.`.
 |               | `tb.pd_out.[5].valid`             | lane 5 valid                                      |
 |               | `tb.pd_out.[6].valid`             | lane 6 valid                                      |
 |               | `tb.pd_out.[7].valid`             | lane 7 valid                                      |
+
+---
+
+(c) 2026 Jeff Nye, uarchlabs.com. Licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

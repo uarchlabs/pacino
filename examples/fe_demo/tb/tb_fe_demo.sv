@@ -251,7 +251,7 @@ module tb;
     end
     evt_begin(scen);
     run_scen(scen);
-    evt_at("the_run_ends", cyc_run);
+    evt_end(cyc_run);
     // The stream must have retired whole for the run to show anything.
     ran  = (ep == W.ne) && (n_err == 0) && (n_retired == W.ne);
     ok   = proof(scen, msg);

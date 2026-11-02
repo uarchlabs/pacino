@@ -22,10 +22,11 @@
 // THE CHECKS. Each program, programs/fdNN_<name>.svh, gives
 //   fdNN_evt_defs()  one evt_def(<label>, <kind>, <late>, <last>,
 //                    <why>) per event, in table order: kind EV_EXACT,
-//                    EV_WINDOW or EV_NONE (no condition on signals can
-//                    express it; why says so); late as below; last 1
-//                    for an event the table states as the last of its
-//                    kind, whose cycle is the last its condition holds
+//                    EV_WINDOW, EV_END (the end-of-run event, under any
+//                    label; see below) or EV_NONE (no condition on
+//                    signals can express it; why says so); late as below;
+//                    last 1 for an event the table states as the last of
+//                    its kind, whose cycle is the last its condition holds
 //   fdNN_evt_now()   a vector, bit k set in a cycle when the condition
 //                    of the k-th evt_def holds
 // tb_fe_demo.sv dispatches to them by name (evt_defs, evt_now).
@@ -44,9 +45,14 @@
 // next marker it shows the new one for that one time unit: an event
 // whose evt_def gives late = 1 takes cyc + 1. The descriptions read
 // such signals at the marker. An event's cycle may instead
-// be given directly with evt_at: tb_fe_demo.sv gives the_run_ends, the
-// row every table ends with, as cyc_run, the cycle count the result line
-// reports.
+// be given directly with evt_at.
+//
+// THE END-OF-RUN EVENT. tb_fe_demo.sv calls evt_end with cyc_run, the
+// cycle count the result line reports, for the row every table ends
+// with. evt_end gives it to the check of kind EV_END, so a scenario can
+// word that row as its description needs. A scenario with no EV_END
+// check falls back to the label the_run_ends. More than one EV_END
+// check fails the scenario.
 //
 // A row and its check are matched by label. A row with no check, a
 // check with no row, or a label given twice fails the scenario, so a
@@ -57,6 +63,7 @@
 //   EV_EXACT   the cycle seen equals the row's cyc
 //   EV_WINDOW  the cycle seen is within the row's cyc plus or minus
 //              max(EV_WIN_MIN, cyc / EV_WIN_DIV)
+//   EV_END     as EV_WINDOW, the cycle given by evt_end
 // A count or value an event states is part of its condition, so it must
 // match exactly for the event to be seen at all. An event never seen
 // fails. events checked <n> of <m> in the result line: m the rows of the
@@ -70,7 +77,7 @@
   localparam int EV_WIN_MIN = 8;    // FDT-10c: at least 8 cycles
   localparam int EV_WIN_DIV = 10;   // FDT-10c: a tenth of the value
 
-  typedef enum int {EV_EXACT, EV_WINDOW, EV_NONE} ev_kind_e;
+  typedef enum int {EV_EXACT, EV_WINDOW, EV_NONE, EV_END} ev_kind_e;
 
   // The table, from fe_demo_evt_tbl.svh.
   string    ev_lbl  [$];
@@ -120,6 +127,18 @@
     int j;
     j = ck_idx(lbl);
     if ((j >= 0) && (ck_at[j] < 0)) ck_at[j] = c;
+  endfunction
+
+  // The end-of-run event's cycle: to the check of kind EV_END, else to
+  // the label every scenario without one uses.
+  function automatic void evt_end(input int c);
+    foreach (ck_kind[j]) begin
+      if (ck_kind[j] == EV_END) begin
+        if (ck_at[j] < 0) ck_at[j] = c;
+        return;
+      end
+    end
+    evt_at("the_run_ends", c);
   endfunction
 
   // The cycle check j was seen, -1 if never.
@@ -225,6 +244,16 @@
                              ck_lbl.size(), EV_MAX));
       nbad++;
     end
+    begin
+      int n_end;
+      n_end = 0;
+      foreach (ck_kind[j]) if (ck_kind[j] == EV_END) n_end++;
+      if (n_end > 1) begin
+        say("E", nm, $sformatf("event checks of kind EV_END %0d, not 1",
+                               n_end));
+        nbad++;
+      end
+    end
     foreach (ck_lbl[j]) begin
       int hits;
       hits = 0;
@@ -256,7 +285,7 @@
         why = "never seen";
       else if ((ck_kind[j] == EV_EXACT) && (o != c))
         why = $sformatf("seen at cyc %0d, exact", o);
-      else if ((ck_kind[j] == EV_WINDOW) &&
+      else if (((ck_kind[j] == EV_WINDOW) || (ck_kind[j] == EV_END)) &&
                ((o < c - evt_win(c)) || (o > c + evt_win(c))))
         why = $sformatf("seen at cyc %0d, window %0d to %0d", o,
                         c - evt_win(c), c + evt_win(c));
