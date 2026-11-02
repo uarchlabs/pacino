@@ -88,16 +88,17 @@ def enum_paths(fst):
 
 
 # The (#, cyc) values of the events in docs/<s>.md's Events section (its
-# level-2 heading "Events", numbered or not; FDT-12c, DOC-009), in table
-# order, up to the next level-1 or level-2 heading; [] when the
-# description is absent or has no such section. # is the row's marker
-# number, the first column.
+# level-2 heading "Events", numbered or not, with or without HTML tags
+# around the word; FDT-12c, DOC-009), in table order, up to the next
+# level-1 or level-2 heading; [] when the description is absent or has
+# no such section. # is the row's marker number, the first column.
 def event_cycs(scen):
     path = os.path.join(DOCS, scen + '.md')
     if not os.path.exists(path):
         return []
     text = open(path).read()
-    m = re.search(r'^## (?:\d+\. )?Events\s*$', text, re.M)
+    m = re.search(r'^## (?:\d+\. )?(?:<[^>]*>\s*)*Events'
+                  r'(?:\s*<[^>]*>)*\s*$', text, re.M)
     if not m:
         return []
     sec = re.split(r'^#{1,2} ', text[m.end():], maxsplit=1, flags=re.M)[0]

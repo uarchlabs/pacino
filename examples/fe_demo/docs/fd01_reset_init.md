@@ -10,19 +10,28 @@
  CONTACT: Jeff Nye
 ```
 
-## 1. Introduction
+## 1. <span style="color: var(--md-accent-fg-color)">Introduction</span>
 
-Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs in the TAGE, ITTAGE and SC. These branch predictor tables require an initial value before they are trained by executed branch behavior. 
+Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs
+in the TAGE, ITTAGE and SC. These branch predictor tables require an initial
+value before they are trained by executed branch behavior. 
 
-Initialization is done with simple FSMs that walk the table addresses writing the constants one cycle per entry. There are 2048 TAGE entries, 512 ITTAGE entries and 1024 SC entries. All tables are initialized in parallel.
+Initialization is done with simple FSMs that walk the table addresses writing
+the constants one cycle per entry. There are 2048 TAGE entries, 512 ITTAGE
+entries and 1024 SC entries. All tables are initialized in parallel.
 
-Ready signals indicate to upstream logic when the predictors have completed this initialization. 
+Ready signals indicate to upstream logic when the predictors have completed
+this initialization. 
 
-This waveform shows ~2048 cycles for completion of the init process. This is followed by ~295 cycles of example requests. Lastly there are ~100 cycles before termination of the scenario.
+This waveform shows ~2048 cycles for completion of the init process. This is
+followed by ~295 cycles of example requests. Lastly there are ~100 cycles
+before termination of the scenario.
 
-The RAS (return address stack) initialization is also shown. The RAS init is a simple reset.
+The RAS (return address stack) initialization is also shown. The RAS init is a
+simple reset.
 
-This scenario runs in the 1-prediction slot Pacino configuration. The operations are the same in either 1 or 2 prediction slots.
+This scenario runs in the 1-prediction slot Pacino configuration. The
+operations are the same in either 1 or 2 prediction slots.
 
 
 ### 1.1 Files
@@ -41,7 +50,7 @@ This scenario runs in the 1-prediction slot Pacino configuration. The operations
 
 ---
 
-## 2. Run the scenario
+## 2. <span style="color: var(--md-accent-fg-color)">Run the scenario</span>
 
 Run simulation:
 ```
@@ -71,14 +80,49 @@ Log file output:
 ```
 
 ---
+## 3. <span style="color: var(--md-accent-fg-color)">The program</span>
 
-## 4. Walkthrough
+The program, `prog_fd01`, is a loop of 128 passes over 7 instructions. It only
+provides requests after initialization completes, and nothing in the loop
+depends on the initialization.
 
-Not yet written.
+---
+## 4. <span style="color: var(--md-accent-fg-color)">Operation</span>
+
+Signal paths are as given in section 6. Event numbers refer to section 5.
+
+Reset is deasserted at cyc 0 (event 0). `u_ftq.u_npc.w_hold` is asserted
+because the predictors are not ready, so `ftq_pred_val_p0` remains deasserted
+and no prediction request is issued.[^1]
+
+At cyc 1 (event 1) the `u_sram_init` FSMs of TAGE, ITTAGE and SC enter the INIT
+state and begin writing at address 0, with `state` = 2'b10. Each FSM writes one
+entry per cycle and all three run in parallel. `u_bpu.u_ras.ras_rst_done` also
+asserts at cyc 1, because the RAS requires only a reset.
+
+| Predictor | Write enable             | Write cycles | Entries | Write data          | Ready asserts             |
+|-----------|--------------------------|--------------|---------|---------------------|---------------------------|
+| ITTAGE    | `u_bpu.u_ittage.ri_wr`   | 1 to 512     | 512     | 0                   | `bpu_ittage_rdy`, cyc 513 |
+| SC        | `u_bpu.u_sc.tbl_ri_wr`   | 1 to 1024    | 1024    | 0                   | `bpu_sc_ready`, cyc 1025  |
+| TAGE      | `u_bpu.u_tage.tbl_ri_wr` | 1 to 2048    | 2048    | T1-T4: 0, T0: 2'b10 | `bpu_tage_rdy`, cyc 2049  |
+
+`waddr` increments by one on each write and ends at the last entry of its
+table. In the cycle after the last write, the FSM enters the DONE state (`state`
+= 2'b11), the write enable deasserts and the predictor's ready asserts. ITTAGE
+and SC are ready at cyc 513 and cyc 1025 (events 2 and 3), and their ready
+signals remain asserted while TAGE completes.
+
+TAGE has the largest table, so `bpu_tage_rdy` is the last ready to assert, at
+cyc 2049 (event 4). `u_ftq.u_npc.w_hold` deasserts in the same cycle, and the
+FTQ issues its first prediction request with `ftq_pred_pc_p0` = 0x8000_0000.
+The FTQ accepts the first p1 prediction at cyc 2050 (event 5). The remaining
+events show the first predictor responses and the end of the run.
+
+[^1]: `rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309`
 
 ---
 
-## 5. Events
+## 5. <span style="color: var(--md-accent-fg-color)">Events</span>
 
 | # | cyc  | Event                                                                                                    | Other                                 |
 |---|------|----------------------------------------------------------------------------------------------------------|---------------------------------------|
@@ -94,7 +138,7 @@ Not yet written.
 
 ---
 
-## 6. Waveform
+## 6. <span style="color: var(--md-accent-fg-color)">Waveform</span>
 
 `make -C examples/fe_demo view S=fd01_reset_init` opens
 `waves/fd01_reset_init.sucl` in Surfer, with a marker at each event above.
@@ -132,3 +176,9 @@ Signal paths below are under `tb.dut` unless they start with `tb.`.
 |                | `u_bpu.w_tage_pred_rdy_p2`          | TAGE response at p2                                            |
 |                | `u_bpu.w_ittage_pred_rdy_p2`        | ITTAGE response at p2                                          |
 |                | `u_bpu.w_sc_pred_rdy_p3`            | SC response at p3                                              |
+
+---
+
+(c) 2026 Jeff Nye, uarchlabs.com. Licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+

@@ -99,9 +99,11 @@ LABEL_WORDS = 6
 VIEW_BEFORE = 2
 VIEW_AFTER = 30
 
-# The Events heading, with or without a section number; a cycle cited
-# as cyc <n> (FDT-12c).
-EVENTS_HEAD = re.compile(r'## (?:(\d+)\. )?Events\s*$')
+# The Events heading, with or without a section number, and with or
+# without HTML tags around the word Events (a styled heading); a cycle
+# cited as cyc <n> (FDT-12c).
+EVENTS_HEAD = re.compile(r'## (?:(\d+)\. )?(?:<[^>]*>\s*)*Events'
+                         r'(?:\s*<[^>]*>)*\s*$')
 CYC_CITE = re.compile(r'\bcyc \d+')
 
 missing = []

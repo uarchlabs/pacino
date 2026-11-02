@@ -253,8 +253,3 @@ Signal paths below are under `tb.dut` unless they start with `tb.`.
 |               | `tb.pd_out.[5].valid`             | lane 5 valid                                      |
 |               | `tb.pd_out.[6].valid`             | lane 6 valid                                      |
 |               | `tb.pd_out.[7].valid`             | lane 7 valid                                      |
-
----
-
-(c) 2026 Jeff Nye, uarchlabs.com. Licensed under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
