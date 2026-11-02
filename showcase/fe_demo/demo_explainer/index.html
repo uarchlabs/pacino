@@ -5827,7 +5827,8 @@ shortened to <code>models/</code> below. </p>
 scenario list is found in <code>planning/showcase/fe_demo_scenarios.md</code>, numbered
 FD-1 to FD-24. Each scenario has an associated make target in
 <code>examples/fe_demo/Makefile</code>. The targets are of the form <code>fdNN_&lt;name&gt;</code>.</p>
-<p>A scenario has three files, the "program", the wave control file and the writeup:</p>
+<p>A scenario has three files, the "program", the wave control file and the
+writeup:</p>
 <ul>
 <li><code>programs/fdNN_&lt;name&gt;.svh</code><ul>
 <li>contains the task <code>prog_fdNN</code> which populates the models memory
@@ -5870,6 +5871,23 @@ data and the number of signals that much be recorded.</p>
 prediction operation. <code>NUM_PRED_SLOTS</code>=2 is configuration used for performance
 analysis.</p>
 <p>FD-3, FD-22, FD-23 and FD-24 run the dual prediction model.</p>
+<p><a id="fast-init"></a><strong>Fast initialization.</strong> The predictor tables need an
+initial value before they can predict. In the design, TAGE, ITTAGE and SC
+each walk their tables after reset, writing one entry per cycle, and raise a
+ready when the walk ends: ITTAGE at cyc 513, SC at cyc 1025 and TAGE at cyc
+2049 (FD-1). Until all three readies are high, the FTQ holds its p0 request
+(<code>u_ftq.u_npc.w_hold</code>).</p>
+<p>Every scenario except FD-1 skips the walk. The Makefile passes
+<code>+TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1</code> (<code>FE_FAST_INIT</code>,
+<code>rtl/core/frontend/fe_top/fe_top_srcs.mk</code>). With these, a SystemVerilog
+<code>initial</code> block in each table writes its initial values at time 0, and each
+predictor ties its ready to 1 (<code>tage.sv</code> line 333, and the same mux in
+<code>ittage.sv</code> and <code>sc.sv</code>).
+Prediction starts on the first cycle after reset instead of about 2048 cycles
+later.</p>
+<p>One effect shows in the waveforms: with the readies 1 from time 0,
+<code>ftq_pred_val_p0</code> is already 1 while <code>tb.rstn</code> is low. Nothing captures the
+request until reset is released, and the first p1 prediction is at cyc 1.</p>
 <hr />
 <h2 id="2-the-program-writer"><span style="color: var(--md-accent-fg-color)">2. The program writer</span><a class="headerlink" href="#2-the-program-writer" title="Permanent link">&para;</a></h2>
 <p>The program writer builds the memory image and the expected execution list.</p>
@@ -5891,9 +5909,9 @@ a store used in FD-13 and FD-19. Filler instructions are variations of addi.
 The emitters write filler instructions and branches/etc; <code>demo_go</code> terminates
 each program with an instruction which jumps to itself, a halt.</p>
 <p>The memory image is written before reset is released.</p>
-<p>The writer appends each instruction to the expected execution list only if it executes.
-Instructions skipped by a taken branch are in the memory image but not in the
-execution list, and a loop appears in the list once per iteration.</p>
+<p>The writer appends each instruction to the expected execution list only if it
+executes. Instructions skipped by a taken branch are in the memory image but
+not in the execution list, and a loop appears in the list once per iteration.</p>
 <p>Each branch's direction is set by the program when it writes the branch.
 Register values are never computed (section 3), so a branch's comparison has
 no effect on its direction: the testbench controls the taken/not taken
@@ -5915,7 +5933,8 @@ is also an entry. The entry type is <code>ex_t</code> in <code>models/fe_tb_writ
 <p>The backend is an abstract model. It does not execute instructions. The backend
 model accepts up to 8 instructions from the frontend via decoder port
 <code>tb.pd_out</code> and checks these instructions against the expected execution list
-and retires them in order.  The backend model raises <code>tb.dec_ibuf_rdy</code> when it is ready to accept more instructions.</p>
+and retires them in order.  The backend model raises <code>tb.dec_ibuf_rdy</code> when it
+is ready to accept more instructions.</p>
 <p>A prediction determines which instruction the frontend fetches after a branch
 or jump. The model checks the prediction by comparing the next instruction
 delivered with the next entry in the expected execution list.</p>
@@ -5942,9 +5961,11 @@ versions of the RTL. The Showcase landing page specifies the current tag. The
 scenarios run internal checks to verify that the waveforms and scenario
 descriptions match the current state of the design.</p>
 <p>A run passes when every expected instruction retires with no stream error and
-the scenario's checks pass. It prints a result line and exits with status 0.
-Otherwise it prints a failing result line and exits non-zero, which stops
-<code>make scenarios</code>.</p>
+the scenario's checks pass. It writes a result line to its log,
+<code>out/&lt;scenario&gt;/&lt;scenario&gt;.log</code>, prints one console line,
+<code>-I: &lt;scenario&gt; : PASS : cyc = &lt;n&gt;</code>, and exits with status 0. Otherwise it
+writes a failing result line, prints <code>-E: &lt;scenario&gt; : FAIL : cyc = &lt;n&gt;</code> and
+exits non-zero, which stops <code>make scenarios</code>.</p>
 <p>A result line begins with <code>-I:</code> (information), <code>-W:</code> (warning) or <code>-E:</code>
 (error), then the scenario name. A passing line gives PASS, the counts the
 checks read, and <code>cyc</code>, the number of cycles from the release of reset to the
@@ -5980,7 +6001,9 @@ array element by its index under the array, for example
 shows slots 0 and 1. Encoded fields, such as <code>trx_type</code>, are shown as numbers;
 the descriptions that show one give its encoding.</p>
 <p>A scenario whose description has an event table opens with one marker per
-event, named <code>c&lt;cyc&gt;_&lt;label&gt;</code>, and the view at the first marker.</p>
+event, named <code>c&lt;cyc&gt;_&lt;label&gt;</code>, in a group named <code>markers</code> immediately after
+the clock group, and the view at the first marker. The Events table is section
+5 of the description, and section 6 lists the waveform's signals.</p>
 <hr />
 <h2 id="8-glossary"><span style="color: var(--md-accent-fg-color)">8. Glossary</span><a class="headerlink" href="#8-glossary" title="Permanent link">&para;</a></h2>
 <p>Standard RISC-V terms (Sv39, Sv39x4, VS-stage and G-stage translation, PBMT,

@@ -2049,10 +2049,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-events" class="md-nav__link">
+  <a href="#3-the-program" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Events
+        3. The program
       
     </span>
   </a>
@@ -2060,10 +2060,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-waveform" class="md-nav__link">
+  <a href="#4-operation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Waveform
+        4. Operation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-waveform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Waveform
       
     </span>
   </a>
@@ -5683,10 +5705,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-events" class="md-nav__link">
+  <a href="#3-the-program" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Events
+        3. The program
       
     </span>
   </a>
@@ -5694,10 +5716,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-waveform" class="md-nav__link">
+  <a href="#4-operation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Waveform
+        4. Operation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-waveform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Waveform
       
     </span>
   </a>
@@ -5727,13 +5771,22 @@
 <h1 id="fd01_reset_init-reset-and-sram-initialization">fd01_reset_init: Reset and SRAM Initialization<a class="headerlink" href="#fd01_reset_init-reset-and-sram-initialization" title="Permanent link">&para;</a></h1>
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
-<h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p>Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs in the TAGE, ITTAGE and SC. These branch predictor tables require an initial value before they are trained by executed branch behavior. </p>
-<p>Initialization is done with simple FSMs that walk the table addresses writing the constants one cycle per entry. There are 2048 TAGE entries, 512 ITTAGE entries and 1024 SC entries. All tables are initialized in parallel.</p>
-<p>Ready signals indicate to upstream logic when the predictors have completed this initialization. </p>
-<p>This waveform shows ~2048 cycles for completion of the init process. This is followed by ~295 cycles of example requests. Lastly there are ~100 cycles before termination of the scenario.</p>
-<p>The RAS (return address stack) initialization is also shown. The RAS init is a simple reset.</p>
-<p>This scenario runs in the 1-prediction slot Pacino configuration. The operations are the same in either 1 or 2 prediction slots.</p>
+<h2 id="1-introduction">1. <span style="color: var(--md-accent-fg-color)">Introduction</span><a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
+<p>Scenario fd01_reset_init (FD01) shows the post-reset initialization of the RAMs
+in the TAGE, ITTAGE and SC. These branch predictor tables require an initial
+value before they are trained by executed branch behavior. </p>
+<p>Initialization is done with simple FSMs that walk the table addresses writing
+the constants one cycle per entry. There are 2048 TAGE entries, 512 ITTAGE
+entries and 1024 SC entries. All tables are initialized in parallel.</p>
+<p>Ready signals indicate to upstream logic when the predictors have completed
+this initialization. </p>
+<p>This waveform shows ~2048 cycles for completion of the init process. This is
+followed by ~295 cycles of example requests. Lastly there are ~100 cycles
+before termination of the scenario.</p>
+<p>The RAS (return address stack) initialization is also shown. The RAS init is a
+simple reset.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration. The
+operations are the same in either 1 or 2 prediction slots.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -5771,7 +5824,7 @@
 </tbody>
 </table>
 <hr />
-<h2 id="2-run-the-scenario">2. Run the scenario<a class="headerlink" href="#2-run-the-scenario" title="Permanent link">&para;</a></h2>
+<h2 id="2-run-the-scenario">2. <span style="color: var(--md-accent-fg-color)">Run the scenario</span><a class="headerlink" href="#2-run-the-scenario" title="Permanent link">&para;</a></h2>
 <p>Run simulation:
 <div class="highlight"><pre><span></span><code>make -C examples/fe_demo fd01_reset_init
 </code></pre></div></p>
@@ -5791,10 +5844,74 @@
     events checked 9 of 9, cyc 2344
 </code></pre></div>
 <hr />
-<h2 id="3-events">3. Events<a class="headerlink" href="#3-events" title="Permanent link">&para;</a></h2>
+<h2 id="3-the-program">3. <span style="color: var(--md-accent-fg-color)">The program</span><a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
+<p>The program, <code>prog_fd01</code>, is a loop of 128 passes over 7 instructions. It only
+provides requests after initialization completes, and nothing in the loop
+depends on the initialization.</p>
+<hr />
+<h2 id="4-operation">4. <span style="color: var(--md-accent-fg-color)">Operation</span><a class="headerlink" href="#4-operation" title="Permanent link">&para;</a></h2>
+<p>Signal paths are as given in section 6. Event numbers refer to section 5.</p>
+<p>Reset is deasserted at cyc 0 (event 0). <code>u_ftq.u_npc.w_hold</code> is asserted
+because the predictors are not ready, so <code>ftq_pred_val_p0</code> remains deasserted
+and no prediction request is issued.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup></p>
+<p>At cyc 1 (event 1) the <code>u_sram_init</code> FSMs of TAGE, ITTAGE and SC enter the INIT
+state and begin writing at address 0, with <code>state</code> = 2'b10. Each FSM writes one
+entry per cycle and all three run in parallel. <code>u_bpu.u_ras.ras_rst_done</code> also
+asserts at cyc 1, because the RAS requires only a reset.</p>
 <table>
 <thead>
 <tr>
+<th>Predictor</th>
+<th>Write enable</th>
+<th>Write cycles</th>
+<th>Entries</th>
+<th>Write data</th>
+<th>Ready asserts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ITTAGE</td>
+<td><code>u_bpu.u_ittage.ri_wr</code></td>
+<td>1 to 512</td>
+<td>512</td>
+<td>0</td>
+<td><code>bpu_ittage_rdy</code>, cyc 513</td>
+</tr>
+<tr>
+<td>SC</td>
+<td><code>u_bpu.u_sc.tbl_ri_wr</code></td>
+<td>1 to 1024</td>
+<td>1024</td>
+<td>0</td>
+<td><code>bpu_sc_ready</code>, cyc 1025</td>
+</tr>
+<tr>
+<td>TAGE</td>
+<td><code>u_bpu.u_tage.tbl_ri_wr</code></td>
+<td>1 to 2048</td>
+<td>2048</td>
+<td>T1-T4: 0, T0: 2'b10</td>
+<td><code>bpu_tage_rdy</code>, cyc 2049</td>
+</tr>
+</tbody>
+</table>
+<p><code>waddr</code> increments by one on each write and ends at the last entry of its
+table. In the cycle after the last write, the FSM enters the DONE state (<code>state</code>
+= 2'b11), the write enable deasserts and the predictor's ready asserts. ITTAGE
+and SC are ready at cyc 513 and cyc 1025 (events 2 and 3), and their ready
+signals remain asserted while TAGE completes.</p>
+<p>TAGE has the largest table, so <code>bpu_tage_rdy</code> is the last ready to assert, at
+cyc 2049 (event 4). <code>u_ftq.u_npc.w_hold</code> deasserts in the same cycle, and the
+FTQ issues its first prediction request with <code>ftq_pred_pc_p0</code> = 0x8000_0000.
+The FTQ accepts the first p1 prediction at cyc 2050 (event 5). The remaining
+events show the first predictor responses and the end of the run.</p>
+<hr />
+<h2 id="5-events">5. <span style="color: var(--md-accent-fg-color)">Events</span><a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
 <th>cyc</th>
 <th>Event</th>
 <th>Other</th>
@@ -5803,147 +5920,243 @@
 <tbody>
 <tr>
 <td>0</td>
-<td>reset released (<code>tb.rstn</code>); the FTQ withholds</td>
+<td>0</td>
+<td>reset released (<code>tb.rstn</code>); the FTQ withholds its p0 request (<code>u_npc.w_hold</code>)</td>
 <td>full init walk</td>
 </tr>
 <tr>
-<td></td>
-<td>its p0 request (<code>u_npc.w_hold</code>)</td>
-<td></td>
-</tr>
-<tr>
 <td>1</td>
-<td>the three table walks start at address 0; the</td>
-<td>each <code>u_sram_init</code></td>
+<td>1</td>
+<td>the three table walks start at address 0; the RAS reset is done (<code>ras_rst_done</code>)</td>
+<td>each <code>u_sram_init</code> in INIT, <code>waddr</code> 0</td>
 </tr>
 <tr>
-<td></td>
-<td>RAS reset is done (<code>ras_rst_done</code>)</td>
-<td>in INIT, <code>waddr</code> 0</td>
-</tr>
-<tr>
+<td>2</td>
 <td>513</td>
 <td>ITTAGE ready (<code>bpu_ittage_rdy</code>)</td>
 <td>512 entries</td>
 </tr>
 <tr>
+<td>3</td>
 <td>1025</td>
 <td>SC ready (<code>bpu_sc_ready</code>)</td>
 <td>1024 entries</td>
 </tr>
 <tr>
+<td>4</td>
 <td>2049</td>
-<td>TAGE ready (<code>bpu_tage_rdy</code>), the last of the</td>
+<td>TAGE ready (<code>bpu_tage_rdy</code>), the last of the three; the FTQ makes its first p0 request in the same cycle</td>
 <td>2048 entries</td>
 </tr>
 <tr>
-<td></td>
-<td>three; the FTQ makes its first p0 request in the</td>
-<td></td>
-</tr>
-<tr>
-<td></td>
-<td>same cycle</td>
-<td></td>
-</tr>
-<tr>
+<td>5</td>
 <td>2050</td>
-<td>first p1 prediction the FTQ accepts</td>
+<td>first p1 prediction the FTQ accepts (<code>w_ok_pred_p1</code>)</td>
 <td></td>
 </tr>
 <tr>
-<td></td>
-<td>(<code>w_ok_pred_p1</code>)</td>
-<td></td>
-</tr>
-<tr>
+<td>6</td>
 <td>2051</td>
 <td>first TAGE and ITTAGE responses at p2</td>
 <td></td>
 </tr>
 <tr>
+<td>7</td>
 <td>2052</td>
 <td>first SC response at p3</td>
 <td></td>
 </tr>
 <tr>
+<td>8</td>
 <td>2344</td>
-<td>the run ends (<code>tb.cyc_run</code>): the last</td>
-<td>a 100 cycle drain</td>
-</tr>
-<tr>
-<td></td>
-<td>instruction retires</td>
-<td>follows, to 2444</td>
+<td>the run ends (<code>tb.cyc_run</code>): the last instruction retires</td>
+<td>a 100 cycle drain follows, to 2444</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="4-waveform">4. Waveform<a class="headerlink" href="#4-waveform" title="Permanent link">&para;</a></h2>
+<h2 id="6-waveform">6. <span style="color: var(--md-accent-fg-color)">Waveform</span><a class="headerlink" href="#6-waveform" title="Permanent link">&para;</a></h2>
 <p><code>make -C examples/fe_demo view S=fd01_reset_init</code> opens
 <code>waves/fd01_reset_init.sucl</code> in Surfer, with a marker at each event above.
 Signal paths below are under <code>tb.dut</code> unless they start with <code>tb.</code>.</p>
-<ul>
-<li>group <code>clock</code><ul>
-<li><code>tb.clk</code> - clock</li>
-<li><code>tb.rstn</code> - active low reset</li>
-<li><code>tb.cyc</code> - cycle number</li>
-</ul>
-</li>
-<li>group <code>tage_init</code>, signals under <code>u_bpu.u_tage</code>, then the ready<ul>
-<li><code>u_sram_init.state</code> - initialization FSM state</li>
-<li><code>tbl_ri_wr</code> - RAM write enable, high cyc 1 to 2048</li>
-<li><code>u_sram_init.waddr</code> - RAM address</li>
-<li><code>tbl_ri_wd</code> - T1-T4 RAM write data, 0 (entry invalid, u = 0)</li>
-<li><code>u_tage_bim.tbl_ri_wd</code> - T0 RAM write data, 2 (<code>2'b10</code>, weakly taken)</li>
-<li><code>bpu_tage_rdy</code> - TAGE ready</li>
-</ul>
-</li>
-<li>group <code>ittage_init</code>, signals under <code>u_bpu.u_ittage</code>, then the ready<ul>
-<li><code>u_sram_init.state</code> - initialization FSM state</li>
-<li><code>ri_wr</code> - RAM write enable, high cyc 1 to 512; ITTAGE gates it per
-  table</li>
-<li><code>u_sram_init.waddr</code> - RAM address</li>
-<li><code>ri_wd</code> - RAM write data, 0; ITTAGE slices it per table</li>
-<li><code>bpu_ittage_rdy</code> - ITTAGE ready</li>
-</ul>
-</li>
-<li>group <code>sc_init</code>, signals under <code>u_bpu.u_sc</code>, then the ready<ul>
-<li><code>u_sram_init.state</code> - initialization FSM state</li>
-<li><code>tbl_ri_wr</code> - RAM write enable, high cyc 1 to 1024</li>
-<li><code>u_sram_init.waddr</code> - RAM address</li>
-<li><code>tbl_ri_wd</code> - RAM write data, 0</li>
-<li><code>bpu_sc_ready</code> - SC ready</li>
-</ul>
-</li>
-<li>group <code>ras_init</code><ul>
-<li><code>u_bpu.u_ras.ras_rst_done</code> - RAS reset done, high from cyc 1</li>
-</ul>
-</li>
-<li>group <code>bp_cluster_p0</code><ul>
-<li><code>ftq_pred_val_p0</code> - p0 request valid</li>
-<li><code>ftq_pred_pc_p0</code> - p0 request PC</li>
-<li><code>ftq_pred_idx_p0</code> - p0 request FTQ index</li>
-<li><code>u_ftq.u_npc.w_hold</code> - holds the p0 request until all three readies
-  are high</li>
-</ul>
-</li>
-<li>group <code>request_stages</code>, one request from p0 to p3<ul>
-<li><code>ftq_pred_val_p0</code> - p0 request valid</li>
-<li><code>bpu_pred_val_p1</code> - p1 prediction valid</li>
-<li><code>u_ftq.w_ok_pred_p1</code> - the FTQ accepts the p1 prediction</li>
-<li><code>u_bpu.w_tage_pred_rdy_p2</code> - TAGE response at p2</li>
-<li><code>u_bpu.w_ittage_pred_rdy_p2</code> - ITTAGE response at p2</li>
-<li><code>u_bpu.w_sc_pred_rdy_p3</code> - SC response at p3</li>
-</ul>
-</li>
-</ul>
+<table>
+<thead>
+<tr>
+<th>group</th>
+<th>signal</th>
+<th>description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>clock</td>
+<td><code>tb.clk</code></td>
+<td>clock</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.rstn</code></td>
+<td>active low reset</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.cyc</code></td>
+<td>cycle number</td>
+</tr>
+<tr>
+<td>tage_init</td>
+<td><code>u_bpu.u_tage.u_sram_init.state</code></td>
+<td>initialization FSM state</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_tage.tbl_ri_wr</code></td>
+<td>RAM write enable, high cyc 1 to 2048</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_tage.u_sram_init.waddr</code></td>
+<td>RAM address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_tage.tbl_ri_wd</code></td>
+<td>T1-T4 RAM write data, 0 (entry invalid, u = 0)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_tage.u_tage_bim.tbl_ri_wd</code></td>
+<td>T0 RAM write data, 2 (<code>2'b10</code>, weakly taken)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_tage_rdy</code></td>
+<td>TAGE ready</td>
+</tr>
+<tr>
+<td>ittage_init</td>
+<td><code>u_bpu.u_ittage.u_sram_init.state</code></td>
+<td>initialization FSM state</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ittage.ri_wr</code></td>
+<td>RAM write enable, high cyc 1 to 512; ITTAGE gates it per table</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ittage.u_sram_init.waddr</code></td>
+<td>RAM address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ittage.ri_wd</code></td>
+<td>RAM write data, 0; ITTAGE slices it per table</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_ittage_rdy</code></td>
+<td>ITTAGE ready</td>
+</tr>
+<tr>
+<td>sc_init</td>
+<td><code>u_bpu.u_sc.u_sram_init.state</code></td>
+<td>initialization FSM state</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_sc.tbl_ri_wr</code></td>
+<td>RAM write enable, high cyc 1 to 1024</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_sc.u_sram_init.waddr</code></td>
+<td>RAM address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_sc.tbl_ri_wd</code></td>
+<td>RAM write data, 0</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_sc_ready</code></td>
+<td>SC ready</td>
+</tr>
+<tr>
+<td>ras_init</td>
+<td><code>u_bpu.u_ras.ras_rst_done</code></td>
+<td>RAS reset done, high from cyc 1</td>
+</tr>
+<tr>
+<td>bp_cluster_p0</td>
+<td><code>ftq_pred_val_p0</code></td>
+<td>p0 request valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftq_pred_pc_p0</code></td>
+<td>p0 request PC</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftq_pred_idx_p0</code></td>
+<td>p0 request FTQ index</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.u_npc.w_hold</code></td>
+<td>holds the p0 request until all three readies are high</td>
+</tr>
+<tr>
+<td>request_stages</td>
+<td><code>ftq_pred_val_p0</code></td>
+<td>p0 request valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_val_p1</code></td>
+<td>p1 prediction valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_ok_pred_p1</code></td>
+<td>the FTQ accepts the p1 prediction</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_tage_pred_rdy_p2</code></td>
+<td>TAGE response at p2</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_ittage_pred_rdy_p2</code></td>
+<td>ITTAGE response at p2</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_sc_pred_rdy_p3</code></td>
+<td>SC response at p3</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p>(c) 2026 Jeff Nye, uarchlabs.com. Licensed under
+<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
 <hr />
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd01_reset_init.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd01_reset_init</code> runs the scenario; <code>make view S=fd01_reset_init</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd01_reset_init.svh</code>, <code>waves/fd01_reset_init.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.1/examples/fe_demo/docs/fd01_reset_init.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.2/examples/fe_demo/docs/fd01_reset_init.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309</code>&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 
