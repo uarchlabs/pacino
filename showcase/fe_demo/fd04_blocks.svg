@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1030" height="376" viewBox="0 0 1030 376">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="1030" height="376" fill="#ffffff"/>
+<text x="30" y="34" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd04_p2_override: the uBTB and the FTB at b[7]</text>
+<text x="30" y="56" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One cell per halfword. The numbers in a block are positions: halfwords from the block start. NUM_PRED_SLOTS = 1.</text>
+<text x="30" y="74" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">Read from out/fd04_p2_override/fd04_p2_override.fst. Labels as in the section 3 listing. Addresses are 0x8000_xxxx.</text>
+<text x="155" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4800</text>
+<text x="205" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4802</text>
+<text x="255" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4804</text>
+<text x="305" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4806</text>
+<text x="355" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4808</text>
+<text x="405" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">480A</text>
+<text x="455" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">480C</text>
+<text x="505" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">480E</text>
+<text x="555" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4810</text>
+<text x="605" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4812</text>
+<text x="655" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4814</text>
+<text x="705" y="106" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">4816</text>
+<text x="118" y="133" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="bold">code</text>
+<rect x="130" y="112" width="50" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="155" y="126" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="155" y="140" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">b[7]</text>
+<rect x="180" y="112" width="100" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="230" y="126" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">bne</text>
+<text x="230" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[7].c</text>
+<rect x="280" y="112" width="100" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="330" y="126" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">jal</text>
+<text x="330" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">b[7].j</text>
+<rect x="380" y="112" width="50" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="405" y="126" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="405" y="140" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">ex</text>
+<rect x="430" y="112" width="100" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="480" y="133" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<rect x="530" y="112" width="50" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="555" y="133" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<rect x="580" y="112" width="100" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="630" y="126" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">jal</text>
+<text x="630" y="140" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">hold</text>
+<rect x="680" y="112" width="50" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="118" y="181" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">FTB, block b[7]</text>
+<rect x="130" y="160" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="155" y="181" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="180" y="160" width="100" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="230" y="181" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">1  slot 0</text>
+<text x="744" y="181" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">ends at 0x8000_4806, the JAL</text>
+<text x="118" y="223" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">FTB, block b[7]+6</text>
+<rect x="280" y="202" width="100" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="330" y="223" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0  slot 0</text>
+<text x="744" y="223" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">ends at 0x8000_480A</text>
+<text x="118" y="265" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">uBTB, block b[7]</text>
+<rect x="130" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="155" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="180" y="244" width="100" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="230" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">1  slot 0</text>
+<rect x="280" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="305" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<rect x="330" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="355" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<rect x="380" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="405" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<rect x="430" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="455" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<rect x="480" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="505" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<rect x="530" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="555" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<rect x="580" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="605" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<rect x="630" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="655" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<rect x="680" y="244" width="50" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="705" y="265" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<text x="744" y="265" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">continues to 0x8000_4820</text>
+<rect x="280" y="106" width="1" height="172" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="286" y="296" class="sans" font-size="12" fill="#ff6e42" text-anchor="start" font-weight="bold">the FTB ends here and the uBTB does not: the p2 redirect to 0x8000_4806</text>
+<rect x="30" y="316" width="34" height="16" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="72" y="329" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">a branch; in a block, the one its prediction slot holds</text>
+<rect x="430" y="316" width="34" height="16" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="472" y="329" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">another halfword of the prediction block</text>
+<text x="30" y="354" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">FTB end: bpu_blk_pft_p2. uBTB end: bpu_pred_pft_p1. Slot: bpu_slot_p2.[0].pos and bpu_pred_slot_p1.[0].pos. FTB blocks shown as they are from cyc 225.</text>
+</svg>

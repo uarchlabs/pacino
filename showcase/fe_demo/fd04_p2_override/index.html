@@ -2141,34 +2141,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2195,10 +2167,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-p2-redirects" class="md-nav__link">
+  <a href="#41-p2-redirects-from-ubtb-capacity" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces p2 redirects
+        4.1 p2 redirects from uBTB capacity
       
     </span>
   </a>
@@ -2206,10 +2178,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-first-p2-redirects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 First p2 redirects
       
     </span>
   </a>
@@ -5825,34 +5797,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -5879,10 +5823,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-p2-redirects" class="md-nav__link">
+  <a href="#41-p2-redirects-from-ubtb-capacity" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces p2 redirects
+        4.1 p2 redirects from uBTB capacity
       
     </span>
   </a>
@@ -5890,10 +5834,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-first-p2-redirects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 First p2 redirects
       
     </span>
   </a>
@@ -5951,14 +5895,20 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd04_p2_override</code> is the FD-4 demonstration scenario. It is a demo, not
-a verification test. It runs a chain of eight blocks that all index one
-uBTB set, which has four ways, while each has its own FTB set. The uBTB
-cannot hold the chain, so at p1 most blocks miss and are predicted to
-fall through; at p2 the FTB knows the taken branch, the successors
-differ, and the cluster raises a p2 redirect. The run passes if the FTQ
-accepts at least one p2 redirect.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd04_p2_override</code> (FD-4) runs a 16-pass loop through eight regions of code,
+b[0] to b[7], chained by JALs. The start addresses of the regions map to one
+uBTB set, which has four ways, and to eight different FTB sets. The FTB
+therefore holds all eight prediction blocks, and the uBTB holds at most four at
+a time.</p>
+<p>When an FTQ prediction request at b[k] (<code>ftq_pred_pc_p0</code>) misses in the uBTB,
+the p1 prediction falls through to the next 32-byte block. The FTB hits at p2
+with the JAL, so the p2 successor differs from the p1 successor and the BPU
+issues a p2 redirect.</p>
+<p>The FTQ accepts 64 p2 redirects: 49 follow a uBTB miss and 15 follow a uBTB hit
+at b[7], which section 4.1 describes. The result line in the log file reports
+the total.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -5993,6 +5943,18 @@ accepts at least one p2 redirect.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd04_p2_override.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6004,140 +5966,217 @@ accepts at least one p2 redirect.</p>
 <div class="highlight"><pre><span></span><code>make -C examples/fe_demo view S=fd04_p2_override
 </code></pre></div></p>
 <p>Console output:
-<div class="highlight"><pre><span></span><code>-I: fd04_p2_override : PASS : cyc = 522
+<div class="highlight"><pre><span></span><code>-I: fd04_p2_override : PASS : cyc = 520
 </code></pre></div></p>
 <p>Log file output:
-<div class="highlight"><pre><span></span><code>-I: fd04_p2_override: PASS, p2 redirects 49, events checked 6 of 6, cyc 522
+<div class="highlight"><pre><span></span><code>-I: fd04_p2_override: PASS, p2 redirects 64, events checked 14 of 14, cyc 520
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The count comes from <code>tb/fe_demo_mon.svh:424-435</code>, taken inside the
-<code>meas</code> window.</p>
-<div class="highlight"><pre><span></span><code>n_redir_p2   u_ftq.w_ok_redir_p2 &amp;&amp; (bpu_redir_p2[0].valid
-             || bpu_redir_p2[1].valid)
-             a cycle in which the FTQ accepted a p2 redirect
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:60-63</code>) is <code>n_redir_p2 &gt; 0</code>.
-<code>tb_fe_demo.sv</code> also requires the whole stream to retire with no errors
-before it accepts the proof.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the count in the log line:</p>
 <ul>
-<li><code>p2 redirects 49</code> counts cycles in which the FTQ accepted a p2
-  redirect. On the two-slot model a cycle with both slots redirecting
-  counts once; on this model a cycle has one slot.</li>
-<li>The miss counts are uneven across the chain (2, 3, 3, 14 and 12 for
-  b[0] to b[4], none for b[5] and b[6]): which four blocks the set holds
-  at a given time depends on the round-robin pointer and the order of
-  updates. The figures are from this run.</li>
-<li>Departure from <code>planning/showcase/fe_demo_scenarios.md</code> FD-4: its
-  program is "a branch whose uBTB entry is stale while its FTB entry is
-  current". As built, the mechanism is uBTB capacity: eight blocks in
-  one four-way set, so most redirects follow a uBTB miss, not a stale
-  hit. 15 of the 49 do follow a hit, all of them b[7]'s, whose uBTB
-  entry keeps an end the FTB entry has split. The proof is FD-4's.</li>
+<li>p2 redirects<ul>
+<li><code>n_redir_p2</code> in <code>tb/fe_demo_mon.svh</code></li>
+<li>cycles in which the FTQ accepted a p2 redirect</li>
+</ul>
+</li>
 </ul>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd04_p2_override.svh</code>, task <code>prog_fd04</code> (tb_fe_top's
-ftbonly). <code>b[k] = RESET_VECTOR + 0x1000 + k * 0x800</code>, k = 0..7, so b[0]
-is 0x80001000 and b[7] is 0x80004800.</p>
-<div class="highlight"><pre><span></span><code>RESET_VECTOR+0   mixed(3)                                  8 bytes
-RESET_VECTOR+8   jal x0,b[0]
+<p>The program is written by the task <code>prog_fd04</code> in
+<code>programs/fd04_p2_override.svh</code>. The code consists of a short prologue, then a
+16-pass loop through the regions b[0] to b[7], and a short epilogue.</p>
+<p>The regions are 0x800 apart, from b[0] at 0x8000_1000 to b[7] at 0x8000_4800.
+Each of b[0] to b[6] ends in a JAL to the next region. b[7] holds a conditional
+branch, at 0x8000_4802, and the JAL back to b[0], at 0x8000_4806.</p>
+<p>The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
+(<code>bp_defines_pkg.sv</code>).</p>
+<div class="highlight"><pre><span></span><code>                                                            Position in block
+Address      Label   Instruction          Purpose              b[k]  b[7]+6
+0x8000_0000          c.addi a0, 1         ; prologue
+0x8000_0002          addi   t0, t0, 1     ; prologue
+0x8000_0006          c.addi a0, 1         ; prologue
+0x8000_0008          jal    x0, b[0]      ; to b[0]
 
-b[k], k &lt; 7      c.addi, addi                              6 bytes
-b[k]+6           bne x6,x0,b[k+1]     always taken        pos 3
+0x8000_1000  b[0]:   c.addi a0, 1         ; filler                0
+0x8000_1002          addi   t0, t0, 1     ; filler                1
+0x8000_1006          jal    x0, b[1]      ; to b[1]               3
 
-b[7]             c.addi
-b[7]+2           bne x6,x0,b[7]+10    taken on the last pass only
-b[7]+6           jal x0,b[0]          passes 0..14 (written dry on
-                                      the last pass)
-b[7]+10          mixed(3)
-b[7]+18          jal x0,0             halt (demo_go -&gt; W.halt)
+  b[1] 0x8000_1800, b[2] 0x8000_2000, b[3] 0x8000_2800,
+  b[4] 0x8000_3000, b[5] 0x8000_3800: the same three instructions
+
+0x8000_4000  b[6]:   c.addi a0, 1         ; filler                0
+0x8000_4002          addi   t0, t0, 1     ; filler                1
+0x8000_4006          jal    x0, b[7]      ; to b[7]               3
+
+0x8000_4800  b[7]:   c.addi a0, 1         ; filler                0
+0x8000_4802  b[7].c: bne    x6, x0, ex    ; taken on last pass    1
+0x8000_4806  b[7].j: jal    x0, b[0]      ; to b[0]              (3)      0
+
+0x8000_480A  ex:     c.addi a0, 1         ; epilogue
+0x8000_480C          addi   t0, t0, 1     ; epilogue
+0x8000_4810          c.addi a0, 1         ; epilogue
+0x8000_4812  hold:   jal    x0, hold      ; termination
 </code></pre></div>
-<ul>
-<li>16 passes over the chain. The code is the same every pass; on the
-  last, b[7]'s conditional exits and <code>d_jal_fill</code>
-  (<code>fe_tb_writer.svh:530-541</code>) writes the back-edge JAL in dry mode so
-  the bytes stay the same but it is not in the expected stream.</li>
-<li>Outcomes come from the writer (<code>bcc</code>, <code>fe_tb_writer.svh:412-419</code>).</li>
-</ul>
+<p>A position is the halfword offset of an instruction from the start of its
+prediction block. The 32-bit instructions take two positions, so the <code>addi</code> at
+0x8000_1002 covers 1 and 2.</p>
+<p>The JAL at position 3 of the block at b[7] is shown in parentheses because that
+position applies only before the split. With one prediction slot, an FTB entry
+holds one branch, so the FTB ends the block at b[7] at the JAL, and the JAL is
+at position 0 of a block of its own. Section 4.1 describes this.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to place the branch at position 3 of each
+region.</p>
+<p>The direction of b[7].c is chosen by the program writer class and resolved by
+the modeled backend. The register operands play no part in the taken/not taken
+state. The code is the same on every pass, and only the expected instruction
+stream changes.</p>
+<p>b[7].c is not taken on passes 0 to 14, and the JAL returns to b[0]. b[7].c is
+taken on pass 15, which exits the loop to <code>ex</code> (event 12), and the JAL does not
+execute.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-p2-redirects">4.1 Why the program produces p2 redirects<a class="headerlink" href="#41-why-the-program-produces-p2-redirects" title="Permanent link">&para;</a></h3>
-<ol>
-<li>One uBTB set. The uBTB index is <code>pc[10:5]</code> XOR (<code>pc[4:1]</code> &lt;&lt; 2),
-   the block start's halfword offset folded into the top index bits
-   (<code>get_idx</code>, <code>rtl/core/frontend/bpu/rtl/ubtb.sv:135-140</code>;
-   <code>UBTB_IDX_BITS = 6</code>, <code>UBTB_OFFSET_BITS = 5</code>,
-   <code>bp_defines_pkg.sv:322, 323</code>). Every b[k] is a multiple of 0x800, so
-   its offset is 0 and all eight map to set 0, which has
-   <code>UBTB_WAYS = 4</code> (<code>bp_defines_pkg.sv:315</code>). An update that misses
-   takes the way named by the set's round-robin <code>wr_ptr</code>
-   (<code>ubtb.sv:478-481</code>), so at most four of the eight blocks are held
-   at a time.</li>
-<li>Eight FTB sets. The FTB set index is <code>pc[13:5]</code> XOR (<code>pc[4:1]</code> &lt;&lt; 5)
-   (<code>ftb_idx</code>, <code>ftb_cntrl.sv:327-331</code>; <code>FTB_IDX_BITS = 9</code>,
-   <code>bp_defines_pkg.sv:176</code>). With offset 0 the eight blocks fall in
-   sets 0x080, 0x0C0, 0x100, 0x140, 0x180, 0x1C0, 0x000 and 0x040
-   (derived from the addresses), so the FTB holds all of them.</li>
-<li>p1 on a uBTB miss predicts fall-through: <code>w_pft_p1</code> is the lookup PC
-   plus 32 (<code>bp_cluster.sv:876-878</code>).</li>
-<li>p2 comparison. <code>bp_cluster.sv:1213-1217</code>: a reachable slot s
-   redirects when the FTB answered (<code>w_ftb_valid_p2</code>) and its p2
-   successor <code>w_succ_p2[s]</code> differs from the p1 successor carried in
-   <code>r_succ_p1_p2[s]</code>. For b[k] the FTB successor is b[k+1] and the p1
-   successor is b[k] + 0x20.</li>
-<li>FTQ acceptance and the new request. <code>ok_redir_p2</code>
-   (<code>ftq_shadow.sv:211-212</code>) requires the stage-2 shadow valid and
-   pointer match; <code>ftq_npc.sv:349-355</code> (arm 4) then takes the p2
-   redirect PC as the next p0 request.</li>
-</ol>
-<p>From the FST, the 49 accepted p2 redirects, by block and target:</p>
-<div class="highlight"><pre><span></span><code>block        target       count   uBTB at p1
-0x80001000   0x80001800    2      miss
-0x80001800   0x80002000    3      miss
-0x80002000   0x80002800    3      miss
-0x80002800   0x80003000   14      miss
-0x80003000   0x80003800   12      miss
-0x80004800   0x80004806   11      hit, end b[7] + 0x20
-0x80004800   0x8000480A    4      hit, end b[7] + 0x20
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a
+marker in the waveform.</p>
+<h3 id="41-p2-redirects-from-ubtb-capacity">4.1 p2 redirects from uBTB capacity<a class="headerlink" href="#41-p2-redirects-from-ubtb-capacity" title="Permanent link">&para;</a></h3>
+<p>The uBTB has 64 sets of four ways. Its set index is <code>pc[10:5]</code> XOR
+(<code>pc[4:1]</code> &lt;&lt; 2), and the FTB set index is <code>pc[13:5]</code> XOR (<code>pc[4:1]</code> &lt;&lt; 5).<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>
+The start address of each region is a multiple of 0x800, so <code>pc[4:1]</code> and
+<code>pc[10:5]</code> are 0. All eight regions map to uBTB set 0, and to eight different
+FTB sets.</p>
+<table>
+<thead>
+<tr>
+<th>Region</th>
+<th>Start address</th>
+<th>uBTB set</th>
+<th>FTB set</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>b[0]</td>
+<td>0x8000_1000</td>
+<td>0</td>
+<td>0x080</td>
+</tr>
+<tr>
+<td>b[1]</td>
+<td>0x8000_1800</td>
+<td>0</td>
+<td>0x0C0</td>
+</tr>
+<tr>
+<td>b[2]</td>
+<td>0x8000_2000</td>
+<td>0</td>
+<td>0x100</td>
+</tr>
+<tr>
+<td>b[3]</td>
+<td>0x8000_2800</td>
+<td>0</td>
+<td>0x140</td>
+</tr>
+<tr>
+<td>b[4]</td>
+<td>0x8000_3000</td>
+<td>0</td>
+<td>0x180</td>
+</tr>
+<tr>
+<td>b[5]</td>
+<td>0x8000_3800</td>
+<td>0</td>
+<td>0x1C0</td>
+</tr>
+<tr>
+<td>b[6]</td>
+<td>0x8000_4000</td>
+<td>0</td>
+<td>0x000</td>
+</tr>
+<tr>
+<td>b[7]</td>
+<td>0x8000_4800</td>
+<td>0</td>
+<td>0x040</td>
+</tr>
+</tbody>
+</table>
+<p>An update that misses in the uBTB takes the way named by the set's round-robin
+write pointer, so the set holds at most four prediction blocks.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> The block at
+0x8000_0000, from the prologue's JAL, also maps to set 0 and holds way 0 until
+b[3] replaces it at cyc 118. The first region replaced is b[0], at cyc 138
+(event 3). Which four the set holds depends on the pointer and the order of the
+updates, so the misses are uneven across the regions. Of the 130 updates to the
+set in the run, 129 write a block it does not hold, and the other is the split
+at cyc 192 (event 6).</p>
+<p>The set around the split is shown below. Its contents are modeled from the uBTB
+updates, and the model matches every p1 hit and miss at b[k] in the run.</p>
+<p><a href="../fd04_ubtb_set0.svg"><img alt="fd04 uBTB set 0 around the split" src="../fd04_ubtb_set0.svg" /></a></p>
+<p>A request that misses in the uBTB predicts no branch, and the end of its p1
+prediction is the request PC plus 32.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> At p2 the FTB supplies the JAL, so for
+b[k] the p2 successor is b[k+1] and the p1 successor is b[k] + 0x20. The BPU
+issues a p2 redirect when the FTB hits and the two successors differ.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> The
+FTQ accepts it and takes the redirect PC as its next p0 request.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup></p>
+<p>The FTQ accepts 64 p2 redirects, shown below by region. The uBTB misses are
+those of the p1 predictions the FTQ accepts.</p>
+<div class="highlight"><pre><span></span><code>region  target        uBTB at p1  uBTB misses  p2 redirects
+b[0]    0x8000_1800   miss             4            3
+b[1]    0x8000_2000   miss             4            3
+b[2]    0x8000_2800   miss             4            3
+b[3]    0x8000_3000   miss            16           15
+b[4]    0x8000_3800   miss            14           13
+b[5]    0x8000_4000   miss            13           12
+b[7]    0x8000_4806   hit                          14
+b[7]    0x8000_480A   hit                           1
 </code></pre></div>
-<p>34 follow a uBTB miss; 15 follow a uBTB hit for b[7]. "uBTB at p1" is
-<code>r_ubtb_blk_p1.hit</code> the cycle before, for the same lookup PC. b[5] and
-b[6] raise no p2 redirect in this run.</p>
-<p>b[7] holds a conditional at position 1 and the jal at position 3. On
-this model an FTB entry holds one branch, so when the jal first
-resolved in a block from b[7] the FTB split the entry: it keeps the
-conditional and ends at the jal's PC, 0x8000_4806 (the split at
-update, <code>planning/arch/ftb_decisions.md</code> section 3; <code>ftb_cntrl.sv</code>,
-THE UPDATE, lines 464 to 615). The FTB answer for b[7] therefore ends
-the block at 0x8000_4806 (<code>bpu_blk_pft_p2</code>). The next block starts at
-the jal and predicts it in slot 0. The uBTB entry for b[7] was split
-the same way at cyc 193. The set's round-robin replacement then wrote
-that way for b[3] at cyc 199. At cyc 203 the conditional's update
-allocated b[7] again, with the end of a new entry, b[7] + 0x20. From
-then on the jal resolves in the block that starts at 0x8000_4806, so
-no update from b[7] carries it, and the uBTB entry for b[7] keeps that
-end. Its p1 answer is the conditional not taken with the fall-through
-0x8000_4820, past the jal. The FTB's fall-through is 0x8000_4806, so
-p2 redirects to the jal's PC; this happens 11 times. The 4 redirects
-to 0x8000_480A are the conditional predicted taken at p2 against the
-uBTB's not taken. None of the 49 has the cluster's cut set
-(<code>w_cut_p2</code>, <code>fe_decisions.md</code> 10): the FTB entry never reports a
-branch no slot carries.</p>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd04_p2_override.sucl</code>, which <code>make view
-S=fd04_p2_override</code> opens in Surfer. Look at:</p>
-<ul>
-<li>group <code>bp_cluster_p1_ubtb</code>: a p1 block with <code>r_ubtb_blk_p1.hit</code> low
-  and <code>bpu_pred_pft_p1</code> the lookup PC + 0x20.</li>
-<li>group <code>bp_cluster_p2_ftb</code>: one cycle later <code>r_val_p2</code> and
-  <code>w_ftb_valid_p2</code>, slot 0 a taken conditional at <code>pos</code> 3, and
-  <code>bpu_redir_p2.[0].valid</code> with <code>target_pc</code> the next b[k].</li>
-<li>group <code>ftq</code>: <code>w_ok_redir_p2</code> accepting it, <code>w_redir_val</code> and
-  <code>w_redir_idx</code>.</li>
-<li>group <code>bp_cluster_p0</code>: the next <code>ftq_pred_pc_p0</code> is the redirect
-  target.</li>
-</ul>
+<p>Each region misses once in pass 0, when the FTB has no entry for it, and that
+miss raises no redirect. Predecode corrects each JAL in pass 0, first at cyc 19
+(event 1), and the FTB entries are allocated from cyc 59 (event 2) to cyc 180
+(event 4). Every other miss raises a p2 redirect, which gives the 49 redirects
+that follow a uBTB miss. b[6] and b[7] miss only in pass 0.</p>
+<p>The 15 redirects at b[7] follow a uBTB hit. b[7] holds b[7].c at position 1 and
+the JAL at position 3, and with one prediction slot an entry holds one branch.
+When the JAL first resolves from the block at b[7], the entry is split: it keeps
+b[7].c and ends the block at the JAL's PC, 0x8000_4806.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup> The uBTB does this
+at cyc 192 (event 6) and the FTB at cyc 193 (event 8).</p>
+<p>The uBTB entry does not stay split. Round-robin replacement writes its way for
+b[3] at cyc 198 (event 9). At cyc 202 (event 10) the update for b[7].c allocates
+b[7] again, with the end of a new entry, b[7] + 0x20. b[3] and b[7] go on
+replacing each other in that way in later passes. The JAL now resolves from the
+block at 0x8000_4806, so no update from b[7] carries it, and each new uBTB entry
+has the same end.</p>
+<p>The uBTB therefore predicts b[7].c not taken with the end 0x8000_4820, past the
+JAL, while the FTB's block ends at 0x8000_4806. The successors differ, so the
+BPU redirects to the JAL's PC, first at cyc 225 (event 11) and 14 times in all.
+The other redirect is at cyc 193 (event 7), before the split takes effect at p2:
+the FTB block still ends at 0x8000_4820, and b[7].c is predicted taken at p2
+against the uBTB's not taken, so the redirect is to 0x8000_480A.</p>
+<p>The blocks at b[7] after the split are shown below.</p>
+<p><a href="../fd04_blocks.svg"><img alt="fd04 the uBTB and the FTB at b[7]" src="../fd04_blocks.svg" /></a></p>
+<h3 id="42-first-p2-redirects">4.2 First p2 redirects<a class="headerlink" href="#42-first-p2-redirects" title="Permanent link">&para;</a></h3>
+<p>The FTQ accepts the first p2 redirect at cyc 182 (event 5), for the block at
+b[0]. The p1 prediction for that block misses one cycle earlier, at cyc 181. In
+group <code>bp_cluster_p1_ubtb</code>, <code>u_bpu.r_ubtb_blk_p1.hit</code> and
+<code>bpu_pred_slot_p1.[0].slot_valid</code> are deasserted, and <code>bpu_pred_pft_p1</code> is
+0x8000_1020, the request PC plus 32.</p>
+<p>At cyc 182, in group <code>bp_cluster_p2_ftb</code>, <code>u_bpu.r_val_p2</code> and
+<code>u_bpu.w_ftb_valid_p2</code> are asserted. <code>bpu_slot_p2.[0]</code> holds the JAL at <code>pos</code> 3,
+with <code>br_type</code> DIRECT_UNC and <code>pred_src</code> PRED_FTB, and <code>bpu_redir_p2.[0].valid</code>
+is asserted with <code>target_pc</code> 0x8000_1800. In group <code>ftq</code>, <code>u_ftq.w_ok_redir_p2</code>
+and <code>u_ftq.w_redir_val</code> are asserted. In group <code>bp_cluster_p0</code>, <code>ftq_pred_pc_p0</code>
+is 0x8000_1800 in the same cycle.</p>
+<p>The first p2 redirect at b[7] is at cyc 193 (event 7), and its p1 prediction is
+at cyc 192. <code>u_bpu.r_ubtb_blk_p1.hit</code> is asserted, slot 0 predicts b[7].c not
+taken, and <code>bpu_pred_pft_p1</code> is 0x8000_4820. At cyc 193, <code>bpu_slot_p2.[0]</code> holds
+b[7].c at <code>pos</code> 1 with <code>taken</code> asserted and <code>pred_src</code> PRED_TAGE, so <code>target_pc</code>
+is 0x8000_480A.</p>
+<p>The first p2 redirect to the JAL's PC is at cyc 225 (event 11), and its p1
+prediction is at cyc 224, with the same uBTB hit and end. At cyc 225,
+<code>bpu_slot_p2.[0]</code> holds b[7].c with <code>taken</code> deasserted, so <code>target_pc</code> is
+0x8000_4806, the end of the FTB's block.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6158,33 +6197,81 @@ S=fd04_p2_override</code> opens in Surfer. Look at:</p>
 </tr>
 <tr>
 <td>1</td>
+<td>19</td>
+<td>first predecode redirect, to b[0]: the JAL at 0x8000_0008 has no predictor entry</td>
+<td>pass 0</td>
+</tr>
+<tr>
+<td>2</td>
+<td>59</td>
+<td>FTB entry for b[0] allocated with the JAL at position 3</td>
+<td>pass 0</td>
+</tr>
+<tr>
+<td>3</td>
+<td>138</td>
+<td>uBTB update for b[4] replaces b[0]; the first region replaced</td>
+<td>set 0, way 1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>180</td>
+<td>FTB entry for b[7] allocated with b[7].c at position 1</td>
+<td>the last region of pass 0</td>
+</tr>
+<tr>
+<td>5</td>
 <td>182</td>
 <td>first p2 redirect, from b[0] to b[1] (0x8000_1800): the FTB successor differs from the p1 successor</td>
 <td>accepted by the FTQ</td>
 </tr>
 <tr>
-<td>2</td>
+<td>6</td>
+<td>192</td>
+<td>the JAL resolves from b[7]: the uBTB entry for b[7] ends at 0x8000_4806</td>
+<td>the split, uBTB</td>
+</tr>
+<tr>
+<td>7</td>
 <td>193</td>
 <td>first p2 redirect to 0x8000_480A: b[7]'s conditional predicted taken at p2</td>
 <td>from b[7]</td>
 </tr>
 <tr>
-<td>3</td>
-<td>293</td>
+<td>8</td>
+<td>193</td>
+<td>the FTB entry for b[7] ends at 0x8000_4806</td>
+<td>the split, <code>upd_split</code> 1</td>
+</tr>
+<tr>
+<td>9</td>
+<td>198</td>
+<td>uBTB update for b[3] replaces b[7]</td>
+<td>set 0, way 0</td>
+</tr>
+<tr>
+<td>10</td>
+<td>202</td>
+<td>uBTB update for b[7] allocates it again, with the end b[7] + 0x20</td>
+<td>set 0, way 0</td>
+</tr>
+<tr>
+<td>11</td>
+<td>225</td>
 <td>first p2 redirect to the jal, 0x8000_4806: the end of the FTB entry for b[7] after the split</td>
 <td>from b[7]</td>
 </tr>
 <tr>
-<td>4</td>
-<td>513</td>
+<td>12</td>
+<td>511</td>
 <td>the chain exits: b[7]'s conditional taken on the last pass, a misprediction; redirect to 0x8000_480A</td>
 <td>pass 15, backend</td>
 </tr>
 <tr>
-<td>5</td>
-<td>522</td>
-<td>the run ends</td>
-<td></td>
+<td>13</td>
+<td>520</td>
+<td>the run ends; the last instruction retires</td>
+<td>a 100 cycle drain follows, to 620</td>
 </tr>
 </tbody>
 </table>
@@ -6219,6 +6306,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td>bp_cluster_p1_ubtb</td>
+<td><code>u_bpu.r_pc_p1</code></td>
+<td>p1 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>bpu_pred_val_p1</code></td>
 <td>p1 prediction valid</td>
 </tr>
@@ -6235,7 +6327,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_pft_p1</code></td>
-<td>p1 fetch block end, the first halfword after it</td>
+<td>p1 prediction block end, next halfword after it</td>
 </tr>
 <tr>
 <td></td>
@@ -6250,7 +6342,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_slot_p1.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6265,17 +6357,22 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_slot_p1.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td>bp_cluster_p2_ftb</td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>p2 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
 </tr>
 <tr>
 <td></td>
 <td><code>bpu_slot_val_p2</code></td>
-<td>slot valid mask</td>
+<td>p2 group valid: p2 valid and an FTB hit</td>
 </tr>
 <tr>
 <td></td>
@@ -6300,7 +6397,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6315,7 +6412,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td></td>
@@ -6402,6 +6499,96 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>u_ftq.u_npc.w_hold</code></td>
 <td>holds the p0 request</td>
 </tr>
+<tr>
+<td>predecode</td>
+<td><code>u_ftq.w_pd_redir_val</code></td>
+<td>predecode redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_pc</code></td>
+<td>predecode redirect target</td>
+</tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_cause</code></td>
+<td>backend redirect cause</td>
+</tr>
+<tr>
+<td>ftb_update</td>
+<td><code>ftb_upd_valid_u0</code></td>
+<td>FTB update valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_pc_u0</code></td>
+<td>block start address of the FTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_pos_u0</code></td>
+<td>halfword position of the branch in the FTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_is_br_u0</code></td>
+<td>the FTB update is for a conditional</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_is_jmp_u0</code></td>
+<td>the FTB update is for a jump</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_hit_u0</code></td>
+<td>the FTB update hits an entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_split</code></td>
+<td>the FTB update splits the entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos</code></td>
+<td>position the split ends the entry at</td>
+</tr>
+<tr>
+<td>ubtb_update</td>
+<td><code>u_bpu.ubtb_upd_u0.[0].valid</code></td>
+<td>uBTB update valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ubtb_upd_u0.[0].pc</code></td>
+<td>block start address of the uBTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ubtb_upd_u0.[0].pos</code></td>
+<td>halfword position of the branch in the uBTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ubtb_upd_u0.[0].is_br</code></td>
+<td>the uBTB update is for a conditional</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ubtb_upd_u0.[0].is_jmp</code></td>
+<td>the uBTB update is for a jump</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6409,7 +6596,36 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd04_p2_override</code> runs the scenario; <code>make view S=fd04_p2_override</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd04_p2_override.svh</code>, <code>waves/fd04_p2_override.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.3/examples/fe_demo/docs/fd04_p2_override.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.4/examples/fe_demo/docs/fd04_p2_override.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p>uBTB index: <code>rtl/core/frontend/bpu/rtl/ubtb.sv:135-140</code>. FTB index:
+<code>rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:327-331</code>. <code>UBTB_WAYS</code>,
+<code>UBTB_IDX_BITS</code> and <code>FTB_IDX_BITS</code>:
+<code>rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:315</code>, <code>:322</code> and <code>:176</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>rtl/core/frontend/bpu/rtl/ubtb.sv:481</code>, <code>:554</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:876-878</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1213-1217</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>rtl/core/frontend/ftq/rtl/ftq_shadow.sv:211-212</code>,
+<code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:349-355</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p>The split at update: rule 4 of the comment at
+<code>rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:464</code>, and
+<code>rtl/core/frontend/bpu/rtl/ubtb.sv:36-41</code>.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 
