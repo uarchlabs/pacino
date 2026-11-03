@@ -18,14 +18,14 @@ marker_set c0_reset_released 36
 item_focus e
 group_marked markers
 item_focus f
-marker_set c20_first_p0_request_withheld_for_an 235
 marker_set c21_first_resolution_from_the_backend 245
-marker_set c21_first_uBTB_update 245
-marker_set c21_first_FTB_update 245
-marker_set c21_first_loop_predictor 245
+marker_set c42_first_consecutive_FTB_updates 455
 marker_set c66_first_ITTAGE_update 695
 marker_set c78_first_RAS_commit 815
-marker_set c168_the_beq_placed_in_an_occupied 1715
+marker_set c98_first_RETURN_commit 1015
+marker_set c166_backend_misprediction_of_the_alwaystaken_beq 1695
+marker_set c168_resolution_of_the_alwaystaken_beq 1715
+marker_set c176_first_accepted_p2_group_for_the 1795
 marker_set c454_the_run_ends 4575
 item_unfocus
 # group backend
@@ -42,66 +42,112 @@ variable_add tb.bkend_ftq_redir_cause
 item_set_format Enum
 variable_add tb.bkend_ftq_redir_self
 item_set_format Bit
+variable_add tb.bkend_ftq_redir_pos
+item_set_format Unsigned
+variable_add tb.bkend_ftq_redir_taken
+item_set_format Bit
 variable_add tb.bkend_ftq_rsv_val
+item_set_format Bit
+variable_add tb.ftq_bkend_rsv_rdy
 item_set_format Bit
 variable_add tb.bkend_ftq_commit_val
 item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
 item_unfocus
-# group ftq_upd_conv
-variable_add tb.bkend_ftq_rsv_val
-item_focus bi
-group_marked ftq_upd_conv
-item_focus bj
+# group ftq_resolve
+variable_add tb.dut.u_ftq.u_resolve.rsv_plc_occ
+item_focus bl
+group_marked ftq_resolve
+item_focus bm
 item_set_format Bit
-variable_add tb.ftq_bkend_rsv_rdy
+variable_add tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[0].pc
+item_set_format Hexadecimal
+item_unfocus
+# group bp_cluster_update
+variable_add tb.dut.u_bpu.w_ubtb_upd_u0.[0].valid
+item_focus bo
+group_marked bp_cluster_update
+item_focus bp
 item_set_format Bit
+variable_add tb.dut.u_bpu.w_ubtb_upd_u0.[0].pc
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_ubtb_upd_u0.[0].pos
+item_set_format Unsigned
 variable_add tb.dut.u_bpu.w_lp_upd_val_p0
 item_set_format Bit
 variable_add tb.dut.u_bpu.w_tage_upd_val_u0
 item_set_format Bit
-variable_add tb.dut.u_bpu.w_ittage_upd_val_u0
-item_set_format Bit
 variable_add tb.dut.u_bpu.w_sc_upd_val_u0
+item_set_format Bit
+variable_add tb.dut.u_bpu.w_ittage_upd_val_u0
 item_set_format Bit
 variable_add tb.dut.bpu_tage_upd_rdy
 item_set_format Bit
 variable_add tb.dut.u_bpu.w_ras_commit_val
 item_set_format Bit
-variable_add tb.dut.u_bpu.w_ubtb_upd_u0.[0].valid
-item_set_format Bit
+variable_add tb.dut.ras_commit_br_type
+item_set_format Enum
+variable_add tb.dut.ras_commit_ret_addr
+item_set_format Hexadecimal
 item_unfocus
 # group ftb_update
 variable_add tb.dut.ftb_upd_valid_u0
-item_focus cc
+item_focus ck
 group_marked ftb_update
-item_focus cd
+item_focus cl
 item_set_format Bit
 variable_add tb.dut.ftb_upd_pc_u0
 item_set_format Hexadecimal
-variable_add tb.dut.ftb_upd_hit_u0
-item_set_format Bit
+variable_add tb.dut.ftb_upd_pos_u0
+item_set_format Unsigned
 variable_add tb.dut.ftb_upd_is_br_u0
 item_set_format Bit
 variable_add tb.dut.ftb_upd_taken_u0
 item_set_format Bit
 variable_add tb.dut.ftb_upd_is_jmp_u0
 item_set_format Bit
-variable_add tb.dut.u_ftq.u_npc.h3_ftb_upd
+variable_add tb.dut.ftb_upd_hit_u0
 item_set_format Bit
+variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split
+item_set_format Bit
+variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos
+item_set_format Unsigned
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus ck
+item_focus de
 group_marked bp_cluster_p0
-item_focus cl
+item_focus df
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
+item_set_format Bit
+variable_add tb.dut.u_ftq.u_npc.h3_ftb_upd
+item_set_format Bit
+item_unfocus
+# group bp_cluster_p2
+variable_add tb.dut.u_bpu.r_pc_p2
+item_focus dk
+group_marked bp_cluster_p2
+item_focus dl
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.r_val_p2
+item_set_format Bit
+variable_add tb.dut.bpu_slot_val_p2
+item_set_format Bit
+variable_add tb.dut.bpu_blk_pft_p2
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_slot_p2.[0].slot_valid
+item_set_format Bit
+variable_add tb.dut.bpu_slot_p2.[0].br_type
+item_set_format Enum
+variable_add tb.dut.bpu_slot_p2.[0].pos
+item_set_format Unsigned
+variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
 item_unfocus
 zoom_to 16 336

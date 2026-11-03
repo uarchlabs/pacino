@@ -55,20 +55,20 @@
   // =================================================================
   // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
   // the Events table of docs/fd12_training.md, in table order. One
-  // slot. The resolution and the updates formed from it in the same
-  // cycle are driven by the testbench (late, per the FST); the FTB
-  // update, its p0 hold and the RAS commit change at the edge.
+  // slot. The resolution, the backend redirect and the logic
+  // combinational from them are late (per the FST); the FTB update, the
+  // RAS commit and the p2 group change at the edge.
   // =================================================================
   function automatic void fd12_evt_defs();
     evt_def("reset_released", EV_EXACT);
-    evt_def("first_p0_request_withheld_for_an", EV_WINDOW);
     evt_def("first_resolution_from_the_backend", EV_WINDOW, 1);
-    evt_def("first_uBTB_update", EV_WINDOW, 1);
-    evt_def("first_FTB_update", EV_WINDOW);
-    evt_def("first_loop_predictor", EV_WINDOW, 1);
+    evt_def("first_consecutive_FTB_updates", EV_WINDOW);
     evt_def("first_ITTAGE_update", EV_WINDOW, 1);
     evt_def("first_RAS_commit", EV_WINDOW);
-    evt_def("the_beq_placed_in_an_occupied", EV_WINDOW, 1);
+    evt_def("first_RETURN_commit", EV_WINDOW);
+    evt_def("backend_misprediction_of_the_alwaystaken_beq", EV_WINDOW, 1);
+    evt_def("resolution_of_the_alwaystaken_beq", EV_WINDOW, 1);
+    evt_def("first_accepted_p2_group_for_the", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
@@ -76,16 +76,21 @@
     logic [EV_MAX-1:0] e;
     e    = '0;
     e[0] = ev_p0(RESET_VECTOR);
-    e[1] = dut.u_ftq.u_npc.h3_ftb_upd;
-    e[2] = bkend_ftq_rsv_val[0];
-    e[3] = dut.u_bpu.w_ubtb_upd_u0[0].valid;
-    e[4] = dut.u_bpu.w_ftb_upd_val_u0;
-    e[5] = (dut.u_bpu.w_lp_upd_val_p0 != '0) &&
-           (dut.u_bpu.w_tage_upd_val_u0 != '0) &&
-           (dut.u_bpu.w_sc_upd_val_u0 != '0);
-    e[6] = dut.u_bpu.w_ittage_upd_val_u0 != '0;
-    e[7] = dut.u_bpu.w_ras_commit_val;
+    e[1] = bkend_ftq_rsv_val[0];
+    // An FTB update this cycle and, by the hold, another in the next.
+    e[2] = dut.ftb_upd_valid_u0 && dut.u_ftq.u_npc.h3_ftb_upd;
+    e[3] = dut.u_bpu.w_ittage_upd_val_u0 != '0;
+    e[4] = dut.u_bpu.w_ras_commit_val;
+    e[5] = dut.u_bpu.w_ras_commit_val && (dut.ras_commit_br_type == RETURN);
+    // The beq at position 6 of the block at +0x10. Position separates it
+    // from the same redirect target at position 0 of the block at +0x1C.
+    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h28)) &&
+           (bkend_ftq_redir_pos == 4'd6);
     // A resolution placed in an occupied slot (item C, BP-139).
-    e[8] = dut.u_ftq.u_resolve.rsv_plc_occ[0];
+    e[7] = dut.u_ftq.u_resolve.rsv_plc_occ[0];
+    // The block at +0x10 after the FTB split, ending at +0x1C.
+    e[8] = dut.u_ftq.w_ok_slot_p2 &&
+           (dut.u_bpu.r_pc_p2 == RESET_VECTOR + VA_WIDTH'('h10)) &&
+           (dut.bpu_blk_pft_p2 == RESET_VECTOR + VA_WIDTH'('h1C));
     return e;
   endfunction

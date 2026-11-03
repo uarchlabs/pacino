@@ -373,16 +373,29 @@ def scenarios(n):
     itt_p2 = [B + '.w_ittage_pred_rdy_p2'] + \
         ['%s.w_ittage_pred_meta_p2.[%d].%s' % (B, s, f) for s in sl
          for f in ('ittage_hit', 'ittage_prm_comp', 'ittage_prm_tgt')]
-    updates = ['tb.bkend_ftq_rsv_val', 'tb.ftq_bkend_rsv_rdy',
-               B + '.w_lp_upd_val_p0', B + '.w_tage_upd_val_u0',
-               B + '.w_ittage_upd_val_u0', B + '.w_sc_upd_val_u0',
-               D + '.bpu_tage_upd_rdy', B + '.w_ras_commit_val'] + \
-        ['%s.w_ubtb_upd_u0.[%d].valid' % (B, s) for s in sl]
+    # fd12: the groups of docs/fd12_training.md section 6, in its order.
+    fd12_backend = ['tb.bkend_ftq_redir_val', 'tb.bkend_ftq_redir_idx',
+                    'tb.bkend_ftq_redir_pc', 'tb.bkend_ftq_redir_cause',
+                    'tb.bkend_ftq_redir_self', 'tb.bkend_ftq_redir_pos',
+                    'tb.bkend_ftq_redir_taken', 'tb.bkend_ftq_rsv_val',
+                    'tb.ftq_bkend_rsv_rdy', 'tb.bkend_ftq_commit_val',
+                    'tb.bkend_ftq_commit_idx']
+    updates = ['%s.w_ubtb_upd_u0.[%d].%s' % (B, s, f) for s in sl
+               for f in ('valid', 'pc', 'pos')] + \
+        [B + '.w_lp_upd_val_p0', B + '.w_tage_upd_val_u0',
+         B + '.w_sc_upd_val_u0', B + '.w_ittage_upd_val_u0',
+         D + '.bpu_tage_upd_rdy', B + '.w_ras_commit_val',
+         D + '.ras_commit_br_type', D + '.ras_commit_ret_addr']
     ftb_upd = [D + '.ftb_upd_valid_u0', D + '.ftb_upd_pc_u0',
-               D + '.ftb_upd_hit_u0', D + '.ftb_upd_is_br_u0',
+               D + '.ftb_upd_pos_u0', D + '.ftb_upd_is_br_u0',
                D + '.ftb_upd_taken_u0', D + '.ftb_upd_is_jmp_u0',
-               Q + '.u_npc.h3_ftb_upd']
-    l1i = [L + '.b_rsp_valid.b_rsp_valid[0]',
+               D + '.ftb_upd_hit_u0', B + '.u_ftb.u_ftb_cntrl.upd_split',
+               B + '.u_ftb.u_ftb_cntrl.upd_cut_pos']
+    fd12_p2 = [B + '.r_pc_p2', B + '.r_val_p2', D + '.bpu_slot_val_p2',
+               D + '.bpu_blk_pft_p2'] + \
+        ['%s.bpu_slot_p2.[%d].%s' % (D, s, f) for s in sl
+         for f in ('slot_valid', 'br_type', 'pos')] + [Q + '.w_ok_slot_p2']
+    l1i =[L + '.b_rsp_valid.b_rsp_valid[0]',
            L + '.b_rsp_valid.b_rsp_valid[1]',
            L + '.b_mis_valid.b_mis_valid[0]',
            L + '.b_mis_valid.b_mis_valid[1]', L + '.u_mshr.mrg_hit'] + \
@@ -572,10 +585,14 @@ def scenarios(n):
                                 ('bp_cluster_p2', [B + '.r_pc_p2'] + bpu_p2),
                                 ('bp_cluster_p3', [B + '.r_pc_p3'] + bpu_p3),
                                 ('ftb_update', ftb_split)]),
-        ('fd12_training', [('clock', clk), ('backend', backend),
-                           ('ftq_upd_conv', updates),
+        ('fd12_training', [('clock', clk), ('backend', fd12_backend),
+                           ('ftq_resolve', [Q + '.u_resolve.rsv_plc_occ'] +
+                            upd_pc),
+                           ('bp_cluster_update', updates),
                            ('ftb_update', ftb_upd),
-                           ('bp_cluster_p0', bpu_p0)]),
+                           ('bp_cluster_p0', bpu_p0 +
+                            [Q + '.u_npc.h3_ftb_upd']),
+                           ('bp_cluster_p2', fd12_p2)]),
         ('fd13_l1i', [('clock', clk), ('ftq_ifu', ftq_ifu),
                       ('ifu_l1i', ifu_l1i), ('l1i', l1i)]),
         ('fd14_translation', [('clock', clk), ('ifu_xlate', xq),

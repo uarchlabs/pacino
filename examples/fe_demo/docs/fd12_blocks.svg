@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="503" viewBox="0 0 1060 503">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="1060" height="503" fill="#ffffff"/>
+<text x="30" y="40" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd12_training: the block at 0x8000_0010 before and after the FTB split</text>
+<text x="30" y="62" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One cell per halfword. The numbers in a block are positions: halfwords from the block start. NUM_PRED_SLOTS = 1. Read from out/fd12_training/fd12_training.fst at p2.</text>
+<text x="50" y="86" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">address 0x8000_00xx, the low byte of each halfword:</text>
+<text x="70" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">10</text>
+<text x="110" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">12</text>
+<text x="150" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">14</text>
+<text x="190" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">16</text>
+<text x="230" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">18</text>
+<text x="270" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">1A</text>
+<text x="310" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">1C</text>
+<text x="350" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">1E</text>
+<text x="390" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">20</text>
+<text x="430" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">22</text>
+<text x="470" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">24</text>
+<text x="510" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">26</text>
+<text x="550" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">28</text>
+<text x="590" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">2A</text>
+<text x="630" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">2C</text>
+<text x="670" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">2E</text>
+<text x="710" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">30</text>
+<text x="750" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">32</text>
+<text x="790" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">34</text>
+<text x="830" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">36</text>
+<text x="870" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">38</text>
+<text x="910" y="102" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">3A</text>
+<rect x="50" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="70" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="70" y="136" class="mono" font-size="10" fill="#ff6e42" text-anchor="middle" font-weight="normal">itop</text>
+<rect x="90" y="108" width="80" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="130" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<rect x="170" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="190" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<rect x="210" y="108" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="250" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">bne</text>
+<text x="250" y="136" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">I:</text>
+<rect x="290" y="108" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="330" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">beq</text>
+<text x="330" y="136" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">B:</text>
+<rect x="530" y="108" width="40" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="550" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<rect x="570" y="108" width="80" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="610" y="129" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<rect x="650" y="108" width="80" height="34" fill="#ffffff" stroke="#8c959f" stroke-width="1"/>
+<text x="690" y="122" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">jalr</text>
+<text x="690" y="136" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">J:</text>
+<rect x="370" y="108" width="160" height="34" fill="#f2f3f5" stroke="#8c959f" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="450" y="129" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">not in the program</text>
+<rect x="730" y="108" width="200" height="34" fill="#f2f3f5" stroke="#8c959f" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="830" y="129" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">not in the program</text>
+<text x="50" y="160" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Labels as in the section 3 listing. I: targets itop, B: targets 0x8000_0028.</text>
+<line x1="290" y1="168" x2="290" y2="410" stroke="#8c959f" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="294" y="178" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">0x8000_001C: the split, cyc 168 (event 7)</text>
+<text x="50" y="204" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">0x8000_0010, before the split</tspan> (FTB entry from cyc 31, 26 accepted p2 groups): 0x8000_0010 to 0x8000_0030. Slot 0 is I:, position 4. B:, position 6, has no slot.</text>
+<rect x="50" y="212" width="640" height="34" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5"/>
+<rect x="210" y="212" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="250" y="241" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">I:</text>
+<rect x="290" y="212" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="330" y="241" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">B:</text>
+<text x="70" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="110" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<line x1="90" y1="212" x2="90" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="150" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="130" y1="212" x2="130" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="190" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<line x1="170" y1="212" x2="170" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="230" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="210" y1="212" x2="210" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="270" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<text x="310" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<line x1="290" y1="212" x2="290" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="350" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<text x="390" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<line x1="370" y1="212" x2="370" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="430" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<line x1="410" y1="212" x2="410" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="470" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<line x1="450" y1="212" x2="450" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="510" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<line x1="490" y1="212" x2="490" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="550" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<line x1="530" y1="212" x2="530" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="590" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<line x1="570" y1="212" x2="570" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="630" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<line x1="610" y1="212" x2="610" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="670" y="227" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<line x1="650" y1="212" x2="650" y2="246" stroke="#8c959f" stroke-width="0.5"/>
+<text x="50" y="276" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">0x8000_0010, after the split</tspan> (first accepted p2 group cyc 176, event 8; 65 groups): 0x8000_0010 to 0x8000_001C. Slot 0 is I:, position 4.</text>
+<rect x="50" y="284" width="240" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="210" y="284" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="250" y="313" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">I:</text>
+<text x="70" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="110" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<line x1="90" y1="284" x2="90" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="150" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="130" y1="284" x2="130" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="190" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<line x1="170" y1="284" x2="170" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="230" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="210" y1="284" x2="210" y2="318" stroke="#8c959f" stroke-width="0.5"/>
+<text x="270" y="299" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<text x="50" y="348" class="sans" font-size="12" fill="#1f2328"><tspan font-weight="bold">0x8000_001C</tspan> (FTB entry from cyc 55, 14 accepted p2 groups): 0x8000_001C to 0x8000_003C. Slot 0 is B:, position 0.</text>
+<rect x="290" y="356" width="640" height="34" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<rect x="290" y="356" width="80" height="34" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="330" y="385" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">B:</text>
+<text x="310" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="350" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<text x="390" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<line x1="370" y1="356" x2="370" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="430" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<line x1="410" y1="356" x2="410" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="470" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<line x1="450" y1="356" x2="450" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="510" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<line x1="490" y1="356" x2="490" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="550" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<line x1="530" y1="356" x2="530" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="590" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<line x1="570" y1="356" x2="570" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="630" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<line x1="610" y1="356" x2="610" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="670" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<line x1="650" y1="356" x2="650" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="710" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<line x1="690" y1="356" x2="690" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="750" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<line x1="730" y1="356" x2="730" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="790" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<line x1="770" y1="356" x2="770" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="830" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<line x1="810" y1="356" x2="810" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="870" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<line x1="850" y1="356" x2="850" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<text x="910" y="371" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<line x1="890" y1="356" x2="890" y2="390" stroke="#8c959f" stroke-width="0.5"/>
+<rect x="50" y="424" width="14" height="14" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="70" y="435" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="normal">block before the split: B: is inside the block and has no slot</text>
+<rect x="420" y="424" width="14" height="14" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="440" y="435" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="normal">block with each of its branches in a slot</text>
+<rect x="700" y="424" width="14" height="14" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="720" y="435" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="normal">conditional branch</text>
+<line x1="30" y1="451" x2="1030" y2="451" stroke="#8c959f" stroke-width="1"/>
+<text x="30" y="469" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Start: u_bpu.r_pc_p2. End: bpu_blk_pft_p2, the first halfword after the block. Position: bpu_slot_p2.[0].pos, in halfwords from the block start.</text>
+<text x="30" y="485" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Groups are cycles with u_ftq.w_ok_slot_p2 asserted at that start and end. The split: u_bpu.u_ftb.u_ftb_cntrl.upd_split, with upd_cut_pos 6.</text>
+</svg>
