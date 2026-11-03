@@ -53,12 +53,27 @@
            (dut.bpu_slot_p3[0].pred_src == PRED_SC);
   endfunction
 
+  // The FTB update for start pc at position p that splits its entry.
+  function automatic logic fd05_split(input logic [VA_WIDTH-1:0] pc,
+                                      input int p);
+    return dut.u_bpu.u_ftb.u_ftb_cntrl.upd_active &&
+           (dut.ftb_upd_pc_u0 == pc) && (int'(dut.ftb_upd_pos_u0) == p) &&
+           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split;
+  endfunction
+
   function automatic void fd05_evt_defs();
     evt_def("reset_released", EV_EXACT);
+    evt_def("first_backend_misprediction", EV_WINDOW, 1);
+    evt_def("FTB_entry_for_0x8000_0018_ends_at", EV_WINDOW);
     evt_def("first_p3_redirect_from_an_SC", EV_WINDOW);
+    evt_def("first_reversal_the_backend_corrects", EV_WINDOW, 1);
     evt_def("A_reversed_to_not_taken_before", EV_WINDOW);
+    evt_def("first_reversal_that_commits", EV_WINDOW);
     evt_def("the_split", EV_WINDOW);
     evt_def("A_reversed_to_not_taken_after", EV_WINDOW);
+    evt_def("FTB_entry_for_0x8000_001A_ends_at", EV_WINDOW);
+    evt_def("last_reversal_of_B", EV_WINDOW, 0, 1);
+    evt_def("last_backend_misprediction_in_the_loop", EV_WINDOW, 1, 1);
     evt_def("last_p3_redirect_from_an_SC", EV_WINDOW, 0, 1);
     evt_def("back_edge_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
@@ -66,21 +81,34 @@
 
   function automatic logic [EV_MAX-1:0] fd05_evt_now();
     logic [EV_MAX-1:0] e;
-    e    = '0;
-    e[0] = ev_p0(RESET_VECTOR);
+    e     = '0;
+    e[0]  = ev_p0(RESET_VECTOR);
+    // The back edge taken, the first redirect of the run, to top.
+    e[1]  = ev_redir(FD05_TOP);
+    // The block at At ends at the back edge, position 7.
+    e[2]  = fd05_split(RESET_VECTOR + VA_WIDTH'('h18), 7);
     // B reversed to taken, to its target.
-    e[1] = fd05_sc(RESET_VECTOR + VA_WIDTH'('h24));
+    e[3]  = fd05_sc(RESET_VECTOR + VA_WIDTH'('h24));
+    // B's fall-through, which only corrects a B predicted taken.
+    e[4]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h1E));
     // A reversed to not taken, to top + 0x20 before the split.
-    e[2] = fd05_sc(FD05_TOP + VA_WIDTH'('h20)) &&
-           (dut.u_bpu.r_pc_p3 == FD05_TOP);
+    e[5]  = fd05_sc(FD05_TOP + VA_WIDTH'('h20)) &&
+            (dut.u_bpu.r_pc_p3 == FD05_TOP);
+    // B reversed to taken in the block at 0x8000_0012, an entry that commits.
+    e[6]  = fd05_sc(RESET_VECTOR + VA_WIDTH'('h24)) &&
+            (dut.u_bpu.r_pc_p3 == RESET_VECTOR + VA_WIDTH'('h12));
     // The FTB update for top that splits its entry at B, position 9.
-    e[3] = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_active &&
-           (dut.ftb_upd_pc_u0 == FD05_TOP) && (dut.ftb_upd_pos_u0 == 9) &&
-           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split;
+    e[7]  = fd05_split(FD05_TOP, 9);
     // ... and after it, to B's PC.
-    e[4] = fd05_sc(RESET_VECTOR + VA_WIDTH'('h1A)) &&
-           (dut.u_bpu.r_pc_p3 == FD05_TOP);
-    e[5] = fd05_sc(dut.bpu_redir_p3[0].target_pc);
-    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h2A));
+    e[8]  = fd05_sc(RESET_VECTOR + VA_WIDTH'('h1A)) &&
+            (dut.u_bpu.r_pc_p3 == FD05_TOP);
+    // The block at B ends at the back edge, position 6.
+    e[9]  = fd05_split(RESET_VECTOR + VA_WIDTH'('h1A), 6);
+    e[10] = fd05_sc(RESET_VECTOR + VA_WIDTH'('h24));
+    // Any mispredict redirect but the loop's exit; its last is the event.
+    e[11] = bkend_ftq_redir_val && (bkend_ftq_redir_cause == RC_MISPREDICT) &&
+            (bkend_ftq_redir_pc != RESET_VECTOR + VA_WIDTH'('h2A));
+    e[12] = fd05_sc(dut.bpu_redir_p3[0].target_pc);
+    e[13] = ev_redir(RESET_VECTOR + VA_WIDTH'('h2A));
     return e;
   endfunction

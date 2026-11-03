@@ -49,14 +49,27 @@
   // =================================================================
   localparam logic [VA_WIDTH-1:0] FD06_ITOP = RESET_VECTOR + VA_WIDTH'('h0E);
 
+  // A p3 redirect the FTQ accepts: SC reversing I, at itop, to not taken.
+  function automatic logic fd06_sc_exit();
+    return dut.u_ftq.w_ok_redir_p3 && dut.bpu_redir_p3[0].valid &&
+           (dut.u_bpu.r_pc_p3 == FD06_ITOP) && !dut.bpu_slot_p3[0].taken &&
+           (dut.bpu_slot_p3[0].pred_src == PRED_SC);
+  endfunction
+
   function automatic void fd06_evt_defs();
     evt_def("reset_released", EV_EXACT);
+    evt_def("first_backend_misprediction", EV_WINDOW, 1);
     evt_def("first_inner_exit_mispredicted", EV_WINDOW, 1);
     evt_def("the_loop_predictor_learns_the_trip", EV_WINDOW);
+    evt_def("last_inner_exit_mispredicted", EV_WINDOW, 1, 1);
+    evt_def("SC_reverses_an_exit_to_not", EV_WINDOW);
+    evt_def("the_FTB_entry_for_itop_ends", EV_WINDOW);
+    evt_def("last_SC_reversal_of_an_exit", EV_WINDOW, 0, 1);
     evt_def("confidence_reaches_3", EV_WINDOW);
     evt_def("first_p1_slot_from_the_loop", EV_WINDOW);
     evt_def("the_loop_predictor_first_trusted_at", EV_WINDOW);
     evt_def("first_exit_predicted_not_taken", EV_WINDOW);
+    evt_def("first_retired_exit_predicted_by_the", EV_WINDOW);
     evt_def("outer_loop_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
@@ -64,20 +77,31 @@
   function automatic logic [EV_MAX-1:0] fd06_evt_now();
     logic [EV_MAX-1:0] e;
     lp_pred_t          lp;
-    e    = '0;
-    lp   = dut.u_bpu.w_lp_pred_p2[0];
-    e[0] = ev_p0(RESET_VECTOR);
-    e[1] = ev_redir(RESET_VECTOR + VA_WIDTH'('h1A));
-    e[2] = lp.lp_past_itr == 8;
-    e[3] = lp.lp_conf == 3;
-    e[4] = dut.u_ftq.w_ok_pred_p1 && dut.bpu_pred_slot_p1[0].slot_valid &&
-           (dut.bpu_pred_slot_p1[0].pred_src == PRED_LOOP);
-    e[5] = lp.lp_pred_is_loop && dut.bpu_slot_p2[0].slot_valid &&
-           (dut.bpu_slot_p2[0].pred_src == PRED_LOOP);
+    e     = '0;
+    lp    = dut.u_bpu.w_lp_pred_p2[0];
+    e[0]  = ev_p0(RESET_VECTOR);
+    // I taken, the first redirect of the run, to itop.
+    e[1]  = ev_redir(FD06_ITOP);
+    e[2]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h1A));
+    e[3]  = lp.lp_past_itr == 8;
+    e[4]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h1A));
+    e[5]  = fd06_sc_exit();
+    // The FTB update for itop that ends its entry at O, position 9.
+    e[6]  = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_active &&
+            (dut.ftb_upd_pc_u0 == FD06_ITOP) &&
+            dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split &&
+            (dut.u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos == 9);
+    e[7]  = fd06_sc_exit();
+    e[8]  = lp.lp_conf == 3;
+    e[9]  = dut.u_ftq.w_ok_pred_p1 && dut.bpu_pred_slot_p1[0].slot_valid &&
+            (dut.bpu_pred_slot_p1[0].pred_src == PRED_LOOP);
+    e[10] = lp.lp_pred_is_loop && dut.bpu_slot_p2[0].slot_valid &&
+            (dut.bpu_slot_p2[0].pred_src == PRED_LOOP);
     // I's slot at p2 from the loop predictor, not taken: the exit.
-    e[6] = dut.u_bpu.r_val_p2 && (dut.u_bpu.r_pc_p2 == FD06_ITOP) &&
-           dut.bpu_slot_p2[0].slot_valid && !dut.bpu_slot_p2[0].taken &&
-           (dut.bpu_slot_p2[0].pred_src == PRED_LOOP);
-    e[7] = ev_redir(RESET_VECTOR + VA_WIDTH'('h24));
+    e[11] = dut.u_bpu.r_val_p2 && (dut.u_bpu.r_pc_p2 == FD06_ITOP) &&
+            dut.bpu_slot_p2[0].slot_valid && !dut.bpu_slot_p2[0].taken &&
+            (dut.bpu_slot_p2[0].pred_src == PRED_LOOP);
+    e[12] = n_lp_exit_ok != 0;
+    e[13] = ev_redir(RESET_VECTOR + VA_WIDTH'('h24));
     return e;
   endfunction

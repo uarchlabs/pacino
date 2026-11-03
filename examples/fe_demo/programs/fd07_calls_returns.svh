@@ -69,34 +69,72 @@
   // =================================================================
   // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
   // the Events table of docs/fd07_calls_returns.md, in table order. One
-  // slot. Every condition is on registers of the design or logic they
-  // drive; the RAS commit valid first rises at an edge (FST), so no
-  // check is late.
+  // slot. The backend's redirects are driven by the testbench: late. The
+  // others are on registers of the design or logic they drive.
   // =================================================================
+  // Retired instructions by the time the first RETURN_CALL of the
+  // retired path reaches p2 (pass 1). The first two reach p2 at cyc 256
+  // and 259, on a path the redirect at cyc 261 squashes, with fewer
+  // retired.
+  localparam int FD07_RC_RETIRED = 90;
+
   function automatic void fd07_evt_defs();
     evt_def("reset_released", EV_EXACT);
     evt_def("first_RAS_commit", EV_WINDOW);
     evt_def("first_RAS_push_at_p2", EV_WINDOW);
     evt_def("entry_1s_recursion_count_reads_1", EV_WINDOW);
     evt_def("entry_1s_count_reaches_4", EV_WINDOW);
+    evt_def("the_backend_corrects_the_bottom_branch", EV_WINDOW, 1);
+    evt_def("first_p1_slot_from_the_RAS", EV_WINDOW);
     evt_def("first_return_predicted_from_the_RAS", EV_WINDOW);
+    evt_def("first_retired_return_the_RAS_predicted", EV_WINDOW);
+    evt_def("last_return_of_f_mispredicted", EV_WINDOW, 1);
+    evt_def("first_pop_of_the_speculative_stack", EV_WINDOW);
     evt_def("first_RETURN_CALL_at_p2", EV_WINDOW);
+    evt_def("first_RETURN_CALL_on_the_retired_path", EV_WINDOW);
+    evt_def("first_pop_that_decrements_a_recursion", EV_WINDOW);
+    evt_def("entry_1_is_reallocated", EV_WINDOW);
+    evt_def("final_return_of_f_mispredicted", EV_WINDOW, 1, 1);
+    evt_def("the_back_edge_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
   function automatic logic [EV_MAX-1:0] fd07_evt_now();
     logic [EV_MAX-1:0] e;
-    e    = '0;
-    e[0] = ev_p0(RESET_VECTOR);
-    e[1] = dut.u_bpu.w_ras_commit_val;
-    e[2] = dut.u_bpu.w_ras_pred_val_p2[0] &&
-           (dut.u_bpu.w_br_type_p2[0] inside {DIRECT_CALL, INDIRECT_CALL});
-    e[3] = dut.u_bpu.u_ras.spec_rctr[1] == 1;
-    e[4] = dut.u_bpu.u_ras.spec_rctr[1] == 4;
-    e[5] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
-           dut.bpu_slot_p2[0].slot_valid &&
-           (dut.bpu_slot_p2[0].pred_src == PRED_RAS);
-    e[6] = dut.u_bpu.w_ras_pred_val_p2[0] &&
-           (dut.u_bpu.w_br_type_p2[0] == RETURN_CALL);
+    logic              pop;
+    logic              rc;
+    e     = '0;
+    pop   = dut.u_bpu.w_ras_pred_val_p2[0] &&
+            (dut.u_bpu.w_br_type_p2[0] inside {RETURN, RETURN_CALL});
+    rc    = dut.u_bpu.w_ras_pred_val_p2[0] &&
+            (dut.u_bpu.w_br_type_p2[0] == RETURN_CALL);
+    e[0]  = ev_p0(RESET_VECTOR);
+    e[1]  = dut.u_bpu.w_ras_commit_val;
+    e[2]  = dut.u_bpu.w_ras_pred_val_p2[0] &&
+            (dut.u_bpu.w_br_type_p2[0] inside {DIRECT_CALL, INDIRECT_CALL});
+    e[3]  = dut.u_bpu.u_ras.spec_rctr[1] == 1;
+    e[4]  = dut.u_bpu.u_ras.spec_rctr[1] == 4;
+    // The branch at f+6, taken at the bottom of the recursion.
+    e[5]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h810));
+    e[6]  = dut.u_ftq.w_ok_pred_p1 && dut.bpu_pred_slot_p1[0].slot_valid &&
+            (dut.bpu_pred_slot_p1[0].pred_src == PRED_RAS);
+    e[7]  = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+            dut.bpu_slot_p2[0].slot_valid &&
+            (dut.bpu_slot_p2[0].pred_src == PRED_RAS);
+    e[8]  = n_ras_ret_ok != 0;
+    // f's last return, to main.
+    e[9]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h18));
+    e[10] = dut.u_ftq.w_ok_slot_p2 && pop &&
+            dut.u_bpu.w_ras_pop_valid_p2[0] &&
+            !dut.u_bpu.u_ras.p2_pre_empty[0];
+    e[11] = rc;
+    e[12] = rc && (n_retired >= FD07_RC_RETIRED);
+    e[13] = pop && dut.u_bpu.u_ras.p2_pop_dec[0] && !dut.u_bpu.w_kill_p2;
+    // Entry 1, count 4 until f1's call to f2 reallocates it.
+    e[14] = (dut.u_bpu.u_ras.spec_ret_addr[1] ==
+             RESET_VECTOR + VA_WIDTH'('h50A)) &&
+            (dut.u_bpu.u_ras.spec_rctr[1] == 0);
+    e[15] = ev_redir(RESET_VECTOR + VA_WIDTH'('h18));
+    e[16] = ev_redir(RESET_VECTOR + VA_WIDTH'('h2E));
     return e;
   endfunction
