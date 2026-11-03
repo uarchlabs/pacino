@@ -2265,34 +2265,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2319,10 +2291,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predicting-the-indirect-targets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predicting the indirect targets
       
     </span>
   </a>
@@ -2330,10 +2302,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-ittage-answers-in-the-waveform" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The ITTAGE answers in the waveform
       
     </span>
   </a>
@@ -6005,34 +5977,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6059,10 +6003,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predicting-the-indirect-targets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predicting the indirect targets
       
     </span>
   </a>
@@ -6070,10 +6014,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-ittage-answers-in-the-waveform" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The ITTAGE answers in the waveform
       
     </span>
   </a>
@@ -6131,15 +6075,17 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd08_indirect</code> is the FD-8 demonstration scenario. It is a demo, not a
-verification test. Each of 40 passes runs an indirect jump and an
-indirect call whose targets alternate between two addresses from pass
-to pass. Each is preceded by a conditional whose direction alternates
-with it, so global history tells the two cases apart. The FTB holds one
-target per jump; ITTAGE learns both targets under their histories and
-supplies the right one at p2. The run passes if at least one retired
-indirect took its correct target from ITTAGE.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd08_indirect</code> (FD-8) runs a loop of 40 passes. Each pass runs an indirect
+jump, J, and an indirect call, K, whose targets alternate from pass to pass.
+Each follows a conditional, A and C, whose direction alternates with it, so the
+global history differs between odd and even passes.</p>
+<p>An FTB entry holds one target for its jump, so it cannot follow a target that
+changes every pass. ITTAGE learns each target under its history and supplies it
+at p2, and the slot's <code>pred_src</code> is PRED_ITTAGE.</p>
+<p>ITTAGE supplies the correct target of 50 of the 80 retired executions of J and
+K. The result line in the log file reports that count.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6174,6 +6120,18 @@ indirect took its correct target from ITTAGE.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd08_indirect.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6189,106 +6147,228 @@ indirect took its correct target from ITTAGE.</p>
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd08_indirect: PASS, indirect targets predicted by ITTAGE 50,
-    events checked 7 of 7, cyc 1147
+    events checked 16 of 16, cyc 1147
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>At retirement (<code>tb/fe_demo_mon.svh:311-316</code>):</p>
-<div class="highlight"><pre><span></span><code>n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
-           final slot at its position is valid, has
-           pred_src == PRED_ITTAGE, is taken, and has the expected
-           target
-</code></pre></div>
-<p>The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (<code>fin_log</code>, <code>tb/fe_demo_mon.svh:270-279</code>).</p>
-<p>The proof (<code>tb/fe_demo_proofs.svh:83</code>) is <code>n_itt_ok &gt; 0</code>.
-<code>tb_fe_demo.sv:160</code> also requires the whole stream to retire with no
-errors.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the count in the log line:</p>
 <ul>
-<li>50 of the 80 retired indirects had their right target from ITTAGE.
-  The other 30 include the first executions of each, before ITTAGE has
-  allocated; their sources were not traced one by one. On the two-slot
-  model the same program gives 58 (DOC-007 run).</li>
-<li>A target from ITTAGE that is wrong is not counted, and neither is one
-  that reached the entry's final slot from another predictor.</li>
-<li>Departure from FD-8 in <code>planning/showcase/fe_demo_scenarios.md</code>: the
-  spec's program is "an indirect jump through a table with a repeating
-  target pattern". The build has no table: an indirect jump and an
-  indirect call whose targets alternate, each after a conditional that
-  alternates with it (tb_fe_top <code>indir</code>). The proof matches the spec.</li>
+<li>indirect targets predicted by ITTAGE<ul>
+<li><code>n_itt_ok</code> in <code>tb/fe_demo_mon.svh</code></li>
+<li>retired INDIRECT_NONRET or INDIRECT_CALL whose final slot in the FTQ entry
+  has <code>pred_src</code> PRED_ITTAGE, <code>taken</code> 1 and the correct target</li>
+</ul>
+</li>
 </ul>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd08_indirect.svh</code>, task <code>prog_fd08</code> (line 19).
-Addresses derived from the source (<code>RESET_VECTOR</code> 0x8000_0000); <code>odd</code> is
-pass number mod 2:</p>
-<div class="highlight"><pre><span></span><code>top = 0x8000_0008   c.addi
-top+2       A:      bne x6,x0,top+8    taken when odd; skips one c.addi
-top+8       J:      jalr x0,0(x7)      to ta (odd) or tb (even)
-ta = 0x8000_0400    mixed(2); jal x0,jn
-tb = 0x8000_0480    mixed(1); jal x0,jn
-jn = 0x8000_0500    c.addi
-jn+2        C:      bne x6,x0,jn+8     taken when even
-jn+8        K:      jalr x1,0(x28)     call fa (odd) or fb (even)
-fa = 0x8000_0600    mixed(2); ret
-fb = 0x8000_0680    mixed(1); ret
-jn+12               c.addi
-jn+14               bne x6,x0,jn+22    taken on the last pass (exit)
-jn+18               jal x0,top         back to top on passes 0..38
+<p>The program is written by the task <code>prog_fd08</code> in <code>programs/fd08_indirect.svh</code>.
+The code consists of a short prologue, then a loop of 40 passes starting at
+<code>top</code>, and a short epilogue.</p>
+<p>The conditional A at 0x8000_000A is taken on odd passes and skips one
+instruction. The jump J at 0x8000_0010 goes to <code>ta</code> on odd passes and <code>tb</code> on
+even passes, and both lead to <code>jn</code>. The conditional C at 0x8000_0502 is taken on
+even passes. The call K at 0x8000_0508 goes to <code>fa</code> on odd passes and <code>fb</code> on
+even passes. The branch X at 0x8000_050E is taken only on the last pass, and
+exits the loop.</p>
+<p>The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
+(<code>bp_defines_pkg.sv</code>).</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+
+0x8000_0008  top:   c.addi a0, 1            ; filler
+0x8000_000A  A:     bne    x6, x0, 0x010    ; taken on odd passes
+0x8000_000E         c.addi a0, 1            ; even passes only
+0x8000_0010  J:     jalr   x0, 0(x7)        ; indirect jump, to ta or tb
+
+0x8000_0400  ta:    c.addi a0, 1            ; odd passes
+0x8000_0402         addi   t0, t0, 1        ; odd passes
+0x8000_0406         jal    x0, jn           ; odd passes
+
+0x8000_0480  tb:    c.addi a0, 1            ; even passes
+0x8000_0482         jal    x0, jn           ; even passes
+
+0x8000_0500  jn:    c.addi a0, 1            ; filler
+0x8000_0502  C:     bne    x6, x0, 0x508    ; taken on even passes
+0x8000_0506         c.addi a0, 1            ; odd passes only
+0x8000_0508  K:     jalr   x1, 0(x28)       ; indirect call, to fa or fb
+0x8000_050C         c.addi a0, 1            ; after the return
+0x8000_050E  X:     bne    x6, x0, 0x516    ; taken on the last pass
+0x8000_0512         jal    x0, top          ; back edge
+
+0x8000_0516         c.addi a0, 1            ; epilogue
+0x8000_0518         addi   t0, t0, 1        ; epilogue
+0x8000_051C         c.addi a0, 1            ; epilogue
+0x8000_051E  hold:  jal    x0, hold         ; termination
+
+0x8000_0600  fa:    c.addi a0, 1            ; odd passes
+0x8000_0602         addi   t0, t0, 1        ; odd passes
+0x8000_0606         ret                     ; odd passes
+
+0x8000_0680  fb:    c.addi a0, 1            ; even passes
+0x8000_0682         ret                     ; even passes
 </code></pre></div>
-<ul>
-<li>The writer decides every outcome and target (<code>bcc</code>, <code>jalr_to</code>,
-  <code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh:412</code> and
-  <code>:389</code>). <code>jalr_to</code> writes <code>jalr rd, 0(rs1)</code>, the same encoding every
-  pass (<code>enc_jalr</code>, line 345); the backend retires against the expected
-  stream, so x7 and x28 are never read.</li>
-<li>J is <code>INDIRECT_NONRET</code> (neither register a link) and K is
-  <code>INDIRECT_CALL</code> (rd x1), by the type rule of <code>jalr_to</code>
-  (<code>fe_tb_writer.svh:396-401</code>). The <code>ret</code> in fa and fb is a RETURN,
-  predicted by the RAS.</li>
-<li><code>exit_or_jal</code> (<code>fe_tb_writer.svh:615</code>) writes the loop exit.</li>
-<li>40 passes give 80 retired indirects: J and K retire 40 times each,
-  20 times to each of their two targets (derived from the source).</li>
-</ul>
+<p>J is an INDIRECT_NONRET because neither register is a link register, and K is an
+INDIRECT_CALL because rd is x1. The <code>ret</code> in <code>fa</code> and <code>fb</code> is a RETURN,
+predicted by the RAS.</p>
+<p>With one prediction slot, an FTB entry holds one branch, so the path to J and K
+is predicted as several blocks. The accepted p2 slot groups, by block:</p>
+<table>
+<thead>
+<tr>
+<th>Block start</th>
+<th>Reached by</th>
+<th>Branch</th>
+<th>Position</th>
+<th>Block end</th>
+<th>Groups</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x8000_0008</td>
+<td><code>top</code></td>
+<td>A</td>
+<td>1</td>
+<td>0x8000_0028 before the split</td>
+<td>6</td>
+</tr>
+<tr>
+<td>0x8000_0008</td>
+<td><code>top</code></td>
+<td>A</td>
+<td>1</td>
+<td>0x8000_0010 after the split</td>
+<td>51</td>
+</tr>
+<tr>
+<td>0x8000_000E</td>
+<td>a backend redirect, A not taken</td>
+<td>J</td>
+<td>1</td>
+<td>0x8000_0014</td>
+<td>11</td>
+</tr>
+<tr>
+<td>0x8000_0010</td>
+<td>A taken, or the block at 0x8000_0008 ends</td>
+<td>J</td>
+<td>0</td>
+<td>0x8000_0014</td>
+<td>59</td>
+</tr>
+<tr>
+<td>0x8000_0500</td>
+<td><code>jn</code></td>
+<td>C</td>
+<td>1</td>
+<td>0x8000_0520 before the split</td>
+<td>5</td>
+</tr>
+<tr>
+<td>0x8000_0500</td>
+<td><code>jn</code></td>
+<td>C</td>
+<td>1</td>
+<td>0x8000_0508 after the split</td>
+<td>66</td>
+</tr>
+<tr>
+<td>0x8000_0506</td>
+<td>a backend redirect, C not taken</td>
+<td>K</td>
+<td>1</td>
+<td>0x8000_050C</td>
+<td>6</td>
+</tr>
+<tr>
+<td>0x8000_0508</td>
+<td>C taken, or the block at 0x8000_0500 ends</td>
+<td>K</td>
+<td>0</td>
+<td>0x8000_050C</td>
+<td>63</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the branches.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. The <code>jalr</code>
+encodings are the same on every pass, and x7 and x28 are never read. The code is
+the same on every pass, and only the expected instruction stream changes.</p>
+<p>J and K each retire 40 times, 20 times to each of their two targets, which gives
+the 80 retired executions in the count.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>The FTB jump slot holds one target per jump (<code>jmp.tgt</code>, written from
-   <code>ftb_upd_jmp_target_u0</code>,
-   <code>rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:553-554</code>). A target that changes
-   every pass is wrong at p2 whenever the FTB target is the one used.</li>
-<li>ITTAGE takes the folded global history (<code>folded_hist</code>,
-   <code>rtl/core/frontend/bpu/rtl/ittage.sv:53-54</code>). A and C alternate
-   in step with the targets, so the history at J and at K differs
-   between odd and even passes and the two targets fall in different
-   entries.</li>
-<li>Allocation. A target mispredict allocates when the provider is not
-   the last table and a candidate exists (<code>alc_upd</code>,
-   <code>rtl/core/frontend/bpu/rtl/ittage_cntrl.sv:832-850</code>); the new entry
-   holds the resolved target.</li>
-<li>Selection at p2. For an <code>INDIRECT_NONRET</code> or <code>INDIRECT_CALL</code> slot the
-   cluster takes the ITTAGE target when ITTAGE answered for this entry
-   with a tagged hit (<code>it_hit</code>,
-   <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1148-1150</code>), primary or
-   alternate target by <code>ittage_using_primary</code> (lines 1151-1153), and
-   records <code>pred_src = PRED_ITTAGE</code>; otherwise the FTB jump target and
-   <code>PRED_FTB</code> (lines 1171-1174). <code>ittage_hit</code> is the primary-table hit
-   (<code>ittage_cntrl.sv:557</code>).</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd08_indirect.sucl</code>, which <code>make view
-S=fd08_indirect</code> opens in Surfer. Look at:</p>
-<ul>
-<li><code>w_ittage_pred_rdy_p2</code> with <code>w_ittage_pred_meta_p2.[0].ittage_hit</code>
-  set and <code>ittage_prm_tgt</code> (VA[40:1]) alternating between the two
-  targets of the slot.</li>
-<li><code>bpu_slot_p2.[0]</code>: on the jump's slot, <code>pred_src</code> <code>PRED_ITTAGE</code> and
-  <code>target</code> 0x8000_0400 / 0x8000_0480 for J, 0x8000_0600 / 0x8000_0680
-  for K.</li>
-<li><code>bpu_redir_p2.[0]</code> with <code>w_ok_redir_p2</code>: a p2 redirect, the p2
-  target differing from the block's p1 prediction.</li>
-</ul>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a
+marker in the waveform.</p>
+<h3 id="41-predicting-the-indirect-targets">4.1 Predicting the indirect targets<a class="headerlink" href="#41-predicting-the-indirect-targets" title="Permanent link">&para;</a></h3>
+<p>An FTB entry holds one jump target, written when the jump resolves.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> ITTAGE
+reads its tables with the request PC, the start of the prediction block, and the
+folded global history.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> On a tagged hit at p2, the slot takes the ITTAGE
+target and <code>pred_src</code> PRED_ITTAGE. Without a hit it takes the FTB target and
+PRED_FTB.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> A misprediction writes the provider's target when its counter is
+0, and allocates in a higher table when a candidate exists.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup></p>
+<p>Each of the 80 executions retires in one of three ways.</p>
+<div class="highlight"><pre><span></span><code>passes     ITTAGE, correct   FTB, correct   backend redirect
+0 to 7     3                 6              7
+8 to 19    22                0              2
+20 to 25   2                 0              10
+26 to 39   23                0              5
+total      50                6              24
+</code></pre></div>
+<p>The figure below shows each execution by pass.</p>
+<p><a href="../fd08_passes.svg"><img alt="fd08 J and K by pass" src="../fd08_passes.svg" /></a></p>
+<p>In passes 0 to 7, the entries are being built. The first allocation is for K at
+cyc 60 (event 2). The first tagged hit and the first target of K from ITTAGE are
+at cyc 260 (events 4 and 5), and the first target of J from ITTAGE is at cyc 267
+(event 6). The monitor counts the first at retirement at cyc 267 (event 7). The
+6 correct targets from the FTB are the executions where the target the entry
+holds matches the pass.</p>
+<p>The FTB splits the blocks at 0x8000_0500 and 0x8000_0008 at cyc 229 and cyc 298
+(events 3 and 8), so that they end at K and J. From then on, a correct
+prediction of A or C leads to the block starting at J or K on both odd and even
+passes, and that block's FTB entry holds one target. A conditional predicted
+taken and resolved not taken instead redirects to 0x8000_000E or 0x8000_0506, a
+different block with its own ITTAGE entries.</p>
+<p>In passes 8 to 19, J is correct in every pass. A is predicted taken in the even
+passes, and the backend redirects to 0x8000_000E at cyc 345, 392, 445, 492, 530
+and 568. J is then predicted in the block at 0x8000_000E, whose entry holds
+<code>tb</code>. In odd passes it is predicted in the block at 0x8000_0010, whose entry
+holds <code>ta</code>.</p>
+<p>K has the two redirects of these passes. In pass 9, table 1 answers <code>fb</code> on an
+odd pass, and the backend redirects to <code>fa</code>. The update allocates in table 2 at
+cyc 378 (event 9). Pass 13 also redirects to <code>fa</code> and allocates in table 3 at
+cyc 478, and K's target first comes from table 3 at cyc 517. ITTAGE also
+corrects the p1 prediction from cyc 398 (event 10), the first of 30 p2 redirects
+on an indirect slot.</p>
+<p>In pass 20, A is predicted correctly on an even pass for the first time since
+pass 6, so J is predicted in the block at 0x8000_0010. Table 1 answers <code>ta</code>
+there, and the backend redirects to <code>tb</code> at cyc 607 (event 11). J is redirected
+4 times and K 6 times in passes 20 to 25, while new entries are allocated in
+tables 1 to 3. J first takes <code>tb</code> from table 2 in that block at cyc 780
+(event 12), in pass 26.</p>
+<p>From pass 26 to pass 39, ITTAGE supplies 23 of the 28 targets. The last indirect
+redirect is K in pass 36, at cyc 1056 (event 13). The loop exits in pass 39 at
+cyc 1137 (event 14).</p>
+<h3 id="42-the-ittage-answers-in-the-waveform">4.2 The ITTAGE answers in the waveform<a class="headerlink" href="#42-the-ittage-answers-in-the-waveform" title="Permanent link">&para;</a></h3>
+<p>The waveform group <code>ittage_p2</code> shows ITTAGE's answer for the block at p2, with
+<code>u_bpu.w_ftb_jmp_target_p2</code>, the FTB's target, beside it. <code>ittage_prm_tgt</code> and
+<code>ittage_alt_tgt</code> hold VA[40:1], so each reads half of the target address.</p>
+<p>At cyc 260 (events 4 and 5), <code>ittage_hit</code> is asserted with <code>ittage_prm_comp</code> 1.
+<code>bpu_slot_p2.[0]</code> holds K at <code>pos</code> 0 with <code>target</code> 0x8000_0680 and <code>pred_src</code>
+PRED_ITTAGE. <code>w_ftb_jmp_target_p2</code> reads the same address.</p>
+<p>At cyc 398 (event 10), <code>bpu_slot_p2.[0].target</code> is 0x8000_0680 from ITTAGE and
+<code>w_ftb_jmp_target_p2</code> is 0x8000_0600. <code>bpu_redir_p2.[0].valid</code> is asserted with
+<code>target_pc</code> 0x8000_0680, and <code>u_ftq.w_ok_redir_p2</code> is asserted.</p>
+<p>At cyc 607 (event 11), the <code>backend</code> group shows the redirect to 0x8000_0480.
+The <code>ittage_update</code> group shows <code>indir_mispredict</code> asserted, <code>resolved_target</code>
+holding VA[40:1] of that address, and <code>ittage_alc_comp</code> 2.</p>
+<p>At cyc 780 (event 12), <code>u_bpu.r_pc_p2</code> is 0x8000_0010, <code>ittage_prm_comp</code> is 2
+and <code>ittage_using_primary</code> is asserted. The slot's <code>target</code> is 0x8000_0480, and
+<code>w_ftb_jmp_target_p2</code> is 0x8000_0400.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6309,39 +6389,93 @@ S=fd08_indirect</code> opens in Surfer. Look at:</p>
 </tr>
 <tr>
 <td>1</td>
-<td>20</td>
+<td>19</td>
 <td>first misprediction of J; redirect to tb, 0x8000_0480</td>
 <td>pass 0, backend</td>
 </tr>
 <tr>
 <td>2</td>
+<td>60</td>
+<td>first ITTAGE allocation: K's update, for fb</td>
+<td>table 1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>229</td>
+<td>the FTB entry for 0x8000_0500 ends at K: the split</td>
+<td><code>upd_split</code>, position 4</td>
+</tr>
+<tr>
+<td>4</td>
 <td>260</td>
 <td>first ITTAGE tagged hit at p2 (<code>ittage_hit</code>)</td>
 <td>slot 0</td>
 </tr>
 <tr>
-<td>3</td>
+<td>5</td>
 <td>260</td>
 <td>first target of K from ITTAGE: the call's slot at p2 has <code>pred_src</code> PRED_ITTAGE</td>
 <td>accepted by the FTQ</td>
 </tr>
 <tr>
-<td>4</td>
+<td>6</td>
 <td>267</td>
 <td>first target of J from ITTAGE: the jump's slot at p2 has <code>pred_src</code> PRED_ITTAGE</td>
 <td>accepted by the FTQ</td>
 </tr>
 <tr>
-<td>5</td>
-<td>1138</td>
+<td>7</td>
+<td>267</td>
+<td>first retired indirect ITTAGE predicted</td>
+<td><code>n_itt_ok</code></td>
+</tr>
+<tr>
+<td>8</td>
+<td>298</td>
+<td>the FTB entry for 0x8000_0008 ends at J: the split</td>
+<td><code>upd_split</code>, position 4</td>
+</tr>
+<tr>
+<td>9</td>
+<td>378</td>
+<td>first allocation above table 1: K's update, for fa</td>
+<td>table 2</td>
+</tr>
+<tr>
+<td>10</td>
+<td>398</td>
+<td>first p2 redirect from an ITTAGE target: K to fb</td>
+<td>accepted by the FTQ</td>
+</tr>
+<tr>
+<td>11</td>
+<td>607</td>
+<td>ITTAGE mispredicts J in pass 20; redirect to tb, 0x8000_0480</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>12</td>
+<td>780</td>
+<td>J first takes a target from table 2: tb, in the block at 0x8000_0010</td>
+<td>pass 26</td>
+</tr>
+<tr>
+<td>13</td>
+<td>1056</td>
+<td>last indirect mispredicted: K in pass 36; redirect to fb, 0x8000_0680</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>14</td>
+<td>1137</td>
 <td>the loop exits: its last conditional taken on the last pass, a misprediction; redirect to 0x8000_0516</td>
 <td>pass 39, backend</td>
 </tr>
 <tr>
-<td>6</td>
+<td>15</td>
 <td>1147</td>
 <td>the run ends</td>
-<td></td>
+<td>a 100 cycle drain, to 1247</td>
 </tr>
 </tbody>
 </table>
@@ -6375,6 +6509,61 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>cycle number</td>
 </tr>
 <tr>
+<td>bp_cluster_p1</td>
+<td><code>u_bpu.r_pc_p1</code></td>
+<td>p1 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_val_p1</code></td>
+<td>p1 prediction valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_idx_p1</code></td>
+<td>FTQ index of the p1 prediction</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.r_ubtb_blk_p1.hit</code></td>
+<td>uBTB hit at p1</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_pft_p1</code></td>
+<td>p1 prediction block end, next halfword after it</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_slot_p1.[0].slot_valid</code></td>
+<td>slot 0 holds a branch</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_slot_p1.[0].br_type</code></td>
+<td>slot 0 branch type</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_slot_p1.[0].pos</code></td>
+<td>slot 0 halfword position in the prediction block</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_slot_p1.[0].taken</code></td>
+<td>slot 0 predicted direction</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_slot_p1.[0].target</code></td>
+<td>slot 0 predicted target</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_pred_slot_p1.[0].pred_src</code></td>
+<td>slot 0 predictor that supplied the prediction</td>
+</tr>
+<tr>
 <td>ittage_p2</td>
 <td><code>u_bpu.w_ittage_pred_rdy_p2</code></td>
 <td>ITTAGE response at p2</td>
@@ -6395,14 +6584,39 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>slot 0 ITTAGE primary target, VA[40:1]</td>
 </tr>
 <tr>
+<td></td>
+<td><code>u_bpu.w_ittage_pred_meta_p2.[0].ittage_using_primary</code></td>
+<td>slot 0 ITTAGE answer is from the primary table</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_ittage_pred_meta_p2.[0].ittage_alt_comp</code></td>
+<td>slot 0 ITTAGE alternate table</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_ittage_pred_meta_p2.[0].ittage_alt_tgt</code></td>
+<td>slot 0 ITTAGE alternate target, VA[40:1]</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_ftb_jmp_target_p2</code></td>
+<td>the FTB's jump target at p2</td>
+</tr>
+<tr>
 <td>bp_cluster_p2</td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>p2 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
 </tr>
 <tr>
 <td></td>
 <td><code>bpu_slot_val_p2</code></td>
-<td>slot valid mask</td>
+<td>p2 group valid: p2 valid and an FTB hit</td>
 </tr>
 <tr>
 <td></td>
@@ -6427,7 +6641,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6442,7 +6656,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td></td>
@@ -6509,6 +6723,81 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>ftq_empty</code></td>
 <td>FTQ empty</td>
 </tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_cause</code></td>
+<td>backend redirect cause</td>
+</tr>
+<tr>
+<td>ittage_update</td>
+<td><code>u_bpu.w_ittage_upd_val_u0</code></td>
+<td>ITTAGE update valid, per slot</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ittage_upd_inp_u0.[0].indir_mispredict</code></td>
+<td>the update is for a misprediction</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ittage_upd_inp_u0.[0].resolved_target</code></td>
+<td>the resolved target, VA[40:1]</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.ittage_upd_inp_u0.[0].ittage_pred_meta.ittage_alc_comp</code></td>
+<td>the table to allocate in</td>
+</tr>
+<tr>
+<td>ftb_update</td>
+<td><code>ftb_upd_valid_u0</code></td>
+<td>FTB update valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_pc_u0</code></td>
+<td>block start address of the FTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_pos_u0</code></td>
+<td>halfword position of the branch in the FTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_is_br_u0</code></td>
+<td>the FTB update is for a conditional</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_is_jmp_u0</code></td>
+<td>the FTB update is for a jump</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_hit_u0</code></td>
+<td>the FTB update hits an entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_split</code></td>
+<td>the FTB update splits the entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos</code></td>
+<td>position the split ends the entry at</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6516,7 +6805,27 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd08_indirect</code> runs the scenario; <code>make view S=fd08_indirect</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd08_indirect.svh</code>, <code>waves/fd08_indirect.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.5/examples/fe_demo/docs/fd08_indirect.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.6/examples/fe_demo/docs/fd08_indirect.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>jmp_new.tgt</code>: <code>rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:553-554</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p>The request PC: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1668</code>. The
+history: <code>rtl/core/frontend/bpu/rtl/ittage.sv:54</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>it_hit</code>, <code>it_tgt</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1148-1153</code>,
+and <code>:1171-1174</code> for the slot.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rtl/core/frontend/bpu/rtl/ittage_cntrl.sv:803-822</code> for the target and
+<code>:832-854</code> for the allocation.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 
