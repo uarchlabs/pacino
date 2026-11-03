@@ -48,6 +48,9 @@ extra:
     - fd02_steady
     - fd03_two_branch
     - fd04_p2_override
+    - fd05_p3_override
+    - fd06_loop_pred
+    - fd07_calls_returns
     - fd09_tage
 
 nav:
