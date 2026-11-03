@@ -51,7 +51,10 @@ extra:
     - fd05_p3_override
     - fd06_loop_pred
     - fd07_calls_returns
+    - fd08_indirect
     - fd09_tage
+    - fd10_pd_redirect
+    - fd11_be_mispredict
 
 nav:
   - Home: index.md

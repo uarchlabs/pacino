@@ -159,7 +159,9 @@
 # CLAUDE.md as Jeff edited it (tables exempt from 80 columns). Updated
 # after DOC-012, session-083 (PROJECT_STATUS.md, fe_demo_tb_decisions.md,
 # fe_demo_scenarios.md). Updated for the FD-4 JAL chain, session-084
-# (PROJECT_STATUS.md, fe_demo_scenarios.md).
+# (PROJECT_STATUS.md, fe_demo_scenarios.md). Updated for the
+# description rework rulings, session-084 (PROJECT_STATUS.md,
+# fe_demo_scenarios.md, fe_demo_tb_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -182,7 +184,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   bfd51475d3cd
-PLAN  PROJECT_STATUS.md                 915c9b08facb
+PLAN  PROJECT_STATUS.md                 07339fd49ca1
 
 UNKN  CLAUDE.md                         b79ebafb114a
 
@@ -222,7 +224,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f90a7b3ce267
-TEST  fe_demo_tb_decisions.md           45d03a27059f
+TEST  fe_demo_tb_decisions.md           220d9acc31ef
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
@@ -252,7 +254,7 @@ INTF  ubtb_interfaces.md          a8e591bbeda2
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
-SHOW  fe_demo_scenarios.md            bf8a87eacfde
+SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   4708b8db70e0
 
 MISC  ras_theory_of_operation.md      75158ae995ed

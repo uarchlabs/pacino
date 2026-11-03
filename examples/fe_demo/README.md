@@ -347,10 +347,11 @@ slot carries `pred_src` PRED_LOOP at p1 and p2; on the tenth pass
 its `taken` drops and the retired branch is not followed by a backend
 redirect.
 
-**fd07_calls_returns.** `tosw` and `tosr` move up on each call and down
-on each return; during the recursion `spec_rctr` of the top entry
-climbs above 1 instead of the pointers moving. `w_br_type_p2`
-RETURN_CALL marks the coroutine switches.
+**fd07_calls_returns.** On each call `tosw` moves up and `tosr` moves to
+the new entry. On each return `tosr` follows the entry's link to the
+entry below and `tosw` holds; only a restore moves `tosw` back. During
+the recursion `spec_rctr` of the top entry climbs above 1 instead of the
+pointers moving. `w_br_type_p2` RETURN_CALL marks the coroutine switches.
 
 **fd08_indirect.** `w_ittage_pred_rdy_p2` with
 `w_ittage_pred_meta_p2.[s].ittage_hit` set, and the p2 slot of the jump

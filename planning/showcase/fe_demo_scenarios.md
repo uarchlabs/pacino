@@ -6,7 +6,7 @@
  FILE:    fe_demo_scenarios.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-11-02
+ UPDATED: 2026-11-03
  CONTACT: Jeff Nye
 ```
 
@@ -30,9 +30,9 @@ FD-0a  Every scenario runs on fe_top with the walker beside it and
 FD-0b  Each scenario has, in its program or its README entry:
          shows     the behaviour, in one sentence
          program   the code shape that produces it
-         waveform  the units whose signals its Surfer command file
-                   shows, one group each (fe_demo_tb_decisions.md
-                   FDT-12a)
+         waveform  the units whose signals show the behaviour; the
+                   Surfer command file shows them and may show more
+                   (fe_demo_tb_decisions.md FDT-12a)
          trace     the events it must produce
          proof     the condition that shows the behaviour occurred
        Each program file's header carries the entry; its trace line
@@ -139,7 +139,8 @@ FD-11  Backend mispredict
             rollback and correction, RAS restore
   program   a conditional with a pseudo-random outcome (the program
             writer's LFSR), then a call and its return, 32 passes
-  waveform  backend resolution, FTQ squash, bp_history, RAS restore
+  waveform  backend resolution, FTQ squash, IFU flush and restart,
+            bp_history, RAS restore
   proof     a backend redirect followed by fetch at the corrected PC
 
 FD-12  Training
@@ -324,4 +325,7 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
               b[7] a conditional then a JAL back to b[0] (Jeff, after
               scratch runs of both forms); it read "chained by taken
               conditionals".
+  2026-11-03  session-084. FD-0b waveform names the units that show
+              the behaviour, not every group of the Surfer file (Jeff);
+              FD-11 waveform adds the IFU flush and restart.
 ```

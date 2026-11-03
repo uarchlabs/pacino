@@ -20,41 +20,27 @@ group_marked markers
 item_focus f
 marker_set c19_first_history_rollback 225
 marker_set c20_first_misprediction_of_A_taken 235
+marker_set c23_fetch_restarts_at_0x8000_0010 265
+marker_set c29_first_predecode_redirect 325
 marker_set c49_the_return_mispredicted 525
 marker_set c53_fetch_restarts_at_0x8000_0014 565
 marker_set c60_the_back_edge_mispredicted 635
+marker_set c72_first_p2_redirect 755
+marker_set c76_first_p3_redirect 795
+marker_set c82_the_FTB_splits_the_block_at 855
+marker_set c86_first_RAS_restore_moving_TOSW 895
 marker_set c86_first_misprediction_of_A_not_taken 895
+marker_set c89_fetch_restarts_at_0x8000_000E 925
+marker_set c125_first_RAS_restore_moving_BOS 1285
 marker_set c471_the_loop_exits 4745
+marker_set c474_fetch_restarts_at_0x8000_001A 4775
 marker_set c480_the_run_ends 4835
-item_unfocus
-# group decode
-variable_add tb.dec_ibuf_rdy
-item_focus o
-group_marked decode
-item_focus p
-item_set_format Bit
-variable_add tb.pd_out.[0].valid
-item_set_format Bit
-variable_add tb.pd_out.[0].start_pc
-item_set_format Hexadecimal
-variable_add tb.pd_out.[0].ftq_idx
-item_set_format Unsigned
-variable_add tb.pd_out.[0].pos
-item_set_format Unsigned
-variable_add tb.pd_out.[0].instr
-item_set_format Hexadecimal
-variable_add tb.pd_out.[0].is_rvc
-item_set_format Bit
-variable_add tb.pd_out.[0].fault_cause
-item_set_format Enum
-variable_add tb.pd_out.[0].fault_va
-item_set_format Hexadecimal
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus bi
+item_focus bh
 group_marked backend
-item_focus bj
+item_focus bi
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -70,12 +56,16 @@ variable_add tb.bkend_ftq_commit_val
 item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
+variable_add tb.bkend_ftq_redir_pos
+item_set_format Unsigned
+variable_add tb.bkend_ftq_redir_taken
+item_set_format Bit
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus cb
-group_marked ftq
 item_focus cc
+group_marked ftq
+item_focus cd
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -98,9 +88,9 @@ item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus cm
-group_marked ftq_ifu
 item_focus cn
+group_marked ftq_ifu
+item_focus co
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -121,11 +111,26 @@ item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
 item_set_format Unsigned
 item_unfocus
+# group bp_cluster_p0
+variable_add tb.dut.ftq_pred_val_p0
+item_focus di
+group_marked bp_cluster_p0
+item_focus dj
+item_set_format Bit
+variable_add tb.dut.ftq_pred_pc_p0
+item_set_format Hexadecimal
+variable_add tb.dut.ftq_pred_idx_p0
+item_set_format Unsigned
+variable_add tb.dut.u_ftq.u_npc.w_hold
+item_set_format Bit
+variable_add tb.dut.u_ftq.u_npc.h3_ftb_upd
+item_set_format Bit
+item_unfocus
 # group bp_history_ras
 variable_add tb.dut.ftq_rollback_val
-item_focus dh
+item_focus do
 group_marked bp_history_ras
-item_focus di
+item_focus dp
 item_set_format Bit
 variable_add tb.dut.ftq_rollback_idx
 item_set_format Unsigned
@@ -141,18 +146,134 @@ variable_add tb.dut.ras_restore_snapshot.tosw
 item_set_format Unsigned
 variable_add tb.dut.ras_restore_snapshot.bos
 item_set_format Unsigned
-item_unfocus
-# group bp_cluster_p0
-variable_add tb.dut.ftq_pred_val_p0
-item_focus ea
-group_marked bp_cluster_p0
-item_focus eb
+variable_add tb.dut.u_bpu.w_ras_restore_val
 item_set_format Bit
-variable_add tb.dut.ftq_pred_pc_p0
-item_set_format Hexadecimal
-variable_add tb.dut.ftq_pred_idx_p0
+variable_add tb.dut.u_bpu.u_ras.tosr
 item_set_format Unsigned
-variable_add tb.dut.u_ftq.u_npc.w_hold
+variable_add tb.dut.u_bpu.u_ras.tosw
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_ras.bos
+item_set_format Unsigned
+item_unfocus
+# group predecode
+variable_add tb.dut.u_ftq.w_pd_redir_val
+item_focus el
+group_marked predecode
+item_focus em
 item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_pc
+item_set_format Hexadecimal
+item_unfocus
+# group bp_cluster_p1
+variable_add tb.dut.u_bpu.r_pc_p1
+item_focus eo
+group_marked bp_cluster_p1
+item_focus ep
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_val_p1
+item_set_format Bit
+variable_add tb.dut.bpu_pred_idx_p1
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.r_ubtb_blk_p1.hit
+item_set_format Bit
+variable_add tb.dut.bpu_pred_pft_p1
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_slot_p1.[0].slot_valid
+item_set_format Bit
+variable_add tb.dut.bpu_pred_slot_p1.[0].br_type
+item_set_format Enum
+variable_add tb.dut.bpu_pred_slot_p1.[0].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_pred_slot_p1.[0].taken
+item_set_format Bit
+variable_add tb.dut.bpu_pred_slot_p1.[0].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_slot_p1.[0].pred_src
+item_set_format Enum
+item_unfocus
+# group bp_cluster_p2
+variable_add tb.dut.u_bpu.r_pc_p2
+item_focus fk
+group_marked bp_cluster_p2
+item_focus fl
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.r_val_p2
+item_set_format Bit
+variable_add tb.dut.bpu_slot_val_p2
+item_set_format Bit
+variable_add tb.dut.bpu_slot_idx_p2
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.w_ftb_valid_p2
+item_set_format Bit
+variable_add tb.dut.bpu_slot_p2.[0].slot_valid
+item_set_format Bit
+variable_add tb.dut.bpu_slot_p2.[0].br_type
+item_set_format Enum
+variable_add tb.dut.bpu_slot_p2.[0].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p2.[0].taken
+item_set_format Bit
+variable_add tb.dut.bpu_slot_p2.[0].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_slot_p2.[0].pred_src
+item_set_format Enum
+variable_add tb.dut.bpu_redir_p2.[0].valid
+item_set_format Bit
+variable_add tb.dut.bpu_redir_p2.[0].target_pc
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_redir_idx_p2
+item_set_format Unsigned
+item_unfocus
+# group bp_cluster_p3
+variable_add tb.dut.u_bpu.r_pc_p3
+item_focus gj
+group_marked bp_cluster_p3
+item_focus gk
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.r_val_p3
+item_set_format Bit
+variable_add tb.dut.bpu_slot_val_p3
+item_set_format Bit
+variable_add tb.dut.bpu_slot_idx_p3
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p3.[0].slot_valid
+item_set_format Bit
+variable_add tb.dut.bpu_slot_p3.[0].br_type
+item_set_format Enum
+variable_add tb.dut.bpu_slot_p3.[0].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p3.[0].taken
+item_set_format Bit
+variable_add tb.dut.bpu_slot_p3.[0].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_slot_p3.[0].pred_src
+item_set_format Enum
+variable_add tb.dut.bpu_redir_p3.[0].valid
+item_set_format Bit
+variable_add tb.dut.bpu_redir_p3.[0].target_pc
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_redir_idx_p3
+item_set_format Unsigned
+item_unfocus
+# group ftb_update
+variable_add tb.dut.ftb_upd_valid_u0
+item_focus hh
+group_marked ftb_update
+item_focus hi
+item_set_format Bit
+variable_add tb.dut.ftb_upd_pc_u0
+item_set_format Hexadecimal
+variable_add tb.dut.ftb_upd_pos_u0
+item_set_format Unsigned
+variable_add tb.dut.ftb_upd_is_br_u0
+item_set_format Bit
+variable_add tb.dut.ftb_upd_is_jmp_u0
+item_set_format Bit
+variable_add tb.dut.ftb_upd_hit_u0
+item_set_format Bit
+variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split
+item_set_format Bit
+variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos
+item_set_format Unsigned
 item_unfocus
 zoom_to 16 336

@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-02
+ UPDATED: 2026-11-03
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,46 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-084: rulings on the fd03 to fd11 description rework.
+
+Documents only. No task run. From the IA's fd11_planning_notes.md
+(the rework of the fe_demo descriptions, fd03 to fd11).
+  FDT-10c stands. The IA had moved testbench-driven rows one cycle
+    back without checking FDT-10c. fd11: its 7 rows restored to the
+    next cycle's marker, 2 newly set late; all 18 rows match their
+    checks (+EVDUMP). fd07, fd08, fd10: the IA corrected them without
+    authorization; reverted at Jeff's instruction to the state before
+    its edit, so 12 rows depart from FDT-10c (fd07 139, 172, 662, 683;
+    fd08 19, 60, 378, 607, 1056, 1137; fd10 175, 245; each one cycle
+    early). They pass as window checks of at least 8 cycles.
+RULED (Jeff):
+  FD-0b relaxed: a waveform line names the units that show the
+    behaviour; the Surfer file shows them and may show more. FDT-12a
+    takes the signals from waves/fe_demo_sigs.py. FD-3 to FD-10 lines
+    unchanged; FD-11 adds the IFU flush and restart.
+  FDT-13: citations are cyc <n> (event <k>), replacing the
+    session-083 cyc-only rule; section 4 gives RTL file and line in a
+    footnote; section 1.1 lists the block connectivity diagram, the
+    pipeline view and demo_explainer.md; hand-drawn figures allowed.
+  README.md fd07 entry approved: on a return tosr follows the link and
+    tosw holds; only a restore moves tosw back (ras.sv 348, 445-446;
+    FST counts). The IA applies it.
+For a later DOC task:
+  fd07, fd08, fd10 to FDT-10c: the 12 rows, the redirect citations in
+    their prose and the marker in fd07_pass6.svg; fd08 rows 60 and 378
+    are combinational from the redirect and need late.
+  programs/fd11_be_mispredict.svh header waveform line to FD-11's.
+  fd09_tage.md, a model page, cites by cyc only: bring it to FDT-13.
+  Four rows on a redirect cycle without late not checked against
+    FDT-10c: fd03 cyc 72, fd04 cyc 202, fd05 cyc 261, fd09 cyc 225.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_scenarios.md,
+fe_demo_tb_decisions.md.
+
+Next free: BP-141, SYS-003, DOC-013, INFRA-014, TOOLS-007, TD#196.
 
 ---
 ## Session-084: FD-4 chained by JALs.
