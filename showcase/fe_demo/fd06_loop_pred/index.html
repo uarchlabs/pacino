@@ -2203,34 +2203,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2257,10 +2229,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predicting-the-inner-exit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predicting the inner exit
       
     </span>
   </a>
@@ -2268,10 +2240,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-loop-predictor-taking-over" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The loop predictor taking over
       
     </span>
   </a>
@@ -5915,34 +5887,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -5969,10 +5913,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predicting-the-inner-exit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predicting the inner exit
       
     </span>
   </a>
@@ -5980,10 +5924,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-loop-predictor-taking-over" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The loop predictor taking over
       
     </span>
   </a>
@@ -6041,13 +5985,17 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd06_loop_pred.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd06_loop_pred.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd06_loop_pred</code> is the FD-6 demonstration scenario. It is a demo, not a
-verification test. It runs a counted inner loop of 10 iterations inside
-an outer loop of 16 passes. The loop predictor (LP) learns the inner
-loop's trip count, reaches full confidence, and from then on supplies
-the inner loop branch's direction, including the not-taken exit. The run
-passes if at least one retired exit was predicted not taken by the LP.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd06_loop_pred</code> (FD-6) runs a 16-pass outer loop around an inner loop of 10
+iterations. The inner loop's branch, I, is taken on the first 9 iterations and
+not taken on the tenth, which exits the inner loop.</p>
+<p>The loop predictor (LP) learns the inner loop's trip count, and its confidence
+rises each time an exit arrives at the same count. At full confidence, the LP
+supplies I's direction, including the not-taken exit, and the slot's <code>pred_src</code>
+is PRED_LOOP.</p>
+<p>The LP predicts the exits of the last 8 passes, 8 to 15, not taken. The result
+line in the log file reports that count.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6082,6 +6030,18 @@ passes if at least one retired exit was predicted not taken by the LP.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd06_loop_pred.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd06_loop_pred.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6097,111 +6057,175 @@ passes if at least one retired exit was predicted not taken by the LP.</p>
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd06_loop_pred: PASS, loop exits predicted by the loop predictor 8,
-    events checked 9 of 9, cyc 439
+    events checked 15 of 15, cyc 439
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The count is taken at retirement, in the backend's retire hook
-(<code>tb/fe_demo_mon.svh:302-305</code>):</p>
-<div class="highlight"><pre><span></span><code>n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
-               FTQ entry's final slot at its position is valid, has
-               pred_src == PRED_LOOP and taken == 0
-</code></pre></div>
-<p>The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (<code>fin_log</code>, <code>tb/fe_demo_mon.svh:270-279</code>), found by position
-(<code>slot_at</code>, line 282).</p>
-<p>The proof (<code>tb/fe_demo_proofs.svh:72</code>) is <code>n_lp_exit_ok &gt; 0</code>.
-<code>tb_fe_demo.sv:160</code> also requires the whole stream to retire with no
-errors before it accepts the proof.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the count in the log line:</p>
 <ul>
-<li>8 of the 16 inner exits were predicted not taken by the LP. Of the
-  other 8, four were mispredicted (the backend redirects of section
-  4.1); for the other four, the slot that predicted them was not traced.</li>
-<li>The count is of retired exits, each counted once, so it cannot exceed
-  16.</li>
-<li>Spec and build agree on program and proof. The FD-6 waveform entry
-  names "loop predictor entry". The command file shows the loop
-  predictor's per-slot answers in the group <code>loop_pred_p1_p2</code>, which
-  stand in for the table entry. The p1 answer shows its hit and its
-  direction. The p2 answer, which re-reads the same entry, also shows
-  the speculative count <code>lp_curs</code> and the learned trip count
-  <code>lp_past_itr</code> with its confidence <code>lp_conf</code> (DOC-006).</li>
+<li>loop exits predicted by the loop predictor<ul>
+<li><code>n_lp_exit_ok</code> in <code>tb/fe_demo_mon.svh</code></li>
+<li>retired exits of a conditional branch whose final slot in the FTQ entry
+  has <code>pred_src</code> PRED_LOOP and <code>taken</code> 0</li>
+</ul>
+</li>
 </ul>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd06_loop_pred.svh</code>, task <code>prog_fd06</code> (line 20).
-Addresses from the source (<code>RESET_VECTOR</code> 0x8000_0000,
-<code>rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:40</code>):</p>
-<div class="highlight"><pre><span></span><code>0x8000_0000          mixed(3)           c.addi, addi, c.addi     8 bytes
-otop = 0x8000_0008   mixed(2)           c.addi, addi             6 bytes
-itop = 0x8000_000E   mixed(3)                                    8 bytes
-0x8000_0016   I:     bne x6,x0,itop     taken on iterations 0..8
-0x8000_001A          mixed(2)                                    6 bytes
-0x8000_0020   O:     bne x6,x0,otop     taken on passes 0..14
-0x8000_0024          mixed(3)
-                     jal x0,0           halt (demo_go -&gt; W.halt)
+<p>The program is written by the task <code>prog_fd06</code> in <code>programs/fd06_loop_pred.svh</code>.
+The code consists of a short prologue, then a 16-pass outer loop starting at
+<code>otop</code>, with a 10-iteration inner loop starting at <code>itop</code>, and a short epilogue.</p>
+<p>The inner loop's branch I at 0x8000_0016 returns to <code>itop</code>. The outer loop's
+branch O at 0x8000_0020 returns to <code>otop</code>.</p>
+<p>The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
+(<code>bp_defines_pkg.sv</code>).</p>
+<div class="highlight"><pre><span></span><code>                                                              Position from
+Address      Label   Instruction          Purpose              otop   itop
+0x8000_0000          c.addi a0, 1         ; prologue
+0x8000_0002          addi   t0, t0, 1     ; prologue
+0x8000_0006          c.addi a0, 1         ; prologue
+
+0x8000_0008  otop:   c.addi a0, 1         ; filler                0
+0x8000_000A          addi   t0, t0, 1     ; filler                1
+0x8000_000E  itop:   c.addi a0, 1         ; filler                3      0
+0x8000_0010          addi   t0, t0, 1     ; filler                4      1
+0x8000_0014          c.addi a0, 1         ; filler                6      3
+0x8000_0016  I:      bne    x6, x0, itop  ; inner loop branch     7      4
+0x8000_001A          c.addi a0, 1         ; filler                9      6
+0x8000_001C          addi   t0, t0, 1     ; filler               10      7
+0x8000_0020  O:      bne    x6, x0, otop  ; outer loop branch    12      9
+
+0x8000_0024          c.addi a0, 1         ; epilogue
+0x8000_0026          addi   t0, t0, 1     ; epilogue
+0x8000_002A          c.addi a0, 1         ; epilogue
+0x8000_002C  hold:   jal    x0, hold      ; termination
 </code></pre></div>
-<ul>
-<li>Fixed code. Each outer pass resets <code>W.wp = otop</code> and each inner
-  iteration <code>W.wp = itop</code>, so the same bytes are written again; only the
-  expected stream grows.</li>
-<li>Outcomes come from the writer. <code>bcc</code> (<code>fe_tb_writer.svh:412</code>) emits
-  <code>bne x6, x0</code> with the direction already decided; the backend retires
-  against the writer's expected stream, so x6 is never read.</li>
-<li>I is taken 9 times and not taken once per outer pass: 16 exits in
-  all, each with the same trip count. O is taken 15 times.</li>
-</ul>
+<p>A position is the halfword offset of an instruction from the start of its
+prediction block. The 32-bit instructions take two positions.</p>
+<p>With one prediction slot, an FTB entry holds one branch, so the loops are
+predicted as several blocks. The accepted p2 slot groups, by block:</p>
+<table>
+<thead>
+<tr>
+<th>Block start</th>
+<th>Reached by</th>
+<th>Branch</th>
+<th>Position</th>
+<th>Block end</th>
+<th>Groups</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x8000_0008 (<code>otop</code>)</td>
+<td>O taken</td>
+<td>I</td>
+<td>7</td>
+<td>0x8000_0028</td>
+<td>15</td>
+</tr>
+<tr>
+<td>0x8000_000E (<code>itop</code>)</td>
+<td>I taken</td>
+<td>I</td>
+<td>4</td>
+<td>0x8000_002E before the split</td>
+<td>55</td>
+</tr>
+<tr>
+<td>0x8000_000E (<code>itop</code>)</td>
+<td>I taken</td>
+<td>I</td>
+<td>4</td>
+<td>0x8000_0020 after the split</td>
+<td>105</td>
+</tr>
+<tr>
+<td>0x8000_001A</td>
+<td>I corrected to not taken</td>
+<td>O</td>
+<td>3</td>
+<td>0x8000_003A</td>
+<td>3</td>
+</tr>
+<tr>
+<td>0x8000_0020 (<code>O</code>)</td>
+<td>The block at <code>itop</code> ending at O</td>
+<td>O</td>
+<td>0</td>
+<td>0x8000_0040</td>
+<td>10</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the branches.</p>
+<p>The direction of each branch is chosen by the program writer class and resolved
+by the modeled backend. The register operands play no part in the taken/not
+taken state. The code is the same on every pass, and only the expected
+instruction stream changes.</p>
+<p>I is taken 9 times and not taken once per pass, which gives 16 exits with the
+same trip count. O is taken on passes 0 to 14 and falls through on pass 15
+(event 13).</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<p>The loop predictor is <code>rtl/core/frontend/bpu/rtl/loop_pred.sv</code>, one
-bank per slot.</p>
-<ol>
-<li>Allocation. An update that misses allocates an entry on a taken
-   backward branch (<code>u_alloc</code>, <code>loop_pred.sv:400</code>). I is taken backward
-   (target 0x8000_000E below its PC), so its first taken resolution
-   allocates. The speculative count is unknown at allocation; it
-   becomes known at the entry's next exit (comment, lines 427-429).</li>
-<li>Training. On a not-taken resolution (an exit) at a known count
-   (<code>loop_pred.sv:411-423</code>): a count equal to the learned trip count
-   (<code>past_itr</code>) raises <code>cnf</code> by one; any other count clears <code>cnf</code> and
-   learns the count. A taken resolution at or past the learned count
-   clears <code>cnf</code> (lines 404-410).</li>
-<li>Trust. A prediction is made only at full confidence:
-   <code>lp_pred_is_loop</code> needs a hit, a valid speculative count and
-   <code>cnf == {LP_CNF_BITS{1'b1}}</code> (<code>loop_pred.sv:269-271</code>, p1;
-   lines 305-306, the p2 re-read). <code>LP_CNF_BITS</code> is 2, so the level
-   is 3 (<code>LP_CONF_LEVEL</code>, line 82). The direction is taken while the
-   count is below the trip count (lines 272 and 273, lines 307 and
-   308), so the exit is predicted not taken.</li>
-<li>Override. At p1, a trusted LP overrides the direction of a slot the
-   uBTB supplied and the slot carries <code>pred_src = PRED_LOOP</code>
-   (<code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:805-810</code>). At p2 the LP
-   takes priority over TAGE for a conditional (<code>w_lp_use_p2</code>,
-   <code>bp_cluster.sv:1031-1036</code>) and the slot again carries <code>PRED_LOOP</code>
-   (lines 1161 and 1162).</li>
-</ol>
-<p>From the run (out/fd06_loop_pred/fd06_loop_pred.fst, slot 0 of
-<code>w_lp_pred_p2</code>): <code>lp_past_itr</code> first reads 8 at cycle 116, <code>lp_conf</code>
-steps 1, 2, 3 and reaches 3 at cycle 248, and <code>lp_pred_is_loop</code> is
-first set at cycle 257. Before that, the inner exit was mispredicted
-four times: backend redirects to 0x8000_001A at cycles 49, 88, 112 and
-140. The p2 answer describes the inner loop's branch only in the cycles
-its block is at p2; in other cycles it reads 0.</p>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd06_loop_pred.sucl</code>, which <code>make view
-S=fd06_loop_pred</code> opens in Surfer. Look at:</p>
-<ul>
-<li><code>bpu_pred_slot_p1.[0]</code> and <code>bpu_slot_p2.[0]</code>: <code>pred_src</code> <code>PRED_LOOP</code>
-  on the slot of I from cyc 256 at p1 and 257 at p2, with <code>taken</code>
-  dropping on the tenth iteration (first at cyc 259).</li>
-<li><code>w_lp_pred_p2.[0]</code>: <code>lp_past_itr</code> 8 from cyc 116, <code>lp_conf</code> reaching
-  3 at cyc 248, <code>lp_pred_is_loop</code> first set at cyc 257.</li>
-<li><code>w_lp_upd_val_p0</code>: the LP updates as I resolves.</li>
-<li><code>bkend_ftq_redir_val</code> is absent from this command file; the three
-  early exit mispredicts show as <code>w_redir_val</code> in the ftq group.</li>
-<li><code>pd_out.[0]</code>: the retirement stream at decode.</li>
-</ul>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a
+marker in the waveform.</p>
+<h3 id="41-predicting-the-inner-exit">4.1 Predicting the inner exit<a class="headerlink" href="#41-predicting-the-inner-exit" title="Permanent link">&para;</a></h3>
+<p>The loop predictor allocates an entry when an update misses on a taken backward
+branch, so I's first taken resolution allocates one, at cyc 20.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> An exit at a
+known count trains the entry. A count equal to the learned trip count,
+<code>past_itr</code>, raises the confidence <code>cnf</code> by one, and any other count clears <code>cnf</code>
+and learns the count. A taken resolution at or past the learned count clears
+<code>cnf</code>.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p>The LP predicts only at full confidence, 3. It then predicts taken while the
+speculative count is below the trip count, so the exit is predicted not
+taken.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> At p1, a trusted LP overrides the direction of a slot the uBTB
+supplied.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> At p2, it takes priority over TAGE.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup> The slot carries
+<code>pred_src</code> PRED_LOOP in both cases.</p>
+<p>Each of the 16 exits retires with a final slot from one of three predictors, the
+last group the FTQ accepted for its entry.</p>
+<div class="highlight"><pre><span></span><code>passes   final slot from   direction   result
+0 to 3   TAGE              taken       mispredicted; the backend redirects
+4 to 7   SC                not taken   correct
+8 to 15  loop predictor    not taken   correct
+</code></pre></div>
+<p>The exits and the LP's training across the run are shown below.</p>
+<p><a href="../fd06_exits.svg"><img alt="fd06 inner loop exits by predictor" src="../fd06_exits.svg" /></a></p>
+<p>The exits of passes 0 to 3 are the backend redirects to 0x8000_001A, from cyc 49
+(event 2) to cyc 140 (event 4). The LP is still training over this time:
+<code>lp_past_itr</code> first reads 8 at cyc 116 (event 3), and <code>lp_conf</code> first reads 1 at
+cyc 140 and 2 at cyc 199.</p>
+<p>The learned count is 8, not 9 or 10, because the LP indexes its table by the
+request PC, the start of the prediction block, and not by I's PC. The first
+iteration of each pass predicts I in the block at <code>otop</code>, which has its own LP
+entry. The other nine predict it in the block at <code>itop</code>, so that entry sees 8
+taken branches and then the exit, at <code>lp_curs</code> 8.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup></p>
+<p>In passes 4 to 7, TAGE still predicts I taken at the exit, and SC reverses it at
+p3. The first reversal is at cyc 162 (event 5) and the last at cyc 238
+(event 7). The first redirects to 0x8000_002E, the end of the block at <code>itop</code>.
+The FTB update at cyc 173 (event 6) ends that entry at O's PC, so the other
+three redirect to 0x8000_0020.</p>
+<p><code>lp_conf</code> reaches 3 at cyc 248 (event 8), and the LP supplies I's direction from
+cyc 256 at p1 (event 9) and cyc 257 at p2 (event 10). It first predicts an exit
+at cyc 259 (event 11), and the monitor counts the first such exit at retirement
+at cyc 266 (event 12), in pass 8. Every exit from there on comes from the LP.</p>
+<p>The backend reports 11 mispredictions in the run. Besides the four exits, three
+are I taken, at cyc 21, 31 and 69, three are O taken, at cyc 59, 171 and 196,
+and one is O falling through at cyc 429 (event 13).</p>
+<h3 id="42-the-loop-predictor-taking-over">4.2 The loop predictor taking over<a class="headerlink" href="#42-the-loop-predictor-taking-over" title="Permanent link">&para;</a></h3>
+<p>The waveform group <code>loop_pred_p1_p2</code> shows the LP's answers for the block at p1
+and p2, not the table entry. The p2 answer describes I only in the cycles its
+block is at p2, and reads 0 otherwise.</p>
+<p>At cyc 116 (event 3), <code>u_bpu.w_lp_pred_p2.[0].lp_past_itr</code> first reads 8, while
+<code>bpu_slot_p2.[0]</code> is still PRED_TAGE. At cyc 248 (event 8), <code>lp_conf</code> first
+reads 3.</p>
+<p>At cyc 256 (event 9), <code>u_bpu.w_lp_pred_p1.[0].lp_pred_is_loop</code> is asserted and
+<code>bpu_pred_slot_p1.[0].pred_src</code> is PRED_LOOP, with <code>u_ftq.w_ok_pred_p1</code>
+asserted. At cyc 257 (event 10), <code>u_bpu.w_lp_pred_p2.[0].lp_pred_is_loop</code> is
+asserted and <code>bpu_slot_p2.[0].pred_src</code> is PRED_LOOP.</p>
+<p>At cyc 259 (event 11), the speculative count <code>lp_curs</code> reads 8, equal to
+<code>lp_past_itr</code>. <code>lp_pred_taken</code> is deasserted, and <code>bpu_slot_p2.[0]</code> holds I at
+<code>pos</code> 4 with <code>taken</code> deasserted and <code>pred_src</code> PRED_LOOP.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6222,51 +6246,87 @@ S=fd06_loop_pred</code> opens in Surfer. Look at:</p>
 </tr>
 <tr>
 <td>1</td>
-<td>49</td>
-<td>first inner exit mispredicted; redirect to 0x8000_001A</td>
-<td>backend</td>
+<td>21</td>
+<td>first backend misprediction: I taken; redirect to 0x8000_000E</td>
+<td>pass 0</td>
 </tr>
 <tr>
 <td>2</td>
+<td>49</td>
+<td>first inner exit mispredicted; redirect to 0x8000_001A</td>
+<td>backend, pass 0</td>
+</tr>
+<tr>
+<td>3</td>
 <td>116</td>
 <td>the loop predictor learns the trip count: <code>lp_past_itr</code> reads 8</td>
 <td><code>w_lp_pred_p2.[0]</code></td>
 </tr>
 <tr>
-<td>3</td>
+<td>4</td>
+<td>140</td>
+<td>last inner exit mispredicted; redirect to 0x8000_001A</td>
+<td>backend, pass 3</td>
+</tr>
+<tr>
+<td>5</td>
+<td>162</td>
+<td>SC reverses an exit to not taken, in pass 4; redirect to 0x8000_002E</td>
+<td>PRED_SC, the end of the block</td>
+</tr>
+<tr>
+<td>6</td>
+<td>173</td>
+<td>the FTB entry for itop ends at 0x8000_0020: the split, at O</td>
+<td><code>upd_split</code>, position 9</td>
+</tr>
+<tr>
+<td>7</td>
+<td>238</td>
+<td>last SC reversal of an exit, in pass 7; redirect to 0x8000_0020</td>
+<td>PRED_SC</td>
+</tr>
+<tr>
+<td>8</td>
 <td>248</td>
 <td>confidence reaches 3 (<code>lp_conf</code>), the level at which the loop predictor is trusted</td>
 <td></td>
 </tr>
 <tr>
-<td>4</td>
+<td>9</td>
 <td>256</td>
 <td>first p1 slot from the loop predictor (<code>pred_src</code> PRED_LOOP), accepted by the FTQ</td>
 <td></td>
 </tr>
 <tr>
-<td>5</td>
+<td>10</td>
 <td>257</td>
 <td>the loop predictor first trusted at p2 (<code>lp_pred_is_loop</code>); the slot is PRED_LOOP</td>
 <td></td>
 </tr>
 <tr>
-<td>6</td>
+<td>11</td>
 <td>259</td>
 <td>first exit predicted not taken, by the loop predictor: I's slot at p2, PRED_LOOP, <code>taken</code> 0</td>
 <td>block 0x8000_000E</td>
 </tr>
 <tr>
-<td>7</td>
+<td>12</td>
+<td>266</td>
+<td>first retired exit predicted by the loop predictor</td>
+<td>pass 8, the first of 8</td>
+</tr>
+<tr>
+<td>13</td>
 <td>429</td>
 <td>outer loop falls through, a misprediction; redirect to 0x8000_0024</td>
 <td>pass 15, backend</td>
 </tr>
 <tr>
-<td>8</td>
+<td>14</td>
 <td>439</td>
-<td>the run ends</td>
-<td></td>
+<td>the run ends; the last instruction retires</td>
+<td>a 100 cycle drain follows, to 539</td>
 </tr>
 </tbody>
 </table>
@@ -6301,6 +6361,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td>bp_cluster_p1</td>
+<td><code>u_bpu.r_pc_p1</code></td>
+<td>p1 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>bpu_pred_val_p1</code></td>
 <td>p1 prediction valid</td>
 </tr>
@@ -6317,7 +6382,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_pft_p1</code></td>
-<td>p1 fetch block end, the first halfword after it</td>
+<td>p1 prediction block end, next halfword after it</td>
 </tr>
 <tr>
 <td></td>
@@ -6332,7 +6397,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_slot_p1.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6347,7 +6412,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_slot_p1.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td>loop_pred_p1_p2</td>
@@ -6396,13 +6461,18 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td>bp_cluster_p2</td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>p2 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
 </tr>
 <tr>
 <td></td>
 <td><code>bpu_slot_val_p2</code></td>
-<td>slot valid mask</td>
+<td>p2 group valid: p2 valid and an FTB hit</td>
 </tr>
 <tr>
 <td></td>
@@ -6427,7 +6497,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6442,7 +6512,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td></td>
@@ -6458,6 +6528,71 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td></td>
 <td><code>bpu_redir_idx_p2</code></td>
 <td>FTQ index of the p2 redirect</td>
+</tr>
+<tr>
+<td>bp_cluster_p3</td>
+<td><code>u_bpu.r_pc_p3</code></td>
+<td>p3 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.r_val_p3</code></td>
+<td>p3 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_val_p3</code></td>
+<td>p3 group valid: p3 valid and an FTB answer</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_idx_p3</code></td>
+<td>FTQ index of the p3 group</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p3.[0].slot_valid</code></td>
+<td>slot 0 holds a branch</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p3.[0].br_type</code></td>
+<td>slot 0 branch type</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p3.[0].pos</code></td>
+<td>slot 0 halfword position in the prediction block</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p3.[0].taken</code></td>
+<td>slot 0 predicted direction</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p3.[0].target</code></td>
+<td>slot 0 predicted target</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p3.[0].pred_src</code></td>
+<td>slot 0 predictor that supplied the prediction</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_redir_p3.[0].valid</code></td>
+<td>p3 redirect from slot 0</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_redir_p3.[0].target_pc</code></td>
+<td>p3 redirect target from slot 0</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_redir_idx_p3</code></td>
+<td>FTQ index of the p3 redirect</td>
 </tr>
 <tr>
 <td>ftq</td>
@@ -6537,7 +6672,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>tb.pd_out.[0].pos</code></td>
-<td>lane 0 halfword position in the fetch block</td>
+<td>lane 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6559,6 +6694,61 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>tb.pd_out.[0].fault_va</code></td>
 <td>lane 0 fetch fault virtual address</td>
 </tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_cause</code></td>
+<td>backend redirect cause</td>
+</tr>
+<tr>
+<td>ftb_update</td>
+<td><code>ftb_upd_valid_u0</code></td>
+<td>FTB update valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_pc_u0</code></td>
+<td>block start address of the FTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_pos_u0</code></td>
+<td>halfword position of the branch in the FTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_is_br_u0</code></td>
+<td>the FTB update is for a conditional</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_is_jmp_u0</code></td>
+<td>the FTB update is for a jump</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftb_upd_hit_u0</code></td>
+<td>the FTB update hits an entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_split</code></td>
+<td>the FTB update splits the entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos</code></td>
+<td>position the split ends the entry at</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6566,7 +6756,34 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd06_loop_pred</code> runs the scenario; <code>make view S=fd06_loop_pred</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd06_loop_pred.svh</code>, <code>waves/fd06_loop_pred.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.4/examples/fe_demo/docs/fd06_loop_pred.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.5/examples/fe_demo/docs/fd06_loop_pred.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>u_alloc</code>: <code>rtl/core/frontend/bpu/rtl/loop_pred.sv:400</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>rtl/core/frontend/bpu/rtl/loop_pred.sv:404-423</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>lp_pred_is_loop</code> and <code>lp_pred_taken</code>:
+<code>rtl/core/frontend/bpu/rtl/loop_pred.sv:269-273</code>, and <code>:305-308</code> for the p2
+re-read. <code>LP_CONF_LEVEL</code>: <code>:82</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:805-810</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>w_lp_use_p2</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1031-1036</code>, and
+<code>:1161-1162</code> for <code>pred_src</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p>The request PC: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1675</code>, and
+<code>rtl/core/frontend/bpu/rtl/loop_pred.sv:209-210</code> for the index and tag.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

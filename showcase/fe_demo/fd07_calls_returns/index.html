@@ -2231,34 +2231,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2285,10 +2257,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predicting-the-returns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predicting the returns
       
     </span>
   </a>
@@ -2296,10 +2268,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-stack-operations-in-the-waveform" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The stack operations in the waveform
       
     </span>
   </a>
@@ -5915,34 +5887,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -5969,10 +5913,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predicting-the-returns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predicting the returns
       
     </span>
   </a>
@@ -5980,10 +5924,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-stack-operations-in-the-waveform" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The stack operations in the waveform
       
     </span>
   </a>
@@ -6041,15 +5985,19 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd07_calls_returns</code> is the FD-7 demonstration scenario. It is a demo,
-not a verification test. Each of 8 passes makes nested calls, a
-recursion four calls deep from one call site, and a coroutine switch by
-two return-calls. The return address stack (RAS) pushes and pops at p2,
-compresses the recursion into a count on one entry, and supplies return
-targets. The run passes if a retired return took its correct target
-from the RAS, a recursion count above 1 was seen, and a p2 RETURN_CALL
-operation occurred.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd07_calls_returns</code> (FD-7) runs a loop of 8 passes. Each pass makes nested
+calls, then a recursion four calls deep from one call site, then a coroutine
+switch by two return-calls.</p>
+<p>The return address stack (RAS) pushes a call's return address and pops it for a
+return at p2, which supplies the return's target. A recursive call whose return
+address matches the top of the stack increments that entry's count, <code>spec_rctr</code>,
+instead of allocating an entry. A return-call pops and then pushes in one
+operation.</p>
+<p>The RAS supplies the target of 64 of the 80 retired returns and return-calls.
+The result line in the log file reports that count, the p2 operations, and the
+highest recursion count.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6084,6 +6032,18 @@ operation occurred.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd07_calls_returns.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6100,139 +6060,208 @@ operation occurred.</p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd07_calls_returns: PASS, returns predicted by the RAS 64, p2 pushes 85,
     p2 pops 125, p2 return-calls 16, highest recursion count 4,
-    events checked 8 of 8, cyc 694
+    events checked 18 of 18, cyc 694
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>At retirement (<code>tb/fe_demo_mon.svh:306-310</code>):</p>
-<div class="highlight"><pre><span></span><code>n_ras_ret_ok   a retired RETURN or RETURN_CALL whose FTQ entry's final
-               slot at its position is valid, has pred_src == PRED_RAS,
-               is taken, and has the expected target
-</code></pre></div>
-<p>Every cycle at p2 (<code>tb/fe_demo_mon.svh:464-487</code>), summed over the slots:</p>
-<div class="highlight"><pre><span></span><code>n_ras_push     w_ras_pred_val_p2[s] with w_br_type_p2[s] a call
-               (DIRECT_CALL, INDIRECT_CALL, RETURN_CALL)
-n_ras_pop      w_ras_pred_val_p2[s] with RETURN or RETURN_CALL
-n_rc_p2        w_ras_pred_val_p2[s] with RETURN_CALL
-max_rctr       the highest u_ras.spec_rctr[i] over all entries
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:79</code>) is
-<code>n_ras_ret_ok &gt; 0 &amp;&amp; max_rctr &gt; 1 &amp;&amp; n_rc_p2 &gt; 0</code>. <code>tb_fe_demo.sv:160</code>
-also requires the whole stream to retire with no errors.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line:</p>
 <ul>
-<li><code>returns predicted by the RAS</code> counts retired returns, at most 80 here
-  (section 3). 64 had their target from the RAS in the entry's final
-  slot.</li>
-<li><code>p2 pushes</code>, <code>pops</code> and <code>return-calls</code> count p2 operations presented
-  to the RAS, not retired instructions. <code>w_ras_pred_val_p2</code> is not gated
-  by the squash (<code>ras_p2_keep</code>, <code>bp_cluster.sv:1394-1395</code> and line
-  2027), so
-  operations of blocks squashed in the same cycle and of predicted paths
-  later redirected are included, and an operation is missing for a
-  call or return the p2 group did not hold (before the FTB learned it).
-  Pops (125) exceed the 80 retired returns plus return-calls; pushes
-  (85) exceed the 80 retired calls plus return-calls.</li>
-<li>The sums are per slot (DOC-002). On the one-slot model a cycle holds
-  at most one RAS operation.</li>
-<li><code>highest recursion count 4</code>. On the correct path the program's
-  recursion gives 3: four recursive calls give one allocation and three
-  increments. 4 is reached in the first two episodes of section 4.1; the
-  four later episodes reach 3. The source of
-  the extra increment was not traced. On the two-slot model the same
-  program reaches 10 (DOC-007 run).</li>
-<li>Departures from FD-7 in <code>planning/showcase/fe_demo_scenarios.md</code>: the
-  spec's "a tail return-call" is built as a coroutine switch by two
-  RETURN_CALLs (jalr x1,0(x5) and jalr x5,0(x1)), not a tail call. The
-  proof adds <code>n_rc_p2 &gt; 0</code> to the spec's two conditions.</li>
+<li>returns predicted by the RAS<ul>
+<li><code>n_ras_ret_ok</code> in <code>tb/fe_demo_mon.svh</code></li>
+<li>retired RETURN or RETURN_CALL whose final slot in the FTQ entry has
+  <code>pred_src</code> PRED_RAS, <code>taken</code> 1 and the correct target</li>
+</ul>
+</li>
+<li>p2 pushes, p2 pops, p2 return-calls<ul>
+<li><code>n_ras_push</code>, <code>n_ras_pop</code> and <code>n_rc_p2</code> in <code>tb/fe_demo_mon.svh</code></li>
+<li>operations presented to the RAS at p2, including those on predicted paths
+  that are later redirected</li>
+</ul>
+</li>
+<li>highest recursion count<ul>
+<li><code>max_rctr</code> in <code>tb/fe_demo_mon.svh</code></li>
+<li>the highest <code>spec_rctr</code> of any entry in any cycle</li>
+</ul>
+</li>
 </ul>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd07_calls_returns.svh</code>, task <code>prog_fd07</code> (line 23).
-Function addresses from the source (<code>RESET_VECTOR</code> 0x8000_0000):
-f1 0x8000_0500, f2 0x8000_0600, f 0x8000_0800, B 0x8000_0A00. The
-loop top is 0x8000_0008. One pass:</p>
-<div class="highlight"><pre><span></span><code>main   mixed(2); jal x1,f1              call
-f1     mixed(2); jal x1,f2              call (nested)
-f2     mixed(2); ret                    return to f1
-f1     mixed(1); ret                    return to main
-main   mixed(1); jal x1,f               call from main
-f+0    mixed(2)                         6 bytes
-f+6    bne x6,x0,f+16                   taken only at the bottom (n == 0)
-f+10   jal x1,f                         recursive call, link f+14
-f+14   c.addi                           after each recursive return
-f+16   ret                              5 returns per pass
-main   mixed(1)
-L      jal x5,B                         call through x5, link L+4
-B      mixed(2)
-B1     jalr x1,0(x5)                    RETURN_CALL: to L+4, link B1+4
-L+4    mixed(2)                         "A"
-A1     jalr x5,0(x1)                    RETURN_CALL: to B1+4, link A1+4
-B1+4   mixed(2)
-B2     jalr x0,0(x5)                    RETURN: to A1+4
-A1+4   mixed(1); bne x6,x0,top          back edge, taken on passes 0..6
+<p>The program is written by the task <code>prog_fd07</code> in
+<code>programs/fd07_calls_returns.svh</code>. The code consists of a short prologue, then a
+loop of 8 passes starting at <code>top</code>, and a short epilogue.</p>
+<p>Each pass calls f1, which calls f2. It then calls f, which calls itself four
+times from the one call site at 0x8000_080A. It then calls B through x5, and B
+and the main code switch by the return-calls B1 and A1. B returns through x5 at
+B2, and the back edge at 0x8000_002A returns to <code>top</code>.</p>
+<p>The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
+(<code>bp_defines_pkg.sv</code>).</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose               Block  Pos
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+
+0x8000_0008  top:   c.addi a0, 1            ; filler              008    0
+0x8000_000A         addi   t0, t0, 1        ; filler              008    1
+0x8000_000E         jal    x1, f1           ; call                008    3
+0x8000_0012         c.addi a0, 1            ; filler              012    0
+0x8000_0014         jal    x1, f            ; call                012    1
+0x8000_0018         c.addi a0, 1            ; filler              018    0
+0x8000_001A  L:     jal    x5, B            ; call through x5     018    1
+0x8000_001E         c.addi a0, 1            ; filler              01E    0
+0x8000_0020         addi   t0, t0, 1        ; filler              01E    1
+0x8000_0024  A1:    jalr   x5, 0(x1)        ; return-call         01E    3
+0x8000_0028         c.addi a0, 1            ; filler              028    0
+0x8000_002A         bne    x6, x0, top      ; back edge           028    1
+
+0x8000_002E         c.addi a0, 1            ; epilogue
+0x8000_0030         addi   t0, t0, 1        ; epilogue
+0x8000_0034         c.addi a0, 1            ; epilogue
+0x8000_0036  hold:  jal    x0, hold         ; termination
+
+0x8000_0500  f1:    c.addi a0, 1            ; filler              500    0
+0x8000_0502         addi   t0, t0, 1        ; filler              500    1
+0x8000_0506         jal    x1, f2           ; nested call         500    3
+0x8000_050A         c.addi a0, 1            ; filler              50A    0
+0x8000_050C         ret                     ; return to main      50A    1
+
+0x8000_0600  f2:    c.addi a0, 1            ; filler              600    0
+0x8000_0602         addi   t0, t0, 1        ; filler              600    1
+0x8000_0606         ret                     ; return to f1        600    3
+
+0x8000_0800  f:     c.addi a0, 1            ; filler              800    0
+0x8000_0802         addi   t0, t0, 1        ; filler              800    1
+0x8000_0806         bne    x6, x0, f+16     ; taken at the bottom 800    3
+0x8000_080A         jal    x1, f            ; recursive call      80A    0
+0x8000_080E         c.addi a0, 1            ; after a return      80E    0
+0x8000_0810         ret                     ; return from f       80E    1
+
+0x8000_0A00  B:     c.addi a0, 1            ; filler              A00    0
+0x8000_0A02         addi   t0, t0, 1        ; filler              A00    1
+0x8000_0A06  B1:    jalr   x1, 0(x5)        ; return-call         A00    3
+0x8000_0A0A         c.addi a0, 1            ; filler              A0A    0
+0x8000_0A0C         addi   t0, t0, 1        ; filler              A0A    1
+0x8000_0A10  B2:    jalr   x0, 0(x5)        ; return              A0A    3
 </code></pre></div>
-<ul>
-<li>Branch types are the writer's
-  (<code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh</code>): <code>jal</code> with
-  rd x1 or x5 is <code>DIRECT_CALL</code> (lines 273 and 274); <code>jalr_to</code> (line 389) types a
-  jalr by the RAS hint rule: rd and rs1 both link and unequal is
-  <code>RETURN_CALL</code>, rd link a call, rs1 link a return.</li>
-<li>Per pass the program retires 8 direct calls (f1, f2, f, f four times,
-  B), 8 returns (f2, f1, f five times, B2) and 2 return-calls (derived
-  from the source). Eight passes give 80 retired calls plus
-  return-calls, and 80 retired returns plus return-calls.</li>
-<li><code>emit_rec</code> (<code>fe_tb_writer.svh:556</code>) writes the recursion; <code>emit_nest</code>
-  (line 543) the nesting.</li>
-</ul>
+<p>Block is the low bits of the start address of the prediction block that holds
+the instruction, and Pos is its halfword position from that start. With one
+prediction slot, each block holds one branch. The <code>ret</code> at 0x8000_0810 is also
+predicted in a block of its own at 0x8000_0810, position 0, when the branch at
+0x8000_0806 is taken.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the branches.</p>
+<p>The program writer types each branch from its link registers, x1 and x5. A
+<code>jal</code> with a link register as rd is a DIRECT_CALL. A <code>jalr</code> with a link register
+as rs1 and not as rd is a RETURN, and one with unequal link registers as rd and
+rs1 is a RETURN_CALL. The directions and targets are chosen by the program
+writer and resolved by the modeled backend, and the register operands play no
+part in them.</p>
+<p>Each pass retires 8 direct calls, 8 returns and 2 return-calls. The 8 returns
+are f2's, f1's, 5 from f and B2. Over 8 passes that gives 80 retired returns and
+return-calls, the total the monitor's count is out of.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<p>The RAS is <code>rtl/core/frontend/bpu/rtl/ras.sv</code>.</p>
-<ol>
-<li>Push and pop at p2. A slot of the p2 group is presented to the RAS
-   when it holds a branch of a valid block and no earlier slot of the
-   block is taken (<code>w_ras_pred_val_p2</code> in
-   <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1090</code>). The RAS pushes
-   the fall-through on a call and pops on a return; a RETURN_CALL pops
-   and then pushes (<code>ras.sv:24-27</code>, <code>ras.sv:253-255</code>).</li>
-<li>Recursion compression. The p2 push is made with recursion allowed
-   (<code>st_push(..., 1'b1)</code>, <code>ras.sv:705</code>). When the pushed address equals
-   the current top, the top entry's count <code>spec_rctr</code> is incremented and
-   TOSR does not move (<code>ras.sv:413-421</code>); a pop of an entry with a
-   non-zero count decrements the count and leaves TOSR (<code>st_retract</code>,
-   <code>ras.sv:334-343</code>). The recursive call at f+10 always pushes f+14, so
-   every recursive call after the first matches the top.</li>
-<li>Return targets. At p1 a uBTB slot of type RETURN or RETURN_CALL with
-   a valid top of stack takes the RAS address and <code>pred_src = PRED_RAS</code>
-   (<code>bp_cluster.sv:839-844</code>). At p2 a return slot takes
-   <code>w_ras_pop_addr_p2</code> and <code>PRED_RAS</code> when the pop is valid
-   (<code>bp_cluster.sv:1164-1169</code>).</li>
-<li>The commit stack. Retired calls and returns update a separate commit
-   stack (<code>csp</code>, <code>commit_top_addr</code>; <code>ras.sv</code> header, lines 18-21), the
-   fallback for a pop of an empty speculative stack.</li>
-</ol>
-<p>From the run (out/fd07_calls_returns/fd07_calls_returns.fst,
-<code>u_ras.spec_rctr</code>): the count of entry 1 reads 1 from cyc 131, 2 from
-133, 3 from 135 and 4 from 137, one step every two cycles, and holds 4
-until cyc 374; entry 4 does the same from cyc 267 (4 at 273) and holds
-4 until cyc 405. Four later episodes reach 3: entry 3 at cyc 392 to
-400, entry 2 at 525 to 533, entry 9 at 581 to 589 and entry 0 at 637 to
-645. In four short ones (entries 11, 12, 10 and 11, from cyc 325 to
-477) the count reaches 1 and returns to 0 within six cycles.</p>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd07_calls_returns.sucl</code>, which <code>make view
-S=fd07_calls_returns</code> opens in Surfer. Look at:</p>
-<ul>
-<li><code>u_ras.tosr</code>, <code>tosw</code>, <code>bos</code>: TOSR and TOSW step on each push, TOSR
-  follows the link on a pop.</li>
-<li><code>u_ras.spec_rctr.[i]</code> and <code>spec_ret_addr.[i]</code> (entries 0-3 in the
-  command file): the count of entry 1 rising to 4 at cyc 131 to 137.</li>
-<li><code>w_br_type_p2.[0]</code> <code>RETURN_CALL</code> with <code>w_ras_pred_val_p2.[0]</code>: the
-  coroutine switches.</li>
-<li><code>bpu_slot_p2.[0].pred_src</code> <code>PRED_RAS</code> on return slots.</li>
-<li>ras_commit group: <code>ras_commit_val</code>, <code>csp</code>, <code>commit_top_addr</code> change
-  as calls and returns retire.</li>
-</ul>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a
+marker in the waveform.</p>
+<h3 id="41-predicting-the-returns">4.1 Predicting the returns<a class="headerlink" href="#41-predicting-the-returns" title="Permanent link">&para;</a></h3>
+<p>The RAS holds two stacks. The speculative stack has 16 entries and changes at
+p2, and it is empty when TOSR equals BOS. The commit stack has 32 entries,
+changes as calls and returns retire, and holds one entry per call with no
+count.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup></p>
+<p>A slot of the p2 group goes to the RAS when it holds a branch of a valid block
+and no earlier slot of the block is taken.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> A call pushes its fall-through
+address. If that address equals the top entry's, the entry's <code>spec_rctr</code> is
+incremented and the pointers do not move. Otherwise a new entry is allocated at
+TOSW.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> A return pops: a non-zero count is decremented and TOSR holds, and a
+count of 0 sends TOSR to the entry below.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> A RETURN_CALL pops and then
+pushes.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup> The pop supplies the slot's target with <code>pred_src</code> PRED_RAS at p2,
+and a return slot from the uBTB takes the top of the stack at p1.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup></p>
+<p>A commit moves BOS to the TOSR its block left.<sup id="fnref:7"><a class="footnote-ref" href="#fn:7">7</a></sup> A pop of an empty speculative
+stack reads the top of the commit stack and changes neither stack.<sup id="fnref:8"><a class="footnote-ref" href="#fn:8">8</a></sup> A backend
+redirect restores TOSR, TOSW and BOS from a snapshot and leaves the entries and
+their counts as they are.<sup id="fnref:9"><a class="footnote-ref" href="#fn:9">9</a></sup></p>
+<p>The monitor's count of 64 divides across the passes as follows.</p>
+<div class="highlight"><pre><span></span><code>pass     returns   from the RAS   not from the RAS
+0        10        2              7 not yet in the FTB; f's last return
+1        10        8              f1's return; f's last return
+2 to 7   10 each   9 each         f's last return
+</code></pre></div>
+<p>In pass 0, no return reaches p2 before cyc 162 (event 7), and the backend
+corrects each return the FTB does not hold yet. In pass 1, f1's return at cyc
+248 finds both stacks empty, so it takes the FTB's target with <code>pred_src</code>
+PRED_FTB.</p>
+<p>F's last return is mispredicted in all 8 passes, for one reason. The recursive
+call at 0x8000_080A pushes 0x8000_080E each time. The first allocates an entry
+and the other three increment it, so the blocks of all four calls leave TOSR on
+that entry. When the first of them commits, BOS moves to the entry, and the
+speculative stack is empty.</p>
+<p>Pass 6 shows the sequence. Entry 9 is allocated at cyc 578, and its count
+reaches 3 at cyc 589. The first recursive call commits at cyc 588, which moves
+BOS to 9. The returns reach p2 from cyc 594 with the stack empty, so each takes
+the top of the commit stack, 0x8000_080E, and the count of entry 9 stays at 3.
+The first four returns are correct. The fifth returns to main at 0x8000_0018,
+but no return has committed yet, so the top still reads 0x8000_080E. The backend
+corrects it at cyc 606. The figure below shows these cycles.</p>
+<p><a href="../fd07_pass6.svg"><img alt="fd07 pass 6 recursion by cycle" src="../fd07_pass6.svg" /></a></p>
+<p>The redirect to 0x8000_0018 is at cyc 172 in pass 0 (event 9), at cyc 294, 361,
+427, 494, 550 and 606 in passes 1 to 6, and at cyc 662 in pass 7 (event 15).</p>
+<p>The other returns come from the speculative stack, where the calls are recent
+enough that the stack is not empty. The first is f2's in pass 1 at cyc 246
+(event 10), which pops 0x8000_050A with TOSR at 2 and BOS at 1.</p>
+<p>The recursion count differs by pass.</p>
+<div class="highlight"><pre><span></span><code>pass   entry    highest count   count rises at cyc
+0      1        4               131 to 137
+1      4        4               267 to 273
+2      11, 12   1               325, 341
+3      3        3               392 to 400
+4      10, 11   1               458, 474
+5      2        3               525 to 533
+6      9        3               581 to 589
+7      0        3               637 to 645
+</code></pre></div>
+<p>Four recursive calls give a count of 3. The count of 4 in passes 0 and 1 comes
+from a fifth call on a predicted path. At the bottom of the recursion the branch
+at 0x8000_0806 is predicted not taken, so the path calls f again and the count
+reaches 4 at cyc 137 (event 4). The backend redirects to 0x8000_0810 at cyc 139
+(event 5). The redirect does not change the count, so entry 1 holds 4 until the
+entry is reallocated at cyc 374 (event 14). Pass 3 also makes a fifth call, at
+cyc 404, but the stack is empty by then, so that call allocates an entry and the
+count stays at 3.</p>
+<p>In passes 2 and 4, a p3 redirect sends the path to 0x8000_0810 after the second
+recursive call, at cyc 327 and 460. A pop then decrements the count, the first
+at cyc 330 (event 13), and the backend redirects to 0x8000_080A at cyc 335 and
+468. The recursion continues in a new entry. The pops at cyc 330, 343, 463 and
+476 are the only ones in the run that decrement a count.</p>
+<p>The first return-calls at p2 are on a predicted path that is later redirected.
+The p3 redirect at cyc 252 leads to B1 at cyc 256 (event 11), and the backend
+redirect at cyc 261 removes it. The return-calls of the retired path first reach
+p2 in pass 1. At cyc 298 (event 12), B1 pops 0x8000_001E and pushes 0x8000_0A0A.
+At cyc 300, A1 pops 0x8000_0A0A and pushes 0x8000_0028. At cyc 302, B2 pops
+0x8000_0028.</p>
+<p>The backend reports 25 mispredictions in the run: 12 in pass 0, 3 in pass 1, 2
+each in passes 2, 3 and 4, 1 each in passes 5 and 6, and 2 in pass 7. The single
+redirects of passes 5 and 6 are f's last return. Pass 7 adds the back edge
+falling through at cyc 683 (event 16).</p>
+<h3 id="42-the-stack-operations-in-the-waveform">4.2 The stack operations in the waveform<a class="headerlink" href="#42-the-stack-operations-in-the-waveform" title="Permanent link">&para;</a></h3>
+<p>The waveform group <code>ras</code> shows the pointers, the entries and the p2 operation.
+<code>bpu_slot_p2.[0].target</code> is the address the pop supplies.</p>
+<p>At cyc 128 (event 2), <code>u_bpu.w_ras_pred_val_p2.[0]</code> is asserted with
+<code>u_bpu.w_br_type_p2.[0]</code> DIRECT_CALL and <code>u_bpu.r_pc_p2</code> at 0x8000_080A. By cyc
+130, <code>u_ras.tosr</code> reads 1 and <code>u_ras.tosw</code> reads 2. <code>u_ras.spec_rctr.[1]</code> reads
+1 at cyc 131 (event 3) and steps to 4 at cyc 137 (event 4), while <code>tosr</code> holds.</p>
+<p>At cyc 162 (event 7), <code>tosr</code> and <code>bos</code> both read 1 and
+<code>u_ras.p2_pre_empty.[0]</code> is asserted. <code>bpu_slot_p2.[0].target</code> is 0x8000_080E
+with <code>pred_src</code> PRED_RAS, the value of <code>u_ras.commit_top_addr</code> in the
+<code>ras_commit</code> group.</p>
+<p>At cyc 246 (event 10), <code>tosr</code> reads 2 and <code>bos</code> reads 1, and <code>p2_pre_empty.[0]</code>
+is deasserted. The target is 0x8000_050A, the value of
+<code>u_ras.spec_ret_addr.[2]</code>.</p>
+<p>At cyc 298 (event 12), <code>w_br_type_p2.[0]</code> is RETURN_CALL at <code>r_pc_p2</code>
+0x8000_0A00, and <code>tosr</code> and <code>tosw</code> read 5 and 6. They read 6 and 7 at cyc 300,
+so the pop and the push of the one operation show as one step.</p>
+<p>From cyc 594 to cyc 601, in pass 6, <code>tosr</code> and <code>bos</code> both read 9,
+<code>p2_pre_empty.[0]</code> is asserted on each pop, <code>spec_rctr.[9]</code> holds 3, and
+<code>commit_top_addr</code> holds 0x8000_080E. The backend's redirect to 0x8000_0018 is at
+cyc 606, in the <code>backend</code> group.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6255,13 +6284,13 @@ S=fd07_calls_returns</code> opens in Surfer. Look at:</p>
 <td>1</td>
 <td>40</td>
 <td>first RAS commit (<code>w_ras_commit_val</code>): a retired call reaches the commit stack</td>
-<td></td>
+<td>pass 0</td>
 </tr>
 <tr>
 <td>2</td>
 <td>128</td>
-<td>first RAS push at p2: a call presented to the RAS</td>
-<td><code>w_ras_pred_val_p2</code></td>
+<td>first RAS push at p2: a call presented to the RAS, allocating entry 1</td>
+<td>block 0x8000_080A</td>
 </tr>
 <tr>
 <td>3</td>
@@ -6272,26 +6301,86 @@ S=fd07_calls_returns</code> opens in Surfer. Look at:</p>
 <tr>
 <td>4</td>
 <td>137</td>
-<td>entry 1's count reaches 4, one step every two cycles</td>
-<td></td>
+<td>entry 1's count reaches 4, on the fifth call, one step every two cycles</td>
+<td>a predicted path</td>
 </tr>
 <tr>
 <td>5</td>
-<td>162</td>
-<td>first return predicted from the RAS at p2: <code>pred_src</code> PRED_RAS, accepted by the FTQ</td>
-<td></td>
+<td>139</td>
+<td>the backend corrects the bottom branch; redirect to 0x8000_0810</td>
+<td>the count stays at 4</td>
 </tr>
 <tr>
 <td>6</td>
-<td>256</td>
-<td>first RETURN_CALL at p2, presented to the RAS</td>
-<td>coroutine switch</td>
+<td>161</td>
+<td>first p1 slot from the RAS (<code>pred_src</code> PRED_RAS), accepted by the FTQ</td>
+<td>block 0x8000_080E</td>
 </tr>
 <tr>
 <td>7</td>
+<td>162</td>
+<td>first return predicted from the RAS at p2: the speculative stack is empty</td>
+<td>commit stack top</td>
+</tr>
+<tr>
+<td>8</td>
+<td>168</td>
+<td>first retired return the RAS predicted</td>
+<td><code>n_ras_ret_ok</code></td>
+</tr>
+<tr>
+<td>9</td>
+<td>172</td>
+<td>last return of f mispredicted, in pass 0; redirect to 0x8000_0018</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>10</td>
+<td>246</td>
+<td>first pop of the speculative stack: f2's return pops 0x8000_050A</td>
+<td>pass 1</td>
+</tr>
+<tr>
+<td>11</td>
+<td>256</td>
+<td>first RETURN_CALL at p2, presented to the RAS</td>
+<td>a predicted path</td>
+</tr>
+<tr>
+<td>12</td>
+<td>298</td>
+<td>first RETURN_CALL on the retired path, in pass 1</td>
+<td>B1</td>
+</tr>
+<tr>
+<td>13</td>
+<td>330</td>
+<td>first pop that decrements a recursion count: entry 11, 1 to 0</td>
+<td>a predicted path, pass 2</td>
+</tr>
+<tr>
+<td>14</td>
+<td>374</td>
+<td>entry 1 is reallocated, for f1's call to f2; its count of 4 clears to 0</td>
+<td>TOSW has wrapped</td>
+</tr>
+<tr>
+<td>15</td>
+<td>662</td>
+<td>final return of f mispredicted, in pass 7; redirect to 0x8000_0018</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>16</td>
+<td>683</td>
+<td>the back edge falls through, in pass 7; redirect to 0x8000_002E</td>
+<td>backend</td>
+</tr>
+<tr>
+<td>17</td>
 <td>694</td>
-<td>the run ends</td>
-<td></td>
+<td>the run ends; the last instruction retires</td>
+<td>a 100 cycle drain follows, to 794</td>
 </tr>
 </tbody>
 </table>
@@ -6326,6 +6415,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td>bp_cluster_p1</td>
+<td><code>u_bpu.r_pc_p1</code></td>
+<td>p1 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>bpu_pred_val_p1</code></td>
 <td>p1 prediction valid</td>
 </tr>
@@ -6342,7 +6436,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_pft_p1</code></td>
-<td>p1 fetch block end, the first halfword after it</td>
+<td>p1 prediction block end, next halfword after it</td>
 </tr>
 <tr>
 <td></td>
@@ -6357,7 +6451,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_slot_p1.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6372,7 +6466,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_pred_slot_p1.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td>ras</td>
@@ -6445,14 +6539,94 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>RAS entry 3 recursion count</td>
 </tr>
 <tr>
+<td></td>
+<td><code>u_bpu.w_ras_pop_valid_p2.[0]</code></td>
+<td>slot 0 pop has a valid address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.p2_pre_empty.[0]</code></td>
+<td>speculative stack empty before the p2 operation</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.p2_pop_dec.[0]</code></td>
+<td>the p2 pop decrements a recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[4]</code></td>
+<td>RAS entry 4 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[5]</code></td>
+<td>RAS entry 5 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[6]</code></td>
+<td>RAS entry 6 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[7]</code></td>
+<td>RAS entry 7 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[8]</code></td>
+<td>RAS entry 8 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[9]</code></td>
+<td>RAS entry 9 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[10]</code></td>
+<td>RAS entry 10 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[11]</code></td>
+<td>RAS entry 11 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[12]</code></td>
+<td>RAS entry 12 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[13]</code></td>
+<td>RAS entry 13 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[14]</code></td>
+<td>RAS entry 14 recursion count</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ras.spec_rctr.[15]</code></td>
+<td>RAS entry 15 recursion count</td>
+</tr>
+<tr>
 <td>bp_cluster_p2</td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>p2 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
 </tr>
 <tr>
 <td></td>
 <td><code>bpu_slot_val_p2</code></td>
-<td>slot valid mask</td>
+<td>p2 group valid: p2 valid and an FTB hit</td>
 </tr>
 <tr>
 <td></td>
@@ -6477,7 +6651,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pos</code></td>
-<td>slot 0 halfword position in the fetch block</td>
+<td>slot 0 halfword position in the prediction block</td>
 </tr>
 <tr>
 <td></td>
@@ -6492,7 +6666,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>bpu_slot_p2.[0].pred_src</code></td>
-<td>slot 0 predictor that supplied the direction</td>
+<td>slot 0 predictor that supplied the prediction</td>
 </tr>
 <tr>
 <td></td>
@@ -6560,6 +6734,21 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>FTQ empty</td>
 </tr>
 <tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_cause</code></td>
+<td>backend redirect cause</td>
+</tr>
+<tr>
 <td>ras_commit</td>
 <td><code>ras_commit_val</code></td>
 <td>RAS commit valid</td>
@@ -6596,7 +6785,43 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd07_calls_returns</code> runs the scenario; <code>make view S=fd07_calls_returns</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd07_calls_returns.svh</code>, <code>waves/fd07_calls_returns.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.4/examples/fe_demo/docs/fd07_calls_returns.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.5/examples/fe_demo/docs/fd07_calls_returns.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>rtl/core/frontend/bpu/rtl/ras.sv:14-21</code> for the stacks and <code>:127-129</code> for
+the commit stack's lack of a count. <code>RAS_SPEC_ENTRIES</code> and
+<code>RAS_COMMIT_ENTRIES</code>: <code>rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:555-556</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>w_ras_pred_val_p2</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1090</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>st_push</code>: <code>rtl/core/frontend/bpu/rtl/ras.sv:413-421</code> for the count and
+<code>:439-446</code> for the allocation.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>st_retract</code>: <code>rtl/core/frontend/bpu/rtl/ras.sv:334-350</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>rtl/core/frontend/bpu/rtl/ras.sv:672-713</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p>p2: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1164-1169</code>. p1: <code>:839-844</code>.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+<li id="fn:7">
+<p><code>c_bos</code>: <code>rtl/core/frontend/bpu/rtl/ras.sv:766-767</code> and <code>:834-841</code>. A
+return whose block left the stack empty does not move BOS.&#160;<a class="footnote-backref" href="#fnref:7" title="Jump back to footnote 7 in the text">&#8617;</a></p>
+</li>
+<li id="fn:8">
+<p><code>rtl/core/frontend/bpu/rtl/ras.sv:673-677</code>.&#160;<a class="footnote-backref" href="#fnref:8" title="Jump back to footnote 8 in the text">&#8617;</a></p>
+</li>
+<li id="fn:9">
+<p><code>rtl/core/frontend/bpu/rtl/ras.sv:808-811</code>.&#160;<a class="footnote-backref" href="#fnref:9" title="Jump back to footnote 9 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 
