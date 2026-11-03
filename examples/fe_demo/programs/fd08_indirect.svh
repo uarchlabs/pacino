@@ -64,31 +64,77 @@
   // 0x8000_0680; the loop exit's target 0x8000_0516. One slot. The
   // backend's redirects are driven by the testbench: late.
   // =================================================================
+  // n_itt_ok is 3 at the redirect to tb in pass 6 (cyc 295) and well
+  // above this by the one in pass 20 (cyc 607).
+  localparam int FD08_OK_PASS20 = 20;
+
+  // An ITTAGE update for a misprediction, allocating (ittage_cntrl alc_upd).
+  function automatic logic fd08_alloc();
+    return dut.u_bpu.w_ittage_upd_val_u0[0] &&
+           dut.u_bpu.ittage_upd_inp_u0[0].indir_mispredict &&
+           (dut.u_bpu.ittage_upd_inp_u0[0].ittage_pred_meta.ittage_prm_comp <
+            IT_TBL_SEL_WIDTH'(IT_NUM_TABLES - 1)) &&
+           (dut.u_bpu.ittage_upd_inp_u0[0].ittage_pred_meta.ittage_alc_comp !=
+            '0);
+  endfunction
+
+  // An FTB update of the block at pc that splits it at position 4.
+  function automatic logic fd08_split(input logic [VA_WIDTH-1:0] pc);
+    return dut.u_bpu.u_ftb.u_ftb_cntrl.upd_active &&
+           (dut.ftb_upd_pc_u0 == pc) &&
+           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split &&
+           (dut.u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos == 4);
+  endfunction
+
   function automatic void fd08_evt_defs();
     evt_def("reset_released", EV_EXACT);
     evt_def("first_misprediction_of_J", EV_WINDOW, 1);
+    evt_def("first_ITTAGE_allocation", EV_WINDOW);
+    evt_def("the_FTB_entry_for_0x8000_0500_ends", EV_WINDOW);
     evt_def("first_ITTAGE_tagged_hit_at_p2", EV_WINDOW);
     evt_def("first_target_of_K_from_ITTAGE", EV_WINDOW);
     evt_def("first_target_of_J_from_ITTAGE", EV_WINDOW);
+    evt_def("first_retired_indirect_ITTAGE_predicted", EV_WINDOW);
+    evt_def("the_FTB_entry_for_0x8000_0008_ends", EV_WINDOW);
+    evt_def("first_allocation_above_table_1", EV_WINDOW);
+    evt_def("first_p2_redirect_from_an_ITTAGE", EV_WINDOW);
+    evt_def("ITTAGE_mispredicts_J_in_pass_20", EV_WINDOW, 1);
+    evt_def("J_first_takes_a_target_from", EV_WINDOW);
+    evt_def("last_indirect_mispredicted", EV_WINDOW, 1, 1);
     evt_def("the_loop_exits", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
   function automatic logic [EV_MAX-1:0] fd08_evt_now();
     logic [EV_MAX-1:0] e;
-    e    = '0;
-    e[0] = ev_p0(RESET_VECTOR);
-    e[1] = ev_redir(RESET_VECTOR + VA_WIDTH'('h480));
-    e[2] = dut.u_bpu.w_ittage_pred_rdy_p2[0] &&
-           dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_hit;
-    e[3] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
-           dut.bpu_slot_p2[0].slot_valid &&
-           (dut.bpu_slot_p2[0].br_type == INDIRECT_CALL) &&
-           (dut.bpu_slot_p2[0].pred_src == PRED_ITTAGE);
-    e[4] = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
-           dut.bpu_slot_p2[0].slot_valid &&
-           (dut.bpu_slot_p2[0].br_type == INDIRECT_NONRET) &&
-           (dut.bpu_slot_p2[0].pred_src == PRED_ITTAGE);
-    e[5] = ev_redir(RESET_VECTOR + VA_WIDTH'('h516));
+    logic              ind;
+    ind = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+          dut.bpu_slot_p2[0].slot_valid &&
+          (dut.bpu_slot_p2[0].pred_src == PRED_ITTAGE);
+    e     = '0;
+    e[0]  = ev_p0(RESET_VECTOR);
+    e[1]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h480));
+    e[2]  = fd08_alloc();
+    e[3]  = fd08_split(RESET_VECTOR + VA_WIDTH'('h500));
+    e[4]  = dut.u_bpu.w_ittage_pred_rdy_p2[0] &&
+            dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_hit;
+    e[5]  = ind && (dut.bpu_slot_p2[0].br_type == INDIRECT_CALL);
+    e[6]  = ind && (dut.bpu_slot_p2[0].br_type == INDIRECT_NONRET);
+    e[7]  = n_itt_ok != 0;
+    e[8]  = fd08_split(RESET_VECTOR + VA_WIDTH'('h8));
+    e[9]  = fd08_alloc() &&
+            (dut.u_bpu.ittage_upd_inp_u0[0].ittage_pred_meta.ittage_alc_comp >
+             IT_TBL_SEL_WIDTH'(1));
+    e[10] = ind && dut.u_ftq.w_ok_redir_p2 && dut.bpu_redir_p2[0].valid;
+    e[11] = ev_redir(RESET_VECTOR + VA_WIDTH'('h480)) &&
+            (n_itt_ok >= FD08_OK_PASS20);
+    // J's slot from the provider in table 2.
+    e[12] = ind && (dut.bpu_slot_p2[0].br_type == INDIRECT_NONRET) &&
+            dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_using_primary &&
+            (dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_prm_comp ==
+             IT_TBL_SEL_WIDTH'(2));
+    // K in pass 36, to fb: the last redirect to any indirect target.
+    e[13] = ev_redir(RESET_VECTOR + VA_WIDTH'('h680));
+    e[14] = ev_redir(RESET_VECTOR + VA_WIDTH'('h516));
     return e;
   endfunction

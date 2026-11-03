@@ -213,7 +213,7 @@ FORMATS = [
      r'.*_source|.*_comp', 'Unsigned', 'an index, pointer, position or table '
      'number, PROVISIONAL'),
     # Addresses, targets, PCs and data.
-    (r'(.*_)?pc(_[pu]\d)?|.*_pft_p\d|(.*_)?(target|tgt)|.*addr(ess)?|'
+    (r'(.*_)?pc(_[pu]\d)?|.*_pft_p\d|(.*_)?(target|tgt)(_p\d)?|.*addr(ess)?|'
      r'.*_[vp]pn\d?|fault_va|instr|.*_(data|cmp|swap)|(tbl_)?ri_wd',
      'Hexadecimal',
      'an address, target, PC or data'),
@@ -529,15 +529,33 @@ def scenarios(n):
                                 ('bp_cluster_p2', [B + '.r_pc_p2'] + bpu_p2),
                                 ('ftq', ftq), ('backend', be_redir),
                                 ('ras_commit', ras_cmt)]),
-        ('fd08_indirect', [('clock', clk), ('ittage_p2', itt_p2),
-                           ('bp_cluster_p2', bpu_p2), ('ftq', ftq)]),
+        ('fd08_indirect', [('clock', clk),
+                           ('bp_cluster_p1', [B + '.r_pc_p1'] + bpu_p1),
+                           ('ittage_p2', itt_p2 +
+                            ['%s.w_ittage_pred_meta_p2.[%d].%s' % (B, s, f)
+                             for s in sl
+                             for f in ('ittage_using_primary',
+                                       'ittage_alt_comp', 'ittage_alt_tgt')] +
+                            [B + '.w_ftb_jmp_target_p2']),
+                           ('bp_cluster_p2', [B + '.r_pc_p2'] + bpu_p2),
+                           ('ftq', ftq), ('backend', be_redir),
+                           ('ittage_update',
+                            [B + '.w_ittage_upd_val_u0'] +
+                            ['%s.ittage_upd_inp_u0.[%d].%s' % (B, s, f)
+                             for s in sl
+                             for f in ('indir_mispredict', 'resolved_target',
+                                       'ittage_pred_meta.ittage_alc_comp')]),
+                           ('ftb_update', ftb_split)]),
         ('fd09_tage', [('clock', clk), ('bp_cluster_p0', bpu_p0),
                        ('tage_p2', tage_p2),
                        ('bp_cluster_p2', bpu_p2_blk), ('backend', be_redir),
                        ('ftq_upd_conv', upd_pc), ('tage_update', tage_upd)]),
         ('fd10_pd_redirect', [('clock', clk), ('ftq_ifu', ftq_ifu),
-                              ('ifu_f3', ifu_f3), ('ftq', ftq),
-                              ('bp_cluster_p0', bpu_p0)]),
+                              ('ifu_f3', ifu_f3 + [Q + '.w_pd_redir_pc']),
+                              ('ftq', ftq), ('bp_cluster_p0', bpu_p0),
+                              ('bp_cluster_p1', [B + '.r_pc_p1'] + bpu_p1),
+                              ('bp_cluster_p2', [B + '.r_pc_p2'] + bpu_p2),
+                              ('backend', be_redir)]),
         ('fd11_be_mispredict', [('clock', clk), ('decode', dec0),
                                 ('backend', backend), ('ftq', ftq),
                                 ('ftq_ifu', ftq_ifu),

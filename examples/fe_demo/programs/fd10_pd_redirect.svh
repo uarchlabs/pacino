@@ -55,22 +55,38 @@
     evt_def("a_predecode_redirect_to_0x8000_0116", EV_WINDOW);
     evt_def("the_back_edge_mispredicted", EV_WINDOW, 1);
     evt_def("last_predecode_redirect", EV_WINDOW, 0, 1);
+    evt_def("first_chain_JAL_predicted_at_p1", EV_WINDOW);
+    evt_def("first_chain_JAL_predicted_at_p2", EV_WINDOW);
+    evt_def("last_chain_JAL_of_pass_1", EV_WINDOW);
+    evt_def("tops_jal_first_predicted_at_p1", EV_WINDOW);
     evt_def("back_edge_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
+  // A p1 slot the FTQ accepts, from the block at pc.
+  function automatic logic fd10_p1(input logic [VA_WIDTH-1:0] pc);
+    return dut.u_ftq.w_ok_pred_p1 && dut.bpu_pred_slot_p1[0].slot_valid &&
+           (dut.u_bpu.r_pc_p1 == pc);
+  endfunction
+
   function automatic logic [EV_MAX-1:0] fd10_evt_now();
     logic [EV_MAX-1:0] e;
-    e    = '0;
-    e[0] = ev_p0(RESET_VECTOR);
-    e[1] = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h200));
-    e[2] = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h108));
+    e     = '0;
+    e[0]  = ev_p0(RESET_VECTOR);
+    e[1]  = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h200));
+    e[2]  = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h108));
     // The halt's predecode redirect, whatever the backend does.
-    e[3] = dut.u_ftq.w_pd_redir_val &&
-           (dut.u_ftq.w_pd_redir_pc == RESET_VECTOR + VA_WIDTH'('h116));
-    e[4] = ev_redir(RESET_VECTOR + VA_WIDTH'('h08));
+    e[3]  = dut.u_ftq.w_pd_redir_val &&
+            (dut.u_ftq.w_pd_redir_pc == RESET_VECTOR + VA_WIDTH'('h116));
+    e[4]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h08));
     // The jal at top + 2 found again, to T(0).
-    e[5] = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h200));
-    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h10E));
+    e[5]  = ev_pd_redir(RESET_VECTOR + VA_WIDTH'('h200));
+    e[6]  = fd10_p1(RESET_VECTOR + VA_WIDTH'('h200));
+    e[7]  = dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_val_p2 &&
+            dut.bpu_slot_p2[0].slot_valid &&
+            (dut.u_bpu.r_pc_p2 == RESET_VECTOR + VA_WIDTH'('h200));
+    e[8]  = fd10_p1(RESET_VECTOR + VA_WIDTH'('h620));
+    e[9]  = fd10_p1(RESET_VECTOR + VA_WIDTH'('h8));
+    e[10] = ev_redir(RESET_VECTOR + VA_WIDTH'('h10E));
     return e;
   endfunction
