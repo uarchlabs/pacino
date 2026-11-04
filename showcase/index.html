@@ -1892,6 +1892,22 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -2403,6 +2419,230 @@
     
   
     FD-16 Fetch Block Crossing a Page
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd17_rvc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-17 Compressed and Unaligned Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd18_uncached/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-18 Uncached Fetch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd19_fencei_cbo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-19 FENCE.I and cbo.inval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd20_backpressure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-20 Backpressure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd21_commit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-21 Commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd22_sc_slot1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-22 SC Reversing Slot 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd23_jump_cut/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-23 A Jump Behind Two Conditionals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fe_demo/fd24_call_slot1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FD-24 A Call in Slot 1
   
 
     
@@ -6127,6 +6367,54 @@ install.</p>
 <td><a href="fe_demo/fd16_page_cross/">A Fetch Block Crossing a Page</a></td>
 <td>One fetch block translated twice, with an instruction straddling the pages</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>17</td>
+<td><a href="fe_demo/fd17_rvc/">Compressed and Unaligned Code</a></td>
+<td>A 32-bit instruction straddling two blocks, and 16-bit control transfers</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>18</td>
+<td><a href="fe_demo/fd18_uncached/">Uncached Fetch</a></td>
+<td>Fetch from PBMT NC and IO pages, never filled into the L1I</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>19</td>
+<td><a href="fe_demo/fd19_fencei_cbo/">FENCE.I and cbo.inval</a></td>
+<td>L1I invalidation and the fetch restart after each</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>20</td>
+<td><a href="fe_demo/fd20_backpressure/">Backpressure</a></td>
+<td>A slow backend stalling decode, the IBUF, the IFU and the FTQ in turn</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>21</td>
+<td><a href="fe_demo/fd21_commit/">Commit</a></td>
+<td>The FTQ commit pointer and the RAS commit stack</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>22</td>
+<td><a href="fe_demo/fd22_sc_slot1/">SC Reversing Slot 1</a></td>
+<td>The statistical corrector reversing the branch in slot 1 at p3</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>23</td>
+<td><a href="fe_demo/fd23_jump_cut/">A Jump Behind Two Conditionals</a></td>
+<td>The FTB splitting a block that holds two conditionals and a jump</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.sucl" target="_blank" rel="noopener">Open</a></td>
+</tr>
+<tr>
+<td>24</td>
+<td><a href="fe_demo/fd24_call_slot1/">A Call in Slot 1</a></td>
+<td>A RAS push from slot 1 behind a not-taken conditional</td>
+<td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.sucl" target="_blank" rel="noopener">Open</a></td>
 </tr>
 </tbody>
 </table>
