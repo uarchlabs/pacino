@@ -6487,7 +6487,7 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd12_training</code> (FD-12) shows resolved branches initiaing update requests
+<p><code>fd12_training</code> (FD-12) shows resolved branches initiating update requests
 routed to the respective predictor based on branch type. It also illustrates
 the operation of the single ported FTB.</p>
 <p>The scenario runs an outer loop of 14 iterations, containing an inner loop
@@ -6496,7 +6496,7 @@ of 6 iterations. The outer loop includes:</p>
 2. an indirect jump
 3. an indirect call and its return.
 </code></pre>
-<p>The inner loop includes a backwards branch executing the stated 6 iterations.</p>
+<p>The inner loop includes a backward branch executing the stated 6 iterations.</p>
 <p>This code then results in all predictors receiving illustrative updates.</p>
 <p>Each executed branch is resolved by the backend, converted by <code>ftq_upd_conv</code>
 into per-predictor updates, and presented to the cluster.</p>
@@ -6638,7 +6638,7 @@ outer loop branch (O:) returning to <code>otop</code>. </p>
 execution except the last iterations.</p>
 <p>The beq (B:) operand selection, x0 and x0, results in the branch always being
 taken.  This is configured to illustrate conditional branch training behavior.</p>
-<p>The program runs in machine mode with translation off, the addresses are
+<p>The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
 (<code>bp_defines_pkg.sv</code>).</p>
 <div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
@@ -7216,7 +7216,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd12_training</code> runs the scenario; <code>make view S=fd12_training</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd12_training.svh</code>, <code>waves/fd12_training.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd12_training.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd12_training.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

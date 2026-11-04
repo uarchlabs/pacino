@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1042" height="370" viewBox="0 0 1042 370">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style>
+<marker id="a-59636e" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#59636e"/></marker>
+<marker id="a-3b6ea5" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#3b6ea5"/></marker>
+<marker id="a-a0702a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a0702a"/></marker>
+</defs>
+<rect width="1042" height="370" fill="#ffffff"/>
+<text x="30" y="36" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd22_sc_slot1: the block at 0x8000_0008 and its successors</text>
+<text x="30" y="58" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One cell per halfword. The numbers are positions from the block start. The block ends at 0x8000_0028.</text>
+<rect x="60" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="88" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="88" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0008</text>
+<rect x="116" y="190" width="112" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="172" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<text x="172" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">000A</text>
+<rect x="228" y="190" width="112" height="42" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="284" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">bne A</text>
+<text x="284" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">000E</text>
+<rect x="340" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="368" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="368" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0012</text>
+<rect x="396" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="424" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="424" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0014</text>
+<rect x="452" y="190" width="112" height="42" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="508" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">bne B</text>
+<text x="508" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0016</text>
+<rect x="564" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="592" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="592" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">001A</text>
+<rect x="620" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="648" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="648" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">001C</text>
+<rect x="676" y="190" width="112" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="732" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<text x="732" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">001E</text>
+<rect x="788" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="816" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="816" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0022</text>
+<rect x="844" y="190" width="56" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="872" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="872" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0024</text>
+<rect x="900" y="190" width="112" height="42" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="956" y="207" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<text x="956" y="223" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0026</text>
+<text x="88" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="144" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<text x="200" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<text x="256" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<text x="312" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<text x="368" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<text x="424" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<text x="480" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<text x="536" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<text x="592" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<text x="648" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<text x="704" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<text x="760" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<text x="816" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<text x="872" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<text x="928" y="246" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<text x="52" y="246" class="sans" font-size="11" fill="#59636e" text-anchor="end" font-weight="normal">pos</text>
+<line x1="956" y1="160" x2="956" y2="260" stroke="#ff6e42" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="952" y="260" class="sans" font-size="11" fill="#ff6e42" text-anchor="end" font-weight="bold">block end, 0x8000_0028</text>
+<path d="M 284 190 C 284 150, 424 150, 424 190" fill="none" stroke="#59636e" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a-59636e)"/>
+<text x="292" y="152" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">A taken: 0x8000_0014</text>
+<path d="M 508 190 C 508 130, 648 130, 648 190" fill="none" stroke="#3b6ea5" stroke-width="1.5" marker-end="url(#a-3b6ea5)"/>
+<text x="506" y="132" class="sans" font-size="11" fill="#3b6ea5" text-anchor="start" font-weight="bold">B taken: 0x8000_001C</text>
+<path d="M 508 190 C 508 72, 956 72, 956 190" fill="none" stroke="#a0702a" stroke-width="1.5" marker-end="url(#a-a0702a)"/>
+<text x="718" y="94" class="sans" font-size="11" fill="#a0702a" text-anchor="start" font-weight="bold">B not taken: 0x8000_0028</text>
+<rect x="30" y="282" width="30" height="16" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="67" y="295" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">the two conditional branches, A in slot 0, B in slot 1</text>
+<rect x="480" y="282" width="30" height="16" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="517" y="295" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">other instructions of the block</text>
+<text x="30" y="320" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">SC reverses B at p3: at cyc 110 from not taken to taken, redirect to 0x8000_001C; at cyc 114 from taken to not taken, redirect to 0x8000_0028.</text>
+<text x="30" y="335" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">A is never taken in this program. SC reverses it at cyc 46, and the backend corrects that at cyc 56.</text>
+<text x="30" y="350" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Read from out/fd22_sc_slot1/fd22_sc_slot1.fst.</text>
+</svg>

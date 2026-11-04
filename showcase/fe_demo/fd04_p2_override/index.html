@@ -6557,7 +6557,7 @@ NUM_PRED_SLOTS=1.</p>
 <p>The regions are 0x800 apart, from b[0] at 0x8000_1000 to b[7] at 0x8000_4800.
 Each of b[0] to b[6] ends in a JAL to the next region. b[7] holds a conditional
 branch, at 0x8000_4802, and the JAL back to b[0], at 0x8000_4806.</p>
-<p>The program runs in machine mode with translation off, the addresses are
+<p>The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
 (<code>bp_defines_pkg.sv</code>).</p>
 <div class="highlight"><pre><span></span><code>                                                            Position in block
@@ -7166,7 +7166,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd04_p2_override</code> runs the scenario; <code>make view S=fd04_p2_override</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd04_p2_override.svh</code>, <code>waves/fd04_p2_override.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd04_p2_override.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd04_p2_override.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

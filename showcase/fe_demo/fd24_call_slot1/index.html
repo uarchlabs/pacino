@@ -6487,15 +6487,18 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd24_call_slot1</code> is the FD-24 scenario of the front-end demonstration.
-A fetch block holds a conditional branch followed by a call. With two
-prediction slots the conditional is in slot 0 and the call in slot 1.
-When the conditional is predicted not taken, the call in slot 1 is on
-the predicted path, and the return address stack (RAS) pushes the
-call's return address at p2 from slot 1. The function's return is then
-predicted from the stack. The scenario runs on the two-slot model
-(<code>SCEN_2S</code> in the <code>Makefile</code>). demo_explainer.md describes how a
-scenario is built and run, and defines the terms used here.</p>
+<p><code>fd24_call_slot1</code> (FD-24) demonstrates a call in slot 1. A prediction block
+holds a conditional branch followed by a call, so the conditional branch is in
+slot 0 and the call in slot 1. When the conditional branch is predicted not
+taken, the call is on the predicted path, and the return address stack (RAS)
+pushes its return address at p2. The return from the function is then predicted
+from the stack.</p>
+<p>The program runs a 24-pass loop whose first block holds C, a never-taken
+conditional branch, followed by a call to a function, f.</p>
+<p>The result line in the log file reports the RAS pushes from slot 1 and the
+returns predicted by the RAS.</p>
+<p>This scenario runs in the 2-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=2.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6530,6 +6533,18 @@ scenario is built and run, and defines the terms used here.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd24_call_slot1.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6546,110 +6561,150 @@ scenario is built and run, and defines the terms used here.</p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd24_call_slot1: PASS,
     RAS pushes from slot 1 behind a not-taken conditional 24,
-    returns predicted by the RAS 21, events checked 9 of 9, cyc 270
+    returns predicted by the RAS 21, events checked 10 of 10, cyc 270
 </code></pre></div></p>
-<p>The two counts are:</p>
-<ul>
-<li>RAS pushes from slot 1 behind a not-taken conditional, the monitor
-  variable <code>n_push_s1</code> (<code>tb/fe_demo_mon.svh</code> lines 629 to 637): p2
-  groups the FTQ accepted (<code>tb.dut.u_ftq.w_ok_slot_p2</code>) in which slot
-  0 is a conditional predicted not taken and slot 1, a call, is
-  presented to the RAS (<code>tb.dut.u_bpu.w_ras_pred_val_p2.[1]</code>);</li>
-<li>returns predicted by the RAS, <code>n_ras_ret_ok</code> (lines 306 to 310): a
-  retired return whose block's final slot for it has <code>pred_src</code>
-  PRED_RAS and the right target.</li>
-</ul>
-<p>The scenario passes when both counts are greater than zero
-(<code>tb/fe_demo_proofs.svh</code> line 186) and every instruction the testbench
-expects retires without error. On the one-slot model the first count
-is 0 and the scenario fails. The run took 270 cycles.</p>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAS pushes from slot 1</td>
+<td><code>n_push_s1</code></td>
+<td>p2 groups accepted by the FTQ, <code>u_ftq.w_ok_slot_p2</code>, with slot 0 a conditional branch predicted not taken and slot 1 a call presented to the RAS</td>
+</tr>
+<tr>
+<td>returns predicted by the RAS</td>
+<td><code>n_ras_ret_ok</code></td>
+<td>retired returns whose slot has <code>pred_src</code> PRED_RAS and the correct target</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
 <p>The program is written by the task <code>prog_fd24</code> in
-<code>programs/fd24_call_slot1.svh</code>. Between a short prologue and epilogue
-it runs a loop of 24 passes. The loop's first block holds C, a
-conditional that is never taken, followed by a call to the function f
-at 0x8000_0400. f returns to the block that holds the back edge. The
-program runs in machine mode with translation off, so the addresses
-are physical. It starts at the reset vector, <code>RESET_VECTOR</code> =
-0x8000_0000 (<code>bp_defines_pkg.sv</code>). The loop's first instruction, top,
-is at 0x8000_0008.</p>
+<code>programs/fd24_call_slot1.svh</code>.</p>
+<p>The code consists of a short prologue, a loop of 24 passes, and a short
+epilogue. The first block of the loop holds C, never taken, followed by a call
+to f. The function returns to the block that holds the back edge.</p>
+<p>The program runs in M-mode with bare addressing.</p>
 <div class="highlight"><pre><span></span><code>Address      Label  Instruction              Purpose
-0x8000_0000         c.addi a0, 1             prologue filler
-0x8000_0002         addi t0, t0, 1           prologue filler
-0x8000_0006         c.addi a0, 1             prologue filler
-0x8000_0008  top:   c.addi a0, 1             loop body filler
-0x8000_000A  C:     bne x6, x0, 0x8000_0010  never taken
-0x8000_000E         c.addi a0, 1             always executed
-0x8000_0010         jal x1, 0x8000_0400      the call; return address
-                                             0x8000_0014
-0x8000_0400  f:     c.addi a0, 1             function body
-0x8000_0402         addi t0, t0, 1           function body
-0x8000_0406         jalr x0, 0(x1)           return to 0x8000_0014
-0x8000_0014         c.addi a0, 1             filler
-0x8000_0016         addi t0, t0, 1           filler
-0x8000_001A         bne x6, x0, 0x8000_0008  back edge to top
-0x8000_001E         c.addi a0, 1             epilogue filler
-0x8000_0020         addi t0, t0, 1           epilogue filler
-0x8000_0024         c.addi a0, 1             epilogue filler
-0x8000_0026         jal x0, 0                jump to itself; the run
-                                             ends here
+0x8000_0000         c.addi a0, 1             ; prologue
+0x8000_0002         addi   t0, t0, 1         ; prologue
+0x8000_0006         c.addi a0, 1             ; prologue
+
+0x8000_0008  top:   c.addi a0, 1             ; filler
+0x8000_000A  C:     bne    x6, x0, 0x8000_0010 ; never taken
+0x8000_000E         c.addi a0, 1             ; always executed
+0x8000_0010         jal    x1, f             ; the call
+0x8000_0014         c.addi a0, 1             ; return address
+0x8000_0016         addi   t0, t0, 1         ; filler
+0x8000_001A         bne    x6, x0, top       ; back edge, passes 0 to 22
+
+0x8000_001E         c.addi a0, 1             ; epilogue
+0x8000_0020         addi   t0, t0, 1         ; epilogue
+0x8000_0024         c.addi a0, 1             ; epilogue
+0x8000_0026  hold:  jal    x0, hold          ; termination
+
+0x8000_0400  f:     c.addi a0, 1             ; function body
+0x8000_0402         addi   t0, t0, 1         ; function body
+0x8000_0406         ret                      ; return to 0x8000_0014
 </code></pre></div>
-<p>In the block that starts at top, C is at halfword position 1 and the
-call at position 4. The <code>jal</code> with rd x1 is a call (<code>DIRECT_CALL</code>) and
-the <code>jalr x0, 0(x1)</code> a return (<code>RETURN</code>), by the program writer's
-types (<code>W.jal</code> and <code>W.ret</code> in
-<code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh</code>). The back edge
-is taken on passes 0 to 22 and falls through on pass 23.</p>
+<p>In the block at top, C is at halfword position 1 and the call at position 4.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to place the branches.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. x6 is never
+read.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
+<p>The walkthrough follows the call and its return. Section 4.1 describes how the
+call reaches slot 1, section 4.2 the RAS push, and section 4.3 the return
+predicted from the stack.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>bp_cluster_p2</code> contains the p2 group, <code>ras</code> the speculative
+stack, <code>ftq</code> the accepted groups and the predecode redirects, <code>ras_commit</code> the
+commit stack, and <code>backend</code> the backend redirects.</p>
+<p>The figure below shows the block, the push and the return.</p>
+<p><a href="../fd24_blocks.svg"><img alt="fd24 the call in slot 1 and the RAS" src="../fd24_blocks.svg" /></a></p>
 <h3 id="41-the-call-reaches-slot-1">4.1 The call reaches slot 1<a class="headerlink" href="#41-the-call-reaches-slot-1" title="Permanent link">&para;</a></h3>
 <p>The FTB entry for the block at top holds C in its first conditional field and
-the call in its jump field. At p2 the cluster places C in slot 0. The call goes
-to the lowest slot that holds no conditional, which is slot 1 (<code>p2_class_comb</code>
-in <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv</code> lines 1010 to 1046, the jump at
-lines 1037 to 1045). A taken branch ends the block, so a slot is on the
-predicted path only when no earlier slot is predicted taken (<code>w_reach_p2</code>,
-lines 1076 to 1084).</p>
+the call in its jump field. At p2, the cluster places C in slot 0. The call goes
+to the lowest slot that holds no conditional branch, which is slot 1.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> A
+taken branch ends the block, so a slot is on the predicted path only when no
+earlier slot is predicted taken.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
 <h3 id="42-the-ras-operation-of-slot-1">4.2 The RAS operation of slot 1<a class="headerlink" href="#42-the-ras-operation-of-slot-1" title="Permanent link">&para;</a></h3>
-<p>At p2 a slot of a valid block is presented to the RAS when it holds a
-branch on the predicted path (<code>w_ras_pred_val_p2</code>, lines 1086 to 1091).
-The RAS performs the slots' operations in order, slot 0 first, so a
-call in slot 1 pushes its return address after slot 0's operation
-(<code>rtl/core/frontend/bpu/rtl/ras.sv</code> lines 24 to 27). A push allocates
-an entry at the write pointer TOSW, and the read pointer TOSR moves to
-it (<code>st_push</code> at <code>ras.sv</code> lines 406 to 454; the p2 push at lines 696
-to 705).</p>
-<p>In the waveform, the first counted push is at cyc 90. It is also the
-first p2 group for top with both slots valid. In the <code>bp_cluster_p2</code>
-group, <code>tb.dut.bpu_slot_p2.[0]</code> is C, a COND at <code>pos</code> 1, not taken,
-<code>pred_src</code> PRED_TAGE. <code>tb.dut.bpu_slot_p2.[1]</code> is the call,
-DIRECT_CALL at <code>pos</code> 4, taken, with <code>target</code> 0x8000_0400 and
-<code>pred_src</code> PRED_FTB. In the <code>ras</code> group
-<code>tb.dut.u_bpu.w_ras_pred_val_p2.[1]</code> is 1 with <code>w_br_type_p2.[1]</code>
-DIRECT_CALL, and <code>w_ras_pred_val_p2.[0]</code> is 1 for C, a conditional,
-which the RAS does not act on. At cyc 91 <code>tb.dut.u_bpu.u_ras.tosr</code> has
-moved from 0 to 1 and <code>tosw</code> from 0 to 2. <code>spec_ret_addr.[1]</code> holds
-0x8000_0014, the call's return address.</p>
+<p>At p2, a slot of a valid block is presented to the RAS when it holds a branch on
+the predicted path.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> The RAS performs the operations of the slots in order,
+slot 0 first, so a call in slot 1 pushes its return address after the operation
+of slot 0.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> A push allocates an entry at the write pointer, TOSW, and the
+read pointer, TOSR, moves to it.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup></p>
+<p>The first counted push is at cyc 90 (event 5). It is also the first p2 group for
+top with both slots valid. <code>u_bpu.r_pc_p2</code> is 0x8000_0008. <code>bpu_slot_p2.[0]</code> is
+C, a COND at <code>pos</code> 1, not taken, <code>pred_src</code> PRED_TAGE. <code>bpu_slot_p2.[1]</code> is the
+call, DIRECT_CALL at <code>pos</code> 4, taken, with <code>target</code> 0x8000_0400 and <code>pred_src</code>
+PRED_FTB. <code>u_bpu.w_ras_pred_val_p2.[1]</code> is 1 with <code>u_bpu.w_br_type_p2.[1]</code>
+DIRECT_CALL. <code>u_bpu.w_ras_pred_val_p2.[0]</code> is 1 for C, a conditional branch, on
+which the RAS does not act.</p>
+<p>At cyc 91 (event 6), <code>u_bpu.u_ras.tosr</code> has moved from 0 to 1 and
+<code>u_bpu.u_ras.tosw</code> from 0 to 2. <code>u_bpu.u_ras.spec_ret_addr.[1]</code> holds
+0x8000_0014, the return address of the call.</p>
 <h3 id="43-the-return-predicted-from-the-stack">4.3 The return predicted from the stack<a class="headerlink" href="#43-the-return-predicted-from-the-stack" title="Permanent link">&para;</a></h3>
-<p>The block at f holds the return. At p2 a return slot takes the RAS's
-pop address as its target when the pop is valid, with <code>pred_src</code>
-PRED_RAS (<code>bp_cluster.sv</code> lines 1164 to 1170). Of the 25 accepted p2
-groups for the block at 0x8000_0400, 23 predict the return from the
-RAS with target 0x8000_0014. The first is at cyc 91, the cycle after
-the first counted push.</p>
-<p>Before cyc 90 the call is found four times by predecode, each time in a
-block whose start has no FTB entry holding it yet; each block start
-has its own entry (BP-140). Predecode redirects to 0x8000_0400 at cyc
-19 (the block at 0x8000_0000, pass 0), 60 (top, after the back edge's
-first backend redirect), 75 (0x8000_0010, C's target, while C is
-predicted taken) and 85 (0x8000_000E, C's fall-through, after the
-backend corrects C).</p>
-<p>When the call and the return retire, the commit stack follows them
-(<code>tb.dut.ras_commit_val</code> with <code>u_ras.csp</code>). The run has 48 commits: a
+<p>The block at f holds the return. At p2, a return slot takes the RAS pop address
+as its target when the pop is valid, with <code>pred_src</code> PRED_RAS.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup> Of the 25
+accepted p2 groups for the block at 0x8000_0400, 23 predict the return from the
+RAS with target 0x8000_0014. The first is at cyc 91 (event 6), the cycle after
+the first counted push. The log count, 21, is of retired returns.</p>
+<p>Before cyc 90, predecode finds the call four times, each time in a block whose
+start has no FTB entry holding it yet. Each block start has its own entry.
+<code>u_ftq.w_pd_redir_pc</code> is 0x8000_0400 at these cycles:</p>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Block start</th>
+<th>Reached by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>19</td>
+<td>1</td>
+<td>0x8000_0000</td>
+<td>pass 0</td>
+</tr>
+<tr>
+<td>60</td>
+<td></td>
+<td>0x8000_0008</td>
+<td>the first backend redirect of the back edge</td>
+</tr>
+<tr>
+<td>75</td>
+<td></td>
+<td>0x8000_0010</td>
+<td>the target of C, while C is predicted taken</td>
+</tr>
+<tr>
+<td>85</td>
+<td></td>
+<td>0x8000_000E</td>
+<td>the fall-through of C, after the backend corrects C</td>
+</tr>
+</tbody>
+</table>
+<p>The commit stack follows when the call and the return retire, behind the
+speculative pointers. <code>u_bpu.u_ras.csp</code> is 1 at cyc 98 (event 7), with
+<code>u_bpu.u_ras.tosw</code> already at 3. The run has 48 RAS commits, <code>ras_commit_val</code>: a
 push and a pop for each of the 24 passes.</p>
-<p>RTL: the slot-1 presentation is <code>w_ras_pred_val_p2[1]</code> in
-<code>bp_cluster.sv</code>; the monitor is <code>tb/fe_demo_mon.svh</code> lines 629 to 637.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6706,12 +6761,18 @@ push and a pop for each of the 24 passes.</p>
 </tr>
 <tr>
 <td>7</td>
+<td>98</td>
+<td>the next call commits: <code>u_ras.csp</code> 1</td>
+<td>speculative pointers ahead</td>
+</tr>
+<tr>
+<td>8</td>
 <td>261</td>
 <td>back edge falls through, a misprediction; redirect to 0x8000_001E</td>
 <td>pass 23</td>
 </tr>
 <tr>
-<td>8</td>
+<td>9</td>
 <td>270</td>
 <td>the run ends</td>
 <td></td>
@@ -6751,6 +6812,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>bp_cluster_p2</td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>block start address at p2</td>
 </tr>
 <tr>
 <td></td>
@@ -6983,6 +7049,16 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>FTQ empty</td>
 </tr>
 <tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_val</code></td>
+<td>predecode redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_pc</code></td>
+<td>predecode redirect PC</td>
+</tr>
+<tr>
 <td>ras_commit</td>
 <td><code>ras_commit_val</code></td>
 <td>RAS commit valid</td>
@@ -6995,7 +7071,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>ras_commit_ret_addr</code></td>
-<td>return address of the RAS commit</td>
+<td>return address pushed by a call</td>
 </tr>
 <tr>
 <td></td>
@@ -7012,6 +7088,16 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>u_bpu.u_ras.commit_top_addr</code></td>
 <td>commit stack top address</td>
 </tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -7019,7 +7105,32 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd24_call_slot1</code> runs the scenario; <code>make view S=fd24_call_slot1</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd24_call_slot1.svh</code>, <code>waves/fd24_call_slot1.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd24_call_slot1.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd24_call_slot1.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>p2_class_comb</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1010-1046</code>. The
+jump: <code>:1037-1045</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>w_reach_p2</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1076-1084</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>w_ras_pred_val_p2</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1086-1091</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rtl/core/frontend/bpu/rtl/ras.sv:24-27</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>st_push</code>: <code>rtl/core/frontend/bpu/rtl/ras.sv:406-454</code>. The p2 push:
+<code>:696-705</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p><code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1164-1170</code>.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

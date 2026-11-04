@@ -6667,7 +6667,7 @@ epilogue.</p>
 <p>The loop body holds two conditional branches. The bne branch at 0x8000_000E
 has a randomized direction. The bne branch at 0x8000_0016 returns to label
 <code>top</code>. This is the loop's back edge, labeled <code>BE</code> in the listing below.</p>
-<p>The program runs in machine mode with translation off, the addresses are
+<p>The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, <code>RESET_VECTOR</code> =
 0x8000_0000 (<code>bp_defines_pkg.sv</code>), and the loop's first instruction, top, is
 at 0x8000_0008.</p>
@@ -6720,7 +6720,7 @@ marker in the waveform.</p>
 <p>Pacino's TAGE implementation uses 5 tables, T0-T4. T0 is the base predictor
 which is untagged. T1 to T4 are tagged and use direction history in their
 access address generation and entry matching. The tagged tables use
-increasing number of history bits (length), 8, 13, 32 and 119, respectively.</p>
+an increasing number of history bits (length), 8, 13, 32 and 119, respectively.</p>
 <p>T0 holds a 2-bit counter per entry and always produces a prediction.</p>
 <p>A tagged table produces a prediction only when its tag matches. Each tagged
 entry holds a 3-bit prediction counter, CTR, which encodes a predicted
@@ -6728,9 +6728,9 @@ direction in its MSB and a confidence value in the lower bits.</p>
 <p>The format for entries in tables T1 to T4 is shown below. All four use the
 same 8-bit tag.<sup id="fnref:tagwidth"><a class="footnote-ref" href="#fn:tagwidth">4</a></sup></p>
 <p><a href="../tage_entry.svg"><img alt="TAGE tagged table entry" src="../tage_entry.svg" /></a></p>
-<p>For the tagged table two predictions are possible, a 'primary' and an
+<p>For the tagged tables, two predictions are possible, a 'primary' and an
 'alternative' prediction. The table with the longest history that matches
-the tag produces the primary prediction, the next longest matching table
+the tag produces the primary prediction, and the next longest matching table
 is the alternative prediction or T0 when no other tagged table matches.</p>
 <p>A prediction moves through four stages, p0 to p3. The FTQ presents the request
 at p0, TAGE reads its tables at p1 and delivers its prediction at p2. TAGE's
@@ -7252,7 +7252,7 @@ ACM/IEEE International Symposium on Microarchitecture. IEEE, 1999.</p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd09_tage</code> runs the scenario; <code>make view S=fd09_tage</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd09_tage.svh</code>, <code>waves/fd09_tage.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd09_tage.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd09_tage.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

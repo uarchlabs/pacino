@@ -6520,7 +6520,7 @@ block have both prediction slots valid.</p>
 <p>The FTQ accepts 78 p1 predictions and 74 p2 slot groups with both slots valid.
 The result line in the log file reports both counts.</p>
 <p>This scenario runs in the 2-prediction slot Pacino configuration,
-NUM_PRED_SLOTS=2, both prediction slots are used.</p>
+NUM_PRED_SLOTS=2, and both prediction slots are used.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6606,7 +6606,7 @@ line:</p>
 <p>Each pass goes from <code>top</code> to X, then to Y, then through <code>back</code> to the back edge
 <code>BE</code>. The conditional branches are X.c1 at 0x8000_0402, X.c2 at 0x8000_0408,
 Y.c1 at 0x8000_0442 and Y.c2 at 0x8000_0448.</p>
-<p>The program runs in machine mode with translation off, the addresses are
+<p>The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
 (<code>bp_defines_pkg.sv</code>).</p>
 <div class="highlight"><pre><span></span><code>                                                              Position in block
@@ -7162,7 +7162,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd03_two_branch</code> runs the scenario; <code>make view S=fd03_two_branch</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd03_two_branch.svh</code>, <code>waves/fd03_two_branch.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd03_two_branch.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd03_two_branch.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

@@ -2655,34 +2655,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2709,10 +2681,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-the-watermark" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 The watermark
       
     </span>
   </a>
@@ -2720,10 +2692,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-commit-walk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The commit walk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-ras-commit-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The RAS commit stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-the-speculative-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 The speculative stack
       
     </span>
   </a>
@@ -6395,34 +6389,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6449,10 +6415,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-the-watermark" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 The watermark
       
     </span>
   </a>
@@ -6460,10 +6426,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-commit-walk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The commit walk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-ras-commit-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The RAS commit stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-the-speculative-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 The speculative stack
       
     </span>
   </a>
@@ -6521,14 +6509,16 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd21_commit</code> is the FD-21 demonstration scenario. It is a demo, not a
-verification test. Calls and returns retire in order. The backend's
-retirement watermark moves the FTQ commit pointer one entry per cycle,
-and each committed entry whose prediction block ends in a call or a
-return pushes or pops the RAS commit stack. The run passes if the
-commit pointer moves in at least 16 cycles and the commit stack
-changes.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd21_commit</code> (FD-21) demonstrates commit in the FTQ and the RAS. The backend's
+retirement watermark moves the FTQ commit pointer one entry per cycle, and each
+committed entry that ends in a call or a return pushes or pops the RAS commit
+stack.</p>
+<p>The program runs six passes of a main function that calls f, with f calling g
+and then h.</p>
+<p>The result line in the log file reports the cycles in which the commit pointer
+moved and the cycles in which the RAS commit stack changed.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6563,6 +6553,18 @@ changes.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd21_commit.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6578,108 +6580,167 @@ changes.</p>
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd21_commit: PASS, cycles the commit pointer moved 42,
-    cycles the RAS commit stack changed 36, events checked 8 of 8, cyc 214
+    cycles the RAS commit stack changed 36, events checked 10 of 10, cyc 214
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The counts come from <code>tb/fe_demo_mon.svh:577-582</code>, sampled every cycle
-while <code>meas</code> is set. Both are counts of CYCLES.</p>
-<div class="highlight"><pre><span></span><code>n_commit_adv  u_ftq.w_commit_ptr differs from its value the cycle
-              before (pv_commit)
-n_csp_chg     u_bpu.u_ras.csp or u_ras.commit_top_addr differs from
-              the cycle before (pv_csp, pv_ctop)
-</code></pre></div>
-<p><code>pv_commit</code>, <code>pv_csp</code> and <code>pv_ctop</code> are updated every cycle, inside or
-outside the measured window (<code>fe_demo_mon.svh:639-641</code>).</p>
-<p>The proof (<code>tb/fe_demo_proofs.svh:167</code>) is
-<code>n_commit_adv &gt;= 16 &amp;&amp; n_csp_chg &gt; 0</code>. <code>tb_fe_demo.sv</code> also requires
-the whole stream to retire with no errors, and the backend checks every
-RAS commit against the retired call or return (the RAS commit check,
-<code>fe_tb_backend.svh:391-415</code>).</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>cycles the commit pointer moved 42</code>: since the walk frees one entry
-  per cycle, this is also the number of FTQ entries committed inside
-  the measured window.</li>
-<li><code>cycles the RAS commit stack changed 36</code> is 3 calls and 3 returns
-  times 6 passes (derived from the source; the run shows 36 RAS
-  commits, section 4.1). Each operation changes <code>csp</code> in its own cycle.</li>
-<li>Departures from <code>planning/showcase/fe_demo_scenarios.md</code> FD-21:</li>
-<li>FD-21's proof is "commits advance; the commit stack changes". The
-    proof as built sets a floor of 16 cycles for the first; the number
-    is the testbench's, not FD-21's.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line. They are counts of cycles.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the commit pointer moved</td>
+<td><code>n_commit_adv</code></td>
+<td><code>u_ftq.w_commit_ptr</code> differs from the cycle before</td>
+</tr>
+<tr>
+<td>the RAS commit stack changed</td>
+<td><code>n_csp_chg</code></td>
+<td><code>u_bpu.u_ras.csp</code> or <code>u_bpu.u_ras.commit_top_addr</code> differs from the cycle before</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd21_commit.svh</code>, task <code>prog_fd21</code>, ported from
-tb_fe_top's <code>calls</code>. M-mode, bare. Offsets from RESET_VECTOR
-0x8000_0000; f = +0x800, g = +0xA00, h = +0xC00. Addresses derived from
-the source.</p>
-<div class="highlight"><pre><span></span><code>+0x00  mixed(3)
-top = +0x08
-+0x08  10 x c.addi
-+0x1C  jal x1,f            main calls f (link +0x20)
-f+0x00 mixed(3); 10 x c.addi
-f+0x1C jal x1,g            f calls g (link f+0x20)
-g      mixed(2); ret       g returns
-f+0x20 c.addi; 13 x c.addi
-f+0x3C jal x1,h            f calls h (link f+0x40)
-h      mixed(2); ret       h returns
-f+0x40 c.addi
-f+0x42 ret                 f returns to main
-+0x20  c.addi
-+0x22  bne x6,x0,top       loop_br; rep_iter: 6 passes, the last not
-                           taken
-+0x26  mixed(3), then jal x0,0 (halt)
+<p>The program is written by the task <code>prog_fd21</code> in <code>programs/fd21_commit.svh</code>.</p>
+<p>The code consists of a short prologue, a loop in which main calls f and f calls
+g and then h, and a short epilogue.</p>
+<p>The program runs in M-mode with bare addressing.</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+
+0x8000_0008  top:   c.addi a0, 1            ; ten, to 0x8000_001A
+0x8000_001C         jal    x1, f            ; main calls f
+0x8000_0020         c.addi a0, 1            ; return address
+0x8000_0022         bne    x6, x0, top      ; taken on passes 0 to 4
+
+0x8000_0026         c.addi a0, 1            ; epilogue
+0x8000_0028         addi   t0, t0, 1        ; epilogue
+0x8000_002C         c.addi a0, 1            ; epilogue
+0x8000_002E  hold:  jal    x0, hold         ; termination
+
+0x8000_0800  f:     c.addi a0, 1            ; function body
+0x8000_0802         addi   t0, t0, 1        ; function body
+0x8000_0806         c.addi a0, 1            ; function body
+0x8000_0808         c.addi a0, 1            ; ten, to 0x8000_081A
+0x8000_081C         jal    x1, g            ; f calls g
+0x8000_0820         c.addi a0, 1            ; return address, 14, to 0x083A
+0x8000_083C         jal    x1, h            ; f calls h
+0x8000_0840         c.addi a0, 1            ; return address
+0x8000_0842         ret                     ; f returns to main
+
+0x8000_0A00  g:     c.addi a0, 1            ; function body
+0x8000_0A02         addi   t0, t0, 1        ; function body
+0x8000_0A06         ret                     ; g returns to f
+
+0x8000_0C00  h:     c.addi a0, 1            ; function body
+0x8000_0C02         addi   t0, t0, 1        ; function body
+0x8000_0C06         ret                     ; h returns to f
 </code></pre></div>
-<ul>
-<li>Each pass makes three calls and three returns; the deepest point is
-  main -&gt; f -&gt; g (or h), two return addresses on the stack.</li>
-<li><code>loop_br</code> and <code>rep_iter</code> (<code>fe_tb_writer.svh:352-383</code>, in
-  <code>rtl/core/frontend/fe_top/tb/models/</code>) write the body once and
-  append its other five executions to the expected stream.</li>
-</ul>
+<p>Each pass makes three calls and three returns, and the deepest point is two
+return addresses.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the control transfers.</p>
+<p>The direction of the back edge is chosen by the program writer and resolved by
+the modeled backend, and the register operands play no part in it. x6 is never
+read.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>The watermark. The backend raises <code>bkend_ftq_commit_val</code> with
-   <code>bkend_ftq_commit_idx</code> the newest FTQ entry all of whose
-   instructions have retired: when the first instruction of a new
-   entry retires, the watermark becomes the entry before it
-   (<code>track_entry</code>, <code>fe_tb_backend.svh:70-93</code>; driven at <code>:458-459</code>
-   when the resolution queue is empty).</li>
-<li>The commit walk. ftq_commit frees every entry from commit_ptr to
-   the watermark, ONE ENTRY PER CYCLE because the RAS commit port is
-   scalar (<code>rtl/core/frontend/ftq/rtl/ftq_commit.sv:26-31</code>):
-   <code>commit_step_val</code> (<code>:235</code>) advances <code>commit_ptr</code> by one (<code>:252</code>).
-   <code>w_commit_ptr</code> in ftq.sv is that pointer.</li>
-<li>The RAS commit. The committing entry's taken call, return or
-   return-call slot sets <code>ras_commit_val</code> and <code>ras_commit_br_type</code>
-   (<code>rtl/core/frontend/ftq/rtl/ftq_entry.sv:275-285</code>). In the RAS a
-   pop moves <code>csp</code> down and a push writes <code>commit_ret_addr</code> and moves
-   <code>csp</code> up (<code>c_pop</code>, <code>c_push</code>, <code>c_nxt</code>,
-   <code>rtl/core/frontend/bpu/rtl/ras.sv:749-759</code>; registered at
-   <code>:844-848</code>). <code>commit_top_addr</code> is the entry below <code>csp</code>
-   (<code>ras.sv:185-187</code>).</li>
-<li>Seen in the run (fst2vcd on <code>out/fd21_commit/fd21_commit.fst</code>,
-   while <code>meas</code> is set): <code>w_commit_ptr</code> changes in 42 cycles;
-   <code>ras_commit_val</code> is high in 36 cycles, 18 with <code>ras_commit_br_type</code>
-   DIRECT_CALL and 18 with RETURN; <code>csp</code> reaches 2.</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd21_commit.sucl</code>, which <code>make view
-S=fd21_commit</code> opens in Surfer. Look at:</p>
-<ul>
-<li>backend group: <code>bkend_ftq_commit_val</code> and <code>bkend_ftq_commit_idx</code>, the
-  watermark.</li>
-<li>ftq group: <code>w_commit_ptr</code> stepping by one per cycle up to the
-  watermark.</li>
-<li>ras_commit group: <code>ras_commit_val</code> with <code>ras_commit_br_type</code> DIRECT_CALL or
-  RETURN and <code>ras_commit_ret_addr</code>; <code>u_ras.csp</code> moving between 0 and 2;
-  <code>commit_top_valid</code> and <code>commit_top_addr</code> (+0x20, f+0x20, f+0x40).</li>
-<li>ras group: the speculative pointers <code>tosr</code> and <code>tosw</code>, which move at
-  prediction time, ahead of the commit stack.</li>
-</ul>
+<p>The walkthrough follows a commit from the backend to the RAS. Section 4.1
+describes the watermark, section 4.2 the commit walk, section 4.3 the RAS commit
+stack, and section 4.4 the speculative stack.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>backend</code> contains the watermark, <code>ftq</code> the commit pointer
+and the walk, <code>ras_commit</code> the commit stack, and <code>ras</code> the speculative stack.</p>
+<h3 id="41-the-watermark">4.1 The watermark<a class="headerlink" href="#41-the-watermark" title="Permanent link">&para;</a></h3>
+<p>The backend reports the newest FTQ entry whose instructions have all retired.
+That is known only when the first instruction of the next entry retires.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup></p>
+<p>The block at 0x8000_0800, entry 1, reaches decode at cyc 37. At cyc 40
+(event 1), <code>tb.bkend_ftq_commit_val</code> is asserted with <code>tb.bkend_ftq_commit_idx</code>
+0.</p>
+<h3 id="42-the-commit-walk">4.2 The commit walk<a class="headerlink" href="#42-the-commit-walk" title="Permanent link">&para;</a></h3>
+<p>The FTQ frees the entries up to the watermark, one per cycle, because the RAS
+commit port takes one operation per cycle.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p>At cyc 205 to 208 (event 8), <code>u_ftq.w_commit_step_val</code> is asserted with
+<code>u_ftq.w_commit_ptr</code> 38, 39, 40 and 41, toward <code>tb.bkend_ftq_commit_idx</code> 41. The
+pointer is 42 at cyc 209.</p>
+<p>A restore suspends the walk.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> At cyc 145, <code>u_ftq.u_commit.w_walk_stop</code> is
+asserted with <code>ftq_ifu_flush_val</code>, and <code>u_ftq.w_commit_step_val</code> is clear for
+that cycle.</p>
+<p>The figure below shows the watermark, the commit pointer and the commit stack
+from cyc 125. The watermark moves in steps, and the pointer follows it one entry
+per cycle. <code>u_bpu.u_ras.csp</code> repeats 1, 2, 1, 2, 1, 0 on each pass.</p>
+<p><a href="../fd21_commit_walk.svg"><img alt="fd21 the commit walk and the commit stack" src="../fd21_commit_walk.svg" /></a></p>
+<h3 id="43-the-ras-commit-stack">4.3 The RAS commit stack<a class="headerlink" href="#43-the-ras-commit-stack" title="Permanent link">&para;</a></h3>
+<p>A committing entry that ends in a taken call or return raises
+<code>ras_commit_val</code>.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> A call pushes <code>ras_commit_ret_addr</code>, and a return pops. A
+return does not use <code>ras_commit_ret_addr</code>.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup> <code>u_bpu.u_ras.commit_top_addr</code> is
+the entry below <code>u_bpu.u_ras.csp</code>.</p>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th><code>ras_commit_br_type</code></th>
+<th><code>u_bpu.u_ras.csp</code></th>
+<th><code>u_bpu.u_ras.commit_top_addr</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>40</td>
+<td>1</td>
+<td>DIRECT_CALL</td>
+<td>0</td>
+<td></td>
+</tr>
+<tr>
+<td>41</td>
+<td>2</td>
+<td></td>
+<td>1</td>
+<td>0x8000_0020</td>
+</tr>
+<tr>
+<td>61</td>
+<td></td>
+<td>DIRECT_CALL</td>
+<td>1</td>
+<td>0x8000_0020</td>
+</tr>
+<tr>
+<td>62</td>
+<td>3</td>
+<td>RETURN</td>
+<td>2</td>
+<td>0x8000_0820</td>
+</tr>
+<tr>
+<td>63</td>
+<td>4</td>
+<td></td>
+<td>1</td>
+<td>0x8000_0020</td>
+</tr>
+</tbody>
+</table>
+<p>The walk at cyc 205 to 208 commits a call and two returns. <code>u_bpu.u_ras.csp</code> is
+1 at cyc 205, 2 at cyc 206, 1 at cyc 207 and 0 at cyc 208.</p>
+<p>The run has 36 RAS commits, 18 calls and 18 returns.</p>
+<h3 id="44-the-speculative-stack">4.4 The speculative stack<a class="headerlink" href="#44-the-speculative-stack" title="Permanent link">&para;</a></h3>
+<p>The speculative pointers move ahead of the commit stack. <code>u_bpu.u_ras.tosr</code> and
+<code>u_bpu.u_ras.tosw</code> stay at 0 until cyc 124, and the first predicted-taken block
+follows at cyc 125.</p>
+<p>At cyc 124 (event 5), <code>u_bpu.u_ras.tosw</code> is 2 and <code>u_bpu.u_ras.csp</code> is 0. The
+next call commits at cyc 134 (event 6), and <code>u_bpu.u_ras.csp</code> is 1 at cyc 135.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6701,41 +6762,53 @@ S=fd21_commit</code> opens in Surfer. Look at:</p>
 <tr>
 <td>1</td>
 <td>40</td>
-<td>first commit watermark from the backend (<code>bkend_ftq_commit_val</code>)</td>
-<td>backend</td>
+<td>first commit: watermark 0, the pointer steps, and the RAS commits the call to f</td>
+<td>return address 0x8000_0020</td>
 </tr>
 <tr>
 <td>2</td>
-<td>40</td>
-<td>the commit pointer first moves (<code>w_commit_step_val</code>), one entry per cycle</td>
-<td></td>
+<td>41</td>
+<td>the commit stack reaches depth 1 (<code>u_ras.csp</code>), top 0x8000_0020</td>
+<td>main</td>
 </tr>
 <tr>
 <td>3</td>
-<td>40</td>
-<td>first RAS commit of a call (<code>ras_commit_br_type</code> DIRECT_CALL)</td>
-<td></td>
+<td>62</td>
+<td>the commit stack reaches depth 2, and the first return commits</td>
+<td>top 0x8000_0820</td>
 </tr>
 <tr>
 <td>4</td>
-<td>62</td>
-<td>the commit stack reaches depth 2 (<code>u_ras.csp</code>)</td>
-<td>main, f</td>
-</tr>
-<tr>
-<td>5</td>
-<td>62</td>
-<td>first RAS commit of a return</td>
+<td>63</td>
+<td>the return has popped: depth 1, top 0x8000_0020</td>
 <td></td>
 </tr>
 <tr>
+<td>5</td>
+<td>124</td>
+<td>the speculative stack first moves: <code>tosw</code> 2, with <code>csp</code> 0</td>
+<td>ahead of commit</td>
+</tr>
+<tr>
 <td>6</td>
+<td>134</td>
+<td>the next call commits</td>
+<td><code>csp</code> 1 at cyc 135</td>
+</tr>
+<tr>
+<td>7</td>
 <td>204</td>
 <td>back edge falls through, a misprediction; redirect to 0x8000_0026</td>
 <td>pass 5, backend</td>
 </tr>
 <tr>
-<td>7</td>
+<td>8</td>
+<td>205</td>
+<td>the walk commits four entries in four consecutive cycles, to watermark 41</td>
+<td>cyc 205 to 208</td>
+</tr>
+<tr>
+<td>9</td>
 <td>214</td>
 <td>the run ends</td>
 <td></td>
@@ -6818,6 +6891,21 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
+<td><code>u_ftq.w_commit_step_val</code></td>
+<td>the commit walk frees an entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.u_commit.w_walk_stop</code></td>
+<td>a restore suspends the commit walk</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ftq_ifu_flush_val</code></td>
+<td>flush of the blocks younger than the named entry</td>
+</tr>
+<tr>
+<td></td>
 <td><code>ftq_full</code></td>
 <td>FTQ full</td>
 </tr>
@@ -6849,7 +6937,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>ras_commit_ret_addr</code></td>
-<td>return address of the RAS commit</td>
+<td>return address pushed by a call</td>
 </tr>
 <tr>
 <td></td>
@@ -6943,7 +7031,31 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd21_commit</code> runs the scenario; <code>make view S=fd21_commit</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd21_commit.svh</code>, <code>waves/fd21_commit.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd21_commit.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd21_commit.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>track_entry</code>:
+<code>rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:70-93</code>. Driven at
+<code>:458-459</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>rtl/core/frontend/ftq/rtl/ftq_commit.sv:26-31</code>. <code>commit_step_val</code>:
+<code>:235</code>. <code>commit_ptr</code>: <code>:252</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>w_walk_stop</code>: <code>rtl/core/frontend/ftq/rtl/ftq_commit.sv:231-235</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rtl/core/frontend/ftq/rtl/ftq_entry.sv:275-285</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>c_pop</code>, <code>c_push</code>, <code>c_nxt</code>: <code>rtl/core/frontend/bpu/rtl/ras.sv:749-759</code>.
+Registered at <code>:844-848</code>. <code>commit_top_addr</code>: <code>:185-187</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

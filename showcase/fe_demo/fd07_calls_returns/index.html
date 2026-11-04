@@ -6572,7 +6572,7 @@ loop of 8 passes starting at <code>top</code>, and a short epilogue.</p>
 times from the one call site at 0x8000_080A. It then calls B through x5, and B
 and the main code switch by the return-calls B1 and A1. B returns through x5 at
 B2, and the back edge at 0x8000_002A returns to <code>top</code>.</p>
-<p>The program runs in machine mode with translation off, the addresses are
+<p>The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
 (<code>bp_defines_pkg.sv</code>).</p>
 <div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose               Block  Pos
@@ -7265,7 +7265,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd07_calls_returns</code> runs the scenario; <code>make view S=fd07_calls_returns</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd07_calls_returns.svh</code>, <code>waves/fd07_calls_returns.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd07_calls_returns.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd07_calls_returns.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

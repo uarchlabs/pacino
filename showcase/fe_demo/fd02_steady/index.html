@@ -6510,7 +6510,7 @@
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
 <p><code>fd02_steady</code> (FD-2) runs 2 KB of straight-line code. There are no branches,
-therefore every uBTB lookup will miss. Consequently the p1 prediction address
+so every uBTB lookup will miss. Consequently the p1 prediction address
 returned is the fall-through address, the lookup PC + 32 bytes returned in p1
 on <code>bpu_pred_pft_p1</code>.</p>
 <p>In this scenario the FTQ allocates one entry per cycle. The front end reaches
@@ -7047,7 +7047,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd02_steady</code> runs the scenario; <code>make view S=fd02_steady</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd02_steady.svh</code>, <code>waves/fd02_steady.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd02_steady.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd02_steady.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

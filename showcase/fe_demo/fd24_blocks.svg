@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="828" height="389" viewBox="0 0 828 389">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style>
+<marker id="a-3b6ea5" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#3b6ea5"/></marker>
+<marker id="a-a0702a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a0702a"/></marker>
+</defs>
+<rect width="828" height="389" fill="#ffffff"/>
+<text x="30" y="36" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd24_call_slot1: the call in slot 1 and the RAS</text>
+<text x="30" y="58" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One cell per halfword, addresses are the low 16 bits. The numbers are positions from the block start.</text>
+<text x="60" y="90" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="bold">block at 0x8000_0008, ends at 0x8000_0014</text>
+<rect x="60" y="124" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="88" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="88" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0008</text>
+<rect x="116" y="124" width="112" height="40" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="172" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">bne C</text>
+<text x="172" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">000A</text>
+<rect x="228" y="124" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="256" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="256" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">000E</text>
+<rect x="284" y="124" width="112" height="40" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="340" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">jal x1</text>
+<text x="340" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0010</text>
+<text x="88" y="178" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="144" y="178" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<text x="200" y="178" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<text x="256" y="178" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<text x="312" y="178" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<text x="368" y="178" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<text x="52" y="178" class="sans" font-size="11" fill="#59636e" text-anchor="end" font-weight="normal">pos</text>
+<text x="172" y="116" class="sans" font-size="11" fill="#a0702a" text-anchor="middle" font-weight="bold">slot 0, not taken</text>
+<text x="332" y="116" class="sans" font-size="11" fill="#a0702a" text-anchor="middle" font-weight="bold">slot 1, taken</text>
+<text x="564" y="90" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="bold">block at f, 0x8000_0400</text>
+<rect x="564" y="124" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="592" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="592" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0400</text>
+<rect x="620" y="124" width="112" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="676" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<text x="676" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0402</text>
+<rect x="732" y="124" width="56" height="40" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="760" y="140" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">ret</text>
+<text x="760" y="156" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0406</text>
+<path d="M 396 144 C 452 144, 524 144, 562 144" fill="none" stroke="#3b6ea5" stroke-width="1.5" marker-end="url(#a-3b6ea5)"/>
+<text x="480" y="136" class="sans" font-size="11" fill="#3b6ea5" text-anchor="middle" font-weight="normal">taken</text>
+<text x="230" y="250" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="bold">RAS entries, speculative stack, at cyc 91</text>
+<rect x="230" y="262" width="118" height="36" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="289" y="284" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">empty</text>
+<text x="289" y="312" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">entry 0</text>
+<rect x="348" y="262" width="118" height="36" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="407" y="284" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0x8000_0014</text>
+<text x="407" y="312" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">entry 1</text>
+<rect x="466" y="262" width="118" height="36" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="525" y="284" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">empty</text>
+<text x="525" y="312" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">entry 2</text>
+<rect x="584" y="262" width="118" height="36" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="643" y="284" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">empty</text>
+<text x="643" y="312" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">entry 3</text>
+<text x="407" y="328" class="sans" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">TOSR 1</text>
+<text x="525" y="328" class="sans" font-size="11" fill="#ff6e42" text-anchor="middle" font-weight="bold">TOSW 2</text>
+<path d="M 340 186 L 387 260" fill="none" stroke="#a0702a" stroke-width="1.5" marker-end="url(#a-a0702a)"/>
+<text x="318" y="220" class="sans" font-size="11" fill="#a0702a" text-anchor="end" font-weight="bold">cyc 90: the call pushes</text>
+<path d="M 437 260 L 760 166" fill="none" stroke="#a0702a" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a-a0702a)"/>
+<text x="770" y="248" class="sans" font-size="11" fill="#a0702a" text-anchor="end" font-weight="bold">cyc 91: ret takes 0x8000_0014, PRED_RAS</text>
+<text x="30" y="354" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">C is not taken at cyc 90, so the call in slot 1 is on the predicted path and is presented to the RAS.</text>
+<text x="30" y="369" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Read from out/fd24_call_slot1/fd24_call_slot1.fst.</text>
+</svg>

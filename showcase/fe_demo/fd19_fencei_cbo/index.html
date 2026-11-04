@@ -2599,34 +2599,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2653,10 +2625,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-the-maintenance-handshake" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 The maintenance handshake
       
     </span>
   </a>
@@ -2664,10 +2636,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-drain" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The drain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-effect-of-each-invalidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The effect of each invalidate
       
     </span>
   </a>
@@ -6395,34 +6378,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6449,10 +6404,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-the-maintenance-handshake" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 The maintenance handshake
       
     </span>
   </a>
@@ -6460,10 +6415,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-drain" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The drain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-effect-of-each-invalidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The effect of each invalidate
       
     </span>
   </a>
@@ -6521,15 +6487,17 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd19_fencei_cbo</code> is the FD-19 demonstration scenario. It is a demo,
-not a verification test. A function is called, rewritten by a store,
-and called again after a FENCE.I; a second function is treated the same
-way with a cbo.inval of its line. Each maintenance operation retires,
-the backend holds decode, the IFU passes the invalidate to the L1I,
-the L1I drains and clears, the IFU acknowledges, and the backend
-restarts fetch at the next instruction. The run passes if both
-invalidates complete and fetch restarts after each.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd19_fencei_cbo</code> (FD-19) demonstrates the two instruction cache maintenance
+operations. A FENCE.I invalidates every L1I line, and a cbo.inval invalidates
+one line. For each operation, the backend, the IFU and the L1I complete a
+handshake, fetch restarts at the next instruction, and the modified code then
+runs.</p>
+<p>The program calls a function, rewrites it with a store, and calls it again after
+a FENCE.I. A second function repeats this with a cbo.inval of its line.</p>
+<p>The result line in the log file reports the invalidates of each kind, the
+completions, the acknowledgments and the restarts.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6564,6 +6532,18 @@ invalidates complete and fetch restarts after each.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd19_fencei_cbo.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6579,138 +6559,198 @@ invalidates complete and fetch restarts after each.</p>
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd19_fencei_cbo: PASS, whole-cache invalidates 1, line invalidates 1,
-    invalidates done 2, maintenance acknowledgements 2,
-    restarts at the next instruction 2, events checked 13 of 13, cyc 235
+    invalidates done 2, maintenance acknowledgments 2,
+    restarts at the next instruction 2, events checked 17 of 17, cyc 235
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The counts come from <code>tb/fe_demo_mon.svh:555-570</code>, sampled every cycle
-while <code>meas</code> is set.</p>
-<div class="highlight"><pre><span></span><code>n_inv_all    ifu_l1i_inv_val &amp;&amp; ifu_l1i_inv_rdy &amp;&amp; ifu_l1i_inv_all
-n_inv_line   ifu_l1i_inv_val &amp;&amp; ifu_l1i_inv_rdy &amp;&amp; !ifu_l1i_inv_all
-n_inv_done   l1i_ifu_inv_done
-n_mt_ack     ifu_cmt_maint_ack; arms mt_wait with mt_pc, the PC of
-             the maintenance entry + 4
-n_restart    the first fetch the FTQ presents after the ack
-             (ftq_ifu_req_val &amp;&amp; ftq_ifu_req_rdy &amp;&amp; !ftq_ifu_flush_val)
-             starts at mt_pc
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:152-153</code>) is <code>n_inv_all &gt; 0 &amp;&amp;
-n_inv_line &gt; 0 &amp;&amp; n_inv_done &gt;= 2 &amp;&amp; n_restart &gt;= 2</code>. <code>n_mt_ack</code> is
-only reported. <code>tb_fe_demo.sv</code> also requires the whole stream to retire
-with no errors, which here includes the new bodies of f and g.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li>One FENCE.I, one cbo.inval: <code>whole-cache invalidates 1, line
-  invalidates 1</code>, a done and an ack for each, and each followed by a
-  fetch at the next instruction.</li>
-<li>The drains had nothing to wait for. At the FENCE.I take
-  <code>mt_busy_any</code> was 0. At the cbo.inval take <code>mt_busy_any</code> was 1 (the
-  fills of the code after it), but inv_line waits only for
-  <code>busy_line</code>, which was 0: no register held line 0x8000_0C40. So
-  M_DRAIN lasted one cycle both times. The program's comment ("so fills
-  are in flight when the L1I takes the invalidate") holds for
-  <code>mt_busy_any</code>; it does not make the line drain wait.</li>
-<li>Departures from <code>planning/showcase/fe_demo_scenarios.md</code> FD-19:</li>
-<li>FD-19's program is "code modified then FENCE.I; a cbo.inval of a
-    code line". The program does both, and also reruns the modified
-    code, so the stream check shows each invalidate took effect.</li>
-<li>FD-19's proof is "the invalidate completes and fetch restarts".
-    The proof as built asks for both kinds, two dones and two restarts
-    at the next instruction. It is stronger.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>whole-cache invalidates</td>
+<td><code>n_inv_all</code></td>
+<td><code>ifu_l1i_inv_val</code>, <code>ifu_l1i_inv_rdy</code> and <code>ifu_l1i_inv_all</code></td>
+</tr>
+<tr>
+<td>line invalidates</td>
+<td><code>n_inv_line</code></td>
+<td><code>ifu_l1i_inv_val</code> and <code>ifu_l1i_inv_rdy</code>, with <code>ifu_l1i_inv_all</code> clear</td>
+</tr>
+<tr>
+<td>invalidates done</td>
+<td><code>n_inv_done</code></td>
+<td><code>l1i_ifu_inv_done</code></td>
+</tr>
+<tr>
+<td>maintenance acknowledgments</td>
+<td><code>n_mt_ack</code></td>
+<td><code>ifu_cmt_maint_ack</code></td>
+</tr>
+<tr>
+<td>restarts at the next instruction</td>
+<td><code>n_restart</code></td>
+<td>the first block after an acknowledgment starts at the address after the maintenance instruction</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd19_fencei_cbo.svh</code>, task <code>prog_fd19</code>, with the
-self-modifying-code tasks <code>smc_*</code> (<code>tb/fe_demo_lib.svh:148-187</code>, after
-tb_fe_top's tasks of the same names). M-mode,
-bare. Offsets from RESET_VECTOR 0x8000_0000; f = +0x800, g = +0xC40.
-Addresses derived from the source.</p>
-<div class="highlight"><pre><span></span><code>+0x00  mixed(3)
-+0x08  jal x1,f ; f: 6 c.addi, ret      smc_fn(f, 2): two calls
-+0x0C  jal x1,f ; (the same)
-+0x10  mixed(2)
-+0x16  sw x0,0(a0)       smc_store(f): retiring it rewrites f as
-                         3 x addi t1 and ret
-+0x1A  mixed(2)
-+0x20  fence.i
-+0x24  mixed(2)
-+0x2A  jal x1,f          smc_call_new(f): the stream expects the new
-                         body (3 x addi t1, ret)
-+0x2E  mixed(2)
-+0x34  jal x1,g ; +0x38 jal x1,g        smc_fn(g, 2)
-+0x3C  sw x0,0(a0)       smc_store(g)
-+0x40  bne (cskip, taken) to +0x46; +0x44 written dry
-+0x46  cbo.inval (a0)    PA 0x8000_0C64: the line of g, 0x8000_0C40
-+0x4A  mixed(60)         160 bytes of code not yet fetched
-+0xEA  jal x1,g          smc_call_new(g)
-+0xEE  mixed(2), then jal x0,0 (halt)
+<p>The program is written by the task <code>prog_fd19</code> in
+<code>programs/fd19_fencei_cbo.svh</code>.</p>
+<p>The code consists of two calls of a function f, a store that rewrites f, a
+FENCE.I, and a third call of f. The same sequence follows for a function g, with
+a cbo.inval of its line, then a short epilogue.</p>
+<p>The program runs in M-mode with bare addressing.</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+0x8000_0008         jal    x1, f            ; first call of f
+0x8000_000C         jal    x1, f            ; second call of f
+0x8000_0010         c.addi a0, 1            ; filler
+0x8000_0012         addi   t0, t0, 1        ; filler
+0x8000_0016         sw     x0, 0(a0)        ; rewrites f
+0x8000_001A         c.addi a0, 1            ; filler
+0x8000_001C         addi   t0, t0, 1        ; filler
+0x8000_0020         fence.i                 ; invalidates every line
+0x8000_0024         c.addi a0, 1            ; next instruction
+0x8000_0026         addi   t0, t0, 1        ; filler
+0x8000_002A         jal    x1, f            ; runs the new body of f
+
+0x8000_002E         c.addi a0, 1            ; filler
+0x8000_0030         addi   t0, t0, 1        ; filler
+0x8000_0034         jal    x1, g            ; first call of g
+0x8000_0038         jal    x1, g            ; second call of g
+0x8000_003C         sw     x0, 0(a0)        ; rewrites g
+0x8000_0040         bne    x6, x0, M        ; taken
+0x8000_0046  M:     cbo.inval (a0)          ; invalidates the line of g
+0x8000_004A         mixed code              ; next instruction, 60 instructions
+0x8000_00EA         jal    x1, g            ; runs the new body of g
+
+0x8000_00EE         c.addi a0, 1            ; epilogue
+0x8000_00F0         addi   t0, t0, 1        ; epilogue
+0x8000_00F4  hold:  jal    x0, hold         ; termination
+
+0x8000_0800  f:     c.addi a0, 1            ; six in the old body, to 0x080A
+0x8000_080C         ret                     ; return
+
+0x8000_0C40  g:     c.addi a0, 1            ; six in the old body, to 0x0C4A
+0x8000_0C4C         ret                     ; return
 </code></pre></div>
-<ul>
-<li>A store's memory effect is a list of halfword patches applied when it
-  retires (<code>fe_tb_writer.svh:644-668</code>; the shared models are in
-  <code>rtl/core/frontend/fe_top/tb/models/</code>).
-  Until then memory holds the old code, so a fetch of f or g after the
-  store and before the maintenance operation would return the old body
-  and the stream would not retire.</li>
-<li><code>fence_i</code> and <code>cbo_inval</code> (<code>fe_tb_writer.svh:673-677</code>, <code>:698-703</code>)
-  mark their stream entries with <code>maint</code> 1 and 2; cbo.inval's entry
-  carries the PA.</li>
-</ul>
+<p>The new bodies of f and g are three <code>addi t1, t1, 1</code> and the same <code>ret</code>.</p>
+<p>The cbo.inval names physical address 0x8000_0C64, in the line of g at
+0x8000_0C40.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the operations.</p>
+<p>A store's rewrite takes effect when the store retires, so memory holds the old
+body until then. The directions and targets are chosen by the program writer and
+resolved by the modeled backend, and the register operands play no part in them.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>The backend. When a maintenance entry retires it stops taking
-   decode's output (<code>mt_pend</code>) and raises <code>cmt_ifu_maint_val</code> with the
-   operation and PA (<code>fe_tb_backend.svh:357-365</code>, <code>:463-470</code>). After
-   <code>ifu_cmt_maint_ack</code> it redirects to the
-   instruction after the operation with cause RC_REPLAY
-   (<code>fe_tb_backend.svh:156-161</code>).</li>
-<li>The IFU (<code>rtl/core/frontend/ifu/rtl/ifu_maint.sv</code>). <code>r_st</code> steps
-   I_IDLE -&gt; I_REQ -&gt; I_WAIT -&gt; I_ACK (<code>ifu_maint.sv:58-63</code>, <code>:87-96</code>).
-   I_REQ drives <code>ifu_l1i_inv_val</code> with <code>ifu_l1i_inv_all</code> for FENCE.I
-   or the address for cbo.inval (<code>:72-74</code>); I_WAIT waits for
-   <code>l1i_ifu_inv_done</code> and clears the IFU line buffer in that cycle
-   (<code>lb_clr_val</code>, <code>:75</code>); I_ACK raises <code>ifu_cmt_maint_ack</code> for one
-   cycle (<code>:71</code>).</li>
-<li>The L1I (<code>rtl/core/frontend/icache/rtl/l1i_maint.sv</code>). From the
-   acceptance cycle the core port takes nothing new (<code>hold</code>, <code>:73</code>).
-   M_DRAIN waits for <code>!busy_any</code> (inv_all) or <code>!busy_line</code> (inv_line)
-   (<code>:96-98</code>), M_CLEAR applies the clear in one cycle, M_DONE raises
-   <code>inv_done</code> (<code>:75</code>, <code>:99-100</code>). inv_line clears every way of the
-   line's set (<code>:25-27</code>).</li>
-<li>Seen in the run (fst2vcd on <code>out/fd19_fencei_cbo/fd19_fencei_cbo.fst</code>):</li>
-</ol>
-<div class="highlight"><pre><span></span><code>cycle  FENCE.I                       cbo.inval
-71     cmt_ifu_maint_val (op 0);     184  cmt_ifu_maint_val (op 1);
-       L1I takes inv_all                  L1I takes the line,
-       (mt_busy_any 0)                    mt_busy_any 1, mt_busy_line 0
-72-73  M_DRAIN, M_CLEAR              185-186  M_DRAIN, M_CLEAR
-74     l1i_ifu_inv_done              187  l1i_ifu_inv_done
-75     ifu_cmt_maint_ack             188  ifu_cmt_maint_ack
-77     redirect to +0x24, cause 2    190  redirect to +0x4A, cause 2
-79     fetch starts at +0x24         192  fetch starts at +0x4A
-</code></pre></div>
-<p>RC_REPLAY is 2'b10 (<code>rtl/core/frontend/bpu/rtl/bp_structs_pkg.sv:128</code>).
-  The taken branch at +0x40 is resolved as a mispredict: a backend
-  redirect to +0x46 with cause 0 at cycle 174.</p>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd19_fencei_cbo.sucl</code>, which <code>make view
-S=fd19_fencei_cbo</code> opens in Surfer. Look at, around cycles 71-79 and
-184-192:</p>
-<ul>
-<li><code>cmt_ifu_maint_val</code>, <code>cmt_ifu_maint_op</code> (0 FENCE.I, 1 cbo.inval) and
-  <code>cmt_ifu_maint_paddr</code>.</li>
-<li>the IFU's <code>u_maint.r_st</code> stepping from I_REQ to I_ACK, and
-  <code>ifu_l1i_inv_val</code> with <code>ifu_l1i_inv_rdy</code>. <code>ifu_l1i_inv_all</code> is set
-  for the FENCE.I; <code>ifu_l1i_inv_paddr</code> names the cbo.inval's line.</li>
-<li><code>mt_busy_any</code>, <code>l1i_ifu_inv_done</code>, <code>ifu_cmt_maint_ack</code>.</li>
-<li><code>bkend_ftq_redir_val</code> with <code>bkend_ftq_redir_cause</code> RC_REPLAY, then
-  <code>ftq_ifu_req_val</code> with <code>ftq_ifu_start_pc</code> at the next instruction.</li>
-<li><code>mt_busy_line</code>, which decides the cbo.inval drain, and the L1I's
-  <code>u_maint.r_st</code> (M_DRAIN, M_CLEAR, M_DONE), both in the maintenance
-  group.</li>
-</ul>
+<p>The walkthrough follows the two maintenance operations. Section 4.1 describes
+their handshake, section 4.2 the drain, and section 4.3 the effect of each
+invalidate.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>maintenance</code> contains the handshake, <code>backend</code> the
+redirects, <code>ftq_ifu</code> the blocks, <code>ifu_l1i</code> the line requests and memory
+requests, and <code>decode</code> lane 0 at decode.</p>
+<h3 id="41-the-maintenance-handshake">4.1 The maintenance handshake<a class="headerlink" href="#41-the-maintenance-handshake" title="Permanent link">&para;</a></h3>
+<p>When a maintenance instruction retires, the backend stops taking decode's output
+and requests the operation.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> The IFU passes the invalidate to the L1I.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup>
+The L1I takes no new request, drains, clears the lines and signals done.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> The
+IFU clears its line buffer and acknowledges, and the backend redirects to the
+next instruction.</p>
+<p>The FENCE.I clears every set. The cbo.inval clears every way of the set of the
+named line.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup></p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>FENCE.I</th>
+<th>cbo.inval</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tb.cmt_ifu_maint_val</code> asserted, <code>tb.cmt_ifu_maint_op</code></td>
+<td>cyc 71, op 0</td>
+<td>cyc 184, op 1</td>
+</tr>
+<tr>
+<td>the L1I takes the invalidate, <code>ifu_l1i_inv_val</code> and <code>ifu_l1i_inv_rdy</code></td>
+<td>cyc 71 (event 1)</td>
+<td>cyc 184 (event 9)</td>
+</tr>
+<tr>
+<td><code>u_l1i.u_maint.r_st</code> 1, M_DRAIN</td>
+<td>cyc 72</td>
+<td>cyc 185</td>
+</tr>
+<tr>
+<td><code>u_l1i.u_maint.r_st</code> 2, M_CLEAR</td>
+<td>cyc 73</td>
+<td>cyc 186</td>
+</tr>
+<tr>
+<td><code>l1i_ifu_inv_done</code></td>
+<td>cyc 74 (event 2)</td>
+<td>cyc 187 (event 10)</td>
+</tr>
+<tr>
+<td><code>tb.ifu_cmt_maint_ack</code></td>
+<td>cyc 75 (event 3)</td>
+<td>cyc 188 (event 11)</td>
+</tr>
+<tr>
+<td><code>tb.bkend_ftq_redir_val</code>, <code>tb.bkend_ftq_redir_cause</code> 2, RC_REPLAY</td>
+<td>cyc 77 (event 4)</td>
+<td>cyc 190 (event 12)</td>
+</tr>
+<tr>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>0x8000_0024</td>
+<td>0x8000_004A</td>
+</tr>
+<tr>
+<td><code>ftq_ifu_start_pc</code> at the next instruction</td>
+<td>cyc 79 (event 5)</td>
+<td>cyc 192 (event 13)</td>
+</tr>
+</tbody>
+</table>
+<p><code>ifu_l1i_inv_all</code> is 1 at cyc 71. At cyc 184 it is 0, and <code>ifu_l1i_inv_paddr</code> is
+0x8000_0C64.</p>
+<p>The <code>bne</code> before the cbo.inval is taken and not predicted.
+<code>tb.bkend_ftq_redir_pc</code> is 0x8000_0046 at cyc 174 (event 8), with
+<code>tb.bkend_ftq_redir_cause</code> 0.</p>
+<h3 id="42-the-drain">4.2 The drain<a class="headerlink" href="#42-the-drain" title="Permanent link">&para;</a></h3>
+<p>The FENCE.I waits until no MSHR register is in use, and the cbo.inval waits
+until no register holds the named line.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup> Neither waits in this run, so
+M_DRAIN lasts one cycle both times.</p>
+<p><code>u_l1i.mt_busy_any</code> is 0 at cyc 71. At cyc 184, <code>u_l1i.mt_busy_any</code> is 1 and
+<code>u_l1i.mt_busy_line</code> is 0.</p>
+<h3 id="43-the-effect-of-each-invalidate">4.3 The effect of each invalidate<a class="headerlink" href="#43-the-effect-of-each-invalidate" title="Permanent link">&para;</a></h3>
+<p>The FENCE.I clears every line, so later requests miss. <code>tb.l1i_mem_a_valid</code> is
+asserted with <code>tb.l1i_mem_a_address</code> 0x8000_0800 at cyc 77 and 0x8000_0000 at
+cyc 82 (event 6). The line at 0x8000_0000 had been requested from memory at
+cyc 6.</p>
+<p>At cyc 58, <code>tb.pd_out.[0].start_pc</code> is 0x8000_0800 with <code>tb.pd_out.[0].instr</code>
+0x0015_0513, the old body of f. At cyc 106 (event 7), it is 0x8000_0800 with
+<code>tb.pd_out.[0].instr</code> 0x0013_0313, the new body.</p>
+<p>The cbo.inval clears only the set of its line. At cyc 208, <code>ifu_l1i_req_paddr</code>
+is 0x8000_0C40, and at cyc 210 (event 14) <code>tb.l1i_mem_a_address</code> is 0x8000_0C40.
+At cyc 209, <code>ifu_l1i_req_paddr</code> is 0x8000_0000 with no memory request.</p>
+<p>At cyc 159, <code>tb.pd_out.[0].start_pc</code> is 0x8000_0C40 with <code>tb.pd_out.[0].instr</code>
+0x0015_0513, the old body of g. At cyc 222 (event 15), it is 0x8000_0C40 with
+<code>tb.pd_out.[0].instr</code> 0x0013_0313, the new body.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6744,7 +6784,7 @@ S=fd19_fencei_cbo</code> opens in Surfer. Look at, around cycles 71-79 and
 <tr>
 <td>3</td>
 <td>75</td>
-<td>first maintenance acknowledgement (<code>ifu_cmt_maint_ack</code>)</td>
+<td>first maintenance acknowledgment (<code>ifu_cmt_maint_ack</code>)</td>
 <td></td>
 </tr>
 <tr>
@@ -6761,42 +6801,66 @@ S=fd19_fencei_cbo</code> opens in Surfer. Look at, around cycles 71-79 and
 </tr>
 <tr>
 <td>6</td>
+<td>82</td>
+<td>memory request for 0x8000_0000, a miss after the FENCE.I</td>
+<td>first requested at cyc 6</td>
+</tr>
+<tr>
+<td>7</td>
+<td>106</td>
+<td>the new body of f reaches decode: lane 0 at 0x8000_0800, <code>addi t1</code></td>
+<td>old body at cyc 58</td>
+</tr>
+<tr>
+<td>8</td>
 <td>174</td>
 <td>the branch at 0x8000_0040 mispredicted; redirect to 0x8000_0046, the cbo.inval</td>
 <td>backend</td>
 </tr>
 <tr>
-<td>7</td>
+<td>9</td>
 <td>184</td>
 <td>the cbo.inval reaches the L1I: it takes the invalidate of line 0x8000_0C40</td>
 <td><code>mt_busy_line</code> 0</td>
 </tr>
 <tr>
-<td>8</td>
+<td>10</td>
 <td>187</td>
 <td>second invalidate done</td>
 <td></td>
 </tr>
 <tr>
-<td>9</td>
+<td>11</td>
 <td>188</td>
-<td>second maintenance acknowledgement</td>
+<td>second maintenance acknowledgment</td>
 <td></td>
 </tr>
 <tr>
-<td>10</td>
+<td>12</td>
 <td>190</td>
 <td>the restart after the cbo.inval: a backend redirect to 0x8000_004A, cause RC_REPLAY</td>
 <td>backend</td>
 </tr>
 <tr>
-<td>11</td>
+<td>13</td>
 <td>192</td>
 <td>fetch starts at 0x8000_004A, the next instruction</td>
 <td></td>
 </tr>
 <tr>
-<td>12</td>
+<td>14</td>
+<td>210</td>
+<td>memory request for 0x8000_0C40, a miss after the cbo.inval</td>
+<td>0x8000_0000 at cyc 209 has no memory request</td>
+</tr>
+<tr>
+<td>15</td>
+<td>222</td>
+<td>the new body of g reaches decode: lane 0 at 0x8000_0C40, <code>addi t1</code></td>
+<td>old body at cyc 159</td>
+</tr>
+<tr>
+<td>16</td>
 <td>235</td>
 <td>the run ends</td>
 <td></td>
@@ -6925,12 +6989,12 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>u_l1i.mt_busy_any</code></td>
-<td>a fill is in flight</td>
+<td>an MSHR register is in use</td>
 </tr>
 <tr>
 <td></td>
 <td><code>u_l1i.mt_busy_line</code></td>
-<td>a fill of the named line is in flight</td>
+<td>an MSHR register holds the named line</td>
 </tr>
 <tr>
 <td></td>
@@ -6940,7 +7004,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>tb.ifu_cmt_maint_ack</code></td>
-<td>maintenance acknowledgement</td>
+<td>maintenance acknowledgment</td>
 </tr>
 <tr>
 <td>ftq_ifu</td>
@@ -7027,6 +7091,36 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>l1i_ifu_rsp_id</code></td>
 <td>id of the request answered</td>
 </tr>
+<tr>
+<td></td>
+<td><code>tb.l1i_mem_a_valid</code></td>
+<td>L1I request to memory</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.l1i_mem_a_address</code></td>
+<td>address of the memory request</td>
+</tr>
+<tr>
+<td>decode</td>
+<td><code>tb.dec_ibuf_rdy</code></td>
+<td>the backend model takes the bundle</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[0].valid</code></td>
+<td>lane 0 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[0].start_pc</code></td>
+<td>lane 0 instruction address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[0].instr</code></td>
+<td>lane 0 instruction, expanded if compressed</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -7034,7 +7128,31 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd19_fencei_cbo</code> runs the scenario; <code>make view S=fd19_fencei_cbo</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd19_fencei_cbo.svh</code>, <code>waves/fd19_fencei_cbo.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd19_fencei_cbo.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd19_fencei_cbo.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>mt_pend</code>, <code>cmt_ifu_maint_val</code>:
+<code>rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:357-365</code>, <code>:463-470</code>.
+The redirect: <code>:156-161</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>rtl/core/frontend/ifu/rtl/ifu_maint.sv:58-63</code>, <code>:71-75</code>, <code>:87-96</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>hold</code>, <code>inv_done</code>: <code>rtl/core/frontend/icache/rtl/l1i_maint.sv:73-75</code>.
+M_DRAIN, M_CLEAR: <code>:96-100</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rtl/core/frontend/icache/rtl/l1i_maint.sv:25-27</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>busy_any</code>, <code>busy_line</code>:
+<code>rtl/core/frontend/icache/rtl/l1i_mshr.sv:499-508</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

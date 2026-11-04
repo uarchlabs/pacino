@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#fd16_page_cross-a-fetch-block-crossing-a-page" class="md-skip">
+        <a href="#fd16_page_cross-a-prediction-block-crossing-a-page" class="md-skip">
           Skip to content
         </a>
       
@@ -2515,34 +2515,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2569,10 +2541,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-two-translations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Two translations
       
     </span>
   </a>
@@ -2580,10 +2552,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-two-line-requests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 Two line requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-straddling-instruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The straddling instruction
       
     </span>
   </a>
@@ -6395,34 +6378,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6449,10 +6404,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-two-translations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Two translations
       
     </span>
   </a>
@@ -6460,10 +6415,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-two-line-requests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 Two line requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-straddling-instruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The straddling instruction
       
     </span>
   </a>
@@ -6517,19 +6483,23 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-<h1 id="fd16_page_cross-a-fetch-block-crossing-a-page">fd16_page_cross: A Fetch Block Crossing a Page<a class="headerlink" href="#fd16_page_cross-a-fetch-block-crossing-a-page" title="Permanent link">&para;</a></h1>
+<h1 id="fd16_page_cross-a-prediction-block-crossing-a-page">fd16_page_cross: A Prediction Block Crossing a Page<a class="headerlink" href="#fd16_page_cross-a-prediction-block-crossing-a-page" title="Permanent link">&para;</a></h1>
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd16_page_cross</code> is the FD-16 demonstration scenario. It is a demo,
-not a verification test. A jump lands 16 bytes before the end of a
-4 KiB page whose virtual successor is mapped to a non-adjacent physical
-page. The fetch block starting there covers both pages, so the IFU
-translates it twice and requests one line from each physical page; a
-32-bit instruction straddles the boundary. The run passes if a
-translation-queue entry is popped with two translations of different
-PPNs.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd16_page_cross</code> (FD-16) demonstrates a prediction block that crosses a 4 KiB
+page boundary:</p>
+<ol>
+<li>the block is translated twice, once for each page</li>
+<li>the IFU requests one L1I line from each of two non-adjacent physical pages</li>
+<li>a 32-bit instruction straddling the boundary reaches decode whole</li>
+</ol>
+<p>The program jumps to an address 16 bytes before the end of a page whose virtual
+successor is mapped to a non-adjacent physical page. The prediction block that
+starts there covers both pages.</p>
+<p>The result line in the log file reports the number of blocks translated twice.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6564,6 +6534,18 @@ PPNs.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6578,96 +6560,140 @@ PPNs.</p>
 <div class="highlight"><pre><span></span><code>-I: fd16_page_cross : PASS : cyc = 112
 </code></pre></div></p>
 <p>Log file output:
-<div class="highlight"><pre><span></span><code>-I: fd16_page_cross: PASS, blocks translated twice 1, events checked 7 of 7,
+<div class="highlight"><pre><span></span><code>-I: fd16_page_cross: PASS, blocks translated twice 1, events checked 8 of 8,
     cyc 112
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The count comes from <code>tb/fe_demo_mon.svh:535-539</code>, sampled every cycle
-while the stream is being measured (<code>meas</code>).</p>
-<div class="highlight"><pre><span></span><code>n_xq_cross   u_ifu.u_xlate.xq_val &amp;&amp; xq_pop &amp;&amp; xq_cross
-             &amp;&amp; xq_ppn0 != xq_ppn1
-             a translation-queue entry popped with two translations
-             of different physical pages
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:133</code>) is <code>n_xq_cross &gt; 0</code>.
-<code>tb_fe_demo.sv</code> also requires the whole stream to retire with no errors
-before it accepts the proof.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li>The figure is 1: the program has one crossing block, and the run's
-  translation queue shows no other entry popped with <code>xq_cross</code> set.</li>
-<li>The monitor also requires the two PPNs to differ, so the count shows
-  two translations, not one page's result read twice. Here they are
-  0x81000 and 0x81205.</li>
-<li>The program meets FD-16 of <code>planning/showcase/fe_demo_scenarios.md</code>
-  (a block that starts within 32 bytes of a page end); the proof is
-  FD-16's. No departure.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the count in the log line,
+while the expected instruction stream has not fully retired. The program has one
+crossing block, with PPNs 0x81000 and 0x81205.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>blocks translated twice</td>
+<td><code>n_xq_cross</code></td>
+<td><code>u_ifu.u_xlate.xq_val</code>, <code>xq_pop</code> and <code>xq_cross</code>, with <code>xq_ppn0</code> not equal to <code>xq_ppn1</code></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd16_page_cross.svh</code>, task <code>prog_fd16</code>. S-mode under
-satp Sv39 (begin_scen use_sv39 = 1).</p>
-<div class="highlight"><pre><span></span><code>mapping  RESET_VECTOR page to itself
-         b      = 0x8001_0000 -&gt; 0x8100_0000
-         b+4K   = 0x8001_1000 -&gt; 0x8120_5000   not adjacent
-0x8000_0000  mixed(3)
-0x8000_0008  jal x0, b+0xFF0
-b+0xFF0      c.addi a0,1 (7 of them)        0xFF0 to 0xFFD
-b+0xFFE      addi t0,t0,1                   32-bit, bytes 0xFFE-0x1001
-b+0x1002     mixed(8), jal x0,0             halt
+<p>The program is written by the task <code>prog_fd16</code> in
+<code>programs/fd16_page_cross.svh</code>.</p>
+<p>The code consists of a short prologue at the reset vector, a jump to 16 bytes
+before the end of page B, seven 16-bit instructions, a 32-bit instruction that
+straddles the page boundary, and a short epilogue.</p>
+<p>The program runs in S-mode under satp Sv39. The two pages of the crossing block
+are adjacent in virtual addresses but not in physical addresses.</p>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Virtual address</th>
+<th>Physical address</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>reset</td>
+<td>0x8000_0000</td>
+<td>0x8000_0000</td>
+</tr>
+<tr>
+<td>B</td>
+<td>0x8001_0000</td>
+<td>0x8100_0000</td>
+</tr>
+<tr>
+<td>B+1</td>
+<td>0x8001_1000</td>
+<td>0x8120_5000</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+0x8000_0008         jal    x0, S            ; to the crossing block
+
+0x8001_0FF0  S:     c.addi a0, 1            ; 16 bytes before the page end
+0x8001_0FF2         c.addi a0, 1            ; filler
+0x8001_0FF4         c.addi a0, 1            ; filler
+0x8001_0FF6         c.addi a0, 1            ; filler
+0x8001_0FF8         c.addi a0, 1            ; filler
+0x8001_0FFA         c.addi a0, 1            ; filler
+0x8001_0FFC         c.addi a0, 1            ; filler
+0x8001_0FFE  X:     addi   t0, t0, 1        ; straddles the page boundary
+
+0x8001_1002         c.addi a0, 1            ; epilogue
+0x8001_1004         addi   t0, t0, 1        ; epilogue
+0x8001_1008         c.addi a0, 1            ; epilogue
+0x8001_100A         c.addi a0, 1            ; epilogue
+0x8001_100C         addi   t0, t0, 1        ; epilogue
+0x8001_1010         c.addi a0, 1            ; epilogue
+0x8001_1012         c.addi a0, 1            ; epilogue
+0x8001_1014         addi   t0, t0, 1        ; epilogue
+0x8001_1018  hold:  jal    x0, hold         ; termination
 </code></pre></div>
-<ul>
-<li><code>map4k</code> (<code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh:142</code>)
-  writes each Sv39 leaf and records the VA page in <code>vmap</code>, which
-  <code>put_hw</code> uses to place each halfword at its physical address, so the
-  32-bit instruction's two halfwords are written to different physical
-  pages (0x8100_0FFE and 0x8120_5000).</li>
-<li>The jump target is 16 bytes before the page end; FD-16 asks for a
-  block starting within 32 bytes of it.</li>
-</ul>
+<p>The two halfwords of the instruction at X are in different physical pages, at
+0x8100_0FFE and 0x8120_5000.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work, other than the
+instruction at X. Their purpose is to mix 16-bit and 32-bit instructions and to
+place X on the page boundary.</p>
+<p>The run has no accepted p2 slot groups, because no block repeats and the FTB
+therefore never hits.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>The block crosses. <code>ifu_xlate</code> marks a block as crossing when its
-   start PC's page offset is at least <code>CROSS_FROM</code> 0xFE0, 32 bytes
-   from the end (<code>rtl/core/frontend/ifu/rtl/ifu_xlate.sv:144</code>,
-   <code>:281</code>), and then needs two lookups (<code>r_need</code>, <code>:407</code>); the queue
-   entry keeps both pages' results (<code>:306-308</code>); the page-1 fields
-   are meaningful only for a crossing block (<code>:33-34</code>).</li>
-<li>Two ITLB lookups and two walks. In the run (cyc is <code>tb.cyc</code>,
-   <code>fe_tb_dut.svh:129</code>) the ITLB lookups (<code>ifu_itlb_vpn</code>) go from VPN
-   0x80010 to 0x80011, and both miss: walks for VPN 0x80010 at cyc
-   46 and VPN 0x80011 at cyc 70.</li>
-<li>The queue entry. At cyc 94 the entry for the block at
-   0x8001_0FF0 is popped with <code>xq_cross</code> 1, <code>xq_ppn0</code> 0x81000 and
-   <code>xq_ppn1</code> 0x81205.</li>
-<li>Two lines from two pages. A block starting in the upper half of a
-   line needs a second line (IFU-7), and for a crossing block that line
-   is the second page's first line (IFU-25,
-   <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:283-284</code>). The L1I requests
-   are 0x8100_0FC0 (cyc 93) and 0x8120_5000 (cyc 94).</li>
-</ol>
-<p>The backend compares every retired instruction with the expected
-stream, so the 32-bit instruction at b+0xFFE retired with its expected
-encoding.</p>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd16_page_cross.sucl</code>, which <code>make view
-S=fd16_page_cross</code> opens in Surfer. Groups: clock, ftq_ifu, ifu_xlate,
-itlb, ifu_l1i, decode. Look at:</p>
-<ul>
-<li><code>ftq_ifu_start_pc</code> 0x8001_0FF0: the crossing block.</li>
-<li><code>ifu_itlb_req_val</code> with <code>ifu_itlb_vpn</code> 0x80010 then 0x80011: the two
-  lookups.</li>
-<li>cyc 94: <code>xq_pop</code> with <code>xq_cross</code> 1, <code>xq_ppn0</code> 0x81000 and <code>xq_ppn1</code>
-  0x81205.</li>
-<li><code>ifu_l1i_req_paddr</code> 0x8100_0FC0 then 0x8120_5000.</li>
-<li>In the itlb group the encoded fields are shown as numbers (DOC-006):
-  <code>itlb_ifu_status</code> (<code>planning/interfaces/itlb_ifu_interfaces.md</code>
-  IT-4) is 0 hit, 1 miss (a walk has started), 2 fault, 3 reserved;
-  <code>itlb_ifu_cause</code> (IT-6), valid with a fault, is 1 instruction access
-  fault, 12 instruction page fault, 20 instruction guest-page fault.</li>
-</ul>
+<p>The walkthrough follows the crossing block. Section 4.1 describes its two
+translations, section 4.2 its two line requests, and section 4.3 the instruction
+that straddles the boundary.
+<a href="../fd14_translation/#4-walkthrough">fd14_translation</a> section 4 defines the
+RISC-V translation terms.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>ifu_xlate</code> contains the translation queue, <code>itlb</code> the
+lookups, <code>ifu_l1i</code> the line requests, and <code>decode</code> lanes 0 and 7 at decode.</p>
+<p>The figure below shows the block's layout.</p>
+<p><a href="../fd16_blocks.svg"><img alt="fd16 the crossing block in virtual and physical addresses" src="../fd16_blocks.svg" /></a></p>
+<h3 id="41-two-translations">4.1 Two translations<a class="headerlink" href="#41-two-translations" title="Permanent link">&para;</a></h3>
+<p><code>ifu_xlate</code> marks a block as crossing when its start address has a page offset
+of at least 0xFE0, 32 bytes from the end of the page, and then requires two
+lookups.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> The block at 0x8001_0FF0 has page offset 0xFF0. Both lookups miss
+the ITLB, so each page is walked, from cyc 46 (event 1) and cyc 70 (event 2).
+The queue entry holds both results.</p>
+<p>At cyc 46 (event 1), <code>tb.itlb_l2t_req_val</code> and <code>tb.itlb_l2t_req_rdy</code> are
+asserted with <code>tb.itlb_l2t_vpn</code> 0x80010, and the walk answers <code>tb.l2t_itlb_ppn</code>
+0x81000 at cyc 67. At cyc 70 (event 2), <code>tb.itlb_l2t_vpn</code> is 0x80011, and the
+walk answers <code>tb.l2t_itlb_ppn</code> 0x81205 at cyc 91.</p>
+<p>At cyc 94 (event 4), <code>u_ifu.u_xlate.xq_val</code> and <code>u_ifu.u_xlate.xq_pop</code> are
+asserted with <code>u_ifu.u_xlate.xq_pc</code> 0x8001_0FF0, <code>u_ifu.u_xlate.xq_cross</code> 1,
+<code>u_ifu.u_xlate.xq_ppn0</code> 0x81000 and <code>u_ifu.u_xlate.xq_ppn1</code> 0x81205.</p>
+<h3 id="42-two-line-requests">4.2 Two line requests<a class="headerlink" href="#42-two-line-requests" title="Permanent link">&para;</a></h3>
+<p>A block that starts in the upper half of a line requires a second line. For a
+crossing block, that line is the first line of the second page.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p>At cyc 93 (event 3), <code>ifu_l1i_req_val</code> and <code>ifu_l1i_req_rdy</code> are asserted with
+<code>ifu_l1i_req_paddr</code> 0x8100_0FC0. At cyc 94 (event 4), <code>ifu_l1i_req_paddr</code> is
+0x8120_5000.</p>
+<h3 id="43-the-straddling-instruction">4.3 The straddling instruction<a class="headerlink" href="#43-the-straddling-instruction" title="Permanent link">&para;</a></h3>
+<p>The instruction at X has its first halfword in the first line and its second
+halfword in the second line. Both lines miss in the L1I, so it cannot be
+assembled until the second line returns, at cyc 107 (event 5). Decode receives
+it whole at cyc 109 (event 6), as the last of the eight instructions of that
+bundle.</p>
+<p>At cyc 105, <code>l1i_ifu_rsp_val</code> is asserted with <code>l1i_ifu_rsp_id</code> 0, the first
+line. At cyc 107 (event 5), <code>l1i_ifu_rsp_val</code> is asserted with <code>l1i_ifu_rsp_id</code>
+1, the second line.</p>
+<p>At cyc 109 (event 6), <code>tb.pd_out.[7].valid</code> is asserted with
+<code>tb.pd_out.[7].start_pc</code> 0x8001_0FFE, <code>tb.pd_out.[7].pos</code> 7,
+<code>tb.pd_out.[7].instr</code> 0x0012_8293 and <code>tb.pd_out.[7].is_rvc</code> 0. At cyc 110,
+<code>tb.pd_out.[0].start_pc</code> is 0x8001_1002, the next instruction.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6690,13 +6716,13 @@ itlb, ifu_l1i, decode. Look at:</p>
 <td>1</td>
 <td>46</td>
 <td>walk for VPN 0x80010, the first page of the crossing block</td>
-<td></td>
+<td>answers at cyc 67</td>
 </tr>
 <tr>
 <td>2</td>
 <td>70</td>
 <td>walk for VPN 0x80011, the second page</td>
-<td></td>
+<td>answers at cyc 91</td>
 </tr>
 <tr>
 <td>3</td>
@@ -6707,17 +6733,23 @@ itlb, ifu_l1i, decode. Look at:</p>
 <tr>
 <td>4</td>
 <td>94</td>
-<td>the translation queue entry of the block at 0x8001_0FF0 popped with two translations: <code>xq_cross</code> 1, PPN 0x81000 and 0x81205</td>
-<td>counted</td>
-</tr>
-<tr>
-<td>5</td>
-<td>94</td>
-<td>L1I request for 0x8120_5000, the second page's first line</td>
+<td>the translation queue entry of the block at 0x8001_0FF0 popped with two translations: <code>xq_cross</code> 1, PPN 0x81000 and 0x81205; L1I request for 0x8120_5000</td>
 <td>second page</td>
 </tr>
 <tr>
+<td>5</td>
+<td>107</td>
+<td>the second line returns (<code>l1i_ifu_rsp_id</code> 1), from 0x8120_5000</td>
+<td>first at cyc 105</td>
+</tr>
+<tr>
 <td>6</td>
+<td>109</td>
+<td>the straddling instruction reaches decode: lane 7 at 0x8001_0FFE, a whole 32-bit addi</td>
+<td><code>tb.pd_out.[7]</code></td>
+</tr>
+<tr>
+<td>7</td>
 <td>112</td>
 <td>the run ends</td>
 <td></td>
@@ -6841,12 +6873,12 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>u_ifu.u_xlate.xq_fault0</code></td>
-<td>the first page faulted</td>
+<td>fault of the first page</td>
 </tr>
 <tr>
 <td></td>
 <td><code>u_ifu.u_xlate.xq_fault1</code></td>
-<td>the second page faulted</td>
+<td>fault of the second page</td>
 </tr>
 <tr>
 <td></td>
@@ -6968,6 +7000,31 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>tb.pd_out.[0].fault_va</code></td>
 <td>lane 0 fetch fault virtual address</td>
 </tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[7].valid</code></td>
+<td>lane 7 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[7].start_pc</code></td>
+<td>lane 7 instruction address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[7].pos</code></td>
+<td>lane 7 halfword position in the fetch block</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[7].instr</code></td>
+<td>lane 7 instruction, expanded if compressed</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[7].is_rvc</code></td>
+<td>lane 7 instruction is 16-bit</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6975,7 +7032,19 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd16_page_cross</code> runs the scenario; <code>make view S=fd16_page_cross</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd16_page_cross.svh</code>, <code>waves/fd16_page_cross.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd16_page_cross.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd16_page_cross.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>CROSS_FROM</code>: <code>rtl/core/frontend/ifu/rtl/ifu_xlate.sv:144</code>.
+<code>w_new_cross</code>: <code>:281</code>. <code>r_need</code>: <code>:407</code>. The queue entry: <code>:306-308</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>w_line1</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:283-284</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

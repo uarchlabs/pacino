@@ -2571,34 +2571,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2625,10 +2597,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-uncached-marking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Uncached marking
       
     </span>
   </a>
@@ -2636,10 +2608,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-one-instruction-at-a-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 One instruction at a time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-requests-by-instruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Requests by instruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-control-transfers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Control transfers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-no-l1i-fills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 No L1I fills
       
     </span>
   </a>
@@ -6395,34 +6400,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6449,10 +6426,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-uncached-marking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Uncached marking
       
     </span>
   </a>
@@ -6460,10 +6437,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-one-instruction-at-a-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 One instruction at a time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-requests-by-instruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Requests by instruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-control-transfers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Control transfers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-no-l1i-fills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 No L1I fills
       
     </span>
   </a>
@@ -6521,15 +6531,17 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd18_uncached</code> is the FD-18 demonstration scenario. It is a demo, not
-a verification test. Code runs from a page whose Sv39 leaf has PBMT NC,
-then from one whose leaf has PBMT IO (DOC-003). The IFU fetches each one
-instruction per FTQ entry, each block only after every older entry has
-committed, with uncached L1I requests that are answered from memory and
-never written into the array. The run passes if the L1I takes uncached
-requests from each page and no line of either page is filled into the
-L1I.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd18_uncached</code> (FD-18) demonstrates fetch from uncached pages:</p>
+<ol>
+<li>the IFU fetches one instruction per FTQ entry</li>
+<li>each entry is fetched only after every older entry has committed</li>
+<li>the L1I answers uncached requests from memory and does not fill the lines</li>
+</ol>
+<p>The program runs from a page with PBMT NC, then from a page with PBMT IO.</p>
+<p>The result line in the log file reports the uncached requests from each page and
+the number of uncached lines filled.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6564,6 +6576,18 @@ L1I.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd18_uncached.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6579,144 +6603,289 @@ L1I.</p>
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd18_uncached: PASS, uncached requests from the NC page 28,
-    from the IO page 10, uncached lines filled 0, events checked 8 of 8, cyc 797
+    from the IO page 10, uncached lines filled 0, events checked 11 of 11,
+    cyc 797
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The counts come from <code>tb/fe_demo_mon.svh:540-554</code>, sampled every cycle
-while <code>meas</code> is set.</p>
-<div class="highlight"><pre><span></span><code>n_uc_req_nc  ifu_l1i_req_val &amp;&amp; ifu_l1i_req_rdy &amp;&amp; ifu_l1i_req_uncached,
-             with the request's PA page not in io_ppn
-             an uncached request the L1I took from the NC page (one per
-             line requested)
-n_uc_req_io  the same, with the PA page in io_ppn: from the IO page
-n_uc_alloc   per bank b: u_l1i.u_mshr.b_fil_valid[b] and the filled
-             line's PA page is in W.uc_ppn
-             a line of an uncached page written into the array
-</code></pre></div>
-<p><code>n_uc_alloc</code> sums the two banks of a cycle into <code>n_ucal</code> and adds the
-sum once (DOC-002; it counted a cycle with both banks once before). It
-is 0 in this run either way.</p>
-<p>The proof (<code>tb/fe_demo_proofs.svh:144</code>) is
-<code>n_uc_req_nc &gt; 0 &amp;&amp; n_uc_req_io &gt; 0 &amp;&amp; n_uc_alloc == 0</code>.
-<code>tb_fe_demo.sv</code> also requires the whole stream to retire with no
-errors.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>uncached requests from the NC page 28</code> counts lines requested, not
-  instructions. From the run (fst2vcd on
-  <code>out/fd18_uncached/fd18_uncached.fst</code>, requests with
-  <code>ifu_l1i_req_uncached</code> taken):</li>
-<li>14 for the 9 instructions at u+0x10..u+0x2E: the 4 in the lower
-    half of the line request PA 0x8120_3000 alone; the 5 in the upper
-    half (u+0x22 onward) request 0x8120_3000 and 0x8120_3040 in
-    consecutive cycles (IFU-7);</li>
-<li>11 for the 12 instructions at u+0x200..u+0x210 (line
-    0x8120_3200). Which instruction was served without a request of
-    its own was not traced;</li>
-<li>3 for the 3 instructions at u+0x400 (line 0x8120_3400).</li>
-<li><code>from the IO page 10</code>: the 7 instructions at io+0x10..io+0x28. The 4
-  in the lower half of the line request PA 0x8120_4000 alone; the 3 in
-  the upper half (io+0x22 onward) request 0x8120_4000 and 0x8120_4040
-  (IFU-7). The first is at cyc 647.</li>
-<li>The requests are about 19 to 25 cycles apart (cycles 111, 130, 149,
-  168, ... in the run): each waits at F0 for the previous entry to
-  commit.</li>
-<li><code>uncached lines filled 0</code> is the proof's last term: no fill of a line
-  of PA page 0x81203 or 0x81204.</li>
-<li>FD-18 of <code>planning/showcase/fe_demo_scenarios.md</code> covers NC and IO
-  (DOC-003); the program runs both. The commit gate FD-18's waveform
-  names is <code>w_uc_gate</code>, in the <code>ifu_fetch</code> group with <code>xq_uc</code>.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line. A request is counted per line requested, not per instruction.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>requests from the NC page</td>
+<td><code>n_uc_req_nc</code></td>
+<td><code>ifu_l1i_req_val</code>, <code>ifu_l1i_req_rdy</code> and <code>ifu_l1i_req_uncached</code>, not on PA page 0x81204</td>
+</tr>
+<tr>
+<td>requests from the IO page</td>
+<td><code>n_uc_req_io</code></td>
+<td>the same, on PA page 0x81204</td>
+</tr>
+<tr>
+<td>uncached lines filled</td>
+<td><code>n_uc_alloc</code></td>
+<td><code>u_l1i.u_mshr.b_fil_valid</code> for a line on PA page 0x81203 or 0x81204</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd18_uncached.svh</code>, task <code>prog_fd18</code>, ported from
-tb_fe_top's <code>uc_nc</code>. S-mode under satp Sv39. The pages
-(<code>map4k</code>, and <code>map4k_pbmt</code> at
-<code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh:770</code>):</p>
-<div class="highlight"><pre><span></span><code>RESET_VECTOR 0x8000_0000 -&gt; PA 0x8000_0000   cacheable
-c            0x8001_0000 -&gt; PA 0x8100_0000   cacheable
-u            0x8001_1000 -&gt; PA 0x8120_3000   PBMT 1 (NC)
-io           0x8001_2000 -&gt; PA 0x8120_4000   PBMT 2 (IO)
+<p>The program is written by the task <code>prog_fd18</code> in <code>programs/fd18_uncached.svh</code>.</p>
+<p>The code consists of a short prologue, a cacheable page that jumps to the NC
+page, code on the NC page with branches, a loop and a function call, and code on
+the IO page with a taken branch.</p>
+<p>The program runs in S-mode under satp Sv39.</p>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Virtual address</th>
+<th>Physical address</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>reset</td>
+<td>0x8000_0000</td>
+<td>0x8000_0000</td>
+<td>cacheable</td>
+</tr>
+<tr>
+<td>c</td>
+<td>0x8001_0000</td>
+<td>0x8100_0000</td>
+<td>cacheable</td>
+</tr>
+<tr>
+<td>u</td>
+<td>0x8001_1000</td>
+<td>0x8120_3000</td>
+<td>PBMT 1, NC</td>
+</tr>
+<tr>
+<td>io</td>
+<td>0x8001_2000</td>
+<td>0x8120_4000</td>
+<td>PBMT 2, IO</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+0x8000_0008         jal    x0, C            ; to page c
+
+0x8001_0000  C:     c.addi a0, 1            ; filler
+0x8001_0002         addi   t0, t0, 1        ; filler
+0x8001_0006         c.addi a0, 1            ; filler
+0x8001_0008         c.addi a0, 1            ; filler
+0x8001_000A         jal    x0, U            ; to page u
+
+0x8001_1010  U:     c.addi a0, 1            ; filler
+0x8001_1012         addi   t0, t0, 1        ; filler
+0x8001_1016         c.addi a0, 1            ; filler
+0x8001_1018         bne    x6, x0, V        ; taken
+0x8001_1022  V:     c.addi a0, 1            ; filler
+0x8001_1024         addi   t0, t0, 1        ; filler
+0x8001_1028         bne    x6, x0, W        ; not taken
+0x8001_102C         c.addi a0, 1            ; filler
+0x8001_102E  W:     jal    x0, L            ; to the loop
+
+0x8001_1200  L:     c.addi a0, 1            ; loop body
+0x8001_1202         addi   t0, t0, 1        ; loop body
+0x8001_1206         bne    x6, x0, L        ; three passes
+0x8001_120A         c.addi a0, 1            ; filler
+0x8001_120C         addi   t0, t0, 1        ; filler
+0x8001_1210         jal    x0, D            ; to page c
+
+0x8001_0200  D:     c.addi a0, 1            ; filler
+0x8001_0202         addi   t0, t0, 1        ; filler
+0x8001_0206         c.addi a0, 1            ; filler
+0x8001_0208         jal    x1, fn           ; call on page u
+0x8001_020C         c.addi a0, 1            ; return address
+0x8001_020E         addi   t0, t0, 1        ; filler
+0x8001_0212         jal    x0, I            ; to page io
+
+0x8001_2010  I:     c.addi a0, 1            ; filler
+0x8001_2012         addi   t0, t0, 1        ; filler
+0x8001_2016         c.addi a0, 1            ; filler
+0x8001_2018         bne    x6, x0, J        ; taken
+0x8001_2022  J:     c.addi a0, 1            ; filler
+0x8001_2024         addi   t0, t0, 1        ; filler
+0x8001_2028         jal    x0, E            ; to page c
+
+0x8001_0300  E:     c.addi a0, 1            ; epilogue
+0x8001_0302         addi   t0, t0, 1        ; epilogue
+0x8001_0306  hold:  jal    x0, hold         ; termination
+
+0x8001_1400  fn:    c.addi a0, 1            ; function body
+0x8001_1402         addi   t0, t0, 1        ; function body
+0x8001_1406         ret                     ; return to 0x8001_020C
 </code></pre></div>
-<div class="highlight"><pre><span></span><code>RESET  mixed(3); jal x0, c
-c      mixed(4); jal x0, u+0x10
-u+0x10 mixed(3)                   +0x10 +0x12 +0x16
-u+0x18 bne (cskip, taken)         to +0x22; +0x1C..+0x21 written dry
-u+0x22 mixed(2)                   +0x22 +0x24
-u+0x28 bne (cskip, not taken)
-u+0x2C c.addi
-u+0x2E jal x0, u+0x200
-u+0x200 mixed(2); bne x6 at +0x206 back to +0x200, 3 iterations
-u+0x20A mixed(2); jal x0, c+0x200 at +0x210
-c+0x200 mixed(3); jal x1, u+0x400 at c+0x208 (link c+0x20C)
-u+0x400 mixed(2); ret at +0x406
-c+0x20C mixed(2); jal x0, io+0x10 at c+0x212
-io+0x10 mixed(3)                  +0x10 +0x12 +0x16
-io+0x18 bne (cskip, taken)        to +0x22; +0x1C..+0x21 written dry
-io+0x22 mixed(2); jal x0, c+0x300 at io+0x28
-c+0x300 mixed(2), then jal x0,0 (halt)
-</code></pre></div>
-<ul>
-<li>24 instructions execute on page u (derived from the source): 9 at
-  u+0x10..u+0x2E, 12 at u+0x200..u+0x210, 3 at u+0x400..u+0x406. 7
-  execute on page io, at io+0x10..io+0x28.</li>
-<li>The program records the IO page's PPN in <code>io_ppn</code>
-  (<code>tb/fe_demo_mon.svh</code> line 160), which the monitor uses to split the
-  uncached requests between the two pages.</li>
-<li><code>map4k_pbmt</code> with a non-zero PBMT also records the PA and VA pages in
-  <code>uc_ppn</code> and <code>uc_vpn</code> (<code>fe_tb_writer.svh:774-776</code>), which the
-  monitor reads.</li>
-<li>The program sets the backend's eager mode (<code>eager = 1'b1</code>,
-  <code>programs/fd18_uncached.svh:31</code>). With nothing presented, the backend
-  then resolves a branch that ended its block against the block the
-  FTQ fetched after it, and commits the entry of the last retired
-  instruction (<code>rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:162-191</code>).</li>
-</ul>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the control transfers.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. x6 is never
+read.</p>
+<p>The modeled backend runs in eager mode for this program. It commits the entry of
+the last retired instruction without waiting for the next instruction, because
+the next instruction waits for that commit.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Uncached marking. On an ITLB hit the IFU translation queue marks
-   the page uncached when its effective attributes are not both
-   cacheable and idempotent (<code>rtl/core/frontend/ifu/rtl/ifu_xlate.sv:226</code>).
-   The ITLB passes the leaf's PBMT to the PMA check
-   (<code>rtl/mmu/itlb/rtl/itlb.sv:420</code>, <code>:435</code>); NC is not cacheable, and IO
-   is neither cacheable nor idempotent.
-   <code>xq_uc</code> carries the mark (<code>ifu_xlate.sv:324</code>).</li>
-<li>The commit gate. F0 does not match an uncached block until
-   <code>commit_ptr</code> equals its FTQ index (<code>w_uc_gate</code>,
-   <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:278</code>, IFU-22). Its requests
-   carry <code>ifu_l1i_req_uncached</code> (<code>ifu_fetch.sv:316</code>).</li>
-<li>One instruction per entry. F3 delivers only the block's first valid
-   instruction; when more would follow (<code>w_uc_cut</code>), it ends the block
-   there with <code>mis_val</code> and <code>ifu_ftq_uc_end</code>, so the FTQ redirects to
-   the next sequential instruction, a new entry
-   (<code>rtl/core/frontend/ifu/rtl/ifu_f3.sv:368-373</code>, the writeback at
-   lines 421 to 431; the rule is described at <code>ifu_f3.sv:94-114</code>). A
-   JALR is delivered alone with no redirect.</li>
-<li>No allocation. An uncached lookup is a miss whatever the tags hold
-   (<code>rtl/core/frontend/icache/rtl/l1i_ctrl.sv:229-230</code>, L1I-24). A free
-   MSHR register taken by an uncached request is marked not to
-   allocate (<code>e_alloc &lt;= !req_uncached</code>,
-   <code>rtl/core/frontend/icache/rtl/l1i_mshr.sv:486</code>), and a fill is
-   installed only when <code>fil_alloc</code> is set (<code>l1i_mshr.sv:350-360</code>).</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd18_uncached.sucl</code>, which <code>make view
-S=fd18_uncached</code> opens in Surfer. Look at:</p>
-<ul>
-<li><code>u_xlate.xq_uc</code> set for the blocks on the two uncached pages, and the
-  commit gate <code>u_fetch.w_uc_gate</code> opening for each block.</li>
-<li><code>ftq_ifu_commit_ptr</code> reaching each uncached block's <code>ftq_ifu_idx</code>
-  before its <code>ifu_l1i_req_val</code> with <code>ifu_l1i_req_uncached</code>.</li>
-<li>each uncached block closing after one instruction, and the next block
-  starting at the next instruction (<code>ftq_ifu_start_pc</code>). The writeback
-  that closes it, <code>ifu_ftq_mis_val</code>, is not in this command file;
-  <code>waves/fd10_pd_redirect.sucl</code> shows it.</li>
-<li>In the l1i group: <code>b_mis_valid</code> for each uncached request, an MSHR
-  <code>e_val</code>, <code>l1i_mem_a_valid</code> and <code>l1i_mem_d_valid</code>, and no
-  <code>b_fil_valid</code> for the 0x8120_3xxx or 0x8120_4xxx lines.</li>
-</ul>
+<p>The walkthrough follows an uncached instruction through fetch. Section 4.1
+describes how a page is marked uncached, section 4.2 the fetch of one
+instruction, section 4.3 the requests by instruction, section 4.4 the control
+transfers, and section 4.5 the absence of L1I fills.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>ifu_xlate</code> contains the translation queue and the page
+attributes, <code>ifu_f3</code> the end of each block, <code>ifu_fetch</code> the commit gate,
+<code>ifu_l1i</code> the requests, <code>l1i</code> the L1I and its memory requests, <code>backend</code> the
+commits and the redirects, and <code>decode</code> lane 0 at decode.</p>
+<h3 id="41-uncached-marking">4.1 Uncached marking<a class="headerlink" href="#41-uncached-marking" title="Permanent link">&para;</a></h3>
+<p>On an ITLB hit, the translation queue marks a block uncached when its page is
+not both cacheable and idempotent.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> PBMT NC clears the cacheable attribute,
+and PBMT IO clears both.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p><code>itlb_ifu_pma</code> bit 0 is the cacheable attribute and bit 3 the idempotent
+attribute. It is 1111 for the cacheable page c at cyc 68, 1110 for the NC page
+at cyc 110, and 0110 for the IO page at cyc 646.</p>
+<h3 id="42-one-instruction-at-a-time">4.2 One instruction at a time<a class="headerlink" href="#42-one-instruction-at-a-time" title="Permanent link">&para;</a></h3>
+<p>The IFU does not start an uncached block until <code>ftq_ifu_commit_ptr</code> equals its
+FTQ index.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> F3 then delivers only the first instruction of the block and ends
+the block there, so the FTQ redirects to the next instruction, which is a new
+entry.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup></p>
+<p>The table shows the instruction at 0x8001_1010, the first on the NC page.</p>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Reading</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>111</td>
+<td>1</td>
+<td><code>ifu_l1i_req_val</code> and <code>ifu_l1i_req_uncached</code> asserted, <code>ifu_l1i_req_paddr</code> 0x8120_3000</td>
+</tr>
+<tr>
+<td>112</td>
+<td></td>
+<td><code>u_l1i.b_mis_valid.[0]</code> asserted</td>
+</tr>
+<tr>
+<td>113</td>
+<td></td>
+<td><code>tb.l1i_mem_a_valid</code> asserted, <code>tb.l1i_mem_a_address</code> 0x8120_3000</td>
+</tr>
+<tr>
+<td>121</td>
+<td></td>
+<td><code>tb.l1i_mem_d_valid</code> asserted, also at cyc 122</td>
+</tr>
+<tr>
+<td>123</td>
+<td></td>
+<td><code>l1i_ifu_rsp_val</code> asserted</td>
+</tr>
+<tr>
+<td>125</td>
+<td></td>
+<td><code>tb.pd_out.[0].start_pc</code> 0x8001_1010</td>
+</tr>
+<tr>
+<td>126</td>
+<td>2</td>
+<td><code>ifu_ftq_uc_end</code> and <code>ifu_ftq_mis_val</code> asserted, <code>u_ftq.w_pd_redir_pc</code> 0x8001_1012</td>
+</tr>
+<tr>
+<td>128</td>
+<td></td>
+<td><code>tb.bkend_ftq_commit_idx</code> 2</td>
+</tr>
+<tr>
+<td>129</td>
+<td>3</td>
+<td><code>ftq_ifu_commit_ptr</code> 3, <code>u_ifu.u_fetch.w_uc_gate</code> asserted, <code>ftq_ifu_start_pc</code> 0x8001_1012</td>
+</tr>
+<tr>
+<td>130</td>
+<td></td>
+<td>the next request, <code>ifu_l1i_req_paddr</code> 0x8120_3000</td>
+</tr>
+</tbody>
+</table>
+<p>The next instruction therefore starts 19 cycles after the previous one. The IO
+page behaves the same way: requests at cyc 647 (event 8) and 666.</p>
+<h3 id="43-requests-by-instruction">4.3 Requests by instruction<a class="headerlink" href="#43-requests-by-instruction" title="Permanent link">&para;</a></h3>
+<p>An instruction in the lower half of a line requests that line alone. An
+instruction in the upper half also requests the next line.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup> At cyc 193,
+<code>ifu_l1i_req_paddr</code> is 0x8120_3000 with <code>ifu_l1i_req_id</code> 0, and at cyc 194 it is
+0x8120_3040 with <code>ifu_l1i_req_id</code> 1, for the instruction at 0x8001_1022.</p>
+<p>The 28 requests from the NC page are for 24 instructions:</p>
+<table>
+<thead>
+<tr>
+<th>Addresses</th>
+<th>Instructions</th>
+<th>Requests</th>
+<th>First</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x8001_1010 to 0x8001_102E</td>
+<td>9</td>
+<td>14</td>
+<td>cyc 111 (event 1)</td>
+</tr>
+<tr>
+<td>0x8001_1200 to 0x8001_1210</td>
+<td>12</td>
+<td>11</td>
+<td>cyc 306 (event 4)</td>
+</tr>
+<tr>
+<td>0x8001_1400 to 0x8001_1406</td>
+<td>3</td>
+<td>3</td>
+<td>cyc 555 (event 6)</td>
+</tr>
+</tbody>
+</table>
+<p>The 10 requests from the IO page are for 7 instructions, the last at cyc 772
+(event 9).</p>
+<p>The loop has one instruction with no request. On the third pass, the block at
+0x8001_1200 follows the predicted-taken <code>bne</code> with no redirect, and the previous
+request was for the same line. At cyc 427 (event 5), <code>u_ifu.u_fetch.w_reuse0</code> is
+asserted with no <code>ifu_l1i_req_val</code>, and <code>tb.pd_out.[0].start_pc</code> is 0x8001_1200
+at cyc 429.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup></p>
+<h3 id="44-control-transfers">4.4 Control transfers<a class="headerlink" href="#44-control-transfers" title="Permanent link">&para;</a></h3>
+<p>A conditional branch ends its block like any other instruction, at the
+sequential address. At cyc 183, <code>u_ftq.w_pd_redir_pc</code> is 0x8001_101C for the
+<code>bne</code> at 0x8001_1018. The backend then corrects the path, with
+<code>tb.bkend_ftq_redir_pc</code> 0x8001_1022 at cyc 189.</p>
+<p>A <code>jal</code> redirects at predecode to its target. At cyc 298, <code>ifu_ftq_mis_val</code> is
+asserted without <code>ifu_ftq_uc_end</code>, and <code>u_ftq.w_pd_redir_pc</code> is 0x8001_1200.</p>
+<p>A <code>ret</code> is delivered alone with no predecode redirect, because only the backend
+knows its target. At cyc 608 (event 7), <code>ifu_ftq_pdwb_val</code> is asserted with
+<code>ifu_ftq_mis_val</code> and <code>ifu_ftq_uc_end</code> clear, and <code>tb.bkend_ftq_redir_pc</code> is
+0x8001_020C at cyc 611.</p>
+<h3 id="45-no-l1i-fills">4.5 No L1I fills<a class="headerlink" href="#45-no-l1i-fills" title="Permanent link">&para;</a></h3>
+<p>An uncached access is a miss whatever the tags hold, and the MSHR register it
+takes is marked not to allocate.<sup id="fnref:7"><a class="footnote-ref" href="#fn:7">7</a></sup> At cyc 316 and 317, <code>tb.l1i_mem_d_valid</code> is
+asserted for the line at 0x8120_3200 with <code>u_l1i.u_mshr.b_fil_valid</code> clear.
+Fills in this run are for the cacheable pages, for example from cyc 38 for the
+reset page.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6749,30 +6918,48 @@ S=fd18_uncached</code> opens in Surfer. Look at:</p>
 </tr>
 <tr>
 <td>3</td>
-<td>306</td>
-<td>first request for 0x8120_3200, the loop at u+0x200</td>
-<td>NC page</td>
+<td>129</td>
+<td>the commit gate opens for the next block: <code>ftq_ifu_commit_ptr</code> 3</td>
+<td>commit at cyc 128</td>
 </tr>
 <tr>
 <td>4</td>
-<td>555</td>
-<td>first request for 0x8120_3400, the function at u+0x400</td>
+<td>306</td>
+<td>first request for 0x8120_3200, the loop at 0x8001_1200</td>
 <td>NC page</td>
 </tr>
 <tr>
 <td>5</td>
+<td>427</td>
+<td>third pass of the loop: a block with no new request, reusing the line</td>
+<td>decode at cyc 429</td>
+</tr>
+<tr>
+<td>6</td>
+<td>555</td>
+<td>first request for 0x8120_3400, the function at 0x8001_1400</td>
+<td>NC page</td>
+</tr>
+<tr>
+<td>7</td>
+<td>608</td>
+<td>the <code>ret</code> writes back with no predecode redirect</td>
+<td>redirect at cyc 611</td>
+</tr>
+<tr>
+<td>8</td>
 <td>647</td>
 <td>first uncached request from the IO page, line 0x8120_4000</td>
 <td>IO page</td>
 </tr>
 <tr>
-<td>6</td>
+<td>9</td>
 <td>772</td>
 <td>last uncached request</td>
 <td>the 38th</td>
 </tr>
 <tr>
-<td>7</td>
+<td>10</td>
 <td>797</td>
 <td>the run ends</td>
 <td></td>
@@ -6896,17 +7083,67 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>u_ifu.u_xlate.xq_fault0</code></td>
-<td>the first page faulted</td>
+<td>fault of the first page</td>
 </tr>
 <tr>
 <td></td>
 <td><code>u_ifu.u_xlate.xq_fault1</code></td>
-<td>the second page faulted</td>
+<td>fault of the second page</td>
 </tr>
 <tr>
 <td></td>
 <td><code>u_ifu.u_xlate.xq_uc</code></td>
 <td>the page is uncached</td>
+</tr>
+<tr>
+<td></td>
+<td><code>itlb_ifu_rsp_val</code></td>
+<td>ITLB response</td>
+</tr>
+<tr>
+<td></td>
+<td><code>itlb_ifu_ppn</code></td>
+<td>physical page number of the response</td>
+</tr>
+<tr>
+<td></td>
+<td><code>itlb_ifu_pma</code></td>
+<td>page attributes of the response</td>
+</tr>
+<tr>
+<td>ifu_f3</td>
+<td><code>ifu_ftq_pdwb_val</code></td>
+<td>predecode writeback to the FTQ</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ifu_ftq_pdwb_idx</code></td>
+<td>FTQ index of the writeback</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ifu_ftq_mis_val</code></td>
+<td>the writeback reports a mispredict position</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ifu_ftq_mis_pos</code></td>
+<td>the mispredict position</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ifu_ftq_uc_end</code></td>
+<td>F3 ends the uncached block</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_val</code></td>
+<td>predecode redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_pc</code></td>
+<td>predecode redirect PC</td>
 </tr>
 <tr>
 <td>ifu_fetch</td>
@@ -6917,6 +7154,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td></td>
 <td><code>u_ifu.u_fetch.w_uc_gate</code></td>
 <td>the commit gate on an uncached block</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ifu.u_fetch.w_reuse0</code></td>
+<td>the block reuses the previous line</td>
 </tr>
 <tr>
 <td>ifu_l1i</td>
@@ -7145,7 +7387,36 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd18_uncached</code> runs the scenario; <code>make view S=fd18_uncached</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd18_uncached.svh</code>, <code>waves/fd18_uncached.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd18_uncached.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd18_uncached.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>w_rsp_res.uc</code>: <code>rtl/core/frontend/ifu/rtl/ifu_xlate.sv:226</code>. <code>xq_uc</code>:
+<code>:324</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>rtl/mmu/pmp/rtl/pmp_pma_chk.sv:234-235</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>w_uc_gate</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:278</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>w_uc_cut</code>, <code>w_uc_end</code>: <code>rtl/core/frontend/ifu/rtl/ifu_f3.sv:368-373</code>. The
+writeback: <code>:421-431</code>. The rule is described at <code>:94-114</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>w_two</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:281</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p><code>w_reuse0</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:289</code>.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+<li id="fn:7">
+<p><code>c_miss</code>: <code>rtl/core/frontend/icache/rtl/l1i_ctrl.sv:229-230</code>. <code>e_alloc</code>:
+<code>rtl/core/frontend/icache/rtl/l1i_mshr.sv:486</code>. <code>fil_alloc</code>: <code>:350-360</code>.&#160;<a class="footnote-backref" href="#fnref:7" title="Jump back to footnote 7 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

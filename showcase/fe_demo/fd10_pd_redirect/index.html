@@ -6556,7 +6556,7 @@ loop of 3 passes starting at <code>top</code>, and a short epilogue.</p>
 <p>Each pass runs one <code>jal</code> at 0x8000_000A to <code>T0</code>, then 12 more through a chain of
 blocks. The last of them, in <code>T11</code>, goes to 0x8000_0108, where the back edge at
 0x8000_010A returns to <code>top</code>. The back edge is taken on passes 0 and 1.</p>
-<p>The program runs in machine mode with translation off, the addresses are
+<p>The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
 (<code>bp_defines_pkg.sv</code>).</p>
 <div class="highlight"><pre><span></span><code>                                                           Position from
@@ -7094,7 +7094,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd10_pd_redirect</code> runs the scenario; <code>make view S=fd10_pd_redirect</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd10_pd_redirect.svh</code>, <code>waves/fd10_pd_redirect.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd10_pd_redirect.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd10_pd_redirect.md">Source of this page on GitHub</a></p>
 <div class="footnote">
 <hr />
 <ol>

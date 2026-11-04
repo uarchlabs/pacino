@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1042" height="564" viewBox="0 0 1042 564">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#59636e"/></marker></defs>
+<rect width="1042" height="564" fill="#ffffff"/>
+<text x="30" y="34" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd14_translation: the 15 memory reads of the nested walk for page V</text>
+<text x="30" y="56" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">Each VS-stage PTE address is translated through the G-stage before the PTE is read. Each cell is one read, in time order, left to right and top to bottom.</text>
+<text x="315" y="92" class="sans" font-size="11" fill="#59636e" text-anchor="middle" font-weight="bold">G-stage L2</text>
+<text x="513" y="92" class="sans" font-size="11" fill="#59636e" text-anchor="middle" font-weight="bold">G-stage L1</text>
+<text x="711" y="92" class="sans" font-size="11" fill="#59636e" text-anchor="middle" font-weight="bold">G-stage L0</text>
+<text x="909" y="92" class="sans" font-size="11" fill="#59636e" text-anchor="middle" font-weight="bold">VS-stage PTE read</text>
+<text x="220" y="139" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">VS-stage L2 PTE</text>
+<rect x="230" y="104" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="238" y="122" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 175</text>
+<text x="238" y="138" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8E00_0018</text>
+<text x="238" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_0801</text>
+<rect x="428" y="104" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="436" y="122" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 181</text>
+<text x="436" y="138" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_2000</text>
+<text x="436" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_0C01</text>
+<rect x="626" y="104" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="634" y="122" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 187</text>
+<text x="634" y="138" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_3000</text>
+<text x="634" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_04DF</text>
+<rect x="824" y="104" width="170" height="62" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="832" y="122" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 192</text>
+<text x="832" y="138" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_1010</text>
+<text x="832" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x3000_0401</text>
+<polyline points="401,135 425,135" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="599,135 623,135" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="797,135 821,135" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="909,167 909,183 315,183 315,197" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="447" y="176" width="330" height="14" fill="#ffffff"/>
+<text x="612" y="187" class="sans" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">the PTE gives the guest physical address of the next table</text>
+<text x="220" y="235" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">VS-stage L1 PTE</text>
+<rect x="230" y="200" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="238" y="218" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 200</text>
+<text x="238" y="234" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8E00_0018</text>
+<text x="238" y="250" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_0801</text>
+<rect x="428" y="200" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="436" y="218" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 206</text>
+<text x="436" y="234" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_2000</text>
+<text x="436" y="250" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_0C01</text>
+<rect x="626" y="200" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="634" y="218" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 212</text>
+<text x="634" y="234" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_3008</text>
+<text x="634" y="250" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_18DF</text>
+<rect x="824" y="200" width="170" height="62" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="832" y="218" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 217</text>
+<text x="832" y="234" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_6000</text>
+<text x="832" y="250" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x3000_0801</text>
+<polyline points="401,231 425,231" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="599,231 623,231" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="797,231 821,231" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="909,263 909,279 315,279 315,293" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="447" y="272" width="330" height="14" fill="#ffffff"/>
+<text x="612" y="283" class="sans" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">the PTE gives the guest physical address of the next table</text>
+<text x="220" y="331" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">VS-stage L0 PTE (leaf)</text>
+<rect x="230" y="296" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="238" y="314" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 225</text>
+<text x="238" y="330" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8E00_0018</text>
+<text x="238" y="346" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_0801</text>
+<rect x="428" y="296" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="436" y="314" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 231</text>
+<text x="436" y="330" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_2000</text>
+<text x="436" y="346" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_0C01</text>
+<rect x="626" y="296" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="634" y="314" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 237</text>
+<text x="634" y="330" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_3010</text>
+<text x="634" y="346" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_1CDF</text>
+<rect x="824" y="296" width="170" height="62" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="832" y="314" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 242</text>
+<text x="832" y="330" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_7280</text>
+<text x="832" y="346" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x0401_40CB</text>
+<polyline points="401,327 425,327" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="599,327 623,327" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="797,327 821,327" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="909,359 909,375 315,375 315,389" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="447" y="368" width="330" height="14" fill="#ffffff"/>
+<text x="612" y="379" class="sans" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">the leaf gives the final guest physical address</text>
+<text x="220" y="427" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">final guest physical address</text>
+<rect x="230" y="392" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="238" y="410" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 250</text>
+<text x="238" y="426" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8E00_0000</text>
+<text x="238" y="442" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_1001</text>
+<rect x="428" y="392" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="436" y="410" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 256</text>
+<text x="436" y="426" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_4400</text>
+<text x="436" y="442" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x23C0_1401</text>
+<rect x="626" y="392" width="170" height="62" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="634" y="410" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">cyc 262</text>
+<text x="634" y="426" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">read  0x8F00_5280</text>
+<text x="634" y="442" class="mono" font-size="10" fill="#1f2328" text-anchor="start" font-weight="normal">data  0x2058_00DF</text>
+<rect x="824" y="392" width="170" height="62" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="909" y="412" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">no VS-stage PTE</text>
+<text x="909" y="428" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">cyc 267: walk answers</text>
+<text x="909" y="442" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">PPN 0x81600</text>
+<polyline points="401,423 425,423" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="599,423 623,423" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<polyline points="797,423 821,423" fill="none" stroke="#59636e" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="30" y="476" width="30" height="16" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<text x="67" y="489" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">G-stage PTE read</text>
+<rect x="230" y="476" width="30" height="16" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="267" y="489" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">VS-stage PTE read</text>
+<text x="30" y="514" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">read: tb.ptw_mem_req_paddr. data: tb.mem_ptw_rsp_data, driven by the testbench. The cycle is that of tb.ptw_mem_req_val.</text>
+<text x="30" y="529" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">The VS-stage leaf gives the guest physical address 0x1005_0000, and the final G-stage leaf gives PPN 0x81600.</text>
+<text x="30" y="544" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Read from out/fd14_translation/fd14_translation.fst.</text>
+</svg>

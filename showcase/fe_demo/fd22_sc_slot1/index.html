@@ -2709,10 +2709,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-two-conditionals-in-one-prediction-block" class="md-nav__link">
+  <a href="#41-two-conditional-branches-in-one-prediction-block" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Two conditionals in one prediction block
+        4.1 Two conditional branches in one prediction block
       
     </span>
   </a>
@@ -6404,10 +6404,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-two-conditionals-in-one-prediction-block" class="md-nav__link">
+  <a href="#41-two-conditional-branches-in-one-prediction-block" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Two conditionals in one prediction block
+        4.1 Two conditional branches in one prediction block
       
     </span>
   </a>
@@ -6487,15 +6487,17 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd22_sc_slot1</code> is the FD-22 scenario of the front-end demonstration.
-One fetch block holds two conditional branches. TAGE predicts both at
-p2, one in each prediction slot. At p3 the statistical corrector (SC)
-reverses the direction of the second, in slot 1, and the cluster
-redirects the request stream from slot 1. FD-5 (<code>docs/fd05_p3_override.md</code>)
-shows the same reversal in slot 0 on the one-slot model; this scenario
-needs the second slot and runs on the two-slot model (<code>SCEN_2S</code> in the
-<code>Makefile</code>). demo_explainer.md describes how a scenario is built and
-run, and defines the terms used here.</p>
+<p><code>fd22_sc_slot1</code> (FD-22) demonstrates the statistical corrector (SC) reversing
+the second of two conditional branches in one prediction block. TAGE predicts
+both branches at p2, one in each prediction slot. At p3, SC reverses the
+direction of the branch in slot 1, and the cluster redirects the request stream.
+<a href="../fd05_p3_override/">fd05_p3_override</a> shows the same reversal in slot 0.</p>
+<p>The program runs a 48-pass loop whose first block holds two conditional
+branches: A, never taken, and B, taken on odd passes.</p>
+<p>The result line in the log file reports the p3 redirects from each slot that SC
+reversed.</p>
+<p>This scenario runs in the 2-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=2.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6530,6 +6532,18 @@ run, and defines the terms used here.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd22_sc_slot1.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6546,138 +6560,189 @@ run, and defines the terms used here.</p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd22_sc_slot1: PASS,
     p3 redirects from slot 1 reversed by SC behind a TAGE slot 0 8,
-    from slot 0 reversed by SC 1, events checked 10 of 10, cyc 368
+    from slot 0 reversed by SC 1, events checked 11 of 11, cyc 368
 </code></pre></div></p>
-<p>The monitor, <code>tb/fe_demo_mon.svh</code> lines 583 to 601, counts a p3
-redirect the FTQ accepted (<code>tb.dut.u_ftq.w_ok_redir_p3</code>) for the block
-at p3 when one of the slots raised it:</p>
-<ul>
-<li>p3 redirects from slot 1 reversed by SC behind a TAGE slot 0, the
-  monitor variable <code>n_sc_s1</code>: slot 1 raises the redirect, slot 1 is a
-  conditional whose <code>pred_src</code> is PRED_SC, and slot 0 is a conditional
-  whose <code>pred_src</code> is PRED_TAGE;</li>
-<li>from slot 0 reversed by SC, <code>n_sc_s0</code>: slot 0 raises the redirect and
-  its <code>pred_src</code> is PRED_SC.</li>
-</ul>
-<p>The scenario passes when the first count is greater than zero
-(<code>tb/fe_demo_proofs.svh</code> line 173) and every instruction the testbench
-expects retires without error. The second count is reported for
-information only. On the one-slot model the first count is 0, because
-there is no slot 1, and the scenario fails. The run took 368 cycles.</p>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line. It counts a p3 redirect that the FTQ accepted, <code>u_ftq.w_ok_redir_p3</code>, for
+the block at p3.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>from slot 1, SC, behind TAGE</td>
+<td><code>n_sc_s1</code></td>
+<td>slot 1 raises the redirect, slot 1 is a conditional with <code>pred_src</code> PRED_SC, and slot 0 is a conditional with <code>pred_src</code> PRED_TAGE</td>
+</tr>
+<tr>
+<td>from slot 0, SC</td>
+<td><code>n_sc_s0</code></td>
+<td>slot 0 raises the redirect, with <code>pred_src</code> PRED_SC</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>The program is written by the task <code>prog_fd22</code> in
-<code>programs/fd22_sc_slot1.svh</code>. Between a short prologue and epilogue it
-runs a loop of 48 passes. The loop's first block holds two conditional
-branches: A, never taken, and B, taken on the odd passes. The program
-runs in machine mode with translation off, so the addresses are
-physical. It starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
-(<code>bp_defines_pkg.sv</code>). The loop's first instruction, top, is at
-0x8000_0008.</p>
+<p>The program is written by the task <code>prog_fd22</code> in <code>programs/fd22_sc_slot1.svh</code>.</p>
+<p>The code consists of a short prologue, a loop of 48 passes, and a short
+epilogue. The first block of the loop holds two conditional branches: A, never
+taken, and B, taken on the odd passes.</p>
+<p>The program runs in M-mode with bare addressing.</p>
 <div class="highlight"><pre><span></span><code>Address      Label  Instruction              Purpose
-0x8000_0000         c.addi a0, 1             prologue filler
-0x8000_0002         addi t0, t0, 1           prologue filler
-0x8000_0006         c.addi a0, 1             prologue filler
-0x8000_0008  top:   c.addi a0, 1             loop body filler
-0x8000_000A         addi t0, t0, 1           loop body filler
-0x8000_000E  A:     bne x6, x0, 0x8000_0014  never taken
-0x8000_0012         c.addi a0, 1             always executed
-0x8000_0014         c.addi a0, 1             loop body filler
-0x8000_0016  B:     bne x6, x0, 0x8000_001C  taken on odd passes
-0x8000_001A         c.addi a0, 1             executed when B is not
-                                             taken
-0x8000_001C         c.addi a0, 1             B's target; filler
-0x8000_001E         addi t0, t0, 1           filler
-0x8000_0022         c.addi a0, 1             filler
-0x8000_0024         c.addi a0, 1             filler
-0x8000_0026         addi t0, t0, 1           filler
-0x8000_002A         c.addi a0, 1             filler
-0x8000_002C         bne x6, x0, 0x8000_0008  back edge to top
-0x8000_0030         c.addi a0, 1             epilogue filler
-0x8000_0032         addi t0, t0, 1           epilogue filler
-0x8000_0036         c.addi a0, 1             epilogue filler
-0x8000_0038         jal x0, 0                jump to itself; the run
-                                             ends here
+0x8000_0000         c.addi a0, 1             ; prologue
+0x8000_0002         addi   t0, t0, 1         ; prologue
+0x8000_0006         c.addi a0, 1             ; prologue
+
+0x8000_0008  top:   c.addi a0, 1             ; filler
+0x8000_000A         addi   t0, t0, 1         ; filler
+0x8000_000E  A:     bne    x6, x0, 0x8000_0014 ; never taken
+0x8000_0012         c.addi a0, 1             ; always executed
+0x8000_0014         c.addi a0, 1             ; filler
+0x8000_0016  B:     bne    x6, x0, 0x8000_001C ; taken on odd passes
+0x8000_001A         c.addi a0, 1             ; executed when B is not taken
+0x8000_001C         c.addi a0, 1             ; target of B
+0x8000_001E         addi   t0, t0, 1         ; filler
+0x8000_0022         c.addi a0, 1             ; filler
+0x8000_0024         c.addi a0, 1             ; filler
+0x8000_0026         addi   t0, t0, 1         ; filler
+0x8000_002A         c.addi a0, 1             ; filler
+0x8000_002C         bne    x6, x0, top       ; back edge
+
+0x8000_0030         c.addi a0, 1             ; epilogue
+0x8000_0032         addi   t0, t0, 1         ; epilogue
+0x8000_0036         c.addi a0, 1             ; epilogue
+0x8000_0038  hold:  jal    x0, hold          ; termination
 </code></pre></div>
-<p>In the block that starts at top, A is at halfword position 3 and B at
-position 7. The filler after B moves the back edge into the next block,
-so the block at top holds exactly the two conditionals. B skips one
-instruction: its target, 0x8000_001C, lies inside the block, so the
-block's successor differs between B taken and B not taken.</p>
-<p>The program writer writes the loop body once per pass at the same
-addresses, so the code in memory does not change; the passes differ
-only in the expected list (demo_explainer.md sections 2 and 3). When
-B is taken, <code>W.cskip</code> in <code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh</code>
-writes the <code>c.addi</code> at 0x8000_001A in dry mode, and the expected list
-leaves it out. The backend model resolves each branch with the
-direction the program recorded; x6 is never read.</p>
+<p>In the block at top, A is at halfword position 3 and B at position 7. The filler
+after B moves the back edge into the next block, so the block at top holds
+exactly the two conditional branches. The target of B lies inside the block, so
+the successor of the block differs between B taken and B not taken.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to place the branches.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. x6 is never
+read.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-two-conditionals-in-one-prediction-block">4.1 Two conditionals in one prediction block<a class="headerlink" href="#41-two-conditionals-in-one-prediction-block" title="Permanent link">&para;</a></h3>
-<p>The FTB records, for a block start address, up to <code>NUM_PRED_SLOTS</code>
-branches, each with its position. On the two-slot model the block at
-top has A in its first conditional field and B in its second. At p2
-the cluster presents them in slots 0 and 1 (<code>p2_class_comb</code>,
-<code>rtl/core/frontend/bpu/rtl/bp_cluster.sv</code> lines 1010 to 1046). For each
-conditional slot, TAGE's direction is used when TAGE answered for the
-block (<code>w_taken_p2</code>, lines 1032 to 1036). The slot's <code>pred_src</code> is then
-PRED_TAGE (lines 1161 and 1162).</p>
-<p>In the waveform, the first p2 group for the block at top with both slots valid
-is at cyc 45, in the <code>bp_cluster_p2</code> group. <code>tb.dut.bpu_slot_p2.[0]</code> is A at
-<code>pos</code> 3 and <code>tb.dut.bpu_slot_p2.[1]</code> is B at <code>pos</code> 7. Both are COND with
-<code>pred_src</code> PRED_TAGE; A is predicted not taken and B taken.</p>
-<p>RTL: the placement of the FTB's conditional fields into slots is in
-<code>p2_class_comb</code>, <code>bp_cluster.sv</code> lines 1010 to 1046.</p>
+<p>The walkthrough follows the block at top. Section 4.1 describes the two branches
+at p2, section 4.2 the SC response at p3, and section 4.3 the reversals in the
+run.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>tage_p2</code> contains the TAGE response, <code>bp_cluster_p2</code> the p2
+group, <code>sc_p3</code> the SC response, <code>bp_cluster_p3</code> the p3 group and redirects,
+<code>ftq</code> the accepted groups, and <code>backend</code> the backend redirects.</p>
+<p>The figure below shows the block and its two successors.</p>
+<p><a href="../fd22_blocks.svg"><img alt="fd22 the block at top and its two successors" src="../fd22_blocks.svg" /></a></p>
+<h3 id="41-two-conditional-branches-in-one-prediction-block">4.1 Two conditional branches in one prediction block<a class="headerlink" href="#41-two-conditional-branches-in-one-prediction-block" title="Permanent link">&para;</a></h3>
+<p>The FTB records up to <code>NUM_PRED_SLOTS</code> branches for a block start address, each
+with its position.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> In the 2-prediction slot configuration, the block at top
+has A in slot 0 and B in slot 1. For each conditional branch, the direction
+comes from TAGE when TAGE answers for the block, and the <code>pred_src</code> of the slot
+is then PRED_TAGE.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p>At cyc 45 (event 2), <code>u_bpu.r_pc_p2</code> is 0x8000_0008, <code>bpu_slot_p2.[0].pos</code> is 3
+and <code>bpu_slot_p2.[1].pos</code> is 7. Both slots have <code>br_type</code> COND and <code>pred_src</code>
+PRED_TAGE. A is predicted not taken and B taken.</p>
 <h3 id="42-sc-answers-at-p3-for-each-slot">4.2 SC answers at p3 for each slot<a class="headerlink" href="#42-sc-answers-at-p3-for-each-slot" title="Permanent link">&para;</a></h3>
-<p>SC answers one cycle after TAGE, at p3, separately for each slot. For
-a conditional slot with an SC hit, and no loop predictor direction at
-p2, the p3 direction is SC's (<code>w_taken_p3</code>, <code>bp_cluster.sv</code> lines 1301
-to 1304). When it differs from the p2 direction, the p3 slot records
-<code>pred_src</code> PRED_SC (<code>p3_slot_comb</code>, lines 1340 to 1352).</p>
-<p>The successors at p3 are chained from the highest slot down, as at p2:
-slot 1's successor is B's target when B is taken and the block's
-fall-through when it is not, and slot 0's successor is A's target or
-slot 1's successor. A slot redirects when it is reachable and its p3
-successor differs from its p2 successor (lines 1307 to 1325). Because
-A is not taken, slot 1 is reachable, and a reversal of B changes both
-successors: slot 1 and slot 0 raise the redirect together, to the same
-address. The FTQ accepts it (<code>ok_redir_p3</code>,
-<code>rtl/core/frontend/ftq/rtl/ftq_shadow.sv</code> lines 220 and 221) and the
-next request starts there (arm 3 of <code>ftq_npc.sv</code>, line 338). The
-block at top has its own FTB entry, which ends one block above its
-start, so its fall-through is 0x8000_0028.</p>
-<p>In the waveform, the first redirect from slot 1 is at cyc 110. One cycle
-earlier, at p2, the <code>tage_p2</code> group shows
-<code>tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_prm_comp</code>
-0 (T0 is the provider) with <code>.tage_pred_tkn</code> 0, so slot 1 is predicted
-not taken. At cyc 110, in the <code>sc_p3</code> group,
-<code>tb.dut.u_bpu.w_sc_hit_p3.[1]</code> is 1 and <code>tb.dut.u_bpu.w_taken_p3.[1]</code>
-is 1: SC predicts B taken. In the <code>bp_cluster_p3</code> group
-<code>tb.dut.bpu_slot_p3.[1].pred_src</code> is PRED_SC. Both
-<code>tb.dut.bpu_redir_p3.[1].valid</code> and <code>.[0].valid</code> are 1, with
-<code>target_pc</code> 0x8000_001C, B's target.</p>
-<p>At cyc 114, TAGE's provider for slot 1 is T1 with CTR 3'b100, weakly
-taken (<code>tage_prm_comp</code> 1, <code>tage_prm_ctr</code> 3'b100 at cyc 113); SC
-predicts not taken, and the redirect is to 0x8000_0028, the block's
-fall-through.</p>
+<p>SC answers one cycle after TAGE, at p3, separately for each slot. For a
+conditional branch with an SC response and no loop predictor direction, the p3
+direction is that of SC.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> When it differs from the p2 direction, the p3 slot
+records <code>pred_src</code> PRED_SC.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup></p>
+<p>The successors at p3 are chained from the highest slot down. The successor of
+slot 1 is the target of B when B is taken and the fall-through of the block when
+it is not. The successor of slot 0 is the target of A, or the successor of
+slot 1. A slot redirects when it is reachable and its p3 successor differs from
+its p2 successor.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup> Because A is not taken, slot 1 is reachable, and a
+reversal of B changes both successors: slot 1 and slot 0 raise the redirect
+together, to the same address. The FTQ accepts it, and the next request starts
+there.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup></p>
+<p>The first redirect from slot 1 is at cyc 110 (event 5). At cyc 109,
+<code>u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_prm_comp</code> is 0 (T0 is the
+provider) with <code>tage_pred_tkn</code> 0, so slot 1 is predicted not taken. At cyc 110,
+<code>u_bpu.w_sc_hit_p3.[1]</code> is 1 and <code>u_bpu.w_taken_p3.[1]</code> is 1: SC predicts B
+taken. <code>bpu_slot_p3.[1].pred_src</code> is PRED_SC. <code>bpu_redir_p3.[1].valid</code> and
+<code>bpu_redir_p3.[0].valid</code> are both 1, with <code>target_pc</code> 0x8000_001C, the target of
+B.</p>
+<p>At cyc 114 (event 6), the reversal goes the other way. At cyc 113, the TAGE
+provider for slot 1 is T1 with CTR 3'b100, weakly taken (<code>tage_prm_comp</code> 1,
+<code>tage_prm_ctr</code> 3'b100). SC predicts not taken, and the redirect is to
+0x8000_0028, the fall-through of the block.</p>
 <h3 id="43-the-reversals-in-the-run">4.3 The reversals in the run<a class="headerlink" href="#43-the-reversals-in-the-run" title="Permanent link">&para;</a></h3>
-<p>There are 9 p3 redirects in the run, all for the block at top:</p>
-<div class="highlight"><pre><span></span><code>cyc                         slot   p2 direction   p3 direction   target
-46                          0      not taken      taken          0x8000_0014
-110                         1      not taken      taken          0x8000_001C
-114, 130, 136, 280, 303,    1      taken          not taken      0x8000_0028
-326, 349
-</code></pre></div>
-<p>The reversal of slot 0 is early in the run, while SC is still
-learning: it reverses A, which is never taken, and the backend
-corrects it (a redirect to 0x8000_0012 at cyc 56). The backend's
-last misprediction of B is at cyc 204 (a redirect to 0x8000_001A).
-After it, each of SC's four reversals of B replaces a wrong TAGE
-direction with the right one, so none is followed by a backend
-redirect.</p>
-<p>RTL: the SC hit for slot s is <code>w_sc_hit_p3[s]</code>, <code>bp_cluster.sv</code> lines
-1296 and 1297; the monitor counts are <code>n_sc_s1</code> and <code>n_sc_s0</code> in
-<code>tb/fe_demo_mon.svh</code> lines 589 to 600.</p>
+<p>The run has 9 p3 redirects, all for the block at top:</p>
+<table>
+<thead>
+<tr>
+<th>cyc</th>
+<th>Event</th>
+<th>Slot</th>
+<th>p2 direction</th>
+<th>p3 direction</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>46</td>
+<td>3</td>
+<td>0</td>
+<td>not taken</td>
+<td>taken</td>
+<td>0x8000_0014</td>
+</tr>
+<tr>
+<td>110</td>
+<td>5</td>
+<td>1</td>
+<td>not taken</td>
+<td>taken</td>
+<td>0x8000_001C</td>
+</tr>
+<tr>
+<td>114</td>
+<td>6</td>
+<td>1</td>
+<td>taken</td>
+<td>not taken</td>
+<td>0x8000_0028</td>
+</tr>
+<tr>
+<td>130, 136</td>
+<td></td>
+<td>1</td>
+<td>taken</td>
+<td>not taken</td>
+<td>0x8000_0028</td>
+</tr>
+<tr>
+<td>280</td>
+<td>8</td>
+<td>1</td>
+<td>taken</td>
+<td>not taken</td>
+<td>0x8000_0028</td>
+</tr>
+<tr>
+<td>303, 326, 349</td>
+<td></td>
+<td>1</td>
+<td>taken</td>
+<td>not taken</td>
+<td>0x8000_0028</td>
+</tr>
+</tbody>
+</table>
+<p>At cyc 46, SC reverses A, which is never taken, and the backend corrects it:
+<code>tb.bkend_ftq_redir_pc</code> is 0x8000_0012 at cyc 56 (event 4).</p>
+<p>The last backend redirect for B is at cyc 204 (event 7), with
+<code>tb.bkend_ftq_redir_pc</code> 0x8000_001A. SC reverses B four more times, at cyc 280
+(event 8), 303, 326 and 349. Each replaces a wrong TAGE direction with the
+correct one, so no backend redirect follows. The next <code>tb.bkend_ftq_redir_val</code>
+is at cyc 358 (event 9), when the back edge falls through.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6740,12 +6805,18 @@ redirect.</p>
 </tr>
 <tr>
 <td>8</td>
+<td>280</td>
+<td>first SC correction of B after the last backend misprediction of B</td>
+<td>no backend redirect follows</td>
+</tr>
+<tr>
+<td>9</td>
 <td>358</td>
 <td>back edge falls through, a misprediction; redirect to 0x8000_0030</td>
 <td>pass 47</td>
 </tr>
 <tr>
-<td>9</td>
+<td>10</td>
 <td>368</td>
 <td>the run ends</td>
 <td></td>
@@ -6840,6 +6911,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>bp_cluster_p2</td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>block start address at p2</td>
 </tr>
 <tr>
 <td></td>
@@ -6970,6 +7046,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>bp_cluster_p3</td>
 <td><code>u_bpu.r_val_p3</code></td>
 <td>p3 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.r_pc_p3</code></td>
+<td>block start address at p3</td>
 </tr>
 <tr>
 <td></td>
@@ -7116,6 +7197,16 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>ftq_empty</code></td>
 <td>FTQ empty</td>
 </tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -7123,7 +7214,34 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd22_sc_slot1</code> runs the scenario; <code>make view S=fd22_sc_slot1</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd22_sc_slot1.svh</code>, <code>waves/fd22_sc_slot1.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd22_sc_slot1.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd22_sc_slot1.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>p2_class_comb</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1010-1046</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>w_taken_p2</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1032-1036</code>.
+<code>w_pred_src_p2</code>: <code>:1161-1162</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>w_sc_hit_p3</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1296-1297</code>.
+<code>w_taken_p3</code>: <code>:1301-1304</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>p3_slot_comb</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1340-1352</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>w_succ_p3</code>, <code>w_redir_p3</code>:
+<code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1307-1325</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p><code>ok_redir_p3</code>: <code>rtl/core/frontend/ftq/rtl/ftq_shadow.sv:220-221</code>. The next
+request: <code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:338</code>.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

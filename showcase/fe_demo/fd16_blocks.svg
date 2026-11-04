@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="986" height="438" viewBox="0 0 986 438">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="986" height="438" fill="#ffffff"/>
+<text x="30" y="36" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd16_page_cross: the crossing block in virtual and physical addresses</text>
+<text x="30" y="58" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">One cell per halfword. The numbers are positions: halfwords from the block start. The block is 0x8001_0FF0 to 0x8001_1010.</text>
+<text x="60" y="92" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="bold">prediction block, virtual addresses</text>
+<rect x="60" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="88" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="88" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FF0</text>
+<rect x="116" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="144" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="144" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FF2</text>
+<rect x="172" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="200" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="200" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FF4</text>
+<rect x="228" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="256" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="256" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FF6</text>
+<rect x="284" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="312" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="312" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FF8</text>
+<rect x="340" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="368" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="368" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FFA</text>
+<rect x="396" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="424" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="424" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FFC</text>
+<rect x="452" y="100" width="112" height="40" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="508" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">addi</text>
+<text x="508" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">0FFE</text>
+<rect x="564" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="592" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="592" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">1002</text>
+<rect x="620" y="100" width="112" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="676" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<text x="676" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">1004</text>
+<rect x="732" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="760" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="760" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">1008</text>
+<rect x="788" y="100" width="56" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="816" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">c.addi</text>
+<text x="816" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">100A</text>
+<rect x="844" y="100" width="112" height="40" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="900" y="116" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">addi</text>
+<text x="900" y="132" class="mono" font-size="9" fill="#59636e" text-anchor="middle" font-weight="normal">100C</text>
+<text x="88" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="144" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<text x="200" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">2</text>
+<text x="256" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">3</text>
+<text x="312" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">4</text>
+<text x="368" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">5</text>
+<text x="424" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">6</text>
+<text x="480" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">7</text>
+<text x="536" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">8</text>
+<text x="592" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">9</text>
+<text x="648" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">10</text>
+<text x="704" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">11</text>
+<text x="760" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">12</text>
+<text x="816" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">13</text>
+<text x="872" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">14</text>
+<text x="928" y="154" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">15</text>
+<text x="52" y="154" class="sans" font-size="11" fill="#59636e" text-anchor="end" font-weight="normal">pos</text>
+<line x1="508" y1="74" x2="508" y2="330" stroke="#ff6e42" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="512" y="84" class="sans" font-size="11" fill="#ff6e42" text-anchor="start" font-weight="bold">VA page boundary, 0x8001_1000</text>
+<text x="60" y="206" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="bold">first page, PPN 0x81000 (end of the line at 0x8100_0FC0, requested at cyc 93)</text>
+<rect x="60" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="88" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FF0</text>
+<rect x="116" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="144" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FF2</text>
+<rect x="172" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="200" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FF4</text>
+<rect x="228" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="256" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FF6</text>
+<rect x="284" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="312" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FF8</text>
+<rect x="340" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="368" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FFA</text>
+<rect x="396" y="214" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="424" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FFC</text>
+<rect x="452" y="214" width="56" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="480" y="234" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">0FFE</text>
+<text x="516" y="234" class="mono" font-size="10" fill="#59636e" text-anchor="start" font-weight="normal">physical page ends at 0x8100_0FFF</text>
+<text x="60" y="284" class="sans" font-size="11" fill="#1f2328" text-anchor="start" font-weight="bold">second page, PPN 0x81205 (the line at 0x8120_5000, requested at cyc 94)</text>
+<text x="500" y="312" class="mono" font-size="10" fill="#59636e" text-anchor="end" font-weight="normal">physical page starts at 0x8120_5000</text>
+<rect x="508" y="292" width="56" height="32" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="536" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">5000</text>
+<rect x="564" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="592" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">5002</text>
+<rect x="620" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="648" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">5004</text>
+<rect x="676" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="704" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">5006</text>
+<rect x="732" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="760" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">5008</text>
+<rect x="788" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="816" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">500A</text>
+<rect x="844" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="872" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">500C</text>
+<rect x="900" y="292" width="56" height="32" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="928" y="312" class="mono" font-size="9" fill="#1f2328" text-anchor="middle" font-weight="normal">500E</text>
+<rect x="30" y="350" width="30" height="16" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="67" y="363" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">the 32-bit addi at 0x8001_0FFE, in two physical pages</text>
+<rect x="480" y="350" width="30" height="16" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<text x="517" y="363" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">other instructions of the block</text>
+<text x="30" y="388" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Virtual addresses are 0x8001_xxxx. Physical cells show the low 16 bits of the address, in their own page.</text>
+<text x="30" y="403" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">The addi reaches decode whole at cyc 109, in lane 7. The queue entry popped at cyc 94 holds both PPNs.</text>
+<text x="30" y="418" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Read from out/fd16_page_cross/fd16_page_cross.fst.</text>
+</svg>

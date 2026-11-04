@@ -6487,23 +6487,17 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd23_jump_cut</code> is the FD-23 scenario of the front-end demonstration.
-A fetch block holds two conditional branches followed by a jump. With
-two prediction slots an FTB entry holds at most two branches, so when
-the jump resolves in that block the FTB splits the entry: it keeps the
-two conditionals and ends the block at the jump's address
-(<code>planning/arch/ftb_decisions.md</code> section 3, BP-140). When both
-conditionals are predicted not taken, the block ends at the jump by
-the FTB's own stored end, and the next block, which starts at the
-jump, predicts the jump in slot 0. The scenario runs on the two-slot
-model (<code>SCEN_2S</code> in the <code>Makefile</code>). demo_explainer.md describes how a
-scenario is built and run, and defines the terms used here.</p>
-<p>DOC-006 wrote this scenario for the cluster's cut
-(<code>planning/arch/fe_decisions.md</code> section 10, BP-138 and BP-139), which
-ended such a block at the jump when the FTB entry held all three
-branches. Since BP-140 no entry the FTB writes holds a branch that no
-slot carries, the cut does not fire, and DOC-007 re-pointed the
-scenario at the split.</p>
+<p><code>fd23_jump_cut</code> (FD-23) demonstrates a prediction block with two conditional
+branches followed by a jump. With two prediction slots, an FTB entry holds at
+most two branches, so when the jump resolves, the FTB splits the entry: it keeps
+the two conditional branches and ends the block at the address of the jump. The
+next block starts at the jump and predicts it in slot 0.</p>
+<p>The program runs a 24-pass loop whose first block holds two never-taken
+conditional branches, C1 and C2, followed by a jump, J.</p>
+<p>The result line in the log file reports the blocks the FTB ends at the jump, the
+jumps predicted in slot 0 of the next block, and the blocks cut by the cluster.</p>
+<p>This scenario runs in the 2-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=2.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6538,6 +6532,18 @@ scenario at the split.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd23_jump_cut.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6556,126 +6562,137 @@ scenario at the split.</p>
     the jump predicted in slot 0 of the next block 21,
     blocks cut by the cluster 0, events checked 12 of 12, cyc 244
 </code></pre></div></p>
-<p>The monitor, <code>tb/fe_demo_mon.svh</code> lines 602 to 628, counts in the p2
-groups the FTQ accepted (<code>tb.dut.u_ftq.w_ok_slot_p2</code>):</p>
-<ul>
-<li>blocks the FTB ends at the jump, the monitor variable <code>n_jmp_end</code>: a
-  group whose two slots are conditionals predicted not taken, whose
-  block end, <code>tb.dut.bpu_blk_pft_p2</code>, is the jump's address, and in
-  which the cluster's cut, <code>tb.dut.u_bpu.w_cut_p2</code>, is clear. The
-  jump's address is the testbench variable <code>jmp_pc</code>
-  (<code>tb/fe_demo_mon.svh</code> line 153). The program sets it when it writes
-  the jump, so the end is checked against the program;</li>
-<li>the jump predicted in slot 0 of the next block, <code>n_jmp_next</code>: the
-  next accepted group whose block starts at that address,
-  <code>tb.dut.u_bpu.r_pc_p2</code>, with a jump in slot 0 at position 0,
-  predicted taken;</li>
-<li>blocks cut by the cluster, <code>n_cut</code>: accepted groups with
-  <code>w_cut_p2</code> set, reported for information.</li>
-</ul>
-<p>The scenario passes when the first two counts are greater than zero
-(<code>tb/fe_demo_proofs.svh</code> line 180) and every instruction the testbench
-expects retires without error. On the one-slot model the counts are
-0 and the scenario fails. The run took 244 cycles.</p>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line. It counts in the p2 groups that the FTQ accepted, <code>u_ftq.w_ok_slot_p2</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>blocks the FTB ends at the jump</td>
+<td><code>n_jmp_end</code></td>
+<td>both slots are conditional branches predicted not taken, <code>bpu_blk_pft_p2</code> is the address of J, and <code>u_bpu.w_cut_p2</code> is clear</td>
+</tr>
+<tr>
+<td>the jump predicted in the next block</td>
+<td><code>n_jmp_next</code></td>
+<td>the next group whose <code>u_bpu.r_pc_p2</code> is that address has a jump in slot 0, at position 0, predicted taken</td>
+</tr>
+<tr>
+<td>blocks cut by the cluster</td>
+<td><code>n_cut</code></td>
+<td>groups with <code>u_bpu.w_cut_p2</code> set</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>The program is written by the task <code>prog_fd23</code> in
-<code>programs/fd23_jump_cut.svh</code>. Between a short prologue and epilogue it
-runs a loop of 24 passes. The loop's first block holds the conditionals
-C1 and C2, never taken, followed by the jump J to a block at
-0x8000_0400 that holds the back edge. The program runs in machine mode
-with translation off, so the addresses are physical. It starts at the
-reset vector, <code>RESET_VECTOR</code> = 0x8000_0000 (<code>bp_defines_pkg.sv</code>). The
-loop's first instruction, top, is at 0x8000_0008.</p>
+<p>The program is written by the task <code>prog_fd23</code> in <code>programs/fd23_jump_cut.svh</code>.</p>
+<p>The code consists of a short prologue, a loop of 24 passes, and a short
+epilogue. The first block of the loop holds C1 and C2, never taken, followed by
+J, a jump to a block at 0x8000_0400 that holds the back edge.</p>
+<p>The program runs in M-mode with bare addressing.</p>
 <div class="highlight"><pre><span></span><code>Address      Label  Instruction              Purpose
-0x8000_0000         c.addi a0, 1             prologue filler
-0x8000_0002         addi t0, t0, 1           prologue filler
-0x8000_0006         c.addi a0, 1             prologue filler
-0x8000_0008  top:   c.addi a0, 1             loop body filler
-0x8000_000A  C1:    bne x6, x0, 0x8000_0010  never taken
-0x8000_000E         c.addi a0, 1             always executed
-0x8000_0010  C2:    bne x6, x0, 0x8000_0016  never taken
-0x8000_0014         c.addi a0, 1             always executed
-0x8000_0016  J:     jal x0, 0x8000_0400      the jump
-0x8000_0400         c.addi a0, 1             filler
-0x8000_0402         addi t0, t0, 1           filler
-0x8000_0406         bne x6, x0, 0x8000_0008  back edge to top
-0x8000_040A         c.addi a0, 1             epilogue filler
-0x8000_040C         addi t0, t0, 1           epilogue filler
-0x8000_0410         c.addi a0, 1             epilogue filler
-0x8000_0412         jal x0, 0                jump to itself; the run
-                                             ends here
+0x8000_0000         c.addi a0, 1             ; prologue
+0x8000_0002         addi   t0, t0, 1         ; prologue
+0x8000_0006         c.addi a0, 1             ; prologue
+
+0x8000_0008  top:   c.addi a0, 1             ; filler
+0x8000_000A  C1:    bne    x6, x0, 0x8000_0010 ; never taken
+0x8000_000E         c.addi a0, 1             ; always executed
+0x8000_0010  C2:    bne    x6, x0, 0x8000_0016 ; never taken
+0x8000_0014         c.addi a0, 1             ; always executed
+0x8000_0016  J:     jal    x0, 0x8000_0400   ; the jump
+
+0x8000_0400         c.addi a0, 1             ; filler
+0x8000_0402         addi   t0, t0, 1         ; filler
+0x8000_0406         bne    x6, x0, top       ; back edge, passes 0 to 22
+
+0x8000_040A         c.addi a0, 1             ; epilogue
+0x8000_040C         addi   t0, t0, 1         ; epilogue
+0x8000_0410         c.addi a0, 1             ; epilogue
+0x8000_0412  hold:  jal    x0, hold          ; termination
 </code></pre></div>
-<p>In the block that starts at top, C1 is at halfword position 1, C2 at
-position 4 and J at position 7. The back edge is taken on passes 0 to
-22 and falls through on pass 23. The program writer writes the loop
-body once per pass at the same addresses, so the code in memory does
-not change (demo_explainer.md, section 2); x6 is never read. Before it
-writes J, the program sets <code>jmp_pc</code> to J's address, 0x8000_0016.</p>
+<p>In the block at top, C1 is at halfword position 1, C2 at position 4 and J at
+position 7.</p>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to place the branches.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. x6 is never
+read.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
+<p>The walkthrough follows the block at top. Section 4.1 describes the FTB entry
+and the split, section 4.2 the block that ends at the jump, and section 4.3 the
+next block, which predicts the jump.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>bp_cluster_p2_ftb</code> contains the FTB fields and the block
+end, <code>bp_cluster_p2</code> the p2 group, <code>bp_cluster_p3</code> the p3 redirects, <code>ftq</code> the
+accepted groups and the predecode redirects, <code>bp_cluster_p0</code> the p0 request,
+<code>ftb_update</code> the FTB updates, and <code>backend</code> the backend redirects.</p>
+<p>The figure below shows the entry before and after the split, and the next block.</p>
+<p><a href="../fd23_blocks.svg"><img alt="fd23 the FTB entry before and after the split" src="../fd23_blocks.svg" /></a></p>
 <h3 id="41-the-ftb-entry-for-top">4.1 The FTB entry for top<a class="headerlink" href="#41-the-ftb-entry-for-top" title="Permanent link">&para;</a></h3>
-<p>The FTB keeps one entry per block start. An update for a branch
-resolved in a block from that start adds the branch to the entry. When
-the entry already holds a branch at that position, the update changes
-that branch in place. The entry stores its branches in position order.
-An
-entry holds at most <code>NUM_PRED_SLOTS</code> branches. When an update would
-make it hold more, the lowest <code>NUM_PRED_SLOTS</code> positions are kept, the
-block's end becomes the address of the lowest branch not kept, and a
-jump not kept clears the jump field. This is the split
-(<code>rtl/core/frontend/bpu/rtl/ftb_cntrl.sv</code>, THE UPDATE, lines 464 to
-494; the split at lines 592 to 615). The uBTB applies the same rule
-(<code>apply_upd</code>, <code>ubtb.sv</code> lines 291 to 376).</p>
-<p>C1 and C2 resolve first: at cyc 52 and 53 the FTB allocates the entry
-for top with C1, then adds C2. The entry ends one block above its
-start, at 0x8000_0028. At cyc 56 the first p2 group for top predicts
-both taken (TAGE's base table starts weakly taken), and the
-statistical corrector reverses them at p3, at cyc 57, to the block's
-end. J then resolves in a block from top and is the third branch: at
-cyc 65, in the <code>ftb_update</code> group, <code>tb.dut.ftb_upd_pc_u0</code> is
-0x8000_0008, <code>ftb_upd_pos_u0</code> 7, <code>ftb_upd_is_jmp_u0</code> 1, and
-<code>tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split</code> is 1 with <code>upd_cut_pos</code> 7.
-The entry keeps C1 and C2 and now ends at position 7, J's address.</p>
+<p>The FTB keeps one entry per block start. An update for a branch resolved in a
+block from that start adds the branch to the entry. When the entry already holds
+a branch at that position, the update changes that branch in place. The entry
+stores its branches in position order.</p>
+<p>An entry holds at most <code>NUM_PRED_SLOTS</code> branches. When an update would make it
+hold more, the lowest <code>NUM_PRED_SLOTS</code> positions are kept, the block end becomes
+the address of the lowest branch not kept, and a jump not kept clears the jump
+field. This is the split.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> The uBTB applies the same rule.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p>C1 and C2 resolve first. At cyc 52 (event 3) the FTB allocates the entry for top
+with C1, and at cyc 53 it adds C2. The entry ends one block above its start, at
+0x8000_0028. At cyc 56 (event 4), the first p2 group for top predicts both
+taken (TAGE's base table starts weakly taken). At cyc 57 (event 5),
+<code>bpu_redir_p3.[0].valid</code> and <code>bpu_redir_p3.[1].valid</code> are both 1, with
+<code>target_pc</code> 0x8000_0028: the
+statistical corrector reverses both at p3.</p>
+<p>J then resolves in a block from top, and it is the third branch. At cyc 65
+(event 6), <code>ftb_upd_pc_u0</code> is 0x8000_0008, <code>ftb_upd_pos_u0</code> is 7,
+<code>ftb_upd_is_jmp_u0</code> is 1, and <code>u_bpu.u_ftb.u_ftb_cntrl.upd_split</code> is 1 with
+<code>upd_cut_pos</code> 7. The entry keeps C1 and C2, and now ends at position 7, the
+address of J.</p>
+<p>The first <code>upd_split</code> of the run is at cyc 41, for the same reason. On the first
+pass, the block from the reset vector holds C1, C2 and J at positions 5, 8 and
+11.</p>
 <h3 id="42-the-block-ends-at-the-jump">4.2 The block ends at the jump<a class="headerlink" href="#42-the-block-ends-at-the-jump" title="Permanent link">&para;</a></h3>
-<p>At p2 the cluster places each conditional field of the entry in its
-slot and the jump field in the lowest slot that holds no conditional
-(<code>p2_class_comb</code>, <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv</code> lines 1010
-to 1046). The entry for top has no jump field, so the two slots hold
-C1 and C2. The block's fall-through, the address fetch continues at
-when no slot is taken, is the FTB's stored end when the FTB answered,
-no branch is cut and no jump is held (<code>w_pft_p2</code>, <code>p2_succ_comb</code>,
-lines 1133 to 1141); it leaves the cluster as <code>bpu_blk_pft_p2</code> (line
-1275). The cut, which would end the block at a branch the FTB reports
-and no slot carries (<code>w_cut_p2</code>, lines 1064 to 1074), stays clear.</p>
-<p>In the waveform, the first accepted p2 group of the block at top that
-ends at J is at cyc 71. In the <code>bp_cluster_p2_ftb</code> group,
-<code>tb.dut.u_bpu.r_pc_p2</code> is 0x8000_0008. The FTB answer holds both
-conditional fields (<code>w_ftb_br_valid_p2.[0]</code> and <code>.[1]</code>) and no jump
-(<code>w_ftb_jmp_valid_p2</code> 0), <code>w_cut_p2</code> is 0, and <code>tb.dut.bpu_blk_pft_p2</code>
-is 0x8000_0016, J's address. In the <code>bp_cluster_p2</code> group,
-<code>tb.dut.bpu_slot_p2.[0]</code> is C1 and <code>.[1]</code> is C2, both COND at <code>pos</code> 1
-and 4, not taken, <code>pred_src</code> PRED_TAGE. The uBTB was split the same
-way: its p1 prediction for top, <code>tb.dut.bpu_pred_pft_p1</code>, is
-0x8000_0016 from cyc 70, so p1 and p2 agree.</p>
+<p>At p2, the cluster places each conditional field of the entry in its slot, and
+the jump field in the lowest slot that holds no conditional branch.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> The
+entry for top has no jump field, so the two slots hold C1 and C2. The
+fall-through of the block, the address fetch continues at when no slot is taken,
+is the stored end of the FTB entry when the FTB answers, no branch is cut and no
+jump is held.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> It leaves the cluster as <code>bpu_blk_pft_p2</code>. The cut, which
+would end the block at a branch the FTB reports and no slot carries, stays
+clear.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup></p>
+<p>The first accepted p2 group of the block at top that ends at J is at cyc 71
+(event 7). <code>u_bpu.r_pc_p2</code> is 0x8000_0008. <code>u_bpu.w_ftb_br_valid_p2.[0]</code> and
+<code>u_bpu.w_ftb_br_valid_p2.[1]</code> are 1, <code>u_bpu.w_ftb_jmp_valid_p2</code> is 0,
+<code>u_bpu.w_cut_p2</code> is 0, and <code>bpu_blk_pft_p2</code> is 0x8000_0016, the address of J.
+<code>bpu_slot_p2.[0]</code> is C1 and <code>bpu_slot_p2.[1]</code> is C2, both COND at <code>pos</code> 1 and 4,
+not taken, <code>pred_src</code> PRED_TAGE.</p>
+<p>The uBTB was split the same way. Its p1 prediction for top, <code>bpu_pred_pft_p1</code>,
+is 0x8000_0016 from cyc 70, so p1 and p2 agree.</p>
 <h3 id="43-the-next-block-predicts-the-jump">4.3 The next block predicts the jump<a class="headerlink" href="#43-the-next-block-predicts-the-jump" title="Permanent link">&para;</a></h3>
-<p>The next block starts at 0x8000_0016. The predictors have not seen
-this block start, so at first neither the uBTB nor the FTB answers for
-it. Fetch runs past J, and predecode at F3 finds it (predecode
-redirects to 0x8000_0400 at cyc 79 and 92). The update for
-J from that start allocates its entry at cyc 91, with J at position 0.
-From then on the FTB answers for 0x8000_0016 with J in its jump field,
-and the cluster places J in slot 0.</p>
-<p>The first counted pair is at cyc 97 and 98. At cyc 97 the block at top
-ends at 0x8000_0016, as in 4.2; at cyc 98, <code>r_pc_p2</code> is 0x8000_0016
-and <code>tb.dut.bpu_slot_p2.[0]</code> is DIRECT_UNC at <code>pos</code> 0, taken, with
-<code>target</code> 0x8000_0400 and <code>pred_src</code> PRED_FTB. The two blocks counted
-at cyc 71 and 84 ended at J before J's own entry existed; their next
-groups had no FTB answer, so the count of blocks ended at J, 23,
+<p>The next block starts at 0x8000_0016. The predictors have not seen this block
+start, so at first neither the uBTB nor the FTB answers for it. Fetch runs past
+J, and predecode at F3 finds it: <code>u_ftq.w_pd_redir_pc</code> is 0x8000_0400 at cyc 79
+and 92. The update for J from that start allocates its entry at cyc 91
+(event 8), with J at position 0. From then on, the FTB answers for 0x8000_0016
+with J in its jump field, and the cluster places J in slot 0.</p>
+<p>The first counted pair is at cyc 97 and 98. At cyc 97, the block at top ends at
+0x8000_0016, as in section 4.2. At cyc 98 (event 9), <code>u_bpu.r_pc_p2</code> is
+0x8000_0016 and <code>bpu_slot_p2.[0]</code> is DIRECT_UNC at <code>pos</code> 0, taken, with <code>target</code>
+0x8000_0400 and <code>pred_src</code> PRED_FTB.</p>
+<p>The blocks at cyc 71 and 84 ended at J before the entry for J existed, and their
+next groups had no FTB answer. The count of blocks that end at J, 23, therefore
 exceeds the count of next blocks, 21.</p>
-<p>RTL: the split is <code>upd_split</code> and <code>upd_cut_pos</code> in <code>ftb_cntrl.sv</code>; the
-block end is <code>w_pft_p2</code> in <code>bp_cluster.sv</code>; the monitor is
-<code>tb/fe_demo_mon.svh</code> lines 602 to 628.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6822,6 +6839,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>p2 fetch block end, the first halfword after it</td>
 </tr>
 <tr>
+<td></td>
+<td><code>bpu_pred_pft_p1</code></td>
+<td>p1 fetch block end</td>
+</tr>
+<tr>
 <td>bp_cluster_p2</td>
 <td><code>u_bpu.r_val_p2</code></td>
 <td>p2 valid</td>
@@ -6927,6 +6949,26 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>FTQ index of the p2 redirect</td>
 </tr>
 <tr>
+<td>bp_cluster_p3</td>
+<td><code>bpu_redir_p3.[0].valid</code></td>
+<td>p3 redirect from slot 0</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_redir_p3.[0].target_pc</code></td>
+<td>p3 redirect target from slot 0</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_redir_p3.[1].valid</code></td>
+<td>p3 redirect from slot 1</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_redir_p3.[1].target_pc</code></td>
+<td>p3 redirect target from slot 1</td>
+</tr>
+<tr>
 <td>ftq</td>
 <td><code>u_ftq.w_ok_pred_p1</code></td>
 <td>the FTQ accepts the p1 prediction</td>
@@ -6975,6 +7017,16 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td></td>
 <td><code>ftq_empty</code></td>
 <td>FTQ empty</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_val</code></td>
+<td>predecode redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_pc</code></td>
+<td>predecode redirect PC</td>
 </tr>
 <tr>
 <td>bp_cluster_p0</td>
@@ -7036,6 +7088,16 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos</code></td>
 <td>position the split ends the entry at</td>
 </tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -7043,7 +7105,30 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd23_jump_cut</code> runs the scenario; <code>make view S=fd23_jump_cut</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd23_jump_cut.svh</code>, <code>waves/fd23_jump_cut.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd23_jump_cut.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd23_jump_cut.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p>THE UPDATE: <code>rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:464-494</code>. The split:
+<code>:592-615</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>apply_upd</code>: <code>rtl/core/frontend/bpu/rtl/ubtb.sv:291-376</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>p2_class_comb</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1010-1046</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>w_pft_p2</code>, <code>p2_succ_comb</code>:
+<code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1133-1141</code>. <code>bpu_blk_pft_p2</code>:
+<code>:1275</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>w_cut_p2</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1064-1074</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

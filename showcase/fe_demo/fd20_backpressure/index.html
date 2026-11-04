@@ -2627,34 +2627,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2681,10 +2653,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-decode" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Decode
       
     </span>
   </a>
@@ -2692,10 +2664,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-instruction-buffer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The instruction buffer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-ifu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The IFU
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-the-ftq-and-the-p0-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 The FTQ and the p0 request
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 Recovery
       
     </span>
   </a>
@@ -6395,34 +6400,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6449,10 +6426,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-decode" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Decode
       
     </span>
   </a>
@@ -6460,10 +6437,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-the-instruction-buffer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 The instruction buffer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-the-ifu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 The IFU
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-the-ftq-and-the-p0-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 The FTQ and the p0 request
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 Recovery
       
     </span>
   </a>
@@ -6521,12 +6531,15 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd20_backpressure</code> is the FD-20 demonstration scenario. It is a demo,
-not a verification test. The backend takes decode's output one cycle in
-four. Decode stalls first, the ibuf fills and refuses the IFU, the
-IFU stops draining the FTQ, the FTQ fills, and the FTQ stops issuing
-p0 requests. The run passes if each of the four stalls occurs.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd20_backpressure</code> (FD-20) demonstrates a stall propagating from decode back to
+the p0 request. Decode holds its bundle, the instruction buffer fills and stalls
+the IFU, the IFU stalls the FTQ, the FTQ fills, and the FTQ withholds the p0
+request.</p>
+<p>The program runs a 40-pass loop with the backend taking decode's output one
+cycle in four.</p>
+<p>The result line in the log file reports the stall cycles at each point.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6561,6 +6574,18 @@ p0 requests. The run passes if each of the four stalls occurs.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd20_backpressure.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6576,105 +6601,117 @@ p0 requests. The run passes if each of the four stalls occurs.</p>
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd20_backpressure: PASS, stall cycles with the instruction buffer full 378,
-    FTQ full 324, decode held 368, no p0 request 331, events checked 6 of 6,
+    FTQ full 324, decode held 368, no p0 request 331, events checked 8 of 8,
     cyc 537
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The counts come from <code>tb/fe_demo_mon.svh:571-576</code>, sampled every cycle
-while <code>meas</code> is set. All four are counts of CYCLES in which the
-condition holds, not of stall events.</p>
-<div class="highlight"><pre><span></span><code>n_ibuf_full  ifu_ibuf_val &amp;&amp; !ibuf_ifu_rdy   the IFU offers, the ibuf
-                                             refuses
-n_ftq_full   ftq_full                        (tb's ftq_full, fe_top's
-                                             port, fe_tb_dut.svh:98,
-                                             :101)
-n_dec_stall  pd_out[0].valid &amp;&amp; !dec_ibuf_rdy
-n_p0_held    !ftq_pred_val_p0                for any hold reason
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:160-161</code>) is that each count is above
-zero. <code>tb_fe_demo.sv</code> also requires the whole stream to retire with no
-errors.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>cyc 537</code> is the measured window, so the stall counts are
-  fractions of it: the ibuf refuses the IFU in 378 of 537 cycles, the
-  FTQ is full in 324, decode holds a bundle in 368.</li>
-<li><code>no p0 request 331</code> counts every hold, not only backpressure. From
-  the run: of the 331 cycles, 324 have <code>ftq_full</code> and 7 have
-  <code>u_ftq.u_npc.h3_ftb_upd</code> (the FTB update hold, H3) without it.</li>
-<li>The order of onset (18, 71, 138) is the propagation from decode back
-  to the FTQ; the counts alone do not show it.</li>
-<li>Departures from <code>planning/showcase/fe_demo_scenarios.md</code> FD-20:</li>
-<li>FD-20's program is "a long run with the backend accepting slowly";
-    the program fixes the rate at one cycle in four (be_rdy_pat 4,
-    FD-U2 closed).</li>
-<li>FD-20's proof is "each stall occurs". The proof as built also
-    counts <code>n_p0_held</code>, which includes the FTB update holds; it does
-    not separate the p0 stall caused by the full FTQ. <code>n_ftq_full</code> is
-    the count of that cause.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line. They are counts of cycles, not of stall events. <code>n_p0_held</code> counts every
+hold of the p0 request, so it includes FTB update holds as well as <code>ftq_full</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>instruction buffer full</td>
+<td><code>n_ibuf_full</code></td>
+<td><code>ifu_ibuf_val</code> with <code>ibuf_ifu_rdy</code> low</td>
+</tr>
+<tr>
+<td>FTQ full</td>
+<td><code>n_ftq_full</code></td>
+<td><code>ftq_full</code></td>
+</tr>
+<tr>
+<td>decode held</td>
+<td><code>n_dec_stall</code></td>
+<td><code>tb.pd_out.[0].valid</code> with <code>tb.dec_ibuf_rdy</code> low</td>
+</tr>
+<tr>
+<td>no p0 request</td>
+<td><code>n_p0_held</code></td>
+<td><code>ftq_pred_val_p0</code> low</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd20_backpressure.svh</code>, task <code>prog_fd20</code>. M-mode,
-bare. Offsets from RESET_VECTOR 0x8000_0000.</p>
-<div class="highlight"><pre><span></span><code>+0x00  mixed(3)
-top = +0x08
-       mixed(23)          15 c.addi and 8 addi, 62 bytes
-top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
-       mixed(3), then jal x0,0 (halt)
+<p>The program is written by the task <code>prog_fd20</code> in
+<code>programs/fd20_backpressure.svh</code>.</p>
+<p>The code consists of a short prologue, a loop of 23 mixed instructions and a
+back edge that runs for 40 passes, and a short epilogue.</p>
+<p>The program runs in M-mode with bare addressing.</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+
+0x8000_0008  top:   mixed code              ; 23 instructions, to 0x8000_0045
+0x8000_0046         bne    x6, x0, top      ; taken on passes 0 to 38
+
+0x8000_004A         c.addi a0, 1            ; epilogue
+0x8000_004C         addi   t0, t0, 1        ; epilogue
+0x8000_0050         c.addi a0, 1            ; epilogue
+0x8000_0052  hold:  jal    x0, hold         ; termination
 </code></pre></div>
-<ul>
-<li><code>be_rdy_pat = 4</code> (<code>programs/fd20_backpressure.svh:24</code>, FD-U2): the
-  backend drives <code>dec_ibuf_rdy</code> only in cycles with <code>cyc % 4 == 0</code>
-  (<code>rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:463-465</code>).</li>
-<li>The stream is 3 + 40 x 24 + 3 = 966 instructions plus the halt
-  (derived from the source).</li>
-</ul>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to fill the loop.</p>
+<p>The direction of the back edge is chosen by the program writer and resolved by
+the modeled backend, and the register operands play no part in it. x6 is never
+read.</p>
+<p>The modeled backend takes decode's output one cycle in four, set by <code>be_rdy_pat</code>
+in the program.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Decode. With <code>dec_ibuf_rdy</code> low three cycles in four, the ibuf's
-   read port presents a bundle that is not taken.</li>
-<li>The ibuf. Its ready is registered occupancy: <code>ibuf_ifu_rdy</code> is high
-   while <code>r_count &lt;= DEPTH - FTQ_PD_WIDTH</code>
-   (<code>rtl/core/frontend/ibuf/rtl/ibuf.sv:114</code>). DEPTH is 64
-   (<code>ibuf.sv:57</code>; fe_top instantiates it without an override,
-   <code>rtl/core/frontend/fe_top/rtl/fe_top.sv:802</code>) and FTQ_PD_WIDTH 16
-   (<code>rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:237</code>), so it refuses
-   above 48 slots.</li>
-<li>The IFU. F3 holds its block, payload and all, while <code>ibuf_ifu_rdy</code>
-   is low (<code>rtl/core/frontend/ifu/rtl/ifu_f3.sv:56-57</code>, IB-7). Fetch
-   and retirement slow to the backend's rate while p0 keeps
-   allocating, so the FTQ fills.</li>
-<li>The FTQ. <code>ftq_full</code> is set when the age of alloc_ptr over
-   commit_ptr reaches FTQ_ALLOC_LIMIT
-   (<code>rtl/core/frontend/ftq/rtl/ftq_ptr.sv:247</code>), which is FTQ_DEPTH,
-   64 (<code>ftq_ptr.sv:196</code>, <code>bp_defines_pkg.sv:30</code>). It is hold condition
-   H2 of ftq_npc: <code>w_hold</code> includes <code>h2_ftq_full</code>
-   (<code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309</code>) and
-   <code>ftq_pred_val_p0 = ~w_hold</code> (<code>ftq_npc.sv:377</code>).</li>
-<li>Seen in the run (fst2vcd on
-   <code>out/fd20_backpressure/fd20_backpressure.fst</code>): the first cycle with
-   <code>pd_out[0].valid</code> and <code>dec_ibuf_rdy</code> low is 18; the first
-   <code>ifu_ibuf_val</code> with <code>ibuf_ifu_rdy</code> low is 71, with <code>u_ibuf.r_count</code>
-   52; the first <code>ftq_full</code> is 138 (tb.cyc values).</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd20_backpressure.sucl</code>, which <code>make view
-S=fd20_backpressure</code> opens in Surfer. Look at:</p>
-<ul>
-<li>decode group: <code>dec_ibuf_rdy</code> high one cycle in four and
-  <code>pd_out.[0].valid</code> held, from cycle 18.</li>
-<li>ibuf group: <code>ifu_ibuf_val</code> with <code>ibuf_ifu_rdy</code> low from cycle 71;
-  <code>u_ibuf.w_n_pres</code> and <code>w_n_pop</code>, the slots presented and taken.</li>
-<li>ftq group: <code>ftq_full</code> from cycle 138, with <code>w_commit_ptr</code>,
-  <code>ftq_pred_idx_p0</code> and <code>ftq_ifu_idx</code>.</li>
-<li>bp_cluster_p0 group: <code>ftq_pred_val_p0</code> low while <code>ftq_full</code> is set;
-  <code>u_npc.w_hold</code> high with it.</li>
-<li><code>u_ibuf.r_count</code> in the ibuf group, the occupancy the ready is
-  computed from: 52 at cyc 71, when <code>ibuf_ifu_rdy</code> first refuses.</li>
-</ul>
+<p>The walkthrough follows the stall from decode back to the p0 request, one
+section for each point. Section 4.5 describes the recovery.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>decode</code> contains the bundle, <code>ibuf</code> the instruction buffer,
+<code>ftq_ifu</code> the blocks and the line buffer, <code>ftq</code> the FTQ occupancy, and
+<code>bp_cluster_p0</code> the p0 request and its holds.</p>
+<p>The figure below shows the occupancy of the instruction buffer and the FTQ.</p>
+<p><a href="../fd20_occupancy.svg"><img alt="fd20 instruction buffer and FTQ occupancy" src="../fd20_occupancy.svg" /></a></p>
+<h3 id="41-decode">4.1 Decode<a class="headerlink" href="#41-decode" title="Permanent link">&para;</a></h3>
+<p><code>tb.dec_ibuf_rdy</code> is high one cycle in four: at cyc 17, 21, 25 and so on. At
+cyc 18 (event 1), <code>tb.pd_out.[0].valid</code> is asserted with <code>tb.dec_ibuf_rdy</code> low,
+the first bundle held.</p>
+<h3 id="42-the-instruction-buffer">4.2 The instruction buffer<a class="headerlink" href="#42-the-instruction-buffer" title="Permanent link">&para;</a></h3>
+<p>The instruction buffer takes a block only at 48 entries or fewer, out of 64.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>
+It takes more than decode removes: a block here offers 12 instructions, and
+decode takes 8 in one cycle of four. At cyc 73, <code>u_ibuf.w_n_pres</code> and
+<code>u_ibuf.w_n_pop</code> are 8.</p>
+<p><code>u_ibuf.r_count</code> is 40 at cyc 70, with <code>ibuf_ifu_rdy</code> asserted. At cyc 71
+(event 2), it is 52, with <code>ifu_ibuf_val</code> asserted and <code>ibuf_ifu_rdy</code> low.</p>
+<h3 id="43-the-ifu">4.3 The IFU<a class="headerlink" href="#43-the-ifu" title="Permanent link">&para;</a></h3>
+<p>F3 holds its block while <code>ibuf_ifu_rdy</code> is low.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> Blocks then stop leaving the
+IFU, and the 16 slots of its line buffer fill.</p>
+<p>At cyc 86, <code>ftq_ifu_req_rdy</code> is asserted. At cyc 87 (event 3), <code>ftq_ifu_req_val</code>
+is asserted with <code>ftq_ifu_req_rdy</code> low and <code>ftq_ifu_flush_val</code> clear, and
+<code>u_ifu.u_lbuf.w_slot_ok</code> is 0: no slot is free for the next line.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> The
+earlier low cycles of <code>ftq_ifu_req_rdy</code>, at cyc 22, 31, 45 and 54, are flush
+cycles.</p>
+<h3 id="44-the-ftq-and-the-p0-request">4.4 The FTQ and the p0 request<a class="headerlink" href="#44-the-ftq-and-the-p0-request" title="Permanent link">&para;</a></h3>
+<p>The FTQ keeps allocating while the IFU takes fewer blocks, so its occupancy
+rises until it reaches 64 entries.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> <code>ftq_full</code> then holds the p0 request.<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">5</a></sup></p>
+<p>At cyc 138 (event 4), <code>u_ftq.u_ptr.w_age_alloc</code> is 64 and <code>ftq_full</code> is
+asserted, with <code>ftq_pred_val_p0</code> low and <code>u_ftq.u_npc.h2_ftq_full</code> asserted.
+<code>u_ftq.w_commit_ptr</code> and <code>ftq_pred_idx_p0</code> are both 16.</p>
+<p>From then on, each commit allows one request. At cyc 144 (event 5),
+<code>u_ftq.w_commit_ptr</code> is 17, <code>ftq_full</code> is clear and <code>ftq_pred_val_p0</code> is
+asserted. At cyc 145, <code>ftq_full</code> is asserted again.</p>
+<p>The FTB update hold also withholds the p0 request.<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">6</a></sup> At cyc 82, 94 and 106,
+before the FTQ is full, <code>u_ftq.u_npc.h3_ftb_upd</code> is asserted with
+<code>ftq_pred_val_p0</code> low and <code>ftq_full</code> clear.</p>
+<h3 id="45-recovery">4.5 Recovery<a class="headerlink" href="#45-recovery" title="Permanent link">&para;</a></h3>
+<p>The back edge of the last pass falls through, and the backend redirects to the
+epilogue. At cyc 526 (event 6), <code>tb.bkend_ftq_redir_val</code> is asserted with
+<code>tb.bkend_ftq_redir_pc</code> 0x8000_004A. The redirect clears the stall: <code>ftq_full</code>
+is clear, <code>u_ibuf.r_count</code> is 0 and <code>u_ftq.u_ptr.w_age_alloc</code> is 1.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6702,23 +6739,35 @@ S=fd20_backpressure</code> opens in Surfer. Look at:</p>
 <tr>
 <td>2</td>
 <td>71</td>
-<td>the instruction buffer first refuses the IFU: <code>ifu_ibuf_val</code> with <code>ibuf_ifu_rdy</code> low, <code>r_count</code> 52</td>
+<td>the instruction buffer first deasserts ready: <code>ifu_ibuf_val</code> with <code>ibuf_ifu_rdy</code> low, <code>r_count</code> 52</td>
 <td>buffer full</td>
 </tr>
 <tr>
 <td>3</td>
+<td>87</td>
+<td>the IFU first deasserts ready: <code>ftq_ifu_req_val</code> with <code>ftq_ifu_req_rdy</code> low, no flush</td>
+<td>no line buffer slot</td>
+</tr>
+<tr>
+<td>4</td>
 <td>138</td>
 <td>the FTQ first full (<code>ftq_full</code>); the p0 request is withheld</td>
 <td>FTQ full</td>
 </tr>
 <tr>
-<td>4</td>
+<td>5</td>
+<td>144</td>
+<td>a commit clears <code>ftq_full</code>, and p0 issues one request</td>
+<td>full again at cyc 145</td>
+</tr>
+<tr>
+<td>6</td>
 <td>526</td>
 <td>back edge falls through, a misprediction; redirect to 0x8000_004A</td>
 <td>pass 39, backend</td>
 </tr>
 <tr>
-<td>5</td>
+<td>7</td>
 <td>537</td>
 <td>the run ends</td>
 <td></td>
@@ -6775,9 +6824,24 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>holds the p0 request</td>
 </tr>
 <tr>
+<td></td>
+<td><code>u_ftq.u_npc.h2_ftq_full</code></td>
+<td>the hold from a full FTQ</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.u_npc.h3_ftb_upd</code></td>
+<td>the hold from an FTB update</td>
+</tr>
+<tr>
 <td>ftq</td>
 <td><code>u_ftq.w_commit_ptr</code></td>
 <td>FTQ commit pointer</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.u_ptr.w_age_alloc</code></td>
+<td>FTQ occupancy</td>
 </tr>
 <tr>
 <td></td>
@@ -6850,6 +6914,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>FTQ commit pointer as the IFU sees it</td>
 </tr>
 <tr>
+<td></td>
+<td><code>u_ifu.u_lbuf.w_slot_ok</code></td>
+<td>the IFU line buffer has a free slot</td>
+</tr>
+<tr>
 <td>ibuf</td>
 <td><code>ifu_ibuf_val</code></td>
 <td>the IFU offers a block to the instruction buffer</td>
@@ -6857,7 +6926,7 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>ifu_ibuf_en</code></td>
-<td>per-lane mask of the slots offered</td>
+<td>per-position mask of the instructions offered</td>
 </tr>
 <tr>
 <td></td>
@@ -6931,7 +7000,32 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd20_backpressure</code> runs the scenario; <code>make view S=fd20_backpressure</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd20_backpressure.svh</code>, <code>waves/fd20_backpressure.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd20_backpressure.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd20_backpressure.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>ibuf_ifu_rdy</code>: <code>rtl/core/frontend/ibuf/rtl/ibuf.sv:114</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>rtl/core/frontend/ifu/rtl/ifu_f3.sv:56-57</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>ftq_ifu_req_rdy</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:348</code>.
+<code>w_slot_ok</code>, <code>alloc_ok</code>: <code>rtl/core/frontend/ifu/rtl/ifu_lbuf.sv:172-179</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>ftq_full</code>: <code>rtl/core/frontend/ftq/rtl/ftq_ptr.sv:247</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p><code>w_hold</code>: <code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309</code>.
+<code>ftq_pred_val_p0</code>: <code>:377</code>.&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p><code>h3_ftb_upd</code>: <code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309</code>.&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

@@ -2543,34 +2543,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2597,10 +2569,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-the-straddling-instruction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 The straddling instruction
       
     </span>
   </a>
@@ -2608,10 +2580,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-compressed-control-transfers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 Compressed control transfers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-non-aligned-block-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Non-aligned block starts
       
     </span>
   </a>
@@ -6395,34 +6378,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6449,10 +6404,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-the-straddling-instruction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 The straddling instruction
       
     </span>
   </a>
@@ -6460,10 +6415,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-compressed-control-transfers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 Compressed control transfers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-non-aligned-block-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Non-aligned block starts
       
     </span>
   </a>
@@ -6521,15 +6487,19 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd17_rvc</code> is the FD-17 demonstration scenario. It is a demo, not a
-verification test. Straight-line code of mixed 16- and 32-bit
-instructions places a 32-bit instruction at the last halfword of a
-32-byte block. The IFU delivers it whole from the block's 17th halfword,
-and the next block starts on its tail. A loop of compressed control
-transfers then runs from block starts that are not 32-byte aligned. The
-run passes if the straddling instruction reaches retirement whole and
-16-bit instructions retire.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd17_rvc</code> (FD-17) demonstrates compressed and non-aligned code:</p>
+<ol>
+<li>a 32-bit instruction at the last halfword of a block reaches decode whole</li>
+<li>the next block starts on the tail of that instruction</li>
+<li>compressed control transfers reach decode expanded, and the blocks they start
+   are not 32-byte aligned</li>
+</ol>
+<p>The program runs mixed 16-bit and 32-bit instructions into the straddling
+instruction, then eight passes of a loop of compressed control transfers.</p>
+<p>The result line in the log file reports the number of straddling instructions
+delivered whole and the number of 16-bit instructions.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6564,6 +6534,18 @@ run passes if the straddling instruction reaches retirement whole and
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd17_rvc.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6579,115 +6561,205 @@ run passes if the straddling instruction reaches retirement whole and
 </code></pre></div></p>
 <p>Log file output:
 <div class="highlight"><pre><span></span><code>-I: fd17_rvc: PASS, straddling 32-bit instructions delivered whole 1,
-    16-bit instructions 98, events checked 5 of 5, cyc 198
+    16-bit instructions 98, events checked 9 of 9, cyc 198
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>Both counts are taken in <code>be_retire_hook</code> (<code>tb/fe_demo_mon.svh:324-329</code>)
-as each expected instruction retires, while <code>meas</code> is set.</p>
-<div class="highlight"><pre><span></span><code>n_straddle   no fault, !is_rvc, pos == 15, and the packet's instr equals
-             the expected (expanded) encoding: a 32-bit instruction in
-             the last halfword of its block, delivered whole
-n_rvc        no fault, is_rvc: a 16-bit instruction retired
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:138</code>) is
-<code>n_straddle &gt; 0 &amp;&amp; n_rvc &gt; 0</code>. <code>tb_fe_demo.sv</code> also requires the whole
-stream to retire with no errors.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>straddling 32-bit instructions delivered whole 1</code> is the
-  instruction at +0x3E (seen at cycle 21, section 4.1).</li>
-<li><code>16-bit instructions 98</code> matches the program (derived from the
-  source): 13 c.addi in mixed(20), 4 c.addi to +0x3E, 3 in mixed(5);
-  9 per odd pass and 10 per even pass (the c.addi at +0x52), 76 over
-  the 8 passes; 2 in the final mixed(3). 20 + 76 + 2 = 98. The halt is
-  32-bit.</li>
-<li>Departures from <code>planning/showcase/fe_demo_scenarios.md</code> FD-17:</li>
-<li>FD-17's shows line names "a 34-byte block, and a 32-bit
-    instruction straddling two blocks". These are one event here: the
-    straddling instruction is delivered in the block before the
-    boundary (the 34-byte window), and the next block starts on its
-    tail. No instruction is split between two delivered blocks; the
-    design does not do that (IFU-8, IFU-11).</li>
-<li>The proof as built checks the instruction's encoding and position
-    at retirement; FD-17's proof is "a straddling instruction
-    delivered whole". It matches.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log line
+as each expected instruction retires. The program has one straddling
+instruction. Of the 16-bit instructions, 22 are outside the loop and 76 are in
+it: nine on each of the eight passes, and one more on each even pass.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>straddling 32-bit instructions delivered</td>
+<td><code>n_straddle</code></td>
+<td>no fault, <code>is_rvc</code> 0, <code>pos</code> 15, and <code>instr</code> equal to the expected encoding, at retirement</td>
+</tr>
+<tr>
+<td>16-bit instructions</td>
+<td><code>n_rvc</code></td>
+<td>no fault, <code>is_rvc</code> 1, at retirement</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd17_rvc.svh</code>, task <code>prog_fd17</code>. M-mode, bare. The
-addresses are offsets from RESET_VECTOR 0x8000_0000
-(<code>rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:40</code>). <code>mixed(n)</code> writes
-c.addi, except addi for every k with k % 3 == 1
-(<code>fe_tb_writer.svh:250</code>; the writer is
-<code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh</code>).</p>
-<div class="highlight"><pre><span></span><code>+0x00  mixed(20)          13 c.addi, 7 addi              0x36 bytes
-+0x36  4 x c.addi         to +0x3E
-+0x3E  addi t0,t0,1       32-bit, halfwords +0x3E and +0x40: crosses
-                          the 32-byte block end and the 64-byte line
-+0x42  mixed(5)           top = +0x4E
-loop, 8 passes (it = 0..7), from top = +0x4E:
-+0x4E  c.addi
-+0x50  c.bnez x8, +0x54   taken on odd passes (skips +0x52)
-+0x52  c.addi             executed on even passes; written dry on odd
-+0x54  addi
-+0x58  c.jalr x1          to fn = +0x400 (INDIRECT_CALL), link +0x5A
-+0x400 c.addi; addi; c.jr x1 at +0x406 (RETURN to +0x5A)
-+0x5A  c.addi
-+0x5C  c.j +0x64          +0x5E..+0x63 written dry (3 c.addi)
-+0x64  c.addi
-+0x66  c.beqz x8, top     taken on passes 0..6
-+0x68  mixed(3), then jal x0,0 (halt)
+<p>The program is written by the task <code>prog_fd17</code> in <code>programs/fd17_rvc.svh</code>.</p>
+<p>The code consists of mixed 16-bit and 32-bit instructions that place a 32-bit
+instruction at the last halfword of the block at 0x8000_0020, a loop of eight
+passes, a function called from the loop, and a short epilogue.</p>
+<p>The program runs in M-mode with bare addressing.</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; mixed code
+0x8000_0002         addi   t0, t0, 1        ; mixed code
+0x8000_0006         c.addi a0, 1            ; mixed code
+0x8000_0008         c.addi a0, 1            ; mixed code
+0x8000_000A         addi   t0, t0, 1        ; mixed code
+0x8000_000E         c.addi a0, 1            ; mixed code
+0x8000_0010         c.addi a0, 1            ; mixed code
+0x8000_0012         addi   t0, t0, 1        ; mixed code
+0x8000_0016         c.addi a0, 1            ; mixed code
+0x8000_0018         c.addi a0, 1            ; mixed code
+0x8000_001A         addi   t0, t0, 1        ; mixed code
+0x8000_001E         c.addi a0, 1            ; mixed code
+0x8000_0020         c.addi a0, 1            ; mixed code
+0x8000_0022         addi   t0, t0, 1        ; mixed code
+0x8000_0026         c.addi a0, 1            ; mixed code
+0x8000_0028         c.addi a0, 1            ; mixed code
+0x8000_002A         addi   t0, t0, 1        ; mixed code
+0x8000_002E         c.addi a0, 1            ; mixed code
+0x8000_0030         c.addi a0, 1            ; mixed code
+0x8000_0032         addi   t0, t0, 1        ; mixed code
+0x8000_0036         c.addi a0, 1            ; filler
+0x8000_0038         c.addi a0, 1            ; filler
+0x8000_003A         c.addi a0, 1            ; filler
+0x8000_003C         c.addi a0, 1            ; filler
+0x8000_003E  X:     addi   t0, t0, 1        ; straddles the block end
+
+0x8000_0042         c.addi a0, 1            ; mixed code
+0x8000_0044         addi   t0, t0, 1        ; mixed code
+0x8000_0048         c.addi a0, 1            ; mixed code
+0x8000_004A         c.addi a0, 1            ; mixed code
+0x8000_004C         addi   t0, t0, 1        ; mixed code
+
+0x8000_0050  top:   c.addi a0, 1            ; loop start
+0x8000_0052         c.bnez x8, T            ; taken on odd passes
+0x8000_0054         c.addi a0, 1            ; reached on even passes
+0x8000_0056  T:     addi   t0, t0, 1        ; filler
+0x8000_005A         c.jalr x1               ; call to fn
+0x8000_005C  R:     c.addi a0, 1            ; return address
+0x8000_005E         c.j    U                ; to U
+0x8000_0066  U:     c.addi a0, 1            ; filler
+0x8000_0068         c.beqz x8, top          ; taken on passes 0 to 6
+
+0x8000_006A         c.addi a0, 1            ; epilogue
+0x8000_006C         addi   t0, t0, 1        ; epilogue
+0x8000_0070         c.addi a0, 1            ; epilogue
+0x8000_0072  hold:  jal    x0, hold         ; termination
+
+0x8000_0400  fn:    c.addi a0, 1            ; function body
+0x8000_0402         addi   t0, t0, 1        ; function body
+0x8000_0406         c.jr   x1               ; return to R
 </code></pre></div>
-<ul>
-<li>The writer appends each compressed control transfer with its 32-bit
-  expansion (<code>fe_tb_writer.svh:435-492</code>, cj, cbz, cjr, cjalr), which is
-  what decode delivers in <code>instr</code>. Outcomes are the writer's, as in
-  every scenario; x8 is not read.</li>
-<li>The loop's blocks start at +0x4E, +0x54 and other non-aligned
-  addresses: a taken transfer starts the next FTQ block at its target.</li>
-</ul>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work, other than the
+instruction at X. Their purpose is to mix 16-bit and 32-bit instructions and to
+place X and the control transfers.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. x8 is never
+read.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>The 17-halfword window. F2 selects 17 halfwords from the block
-   offset (<code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:445-448</code>), from the two
-   lines <code>{rd_data1, rd_data0}</code>. A 32-bit instruction that starts at
-   position 15 of a 32-byte block therefore completes inside the block.
-   A block in the upper half of its line asks for the next line as
-   well (<code>w_two</code>, <code>ifu_fetch.sv:281</code>, IFU-7).</li>
-<li>The block at +0x20 ends by falling through, and its last delivered
-   instruction is 32-bit and starts 2 bytes before next_pc (+0x40). F3
-   then sets the straddle register (<code>w_strad_set</code>,
-   <code>rtl/core/frontend/ifu/rtl/ifu_f3.sv:375</code>; the register is
-   described at <code>ifu_f3.sv:64</code>) with <code>r_strad_pc</code> = +0x40.</li>
-<li>The block at +0x40 arrives at F3 with that start PC, so <code>first_tail</code>
-   (<code>ifu_f3.sv:250</code>) starts its walk at position 1: the halfword at
-   +0x40 is the tail of the instruction already delivered.</li>
-<li>Seen in the run (fst2vcd on <code>out/fd17_rvc/fd17_rvc.fst</code>): the FTQ
-   blocks start at +0x00, +0x20, +0x40, ...; at cycle 21
-   <code>r_strad_val</code> is 1 with <code>r_strad_pc</code> 0x8000_0040; in the same cycle
-   decode slot 4 holds start_pc 0x8000_003E, pos 15 (f), is_rvc 0,
-   instr 0x00128293, ftq_idx 1; the next bundle starts at 0x8000_0042,
-   pos 1, ftq_idx 2.</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd17_rvc.sucl</code>, which <code>make view S=fd17_rvc</code>
-opens in Surfer. Look at:</p>
-<ul>
-<li><code>ftq_ifu_start_pc</code> and <code>ftq_ifu_next_pc</code>: the blocks +0x20 to +0x40
-  and +0x40 to +0x60 at the start of the run.</li>
-<li><code>ifu_ibuf_val</code>, <code>ifu_ibuf_en</code> and <code>ibuf_ifu_rdy</code>: the blocks entering
-  the ibuf.</li>
-<li><code>pd_out.[4]</code> at cycle 21: start_pc 0x8000_003E, pos 15, is_rvc 0.</li>
-<li>In the loop, <code>pd_out.[i].is_rvc</code> set on the compressed transfers and
-  <code>pd_out.[0].instr</code> holding their expansions (jal, beq/bne, jalr). The
-  decode group shows the first lane in full and the <code>is_rvc</code> of every
-  lane; of lane 4 it also shows the PC and position (DOC-006).</li>
-<li>The straddle register, group <code>ifu_f3_straddle</code>
-  (<code>u_ifu.u_f3.r_strad_val</code>, <code>r_strad_pc</code>, <code>r_strad_idx</code>): set at
-  cycle 21 with <code>r_strad_pc</code> 0x8000_0040.</li>
-</ul>
+<p>The walkthrough follows the three behaviors of the introduction. Section 4.1
+describes the straddling instruction, section 4.2 the expansion of the
+compressed control transfers, and section 4.3 the blocks those transfers start.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a marker
+in the waveform.</p>
+<p>The waveform group <code>ftq_ifu</code> contains the blocks, <code>ifu_f3</code> the predecode
+writeback, <code>ifu_f3_straddle</code> the straddle register, <code>ibuf</code> the offers to the
+instruction buffer, <code>backend</code> the backend redirects, and <code>decode</code> the lanes at
+decode.</p>
+<p>The figure below shows the two blocks around the block end.</p>
+<p><a href="../fd17_blocks.svg"><img alt="fd17 the straddling instruction across two blocks" src="../fd17_blocks.svg" /></a></p>
+<h3 id="41-the-straddling-instruction">4.1 The straddling instruction<a class="headerlink" href="#41-the-straddling-instruction" title="Permanent link">&para;</a></h3>
+<p>The IFU selects 17 halfwords from the block offset, so a 32-bit instruction that
+starts at position 15 of a 32-byte block completes inside that block.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> The
+block at 0x8000_0020 starts in the upper half of its line, so it also uses the
+next line, which holds the second halfword of X.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<p>That block ends by falling through, and its last instruction starts 2 bytes
+before the end of the block. The straddle register therefore records the next
+block's start address, and the next block begins after the tail.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup></p>
+<p>At cyc 20, <code>ifu_ibuf_en</code> is 0xFBBB, with bit 15 set for X. At cyc 21, it is
+0xEF76 for the block at 0x8000_0040, with bit 0 clear for the tail.</p>
+<p>At cyc 21 (event 1), <code>tb.pd_out.[4].valid</code> is asserted with
+<code>tb.pd_out.[4].start_pc</code> 0x8000_003E, <code>tb.pd_out.[4].pos</code> 15,
+<code>tb.pd_out.[4].instr</code> 0x0012_8293 and <code>tb.pd_out.[4].is_rvc</code> 0.
+<code>u_ifu.u_f3.r_strad_val</code> is asserted with <code>u_ifu.u_f3.r_strad_pc</code> 0x8000_0040.</p>
+<p>At cyc 22 (event 2), <code>tb.pd_out.[0].start_pc</code> is 0x8000_0042 and
+<code>tb.pd_out.[0].pos</code> is 1, with <code>tb.pd_out.[0].ftq_idx</code> 2, the next block.</p>
+<h3 id="42-compressed-control-transfers">4.2 Compressed control transfers<a class="headerlink" href="#42-compressed-control-transfers" title="Permanent link">&para;</a></h3>
+<p>Each compressed control transfer reaches decode as its 32-bit expansion, with
+<code>is_rvc</code> 1.</p>
+<table>
+<thead>
+<tr>
+<th>Instruction</th>
+<th>cyc</th>
+<th>Lane</th>
+<th>Address</th>
+<th><code>instr</code></th>
+<th>Expansion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>c.jalr x1</td>
+<td>23</td>
+<td>1</td>
+<td>0x8000_005A</td>
+<td>0x0000_80E7</td>
+<td>jalr x1, 0(x1)</td>
+</tr>
+<tr>
+<td>c.jr x1</td>
+<td>95</td>
+<td>2</td>
+<td>0x8000_0406</td>
+<td>0x0000_8067</td>
+<td>jalr x0, 0(x1)</td>
+</tr>
+<tr>
+<td>c.j U</td>
+<td>96</td>
+<td>1</td>
+<td>0x8000_005E</td>
+<td>0x0080_006F</td>
+<td>jal x0, +8</td>
+</tr>
+<tr>
+<td>c.beqz x8</td>
+<td>97</td>
+<td>1</td>
+<td>0x8000_0068</td>
+<td>0xFE04_04E3</td>
+<td>beq x8, x0, -24</td>
+</tr>
+<tr>
+<td>c.bnez x8</td>
+<td>98</td>
+<td>1</td>
+<td>0x8000_0052</td>
+<td>0x0004_1263</td>
+<td>bne x8, x0, +4</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-non-aligned-block-starts">4.3 Non-aligned block starts<a class="headerlink" href="#43-non-aligned-block-starts" title="Permanent link">&para;</a></h3>
+<p>A taken transfer starts the next block at its target, so the loop's blocks start
+at 0x8000_0050, 0x8000_0056, 0x8000_005C, 0x8000_0066 and 0x8000_0054. Positions
+are counted from the block start.</p>
+<p>The first pass has no predictions, so each transfer is corrected by a redirect.</p>
+<p>The c.jalr is resolved by the backend: <code>tb.bkend_ftq_redir_val</code> is asserted with
+<code>tb.bkend_ftq_redir_pc</code> 0x8000_0400 at cyc 25. At cyc 28 (event 3),
+<code>ftq_ifu_start_pc</code> is 0x8000_0400. The predecode redirect to 0x8000_0066 at
+cyc 22 is for the c.j, which follows the c.jalr, and is on the wrong path.</p>
+<p>The c.jr is also resolved by the backend, with <code>tb.bkend_ftq_redir_pc</code>
+0x8000_005C at cyc 45. At cyc 48 (event 4), <code>ftq_ifu_start_pc</code> is 0x8000_005C,
+the first block with a non-aligned start, and <code>ftq_ifu_next_pc</code> is 0x8000_007C.
+At cyc 53, <code>tb.pd_out.[0].start_pc</code> is 0x8000_005C with <code>tb.pd_out.[0].pos</code> 0.</p>
+<p>The c.j is corrected by predecode: <code>u_ftq.w_pd_redir_val</code> is asserted at cyc 54.
+At cyc 57 (event 5), <code>ftq_ifu_start_pc</code> is 0x8000_0066.</p>
+<p>The c.beqz is resolved by the backend, with <code>tb.bkend_ftq_redir_pc</code> 0x8000_0050
+at cyc 65. At cyc 69 (event 6), <code>ftq_ifu_start_pc</code> is 0x8000_0050.</p>
+<p>Compressed transfers are predicted in later passes. At cyc 90 (event 7),
+<code>ftq_ifu_start_pc</code> is 0x8000_0400 and <code>ftq_ifu_next_pc</code> is 0x8000_005C, with
+<code>ftq_ifu_taken_val</code> asserted and <code>ftq_ifu_taken_pos</code> 3, the position of the
+c.jr.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6722,10 +6794,34 @@ opens in Surfer. Look at:</p>
 <td>3</td>
 <td>28</td>
 <td>first fetch of fn, 0x8000_0400, after the c.jalr</td>
-<td><code>ftq_ifu_start_pc</code></td>
+<td>redirect at cyc 25</td>
 </tr>
 <tr>
 <td>4</td>
+<td>48</td>
+<td>first block with a non-aligned start, 0x8000_005C, after the c.jr</td>
+<td>redirect at cyc 45</td>
+</tr>
+<tr>
+<td>5</td>
+<td>57</td>
+<td>block at 0x8000_0066, after the c.j</td>
+<td>predecode redirect, cyc 54</td>
+</tr>
+<tr>
+<td>6</td>
+<td>69</td>
+<td>block at 0x8000_0050, after the c.beqz</td>
+<td>redirect at cyc 65</td>
+</tr>
+<tr>
+<td>7</td>
+<td>90</td>
+<td>first predicted-taken compressed transfer: the c.jr, position 3 of the block at 0x8000_0400</td>
+<td>target 0x8000_005C</td>
+</tr>
+<tr>
+<td>8</td>
 <td>198</td>
 <td>the run ends</td>
 <td></td>
@@ -6874,12 +6970,22 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>ifu_ibuf_en</code></td>
-<td>per-lane mask of the slots offered</td>
+<td>per-position mask of the instructions offered</td>
 </tr>
 <tr>
 <td></td>
 <td><code>ibuf_ifu_rdy</code></td>
 <td>the instruction buffer takes the block</td>
+</tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>redirect target</td>
 </tr>
 <tr>
 <td>decode</td>
@@ -6928,6 +7034,51 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
+<td><code>tb.pd_out.[1].valid</code></td>
+<td>lane 1 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[1].start_pc</code></td>
+<td>lane 1 instruction address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[1].instr</code></td>
+<td>lane 1 instruction, expanded if compressed</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[1].is_rvc</code></td>
+<td>lane 1 instruction is 16-bit</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[2].valid</code></td>
+<td>lane 2 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[2].start_pc</code></td>
+<td>lane 2 instruction address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[2].instr</code></td>
+<td>lane 2 instruction, expanded if compressed</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[2].is_rvc</code></td>
+<td>lane 2 instruction is 16-bit</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.pd_out.[3].is_rvc</code></td>
+<td>lane 3 instruction is 16-bit</td>
+</tr>
+<tr>
+<td></td>
 <td><code>tb.pd_out.[4].valid</code></td>
 <td>lane 4 valid</td>
 </tr>
@@ -6943,23 +7094,13 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
+<td><code>tb.pd_out.[4].instr</code></td>
+<td>lane 4 instruction, expanded if compressed</td>
+</tr>
+<tr>
+<td></td>
 <td><code>tb.pd_out.[4].is_rvc</code></td>
 <td>lane 4 instruction is 16-bit</td>
-</tr>
-<tr>
-<td></td>
-<td><code>tb.pd_out.[1].is_rvc</code></td>
-<td>lane 1 instruction is 16-bit</td>
-</tr>
-<tr>
-<td></td>
-<td><code>tb.pd_out.[2].is_rvc</code></td>
-<td>lane 2 instruction is 16-bit</td>
-</tr>
-<tr>
-<td></td>
-<td><code>tb.pd_out.[3].is_rvc</code></td>
-<td>lane 3 instruction is 16-bit</td>
 </tr>
 <tr>
 <td></td>
@@ -6983,7 +7124,22 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd17_rvc</code> runs the scenario; <code>make view S=fd17_rvc</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd17_rvc.svh</code>, <code>waves/fd17_rvc.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd17_rvc.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/examples/fe_demo/docs/fd17_rvc.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p>IFU-8: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:445-448</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>w_two</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:281</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>w_strad_set</code>: <code>rtl/core/frontend/ifu/rtl/ifu_f3.sv:375</code>. <code>first_tail</code>:
+<code>:250</code>. The straddle register is described at <code>:64</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

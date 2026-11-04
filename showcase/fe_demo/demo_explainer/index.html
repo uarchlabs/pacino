@@ -6457,7 +6457,7 @@
 </tbody>
 </table>
 <p>The shared testbench models are found in <code>rtl/core/frontend/fe_top/tb/models/</code>,
-shortened to <code>models/</code> below. </p>
+shortened to <code>models/</code> below.</p>
 <hr />
 <h2 id="1-the-scenario">1. The scenario<a class="headerlink" href="#1-the-scenario" title="Permanent link">&para;</a></h2>
 <p>A scenario exercises isolated aspects of the Pacino frontend (FE). The full
@@ -6468,14 +6468,14 @@ FD-1 to FD-24. Each scenario has an associated make target in
 writeup:</p>
 <ul>
 <li><code>programs/fdNN_&lt;name&gt;.svh</code><ul>
-<li>contains the task <code>prog_fdNN</code> which populates the models memory
-  and begins exectution.</li>
-<li>In the demos there is no assembly step, the instructions are
+<li>contains the task <code>prog_fdNN</code> which populates the model's memory
+  and begins execution.</li>
+<li>In the demos there is no assembly step; the instructions are
   written to model memory directly as instruction words.</li>
 </ul>
 </li>
 <li><code>waves/fdNN_&lt;name&gt;.sucl</code><ul>
-<li>this is Surfer command file: containing signals, groups and markers</li>
+<li>this is a Surfer command file containing signals, groups and markers</li>
 <li>Events in the waveforms are annotated using these markers. The
   markers are also described in the scenario description.</li>
 </ul>
@@ -6487,7 +6487,7 @@ writeup:</p>
 </ul>
 <p>A run has four steps:</p>
 <ol>
-<li><code>begin_scen</code> prints the start line, resets all models and the monitors.</li>
+<li><code>begin_scen</code> prints the start line and resets all models and the monitors.</li>
 <li>The program task writes the program and the expected instruction list 
    to the model memory.</li>
 <li><code>demo_go</code> releases reset and runs until every expected instruction 
@@ -6502,20 +6502,20 @@ instantiates the FE as <code>fe_top</code>, and the page table walker. </p>
 <p>There are two simulation models, based on the number of prediction slots
 selected. <code>NUM_PRED_SLOTS</code> selects 1 or 2 prediction slots. Pacino's FE
 runs either.</p>
-<p><code>NUM_PRED_SLOTS</code>=1 is used for the simpler explanations to reduce amount of
-data and the number of signals that much be recorded.</p>
+<p><code>NUM_PRED_SLOTS</code>=1 is used for the simpler explanations to reduce the amount of
+data and the number of signals that must be recorded.</p>
 <p>Full performance, <code>NUM_PRED_SLOTS</code>=2, scenarios are included to show dual
-prediction operation. <code>NUM_PRED_SLOTS</code>=2 is configuration used for performance
-analysis.</p>
+prediction operation. <code>NUM_PRED_SLOTS</code>=2 is the configuration used for
+performance analysis.</p>
 <p>FD-3, FD-22, FD-23 and FD-24 run the dual prediction model.</p>
 <p><a id="fast-init"></a><strong>Fast initialization.</strong> The predictor tables need an
 initial value before they can predict. In the design, TAGE, ITTAGE and SC
 each walk their tables after reset, writing one entry per cycle, and raise a
 ready when the walk ends: ITTAGE at cyc 513, SC at cyc 1025 and TAGE at cyc
-2049 (FD-1). Until all three readies are high, the FTQ holds its p0 request
-(<code>u_ftq.u_npc.w_hold</code>).</p>
-<p>Every scenario except FD-1 skips the walk. The Makefile passes
-<code>+TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1</code> (<code>FE_FAST_INIT</code>,
+2049 (FD-1). The FTQ holds its p0 request (<code>u_ftq.u_npc.w_hold</code>) until all
+three readies are high.</p>
+<p>Every scenario except FD-1 skips the table initialization walk. The Makefile
+passes <code>+TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1</code> (<code>FE_FAST_INIT</code>,
 <code>rtl/core/frontend/fe_top/fe_top_srcs.mk</code>). With these, a SystemVerilog
 <code>initial</code> block in each table writes its initial values at time 0, and each
 predictor ties its ready to 1 (<code>tage.sv</code> line 333, and the same mux in
@@ -6535,7 +6535,8 @@ The backend model checks each retired instruction against the list (section 3).<
 image. The page table walker reads from this image.</p>
 <p>Scenarios run either in machine mode with physical addresses or in supervisor
 mode under Sv39 translation. For the Sv39 scenarios, the writer also builds the
-page tables in the memory image. FD-15 also uses two-stage (guest) translation.</p>
+page tables in the memory image. FD-14 and FD-15 also use two-stage (guest)
+translation.</p>
 <p>The program writer includes tasks which emit either 16b or 32b instructions.
 The writer emits either "filler" or "active" instructions.</p>
 <p>The filler instructions serve to position an active instruction at a particular
@@ -6543,7 +6544,7 @@ PC. The PCs are varied to set up configurations which illustrate operation of
 the frontend.</p>
 <p>The active instructions are branches or jumps, plus <code>fence.i</code>, <code>cbo.inval</code> and
 a store used in FD-13 and FD-19. Filler instructions are variations of addi.
-The emitters write filler instructions and branches/etc; <code>demo_go</code> terminates
+The emitters write filler instructions, branches, etc.; <code>demo_go</code> terminates
 each program with an instruction which jumps to itself, a halt.</p>
 <p>The memory image is written before reset is released.</p>
 <p>The writer appends each instruction to the expected execution list only if it
