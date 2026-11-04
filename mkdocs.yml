@@ -57,6 +57,9 @@ extra:
     - fd11_be_mispredict
     - fd12_training
     - fd13_l1i
+    - fd14_translation
+    - fd15_faults
+    - fd16_page_cross
 
 nav:
   - Home: index.md
