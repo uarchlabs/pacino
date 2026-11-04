@@ -22,14 +22,15 @@ marker_set c46_walk_for_VPN_0x80010 495
 marker_set c70_walk_for_VPN_0x80011 735
 marker_set c93_L1I_request_for_0x8100_0FC0 965
 marker_set c94_the_translation_queue_entry_of_the 975
-marker_set c94_L1I_request_for_0x8120_5000 975
+marker_set c107_the_second_line_returns 1105
+marker_set c109_the_straddling_instruction_reaches_decode 1125
 marker_set c112_the_run_ends 1155
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus m
-group_marked ftq_ifu
 item_focus n
+group_marked ftq_ifu
+item_focus o
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -52,9 +53,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_xlate
 variable_add tb.dut.u_ifu.u_xlate.xq_val
-item_focus bh
-group_marked ifu_xlate
 item_focus bi
+group_marked ifu_xlate
+item_focus bj
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_xlate.xq_pop
 item_set_format Bit
@@ -77,9 +78,9 @@ item_set_format Bit
 item_unfocus
 # group itlb
 variable_add tb.dut.ifu_itlb_req_val
-item_focus cc
-group_marked itlb
 item_focus cd
+group_marked itlb
+item_focus ce
 item_set_format Bit
 variable_add tb.dut.ifu_itlb_req_rdy
 item_set_format Bit
@@ -96,9 +97,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus ck
-group_marked ifu_l1i
 item_focus cl
+group_marked ifu_l1i
+item_focus cm
 item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Bit
@@ -115,9 +116,9 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus dc
-group_marked decode
 item_focus dd
+group_marked decode
+item_focus de
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -135,5 +136,15 @@ variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
+variable_add tb.pd_out.[7].valid
+item_set_format Bit
+variable_add tb.pd_out.[7].start_pc
+item_set_format Hexadecimal
+variable_add tb.pd_out.[7].pos
+item_set_format Unsigned
+variable_add tb.pd_out.[7].instr
+item_set_format Hexadecimal
+variable_add tb.pd_out.[7].is_rvc
+item_set_format Bit
 item_unfocus
 zoom_to 16 336

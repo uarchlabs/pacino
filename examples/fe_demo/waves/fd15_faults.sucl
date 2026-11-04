@@ -21,8 +21,10 @@ item_focus f
 marker_set c90_walk_for_VPN_0x80400 935
 marker_set c104_the_walker_answers_a_page_fault 1075
 marker_set c108_the_page_fault_reaches_decode 1115
+marker_set c110_the_trap_redirect_for_the_page 1135
 marker_set c166_walk_for_VPN_0x80600 1695
 marker_set c187_the_walker_answers_a_hit 1905
+marker_set c188_the_ITLB_answers_the_access_fault 1915
 marker_set c191_the_access_fault_reaches_decode 1945
 marker_set c202_the_ecalls_trap_redirect_to_V 2055
 marker_set c399_walk_for_VPN_0x80800 4025
@@ -32,9 +34,9 @@ marker_set c700_the_run_ends 7035
 item_unfocus
 # group itlb
 variable_add tb.dut.ifu_itlb_req_val
-item_focus bb
+item_focus bd
 group_marked itlb
-item_focus bc
+item_focus be
 item_set_format Bit
 variable_add tb.dut.ifu_itlb_req_rdy
 item_set_format Bit
@@ -51,9 +53,9 @@ item_set_format Unsigned
 item_unfocus
 # group walker
 variable_add tb.itlb_l2t_req_val
-item_focus bj
+item_focus bl
 group_marked walker
-item_focus bk
+item_focus bm
 item_set_format Bit
 variable_add tb.itlb_l2t_req_rdy
 item_set_format Bit
@@ -78,9 +80,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_xlate
 variable_add tb.dut.u_ifu.u_xlate.xq_val
-item_focus cf
+item_focus ch
 group_marked ifu_xlate
-item_focus cg
+item_focus ci
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_xlate.xq_pop
 item_set_format Bit
@@ -103,18 +105,18 @@ item_set_format Bit
 item_unfocus
 # group ifu_fault
 variable_add tb.dut.ifu_ftq_fault_val
-item_focus da
+item_focus dc
 group_marked ifu_fault
-item_focus db
+item_focus dd
 item_set_format Bit
 variable_add tb.dut.ifu_ftq_fault_pos
 item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus dd
+item_focus df
 group_marked decode
-item_focus de
+item_focus dg
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -132,12 +134,14 @@ variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
+variable_add tb.pd_out.[0].fault_gpa
+item_set_format Hexadecimal
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus dn
+item_focus ea
 group_marked backend
-item_focus do
+item_focus eb
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned

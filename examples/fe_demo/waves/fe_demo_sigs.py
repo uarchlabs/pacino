@@ -214,7 +214,7 @@ FORMATS = [
      'number, PROVISIONAL'),
     # Addresses, targets, PCs and data.
     (r'(.*_)?pc(_[pu]\d)?|.*_pft_p\d|(.*_)?(target|tgt)(_p\d)?|.*addr(ess)?|'
-     r'.*_[vp]pn\d?|fault_va|instr|.*_(data|cmp|swap)|(tbl_)?ri_wd',
+     r'.*_[vp]pn\d?|fault_va|fault_gpa|instr|.*_(data|cmp|swap)|(tbl_)?ri_wd',
      'Hexadecimal',
      'an address, target, PC or data'),
 ]
@@ -599,15 +599,21 @@ def scenarios(n):
                       ('ftq_ifu', ftq_ifu),
                       ('ifu_l1i', ifu_l1i + [D + '.l1i_ifu_inv_done']),
                       ('l1i', l1i[:4] + [L + '.u_mshr.accept'] + l1i[4:])]),
-        ('fd14_translation', [('clock', clk), ('ifu_xlate', xq),
+        ('fd14_translation', [('clock', clk), ('backend', be_redir[:2]),
+                              ('ifu_xlate', xq),
                               ('itlb', itlb), ('walker', walk),
                               ('walker_mem', walk_mem)]),
         ('fd15_faults', [('clock', clk), ('itlb', itlb), ('walker', walk),
                          ('ifu_xlate', xq), ('ifu_fault', fault),
-                         ('decode', dec0), ('backend', backend)]),
+                         ('decode', dec0 + ['tb.pd_out.[0].fault_gpa']),
+                         ('backend', backend)]),
         ('fd16_page_cross', [('clock', clk), ('ftq_ifu', ftq_ifu),
                              ('ifu_xlate', xq), ('itlb', itlb),
-                             ('ifu_l1i', ifu_l1i), ('decode', dec0)]),
+                             ('ifu_l1i', ifu_l1i),
+                             ('decode', dec0 +
+                              ['tb.pd_out.[7].%s' % f for f in
+                               ('valid', 'start_pc', 'pos', 'instr',
+                                'is_rvc')])]),
         ('fd17_rvc', [('clock', clk), ('ftq_ifu', ftq_ifu),
                       ('ifu_f3', ifu_f3), ('ifu_f3_straddle', f3_strad),
                       ('ibuf', ibuf), ('decode', dec_rvc)]),

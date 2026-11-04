@@ -90,8 +90,10 @@
     evt_def("walk_for_VPN_0x80400", EV_WINDOW);
     evt_def("the_walker_answers_a_page_fault", EV_WINDOW);
     evt_def("the_page_fault_reaches_decode", EV_WINDOW);
+    evt_def("the_trap_redirect_for_the_page", EV_WINDOW, 1);
     evt_def("walk_for_VPN_0x80600", EV_WINDOW);
     evt_def("the_walker_answers_a_hit", EV_WINDOW);
+    evt_def("the_ITLB_answers_the_access_fault", EV_WINDOW);
     evt_def("the_access_fault_reaches_decode", EV_WINDOW);
     evt_def("the_ecalls_trap_redirect_to_V", EV_WINDOW, 1);
     evt_def("walk_for_VPN_0x80800", EV_WINDOW);
@@ -107,12 +109,17 @@
     e[1]  = fd15_walk('h80400, 1'b0);
     e[2]  = fd15_ans(2'd1, 12, '0);
     e[3]  = fd15_dec(tgt(0), IFU_FAULT_PAGE);
-    e[4]  = fd15_walk('h80600, 1'b0);
-    e[5]  = fd15_ans(2'd0, 0, PPN_WIDTH'('h81400));
-    e[6]  = fd15_dec(tgt(1), IFU_FAULT_ACCESS);
-    e[7]  = ev_redir_any(PC_V);
-    e[8]  = fd15_walk('h80800, 1'b1);
-    e[9]  = fd15_ans(2'd1, 20, '0);
-    e[10] = fd15_dec(tgt(2), IFU_FAULT_GUEST_PAGE);
+    e[4]  = bkend_ftq_redir_val && (bkend_ftq_redir_cause == RC_TRAP) &&
+            (bkend_ftq_redir_pc == hnd(0));
+    e[5]  = fd15_walk('h80600, 1'b0);
+    e[6]  = fd15_ans(2'd0, 0, PPN_WIDTH'('h81400));
+    // Status 2 is a fault (IT-4), cause 1 the access cause (IT-6).
+    e[7]  = dut.itlb_ifu_rsp_val && (dut.itlb_ifu_status == 2'd2) &&
+            (int'(dut.itlb_ifu_cause) == 1);
+    e[8]  = fd15_dec(tgt(1), IFU_FAULT_ACCESS);
+    e[9]  = ev_redir_any(PC_V);
+    e[10] = fd15_walk('h80800, 1'b1);
+    e[11] = fd15_ans(2'd1, 20, '0);
+    e[12] = fd15_dec(tgt(2), IFU_FAULT_GUEST_PAGE);
     return e;
   endfunction

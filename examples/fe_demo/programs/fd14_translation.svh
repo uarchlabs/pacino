@@ -62,6 +62,7 @@
 
   function automatic void fd14_evt_defs();
     evt_def("reset_released", EV_EXACT);
+    evt_def("first_ITLB_miss", EV_WINDOW);
     evt_def("first_walk", EV_WINDOW);
     evt_def("walk_for_C", EV_WINDOW);
     evt_def("the_CAS", EV_WINDOW);
@@ -70,6 +71,7 @@
     evt_def("the_ecalls_trap_redirect_to_V", EV_WINDOW, 1);
     evt_def("the_nested_walk_for_C_ends", EV_WINDOW);
     evt_def("walk_for_V", EV_WINDOW);
+    evt_def("the_VSstage_leaf_for_V_read", EV_WINDOW, 1);
     evt_def("the_walk_for_V_answers_PPN", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
@@ -78,18 +80,23 @@
     logic [EV_MAX-1:0] e;
     e     = '0;
     e[0]  = ev_p0(RESET_VECTOR);
-    e[1]  = fd14_walk('h80000, 1'b0);
-    e[2]  = fd14_walk('h80010, 1'b0);
+    // Status 1 is a miss (IT-4): a walk has started.
+    e[1]  = dut.itlb_ifu_rsp_val && (dut.itlb_ifu_status == 2'd1);
+    e[2]  = fd14_walk('h80000, 1'b0);
+    e[3]  = fd14_walk('h80010, 1'b0);
     // The walker's compare-and-swap (as the monitor's n_cas).
-    e[3]  = ptw_mem_req_val && ptw_mem_req_rdy && ptw_mem_req_op;
-    e[4]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd0) &&
+    e[4]  = ptw_mem_req_val && ptw_mem_req_rdy && ptw_mem_req_op;
+    e[5]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd0) &&
             (l2t_itlb_ppn == PPN_WIDTH'('h81000));
-    e[5]  = fd14_walk('h80010, 1'b1);
-    e[6]  = ev_redir_any(PC_V);
-    e[7]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd1) &&
+    e[6]  = fd14_walk('h80010, 1'b1);
+    e[7]  = ev_redir_any(PC_V);
+    e[8]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd1) &&
             (l2t_itlb_cause == CAUSE_WIDTH'(12));
-    e[8]  = fd14_walk('h80050, 1'b1);
-    e[9]  = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd0) &&
+    e[9]  = fd14_walk('h80050, 1'b1);
+    // The VS-stage leaf of V: GPA 0x1005_0000, flags 0xCB. The memory
+    // response is driven by the testbench: late.
+    e[10] = mem_ptw_rsp_val && (mem_ptw_rsp_data == 64'h0000_0000_0401_40CB);
+    e[11] = l2t_itlb_rsp_val && (l2t_itlb_status == 2'd0) &&
             (l2t_itlb_ppn == PPN_WIDTH'('h81600));
     return e;
   endfunction

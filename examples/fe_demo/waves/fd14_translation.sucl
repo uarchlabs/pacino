@@ -18,6 +18,7 @@ marker_set c0_reset_released 36
 item_focus e
 group_marked markers
 item_focus f
+marker_set c3_first_ITLB_miss 65
 marker_set c4_first_walk 75
 marker_set c46_walk_for_C 495
 marker_set c67_the_CAS 705
@@ -26,14 +27,24 @@ marker_set c91_first_nested_walk 945
 marker_set c92_the_ecalls_trap_redirect_to_V 955
 marker_set c168_the_nested_walk_for_C_ends 1715
 marker_set c170_walk_for_V 1735
+marker_set c246_the_VSstage_leaf_for_V_read 2495
 marker_set c267_the_walk_for_V_answers_PPN 2705
 marker_set c285_the_run_ends 2885
 item_unfocus
+# group backend
+variable_add tb.bkend_ftq_redir_val
+item_focus bc
+group_marked backend
+item_focus bd
+item_set_format Bit
+variable_add tb.bkend_ftq_redir_pc
+item_set_format Hexadecimal
+item_unfocus
 # group ifu_xlate
 variable_add tb.dut.u_ifu.u_xlate.xq_val
-item_focus ba
+item_focus bf
 group_marked ifu_xlate
-item_focus bb
+item_focus bg
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_xlate.xq_pop
 item_set_format Bit
@@ -56,9 +67,9 @@ item_set_format Bit
 item_unfocus
 # group itlb
 variable_add tb.dut.ifu_itlb_req_val
-item_focus bl
+item_focus ca
 group_marked itlb
-item_focus bm
+item_focus cb
 item_set_format Bit
 variable_add tb.dut.ifu_itlb_req_rdy
 item_set_format Bit
@@ -75,9 +86,9 @@ item_set_format Unsigned
 item_unfocus
 # group walker
 variable_add tb.itlb_l2t_req_val
-item_focus cd
+item_focus ci
 group_marked walker
-item_focus ce
+item_focus cj
 item_set_format Bit
 variable_add tb.itlb_l2t_req_rdy
 item_set_format Bit
@@ -102,9 +113,9 @@ item_set_format Unsigned
 item_unfocus
 # group walker_mem
 variable_add tb.ptw_mem_req_val
-item_focus cp
+item_focus de
 group_marked walker_mem
-item_focus da
+item_focus df
 item_set_format Bit
 variable_add tb.ptw_mem_req_rdy
 item_set_format Bit

@@ -1,27 +1,32 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-# fd16_page_cross: A Fetch Block Crossing a Page
+# fd16_page_cross: A Prediction Block Crossing a Page
 ```
  FILE:    fd16_page_cross.md
  SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-19
+ UPDATED: 2026-11-03
  CONTACT: Jeff Nye
 ```
 
 ## 1. Introduction
 
-`fd16_page_cross` is the FD-16 demonstration scenario. It is a demo,
-not a verification test. A jump lands 16 bytes before the end of a
-4 KiB page whose virtual successor is mapped to a non-adjacent physical
-page. The fetch block starting there covers both pages, so the IFU
-translates it twice and requests one line from each physical page; a
-32-bit instruction straddles the boundary. The run passes if a
-translation-queue entry is popped with two translations of different
-PPNs.
+`fd16_page_cross` (FD-16) demonstrates a prediction block that crosses a 4 KiB
+page boundary:
 
-The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+1. the block is translated twice, once for each page
+2. the IFU requests one L1I line from each of two non-adjacent physical pages
+3. a 32-bit instruction straddling the boundary reaches decode whole
+
+The program jumps to an address 16 bytes before the end of a page whose virtual
+successor is mapped to a non-adjacent physical page. The prediction block that
+starts there covers both pages.
+
+The result line in the log file reports the number of blocks translated twice.
+
+This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.
 
 ### 1.1 Files
 
@@ -35,6 +40,9 @@ The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
   | Log                | $DEMO/out/fd16_page_cross/fd16_page_cross.log |
   | Waveform           | $DEMO/out/fd16_page_cross/fd16_page_cross.fst |
   | Waveform (online)  | [Link](https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.fst&startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd16_page_cross.sucl) |
+  | Block connectivity | [$DEMO/docs/fe_block.svg](fe_block.svg)       |
+  | Pipeline view      | [$DEMO/docs/fe_pipe.svg](fe_pipe.svg)         |
+  | Common description | [$DEMO/docs/demo_explainer.md](demo_explainer.md) |
 
 ---
 
@@ -57,123 +65,156 @@ Console output:
 
 Log file output:
 ```
--I: fd16_page_cross: PASS, blocks translated twice 1, events checked 7 of 7,
+-I: fd16_page_cross: PASS, blocks translated twice 1, events checked 8 of 8,
     cyc 112
 ```
 
-### 2.1 What the monitor counts
+The testbench monitor, `tb/fe_demo_mon.svh`, supplies the count in the log line,
+while the expected instruction stream has not fully retired. The program has one
+crossing block, with PPNs 0x81000 and 0x81205.
 
-The count comes from `tb/fe_demo_mon.svh:535-539`, sampled every cycle
-while the stream is being measured (`meas`).
-
-```
-n_xq_cross   u_ifu.u_xlate.xq_val && xq_pop && xq_cross
-             && xq_ppn0 != xq_ppn1
-             a translation-queue entry popped with two translations
-             of different physical pages
-```
-
-The proof (`tb/fe_demo_proofs.svh:133`) is `n_xq_cross > 0`.
-`tb_fe_demo.sv` also requires the whole stream to retire with no errors
-before it accepts the proof.
-
-### 2.2 Reading the numbers
-
-- The figure is 1: the program has one crossing block, and the run's
-  translation queue shows no other entry popped with `xq_cross` set.
-- The monitor also requires the two PPNs to differ, so the count shows
-  two translations, not one page's result read twice. Here they are
-  0x81000 and 0x81205.
-- The program meets FD-16 of `planning/showcase/fe_demo_scenarios.md`
-  (a block that starts within 32 bytes of a page end); the proof is
-  FD-16's. No departure.
+| Item                   | Counter      | Counted                                                                                    |
+|------------------------|--------------|--------------------------------------------------------------------------------------------|
+| blocks translated twice | `n_xq_cross` | `u_ifu.u_xlate.xq_val`, `xq_pop` and `xq_cross`, with `xq_ppn0` not equal to `xq_ppn1`     |
 
 ---
 
 ## 3. The program
 
-Source: `programs/fd16_page_cross.svh`, task `prog_fd16`. S-mode under
-satp Sv39 (begin_scen use_sv39 = 1).
+The program is written by the task `prog_fd16` in
+`programs/fd16_page_cross.svh`.
+
+The code consists of a short prologue at the reset vector, a jump to 16 bytes
+before the end of page B, seven 16-bit instructions, a 32-bit instruction that
+straddles the page boundary, and a short epilogue.
+
+The program runs in S-mode under satp Sv39. The two pages of the crossing block
+are adjacent in virtual addresses but not in physical addresses.
+
+| Page   | Virtual address | Physical address |
+|--------|-----------------|------------------|
+| reset  | 0x8000_0000     | 0x8000_0000      |
+| B      | 0x8001_0000     | 0x8100_0000      |
+| B+1    | 0x8001_1000     | 0x8120_5000      |
 
 ```
-mapping  RESET_VECTOR page to itself
-         b      = 0x8001_0000 -> 0x8100_0000
-         b+4K   = 0x8001_1000 -> 0x8120_5000   not adjacent
-0x8000_0000  mixed(3)
-0x8000_0008  jal x0, b+0xFF0
-b+0xFF0      c.addi a0,1 (7 of them)        0xFF0 to 0xFFD
-b+0xFFE      addi t0,t0,1                   32-bit, bytes 0xFFE-0x1001
-b+0x1002     mixed(8), jal x0,0             halt
+Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+0x8000_0008         jal    x0, S            ; to the crossing block
+
+0x8001_0FF0  S:     c.addi a0, 1            ; 16 bytes before the page end
+0x8001_0FF2         c.addi a0, 1            ; filler
+0x8001_0FF4         c.addi a0, 1            ; filler
+0x8001_0FF6         c.addi a0, 1            ; filler
+0x8001_0FF8         c.addi a0, 1            ; filler
+0x8001_0FFA         c.addi a0, 1            ; filler
+0x8001_0FFC         c.addi a0, 1            ; filler
+0x8001_0FFE  X:     addi   t0, t0, 1        ; straddles the page boundary
+
+0x8001_1002         c.addi a0, 1            ; epilogue
+0x8001_1004         addi   t0, t0, 1        ; epilogue
+0x8001_1008         c.addi a0, 1            ; epilogue
+0x8001_100A         c.addi a0, 1            ; epilogue
+0x8001_100C         addi   t0, t0, 1        ; epilogue
+0x8001_1010         c.addi a0, 1            ; epilogue
+0x8001_1012         c.addi a0, 1            ; epilogue
+0x8001_1014         addi   t0, t0, 1        ; epilogue
+0x8001_1018  hold:  jal    x0, hold         ; termination
 ```
 
-- `map4k` (`rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh:142`)
-  writes each Sv39 leaf and records the VA page in `vmap`, which
-  `put_hw` uses to place each halfword at its physical address, so the
-  32-bit instruction's two halfwords are written to different physical
-  pages (0x8100_0FFE and 0x8120_5000).
-- The jump target is 16 bytes before the page end; FD-16 asks for a
-  block starting within 32 bytes of it.
+The two halfwords of the instruction at X are in different physical pages, at
+0x8100_0FFE and 0x8120_5000.
+
+The `c.addi` and `addi` instructions do no useful work, other than the
+instruction at X. Their purpose is to mix 16-bit and 32-bit instructions and to
+place X on the page boundary.
+
+The run has no accepted p2 slot groups, because no block repeats and the FTB
+therefore never hits.
 
 ---
 
 ## 4. Walkthrough
 
-### 4.1 Why the program produces the behavior
+The walkthrough follows the crossing block. Section 4.1 describes its two
+translations, section 4.2 its two line requests, and section 4.3 the instruction
+that straddles the boundary.
+[fd14_translation](fd14_translation.md#4-walkthrough) section 4 defines the
+RISC-V translation terms.
 
-1. The block crosses. `ifu_xlate` marks a block as crossing when its
-   start PC's page offset is at least `CROSS_FROM` 0xFE0, 32 bytes
-   from the end (`rtl/core/frontend/ifu/rtl/ifu_xlate.sv:144`,
-   `:281`), and then needs two lookups (`r_need`, `:407`); the queue
-   entry keeps both pages' results (`:306-308`); the page-1 fields
-   are meaningful only for a crossing block (`:33-34`).
-2. Two ITLB lookups and two walks. In the run (cyc is `tb.cyc`,
-   `fe_tb_dut.svh:129`) the ITLB lookups (`ifu_itlb_vpn`) go from VPN
-   0x80010 to 0x80011, and both miss: walks for VPN 0x80010 at cyc
-   46 and VPN 0x80011 at cyc 70.
-3. The queue entry. At cyc 94 the entry for the block at
-   0x8001_0FF0 is popped with `xq_cross` 1, `xq_ppn0` 0x81000 and
-   `xq_ppn1` 0x81205.
-4. Two lines from two pages. A block starting in the upper half of a
-   line needs a second line (IFU-7), and for a crossing block that line
-   is the second page's first line (IFU-25,
-   `rtl/core/frontend/ifu/rtl/ifu_fetch.sv:283-284`). The L1I requests
-   are 0x8100_0FC0 (cyc 93) and 0x8120_5000 (cyc 94).
+Cycle numbers below are events in [section 5](#5-events); each event is a marker
+in the waveform.
 
-The backend compares every retired instruction with the expected
-stream, so the 32-bit instruction at b+0xFFE retired with its expected
-encoding.
+The waveform group `ifu_xlate` contains the translation queue, `itlb` the
+lookups, `ifu_l1i` the line requests, and `decode` lanes 0 and 7 at decode.
 
-### 4.2 Reading the waveform
+The figure below shows the block's layout.
 
-The saved view is `waves/fd16_page_cross.sucl`, which `make view
-S=fd16_page_cross` opens in Surfer. Groups: clock, ftq_ifu, ifu_xlate,
-itlb, ifu_l1i, decode. Look at:
+[![fd16 the crossing block in virtual and physical addresses](fd16_blocks.svg)](fd16_blocks.svg)
 
-- `ftq_ifu_start_pc` 0x8001_0FF0: the crossing block.
-- `ifu_itlb_req_val` with `ifu_itlb_vpn` 0x80010 then 0x80011: the two
-  lookups.
-- cyc 94: `xq_pop` with `xq_cross` 1, `xq_ppn0` 0x81000 and `xq_ppn1`
-  0x81205.
-- `ifu_l1i_req_paddr` 0x8100_0FC0 then 0x8120_5000.
-- In the itlb group the encoded fields are shown as numbers (DOC-006):
-  `itlb_ifu_status` (`planning/interfaces/itlb_ifu_interfaces.md`
-  IT-4) is 0 hit, 1 miss (a walk has started), 2 fault, 3 reserved;
-  `itlb_ifu_cause` (IT-6), valid with a fault, is 1 instruction access
-  fault, 12 instruction page fault, 20 instruction guest-page fault.
+### 4.1 Two translations
+
+`ifu_xlate` marks a block as crossing when its start address has a page offset
+of at least 0xFE0, 32 bytes from the end of the page, and then requires two
+lookups.[^1] The block at 0x8001_0FF0 has page offset 0xFF0. Both lookups miss
+the ITLB, so each page is walked, from cyc 46 (event 1) and cyc 70 (event 2).
+The queue entry holds both results.
+
+At cyc 46 (event 1), `tb.itlb_l2t_req_val` and `tb.itlb_l2t_req_rdy` are
+asserted with `tb.itlb_l2t_vpn` 0x80010, and the walk answers `tb.l2t_itlb_ppn`
+0x81000 at cyc 67. At cyc 70 (event 2), `tb.itlb_l2t_vpn` is 0x80011, and the
+walk answers `tb.l2t_itlb_ppn` 0x81205 at cyc 91.
+
+At cyc 94 (event 4), `u_ifu.u_xlate.xq_val` and `u_ifu.u_xlate.xq_pop` are
+asserted with `u_ifu.u_xlate.xq_pc` 0x8001_0FF0, `u_ifu.u_xlate.xq_cross` 1,
+`u_ifu.u_xlate.xq_ppn0` 0x81000 and `u_ifu.u_xlate.xq_ppn1` 0x81205.
+
+### 4.2 Two line requests
+
+A block that starts in the upper half of a line requires a second line. For a
+crossing block, that line is the first line of the second page.[^2]
+
+At cyc 93 (event 3), `ifu_l1i_req_val` and `ifu_l1i_req_rdy` are asserted with
+`ifu_l1i_req_paddr` 0x8100_0FC0. At cyc 94 (event 4), `ifu_l1i_req_paddr` is
+0x8120_5000.
+
+### 4.3 The straddling instruction
+
+The instruction at X has its first halfword in the first line and its second
+halfword in the second line. Both lines miss in the L1I, so it cannot be
+assembled until the second line returns, at cyc 107 (event 5). Decode receives
+it whole at cyc 109 (event 6), as the last of the eight instructions of that
+bundle.
+
+At cyc 105, `l1i_ifu_rsp_val` is asserted with `l1i_ifu_rsp_id` 0, the first
+line. At cyc 107 (event 5), `l1i_ifu_rsp_val` is asserted with `l1i_ifu_rsp_id`
+1, the second line.
+
+At cyc 109 (event 6), `tb.pd_out.[7].valid` is asserted with
+`tb.pd_out.[7].start_pc` 0x8001_0FFE, `tb.pd_out.[7].pos` 7,
+`tb.pd_out.[7].instr` 0x0012_8293 and `tb.pd_out.[7].is_rvc` 0. At cyc 110,
+`tb.pd_out.[0].start_pc` is 0x8001_1002, the next instruction.
+
+[^1]: `CROSS_FROM`: `rtl/core/frontend/ifu/rtl/ifu_xlate.sv:144`.
+    `w_new_cross`: `:281`. `r_need`: `:407`. The queue entry: `:306-308`.
+[^2]: `w_line1`: `rtl/core/frontend/ifu/rtl/ifu_fetch.sv:283-284`.
 
 ---
 
 ## 5. Events
 
-| # | cyc | Event                                                                                                                       | Other        |
-|---|-----|-----------------------------------------------------------------------------------------------------------------------------|--------------|
-| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                                                     | S-mode, Sv39 |
-| 1 | 46  | walk for VPN 0x80010, the first page of the crossing block                                                                  |              |
-| 2 | 70  | walk for VPN 0x80011, the second page                                                                                       |              |
-| 3 | 93  | L1I request for 0x8100_0FC0, the line of the block's start                                                                  | first page   |
-| 4 | 94  | the translation queue entry of the block at 0x8001_0FF0 popped with two translations: `xq_cross` 1, PPN 0x81000 and 0x81205 | counted      |
-| 5 | 94  | L1I request for 0x8120_5000, the second page's first line                                                                   | second page  |
-| 6 | 112 | the run ends                                                                                                                |              |
+| # | cyc | Event                                                                                                                                                    | Other             |
+|---|-----|----------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|
+| 0 | 0   | reset released (`tb.rstn`); the FTQ requests 0x8000_0000 the same cycle                                                                                  | S-mode, Sv39      |
+| 1 | 46  | walk for VPN 0x80010, the first page of the crossing block                                                                                               | answers at cyc 67 |
+| 2 | 70  | walk for VPN 0x80011, the second page                                                                                                                    | answers at cyc 91 |
+| 3 | 93  | L1I request for 0x8100_0FC0, the line of the block's start                                                                                               | first page        |
+| 4 | 94  | the translation queue entry of the block at 0x8001_0FF0 popped with two translations: `xq_cross` 1, PPN 0x81000 and 0x81205; L1I request for 0x8120_5000 | second page       |
+| 5 | 107 | the second line returns (`l1i_ifu_rsp_id` 1), from 0x8120_5000                                                                                           | first at cyc 105  |
+| 6 | 109 | the straddling instruction reaches decode: lane 7 at 0x8001_0FFE, a whole 32-bit addi                                                                    | `tb.pd_out.[7]`   |
+| 7 | 112 | the run ends                                                                                                                                             |                   |
 
 ---
 
@@ -205,8 +246,8 @@ Signal paths below are under `tb.dut` unless they start with `tb.`.
 |           | `u_ifu.u_xlate.xq_cross`    | the block crosses a page                          |
 |           | `u_ifu.u_xlate.xq_ppn0`     | physical page number of the first page            |
 |           | `u_ifu.u_xlate.xq_ppn1`     | physical page number of the second page           |
-|           | `u_ifu.u_xlate.xq_fault0`   | the first page faulted                            |
-|           | `u_ifu.u_xlate.xq_fault1`   | the second page faulted                           |
+|           | `u_ifu.u_xlate.xq_fault0`   | fault of the first page                           |
+|           | `u_ifu.u_xlate.xq_fault1`   | fault of the second page                          |
 |           | `u_ifu.u_xlate.xq_uc`       | the page is uncached                              |
 | itlb      | `ifu_itlb_req_val`          | IFU lookup in the ITLB                            |
 |           | `ifu_itlb_req_rdy`          | the ITLB takes the lookup                         |
@@ -231,3 +272,8 @@ Signal paths below are under `tb.dut` unless they start with `tb.`.
 |           | `tb.pd_out.[0].is_rvc`      | lane 0 instruction is 16-bit                      |
 |           | `tb.pd_out.[0].fault_cause` | lane 0 fetch fault cause                          |
 |           | `tb.pd_out.[0].fault_va`    | lane 0 fetch fault virtual address                |
+|           | `tb.pd_out.[7].valid`       | lane 7 valid                                      |
+|           | `tb.pd_out.[7].start_pc`    | lane 7 instruction address                        |
+|           | `tb.pd_out.[7].pos`         | lane 7 halfword position in the fetch block       |
+|           | `tb.pd_out.[7].instr`       | lane 7 instruction, expanded if compressed        |
+|           | `tb.pd_out.[7].is_rvc`      | lane 7 instruction is 16-bit                      |

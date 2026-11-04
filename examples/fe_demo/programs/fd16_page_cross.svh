@@ -56,7 +56,8 @@
     evt_def("walk_for_VPN_0x80011", EV_WINDOW);
     evt_def("L1I_request_for_0x8100_0FC0", EV_WINDOW);
     evt_def("the_translation_queue_entry_of_the", EV_WINDOW);
-    evt_def("L1I_request_for_0x8120_5000", EV_WINDOW);
+    evt_def("the_second_line_returns", EV_WINDOW);
+    evt_def("the_straddling_instruction_reaches_decode", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
@@ -72,6 +73,12 @@
            dut.u_ifu.u_xlate.xq_cross &&
            (dut.u_ifu.u_xlate.xq_ppn0 == PPN_WIDTH'('h81000)) &&
            (dut.u_ifu.u_xlate.xq_ppn1 == PPN_WIDTH'('h81205));
-    e[5] = fd16_l1i(PA_WIDTH'('h8120_5000));
+    // The response to the block's second line, id 1 in this run: the first
+    // response with that id after the crossing entry is counted.
+    e[5] = dut.l1i_ifu_rsp_val && (int'(dut.l1i_ifu_rsp_id) == 1) &&
+           (n_xq_cross > 0);
+    // The 32-bit instruction at b + 0xFFE, whole, in lane 7 of the bundle.
+    e[6] = pd_out[7].valid && !pd_out[7].is_rvc &&
+           (pd_out[7].start_pc == VA_WIDTH'('h0_8001_0FFE));
     return e;
   endfunction
