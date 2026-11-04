@@ -82,11 +82,14 @@
   function automatic void fd13_evt_defs();
     evt_def("reset_released", EV_EXACT);
     evt_def("first_L1I_miss", EV_WINDOW);
+    evt_def("first_memory_request", EV_WINDOW);
     evt_def("first_L1I_hit", EV_WINDOW);
+    evt_def("the_2cycle_hit", EV_WINDOW);
     evt_def("the_invalidate_is_done", EV_WINDOW);
     evt_def("the_restart_after_the_FENCEI", EV_WINDOW, 1);
     evt_def("the_fourth_call_found_at_F3", EV_WINDOW, 0, 1);
     evt_def("the_merge", EV_WINDOW);
+    evt_def("the_merged_request_answered", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
@@ -95,12 +98,22 @@
     e    = '0;
     e[0] = ev_p0(RESET_VECTOR);
     e[1] = dut.u_l1i.b_mis_valid[0] || dut.u_l1i.b_mis_valid[1];
-    e[2] = dut.u_l1i.b_rsp_valid[0] || dut.u_l1i.b_rsp_valid[1];
-    e[3] = dut.l1i_ifu_inv_done;
-    e[4] = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h30));
+    e[2] = l1i_mem_a_valid;
+    e[3] = dut.u_l1i.b_rsp_valid[0] || dut.u_l1i.b_rsp_valid[1];
+    // The first request for line 0x8000_0000 after a hit has been counted:
+    // the earlier requests for that line precede the first hit.
+    e[4] = dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
+           (dut.ifu_l1i_req_paddr == PA_WIDTH'(RESET_VECTOR)) &&
+           (n_l1i_hit > 0);
+    e[5] = dut.l1i_ifu_inv_done;
+    e[6] = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h30));
     // The last predecode redirect to X+0x30: the fourth call.
-    e[5] = ev_pd_redir(FD13_X + VA_WIDTH'('h30));
+    e[7] = ev_pd_redir(FD13_X + VA_WIDTH'('h30));
     // As the monitor's n_l1i_merge.
-    e[6] = dut.u_l1i.u_mshr.accept && dut.u_l1i.u_mshr.mrg_hit;
+    e[8] = dut.u_l1i.u_mshr.accept && dut.u_l1i.u_mshr.mrg_hit;
+    // The merged request carries id 1 in this run. The first response with
+    // that id after the merge is counted.
+    e[9] = dut.l1i_ifu_rsp_val && (int'(dut.l1i_ifu_rsp_id) == 1) &&
+           (n_l1i_merge > 0);
     return e;
   endfunction

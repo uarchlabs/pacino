@@ -55,6 +55,8 @@ extra:
     - fd09_tage
     - fd10_pd_redirect
     - fd11_be_mispredict
+    - fd12_training
+    - fd13_l1i
 
 nav:
   - Home: index.md
