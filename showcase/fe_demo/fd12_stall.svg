@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="946" height="473" viewBox="0 0 946 473">
+<defs><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="946" height="473" fill="#ffffff"/>
+<text x="30" y="34" class="sans" font-size="22" fill="#1f2328" text-anchor="start" font-weight="bold">fd12_training: the FTQ prediction request stall for FTB updates</text>
+<text x="30" y="56" class="sans" font-size="12" fill="#59636e" text-anchor="start" font-weight="normal">Each FTB update stalls the FTQ prediction request in the cycle before the update, including when the updates are consecutive.</text>
+<text x="30" y="128" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="bold">backend</text>
+<text x="290" y="128" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">tb.bkend_ftq_rsv_val</text>
+<rect x="300" y="112" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="332" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="364" y="112" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="396" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="428" y="112" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="460" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="532" y="112" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="564" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="596" y="112" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="628" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="660" y="112" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="692" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="724" y="112" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="756" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="788" y="112" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="820" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="852" y="112" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="884" y="128" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="30" y="170" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="bold">stall</text>
+<text x="290" y="170" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">u_ftq.u_npc.h3_ftb_upd</text>
+<rect x="300" y="154" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="332" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="364" y="154" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="396" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="428" y="154" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="460" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="532" y="154" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="564" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="596" y="154" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="628" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="660" y="154" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="692" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="724" y="154" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="756" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="788" y="154" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="820" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="852" y="154" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="884" y="170" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="290" y="198" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">u_ftq.u_npc.w_hold</text>
+<rect x="300" y="182" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="332" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="364" y="182" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="396" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="428" y="182" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="460" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="532" y="182" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="564" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="596" y="182" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="628" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="660" y="182" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="692" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="724" y="182" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="756" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="788" y="182" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="820" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="852" y="182" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="884" y="198" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="290" y="226" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">ftq_pred_val_p0</text>
+<rect x="300" y="210" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="332" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="364" y="210" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="396" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="428" y="210" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="460" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="532" y="210" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="564" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="596" y="210" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="628" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="660" y="210" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="692" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="724" y="210" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="756" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="bold">0</text>
+<rect x="788" y="210" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="820" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="852" y="210" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="884" y="226" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<text x="290" y="254" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">ftq_pred_pc_p0</text>
+<rect x="300" y="238" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="332" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="364" y="238" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="396" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="428" y="238" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="460" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">030</text>
+<rect x="532" y="238" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="564" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="596" y="238" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="628" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="660" y="238" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="692" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="724" y="238" width="64" height="24" fill="#f7ead2" stroke="#a0702a" stroke-width="1"/>
+<text x="756" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">01C</text>
+<rect x="788" y="238" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="820" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">01C</text>
+<rect x="852" y="238" width="64" height="24" fill="#f2f3f5" stroke="#8c959f" stroke-width="1"/>
+<text x="884" y="254" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">03C</text>
+<text x="30" y="296" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="bold">FTB update</text>
+<text x="290" y="296" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">ftb_upd_valid_u0</text>
+<rect x="300" y="280" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="332" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="364" y="280" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="396" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="428" y="280" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="460" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="532" y="280" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="564" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<rect x="596" y="280" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="628" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="660" y="280" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="692" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="724" y="280" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="756" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="788" y="280" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="820" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">1</text>
+<rect x="852" y="280" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="884" y="296" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">0</text>
+<text x="290" y="324" class="sans" font-size="11" fill="#1f2328" text-anchor="end" font-weight="normal">ftb_upd_pc_u0</text>
+<rect x="300" y="308" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<rect x="364" y="308" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="396" y="324" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">000</text>
+<rect x="428" y="308" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<rect x="532" y="308" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<rect x="596" y="308" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="628" y="324" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="660" y="308" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="692" y="324" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="724" y="308" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="756" y="324" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="788" y="308" width="64" height="24" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="820" y="324" class="mono" font-size="10" fill="#1f2328" text-anchor="middle" font-weight="normal">010</text>
+<rect x="852" y="308" width="64" height="24" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="332" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">20</text>
+<text x="396" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">21</text>
+<text x="460" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">22</text>
+<text x="564" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">41</text>
+<text x="628" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">42</text>
+<text x="692" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">43</text>
+<text x="756" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">44</text>
+<text x="820" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">45</text>
+<text x="884" y="348" class="mono" font-size="10" fill="#59636e" text-anchor="middle" font-weight="normal">46</text>
+<text x="290" y="348" class="sans" font-size="11" fill="#59636e" text-anchor="end" font-weight="normal">cyc</text>
+<text x="512" y="224" class="mono" font-size="14" fill="#59636e" text-anchor="middle" font-weight="normal">...</text>
+<rect x="364" y="102" width="1" height="234" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="368" y="96" class="sans" font-size="11" fill="#ff6e42" text-anchor="start" font-weight="bold">cyc 21: event 1</text>
+<rect x="596" y="102" width="1" height="234" fill="#ff6e42" stroke="#ff6e42" stroke-width="1"/>
+<text x="600" y="96" class="sans" font-size="11" fill="#ff6e42" text-anchor="start" font-weight="bold">cyc 42: event 2</text>
+<rect x="30" y="370" width="30" height="16" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="67" y="383" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">FTQ prediction request stalled</text>
+<rect x="290" y="370" width="30" height="16" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<text x="327" y="383" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">FTB update</text>
+<rect x="440" y="370" width="30" height="16" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5"/>
+<text x="477" y="383" class="sans" font-size="12" fill="#1f2328" text-anchor="start" font-weight="normal">FTQ prediction request not stalled</text>
+<text x="30" y="408" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Addresses are 0x8000_0xxx. Signal paths are under tb.dut unless they start with tb. Empty cells: the payload is not valid.</text>
+<text x="30" y="423" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">A column is the interval with tb.cyc at its value. The stall rises one time unit after the marker of cyc 20, so it fills column 20,</text>
+<text x="30" y="438" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">and the marker of cyc 21 is the first to show it. The update rises at the marker of cyc 21 and fills column 21.</text>
+<text x="30" y="453" class="sans" font-size="11" fill="#59636e" text-anchor="start" font-weight="normal">Read from out/fd12_training/fd12_training.fst.</text>
+</svg>

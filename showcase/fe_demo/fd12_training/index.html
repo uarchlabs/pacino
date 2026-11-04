@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#fd12_training-predictor-training-and-the-ftb-update-bubble" class="md-skip">
+        <a href="#fd12_training-predictor-training" class="md-skip">
           Skip to content
         </a>
       
@@ -2381,34 +2381,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2435,10 +2407,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predictor-update-generation-and-branch-type-qualification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predictor update generation and branch type qualification
       
     </span>
   </a>
@@ -2446,10 +2418,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-p0-request-stall-for-ftb-updates" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 p0 request stall for FTB updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-suppressed-training-for-a-resolution-placed-in-an-occupied-slot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Suppressed training for a resolution placed in an occupied slot
       
     </span>
   </a>
@@ -6065,34 +6048,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6119,10 +6074,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-predictor-update-generation-and-branch-type-qualification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 Predictor update generation and branch type qualification
       
     </span>
   </a>
@@ -6130,10 +6085,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-p0-request-stall-for-ftb-updates" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 p0 request stall for FTB updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-suppressed-training-for-a-resolution-placed-in-an-occupied-slot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Suppressed training for a resolution placed in an occupied slot
       
     </span>
   </a>
@@ -6187,20 +6153,30 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-<h1 id="fd12_training-predictor-training-and-the-ftb-update-bubble">fd12_training: Predictor Training and the FTB Update Bubble<a class="headerlink" href="#fd12_training-predictor-training-and-the-ftb-update-bubble" title="Permanent link">&para;</a></h1>
+<h1 id="fd12_training-predictor-training">fd12_training: Predictor Training<a class="headerlink" href="#fd12_training-predictor-training" title="Permanent link">&para;</a></h1>
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd12_training</code> is the FD-12 demonstration scenario. It is a demo, not a
-verification test. It runs nested counted loops whose body holds every
-kind of control transfer the predictors train on: conditionals, an
-indirect jump, an indirect call and its return. Each retired control
-transfer is resolved by the backend, converted by <code>ftq_upd_conv</code> into
-per-predictor updates, and presented to the cluster; each FTB update
-withholds one p0 request. The run passes if every predictor receives at
-least one update and at least one p0 request is withheld for an FTB
-update.</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd12_training</code> (FD-12) shows resolved branches initiaing update requests
+routed to the respective predictor based on branch type. It also illustrates
+the operation of the single ported FTB.</p>
+<p>The scenario runs an outer loop of 14 iterations, containing an inner loop
+of 6 iterations. The outer loop includes:</p>
+<pre><code>1. an always-taken conditional
+2. an indirect jump
+3. an indirect call and its return.
+</code></pre>
+<p>The inner loop includes a backwards branch executing the stated 6 iterations.</p>
+<p>This code then results in all predictors receiving illustrative updates.</p>
+<p>Each executed branch is resolved by the backend, converted by <code>ftq_upd_conv</code>
+into per-predictor updates, and presented to the cluster.</p>
+<p>An FTB update is a read-modify-write and occupies the single FTB read port for
+one cycle. Prediction lookups use the same port at p1. To avoid the conflict,
+the FTQ stalls its prediction request in the cycle before each FTB update.</p>
+<p>The result line in the log file reports the update count for each predictor and
+the number of FTQ prediction request stall cycles.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6235,6 +6211,18 @@ update.</p>
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd12_training.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6253,134 +6241,311 @@ update.</p>
     TAGE 111, SC 111, ITTAGE 28, RAS commit 28, p0 holds for an FTB update 154,
     events checked 10 of 10, cyc 454
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The counts come from <code>tb/fe_demo_mon.svh:502-514</code>, sampled every cycle
-while the stream is being measured (<code>meas</code>,
-<code>rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:416</code>). They read
-the valids after the cluster's gates.</p>
-<div class="highlight"><pre><span></span><code>n_upd_ubtb   per slot: w_ubtb_upd_u0[s].valid, summed over the slots
-             of the cycle (DOC-002)
-n_upd_lp     cycles with w_lp_upd_val_p0 != 0
-n_upd_tage   cycles with w_tage_upd_val_u0 != 0
-n_upd_itt    cycles with w_ittage_upd_val_u0 != 0
-n_upd_sc     cycles with w_sc_upd_val_u0 != 0
-n_upd_ftb    cycles with w_ftb_upd_val_u0
-n_upd_ras    cycles with w_ras_commit_val
-n_ftb_bub    cycles with u_ftq.u_npc.h3_ftb_upd
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:108-110</code>) requires every one of the
-eight counts to be non-zero. <code>tb_fe_demo.sv</code> also requires the whole
-stream to retire with no errors before it accepts the proof.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li>The figures match the program's control transfers but for one: uBTB
-  and FTB 154 (every transfer), LP, TAGE and SC 111 (the conditionals,
-  less one), ITTAGE 28 (the indirect jump and call), RAS commit 28 (the
-  call and the return). FTB update p0 holds 154: one per FTB update.</li>
-<li>The conditional left out is the always-taken <code>beq</code> at +0x1C,
-  resolved at cyc 168 in a block from +0x10 whose one slot holds the
-  inner loop branch at position 4. The FTQ places its resolution in
-  that occupied slot, whose prediction metadata describes the other
-  branch, so the uBTB and FTB updates form and the LP, TAGE and SC
-  updates are suppressed (item C, BP-139,
-  <code>rtl/core/frontend/ftq/rtl/ftq_resolve.sv</code> lines 46 to 57). The
-  condition is <code>rsv_plc_occ</code> (line 443), which gates the updates at
-  lines 551 to 560. It is the only such resolution in the run.</li>
-<li>Except <code>n_upd_ubtb</code>, the counters count cycles with any slot valid,
-  not slot updates; the result line says "update cycles" for that
-  reason. DOC-002 changed <code>n_upd_ubtb</code> to sum its slots. On this model
-  a cycle has one slot, so every count is of single-slot updates.</li>
-<li>The run takes 454 cycles on this model and 459 on the two-slot model
-  (DOC-007 run). On the two-slot model the LP, TAGE and SC counts are
-  112, since the <code>beq</code> has a slot of its own.</li>
-<li>Departure from <code>planning/showcase/fe_demo_scenarios.md</code> FD-12: the
-  program there is "any branch, first execution and the next"; the
-  program as built is tb_fe_top's <code>loops</code>, with every update type, so
-  that the proof can require an update at each predictor. The proof as
-  built adds the RAS commit to the predictors FD-12 names.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line. A count is the number of cycles in which the signal is asserted, while
+the expected instruction stream has not fully retired.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Signal</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>uBTB</td>
+<td><code>n_upd_ubtb</code></td>
+<td><code>u_bpu.w_ubtb_upd_u0[s].valid</code></td>
+</tr>
+<tr>
+<td>loop predictor</td>
+<td><code>n_upd_lp</code></td>
+<td><code>u_bpu.w_lp_upd_val_p0</code></td>
+</tr>
+<tr>
+<td>FTB</td>
+<td><code>n_upd_ftb</code></td>
+<td><code>u_bpu.w_ftb_upd_val_u0</code></td>
+</tr>
+<tr>
+<td>TAGE</td>
+<td><code>n_upd_tage</code></td>
+<td><code>u_bpu.w_tage_upd_val_u0</code></td>
+</tr>
+<tr>
+<td>SC</td>
+<td><code>n_upd_sc</code></td>
+<td><code>u_bpu.w_sc_upd_val_u0</code></td>
+</tr>
+<tr>
+<td>ITTAGE</td>
+<td><code>n_upd_itt</code></td>
+<td><code>u_bpu.w_ittage_upd_val_u0</code></td>
+</tr>
+<tr>
+<td>RAS commit</td>
+<td><code>n_upd_ras</code></td>
+<td><code>u_bpu.w_ras_commit_val</code></td>
+</tr>
+<tr>
+<td>p0 holds for an FTB update</td>
+<td><code>n_ftb_bub</code></td>
+<td><code>u_ftq.u_npc.h3_ftb_upd</code></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd12_training.svh</code>, task <code>prog_fd12</code>. Bare M-mode,
-code at RESET_VECTOR 0x8000_0000 (<code>bp_defines_pkg.sv:40</code>). Addresses
-below are derived from the writer's emitters (<code>mixed</code> is c.addi, addi,
-c.addi repeating: 2, 4, 2 bytes).</p>
-<div class="highlight"><pre><span></span><code>0x8000_0000  mixed(4)                                     10 bytes
-otop = +0x0A mixed(2)                     outer body
-itop = +0x10 mixed(3)                     inner body
-       +0x18 bne x6,x0,itop               inner loop branch, 6 passes
-       +0x1C beq x0,x0,+0x28              always taken
-       +0x28 mixed(2)
-       +0x2E jalr x0,0(x7)  -&gt; +0x6E      indirect jump
-       +0x6E mixed(2)
-       +0x74 jalr x1,0(x28) -&gt; fn         indirect call
-       +0x78 mixed(1)                     return lands here
-       +0x7A bne x6,x0,otop               outer loop branch, 14 passes
-       +0x7E mixed(3), jal x0,0           halt
-fn = 0x8000_0800  mixed(3); jalr x0,0(ra) -&gt; +0x78   return
+<p>The program is written by the task <code>prog_fd12</code> in <code>programs/fd12_training.svh</code>.
+The code consists of an arbitrary prologue, then the outer loop of 14 passes
+starting at <code>otop</code>, and a short epilogue. The inner loop of 6 passes starts at
+<code>itop</code>.</p>
+<p>Each outer pass runs the inner loop, then the always-taken beq (B:), the
+indirect jump (J:), the indirect call (K:) to <code>fn</code> and its return, then the
+outer loop branch (O:) returning to <code>otop</code>. </p>
+<p>The inner loop branch (I:) and the outer loop branch (O:) are taken on every
+execution except the last iterations.</p>
+<p>The beq (B:) operand selection, x0 and x0, results in the branch always being
+taken.  This is configured to illustrate conditional branch training behavior.</p>
+<p>The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
+(<code>bp_defines_pkg.sv</code>).</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+0x8000_0006         c.addi a0, 1            ; prologue
+0x8000_0008         c.addi a0, 1            ; prologue
+
+0x8000_000A  otop:  c.addi a0, 1            ; outer body
+0x8000_000C         addi   t0, t0, 1        ; outer body
+
+0x8000_0010  itop:  c.addi a0, 1            ; inner body
+0x8000_0012         addi   t0, t0, 1        ; inner body
+0x8000_0016         c.addi a0, 1            ; inner body
+0x8000_0018  I:     bne    x6, x0, itop     ; inner loop branch
+0x8000_001C  B:     beq    x0, x0, 0x028    ; always taken
+
+0x8000_0028         c.addi a0, 1            ; filler
+0x8000_002A         addi   t0, t0, 1        ; filler
+0x8000_002E  J:     jalr   x0, 0(x7)        ; indirect jump, to 0x06E
+
+0x8000_006E         c.addi a0, 1            ; filler
+0x8000_0070         addi   t0, t0, 1        ; filler
+0x8000_0074  K:     jalr   x1, 0(x28)       ; indirect call, to fn
+0x8000_0078         c.addi a0, 1            ; after the return
+0x8000_007A  O:     bne    x6, x0, otop     ; outer loop branch
+
+0x8000_007E         c.addi a0, 1            ; epilogue
+0x8000_0080         addi   t0, t0, 1        ; epilogue
+0x8000_0084         c.addi a0, 1            ; epilogue
+0x8000_0086  hold:  jal    x0, hold         ; termination
+
+0x8000_0800  fn:    c.addi a0, 1            ; function body
+0x8000_0802         addi   t0, t0, 1        ; function body
+0x8000_0806         ret                     ; return to 0x8000_0078
 </code></pre></div>
-<ul>
-<li>The loops are built by <code>loop_br</code> and <code>rep_iter</code>
-  (<code>rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh:352</code>, <code>:364</code>):
-  the body is written once and its expected-stream entries are
-  replicated, the last execution of each loop branch not taken.</li>
-<li><code>rep_iter(eo, 14)</code> replicates the outer body including the six inner
-  passes already expanded, so the stream holds 14 x 6 inner branches.</li>
-<li><code>jalr_to</code> (<code>fe_tb_writer.svh:389</code>) types the jump by the RAS hint
-  rules: <code>jalr x0,0(x7)</code> is INDIRECT_NONRET, <code>jalr x1,0(x28)</code> is
-  INDIRECT_CALL; <code>ret</code> (<code>:280</code>) is RETURN.</li>
-</ul>
-<p>Control transfers in the stream, per outer pass: 6 inner branches, the
-always-taken <code>beq</code>, the indirect jump, the indirect call, the return,
-the outer branch. Over 14 passes: 154 transfers, of which 112
-conditionals (8 per pass), 28 indirect (jump and call) and 28 RAS
-operations (call and return). The halt (<code>jal x0,0</code>) is the stream's
-last entry; the counts of section 2 (154, not 155, for the uBTB and FTB) show
-that its update falls after the measurement window closes.</p>
+<p>The indirect jump (J:) is an INDIRECT_NONRET because neither register is a link
+register, and the indirect call (K:) is an INDIRECT_CALL because rd is x1. The
+<code>ret</code> in <code>fn</code> is a RETURN.</p>
+<p>With one prediction slot, an FTB entry holds one branch, so the path is
+predicted as several blocks. The accepted p2 slot groups, by block:</p>
+<table>
+<thead>
+<tr>
+<th>Block start</th>
+<th>Reached by</th>
+<th>Branch</th>
+<th>Position</th>
+<th>Block end</th>
+<th>Groups</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x8000_000A</td>
+<td>the outer loop branch taken</td>
+<td>inner loop branch (I:)</td>
+<td>7</td>
+<td>0x8000_002A</td>
+<td>13</td>
+</tr>
+<tr>
+<td>0x8000_0010</td>
+<td><code>itop</code></td>
+<td>inner loop branch (I:)</td>
+<td>4</td>
+<td>0x8000_0030 before the split</td>
+<td>26</td>
+</tr>
+<tr>
+<td>0x8000_0010</td>
+<td><code>itop</code></td>
+<td>inner loop branch (I:)</td>
+<td>4</td>
+<td>0x8000_001C after the split</td>
+<td>65</td>
+</tr>
+<tr>
+<td>0x8000_001C</td>
+<td>the inner loop branch not taken</td>
+<td>always-taken beq (B:)</td>
+<td>0</td>
+<td>0x8000_003C</td>
+<td>14</td>
+</tr>
+<tr>
+<td>0x8000_0028</td>
+<td>the beq taken</td>
+<td>indirect jump (J:)</td>
+<td>3</td>
+<td>0x8000_0032</td>
+<td>13</td>
+</tr>
+<tr>
+<td>0x8000_006E</td>
+<td>the indirect jump</td>
+<td>indirect call (K:)</td>
+<td>3</td>
+<td>0x8000_0078</td>
+<td>13</td>
+</tr>
+<tr>
+<td>0x8000_0800</td>
+<td>the indirect call</td>
+<td><code>ret</code></td>
+<td>4</td>
+<td>0x8000_080C</td>
+<td>13</td>
+</tr>
+<tr>
+<td>0x8000_0078</td>
+<td>the return</td>
+<td>outer loop branch (O:)</td>
+<td>1</td>
+<td>0x8000_0098</td>
+<td>13</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the branches.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them. x7 and x28 are
+never read.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Resolution and conversion. <code>ftq_upd_conv</code>
-   (<code>rtl/core/frontend/ftq/rtl/ftq_upd_conv.sv</code>) forms the per-slot
-   uBTB, LP, TAGE, ITTAGE and SC payloads from the resolved record. A
-   slot's predictor valids are presented only when the slot is
-   accepted by every predictor it trains (<code>upd_acc</code>, lines 136-138
-   and 171; the handshake is described in the file header, lines
-   29-37).</li>
-<li>The cluster's type gate. <code>bp_cluster</code> classifies each update
-   channel from its uBTB payload (<code>upd_br_type</code>,
-   <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1739-1746</code>) and fans it out
-   by type (fe_decisions.md 7.2):</li>
-<li>uBTB: any type but NO_BRANCH (<code>bp_cluster.sv:1752-1753</code>)</li>
-<li>LP: conditionals (<code>:1678-1679</code>)</li>
-<li>TAGE, SC: conditionals, each also gated by its queue ready, SC by
-     <code>sc_enable</code> (<code>:1798-1807</code>)</li>
-<li>ITTAGE: INDIRECT_NONRET and INDIRECT_CALL (<code>:1744-1746</code>,
-     <code>:1801-1803</code>)</li>
-<li>FTB: its own channel, for a branch or a jump (<code>:1643-1644</code>)</li>
-<li>RAS commit: DIRECT_CALL, INDIRECT_CALL, RETURN, RETURN_CALL
-     (<code>:1649-1653</code>)</li>
-<li>The FTB update bubble. The FTB has one read port. When
-   <code>ftq_ftb_sched</code> will issue an FTB update next cycle (<code>issue_next</code>,
-   <code>rtl/core/frontend/ftq/rtl/ftq_ftb_sched.sv:327</code>, wired to
-   <code>h3_ftb_upd</code> at <code>ftq.sv:493</code>), <code>ftq_npc</code> holds its p0 request
-   (hold term H3 in <code>w_hold</code>, <code>ftq_npc.sv:307-309</code>; rationale at
-   <code>ftq_npc.sv:132-137</code>). One p0 request is withheld per FTB update.</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd12_training.sucl</code>, which <code>make view
-S=fd12_training</code> opens in Surfer. Groups: clock, backend, ftq_upd_conv,
-ftb_update, bp_cluster_p0. Look at:</p>
-<ul>
-<li><code>bkend_ftq_rsv_val</code>: a resolution from the backend.</li>
-<li><code>w_ubtb_upd_u0.[0].valid</code>, <code>w_lp_upd_val_p0</code>, <code>w_tage_upd_val_u0</code>,
-  <code>w_sc_upd_val_u0</code>, <code>w_ittage_upd_val_u0</code>, <code>w_ras_commit_val</code>: the
-  updates after the cluster's gates, by type.</li>
-<li><code>ftb_upd_valid_u0</code> with <code>ftb_upd_pc_u0</code>: an FTB update; in the cycle
-  before it <code>u_npc.h3_ftb_upd</code> is high, <code>u_npc.w_hold</code> is high and
-  <code>ftq_pred_val_p0</code> is low: the withheld p0 request.</li>
-</ul>
+<p>The walkthrough follows branch resolutions from the backend model to the
+predictor updates.</p>
+<p>Section 4.1 describes update generation and qualification by branch type.
+Section 4.2 shows the FTB update/FTQ stall conditions. Section 4.3 describes the
+one resolution in the run that does not train the loop predictor, TAGE and SC,
+and the FTB entry split that accompanies it.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a
+marker in the waveform. A signal the testbench drives, such as
+<code>tb.bkend_ftq_rsv_val</code>, changes one time unit after the clock edge, as does
+logic combinational from it, so the waveform first shows the new value at the
+marker of the next cycle.</p>
+<p>The waveform group <code>bp_cluster_update</code> contains the update valids after the
+<code>bp_cluster</code> qualification, <code>ftb_update</code> the FTB update, and <code>bp_cluster_p0</code> the
+p0 request and its stall.</p>
+<h3 id="41-predictor-update-generation-and-branch-type-qualification">4.1 Predictor update generation and branch type qualification<a class="headerlink" href="#41-predictor-update-generation-and-branch-type-qualification" title="Permanent link">&para;</a></h3>
+<p>Module <code>ftq_upd_conv</code> generates the update inputs for the predictors, with the
+exceptions of FTB and RAS. A slot's update valids are asserted only when every
+predictor that the slot trains can accept the update.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup></p>
+<p><code>bp_cluster</code> decodes the branch type of each update from its uBTB update input
+and qualifies the per-predictor valids as follows:<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup></p>
+<div class="highlight"><pre><span></span><code>Predictor        Trained on
+uBTB             all branch types except NO_BRANCH
+loop predictor   COND
+TAGE, SC         COND; each also qualified by its queue ready, SC by sc_enable
+ITTAGE           INDIRECT_NONRET, INDIRECT_CALL
+FTB              conditional or jump, on the dedicated ftb_upd_* channel
+RAS commit       DIRECT_CALL, INDIRECT_CALL, RETURN, RETURN_CALL
+</code></pre></div>
+<p>The first resolution is that of the inner loop branch (I:), at position 12 of
+the block at 0x8000_0000, at cyc 21 (event 1). This COND resolution produces the
+first uBTB, FTB, loop predictor, TAGE and SC updates. The indirect jump (J:)
+produces the first ITTAGE update at cyc 66 (event 3). The indirect call (K:)
+produces the first RAS commit at cyc 78 (event 4), one cycle after its
+resolution at cyc 77. The first RETURN commit follows at cyc 98 (event 5).</p>
+<p>At cyc 21 (event 1), <code>tb.bkend_ftq_rsv_val</code> is asserted.
+<code>u_bpu.w_ubtb_upd_u0.[0].valid</code> is asserted with <code>.pc</code> 0x8000_0000 and <code>.pos</code>
+12. <code>u_ftq.u_upd_conv.lp_upd_p0.[0].pc</code> is 0x8000_0018, the address of the inner
+loop branch (I:). <code>u_bpu.w_lp_upd_val_p0</code>, <code>u_bpu.w_tage_upd_val_u0</code> and
+<code>u_bpu.w_sc_upd_val_u0</code> are asserted. <code>ftb_upd_valid_u0</code> is asserted with
+<code>ftb_upd_pc_u0</code> 0x8000_0000, <code>ftb_upd_pos_u0</code> 12, <code>ftb_upd_is_br_u0</code> 1 and
+<code>ftb_upd_hit_u0</code> 0.</p>
+<p>At cyc 66 (event 3), <code>u_bpu.w_ittage_upd_val_u0</code> is asserted and
+<code>lp_upd_p0.[0].pc</code> is 0x8000_002E, the address of the indirect jump (J:).
+<code>ftb_upd_is_jmp_u0</code> is 1.</p>
+<p>At cyc 78 (event 4), <code>u_bpu.w_ras_commit_val</code> is asserted with
+<code>ras_commit_br_type</code> INDIRECT_CALL and <code>ras_commit_ret_addr</code> 0x8000_0078.</p>
+<p>At cyc 98 (event 5), <code>u_bpu.w_ras_commit_val</code> is asserted with
+<code>ras_commit_br_type</code> RETURN.</p>
+<p>The run contains 15 backend redirects:</p>
+<div class="highlight"><pre><span></span><code>cyc  pass  Branch                                  Block  pos  Target
+21   0     inner loop branch (I:)                  0x000  12   0x010
+31   0     inner loop branch (I:)                  0x010  4    0x010
+45   0     inner loop branch (I:), falls through   0x010  4    0x01C
+55   0     always-taken beq (B:)                   0x01C  0    0x028
+66   0     indirect jump (J:)                      0x028  3    0x06E
+77   0     indirect call (K:)                      0x06E  3    0x800
+97   0     the return                              0x800  4    0x078
+108  0     outer loop branch (O:)                  0x078  1    0x00A
+118  1     inner loop branch (I:)                  0x00A  7    0x010
+133  1     inner loop branch (I:), falls through   0x010  4    0x01C
+152  2     inner loop branch (I:)                  0x010  4    0x010
+166  2     always-taken beq (B:)                   0x010  6    0x028
+197  3     inner loop branch (I:), falls through   0x010  4    0x01C
+244  5     inner loop branch (I:)                  0x010  4    0x010
+444  13    outer loop branch (O:), falls through   0x078  1    0x07E
+</code></pre></div>
+<h3 id="42-p0-request-stall-for-ftb-updates">4.2 p0 request stall for FTB updates<a class="headerlink" href="#42-p0-request-stall-for-ftb-updates" title="Permanent link">&para;</a></h3>
+<p>The FTB has a single read port. When <code>ftq_ftb_sched</code> will issue an FTB update in
+the next cycle, a p0 request in the current cycle would reach its FTB read at p1
+in that cycle, so <code>ftq_npc</code> stalls the request.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> Each FTB update stalls the
+p0 request for one cycle, 154 cycles in the run. The first stall is for the FTB
+update at cyc 21 (event 1).</p>
+<p>At cyc 21 (event 1), <code>u_ftq.u_npc.h3_ftb_upd</code> and <code>u_ftq.u_npc.w_hold</code> are
+asserted, and <code>ftq_pred_val_p0</code> is deasserted with <code>ftq_pred_pc_p0</code> 0x8000_0010.
+These signals transition one time unit after the marker of cyc 20. One time unit
+after the marker of cyc 21, the stall ends and <code>ftq_pred_val_p0</code> asserts with
+the same PC. <code>ftb_upd_valid_u0</code> remains asserted until the marker of cyc 22. The
+stall therefore occupies the clock cycle preceding the FTB update.</p>
+<p>FTB updates can occur in consecutive cycles, each with its own stall. The first
+such sequence is four updates of the inner loop branch (I:), from cyc 42
+(event 2) to cyc 45. <code>u_ftq.u_npc.h3_ftb_upd</code> remains asserted and
+<code>ftq_pred_val_p0</code> remains deasserted from one time unit after the marker of cyc
+41 until one time unit after the marker of cyc 45, so no prediction request is
+presented in those four cycles.</p>
+<p>The figure below shows these cycles.</p>
+<p><a href="../fd12_stall.svg"><img alt="fd12 the FTQ prediction request stall for FTB updates" src="../fd12_stall.svg" /></a></p>
+<h3 id="43-suppressed-training-for-a-resolution-placed-in-an-occupied-slot">4.3 Suppressed training for a resolution placed in an occupied slot<a class="headerlink" href="#43-suppressed-training-for-a-resolution-placed-in-an-occupied-slot" title="Permanent link">&para;</a></h3>
+<p>In pass 2, the block at 0x8000_0010 contains both the inner loop branch (I:) at
+position 4 and the always-taken beq (B:) at position 6, and the FTB entry's
+single slot holds the inner loop branch. The backend redirects to 0x8000_0028 at
+cyc 166 (event 6), and the beq resolves at cyc 168 (event 7). The FTQ places the
+resolution in the occupied slot, whose prediction metadata describes the inner
+loop branch, and suppresses the loop predictor, TAGE and SC updates.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> The
+uBTB and FTB updates are still generated, and the FTB update splits the entry so
+that the block thereafter ends at 0x8000_001C. The FTQ accepts the first p2
+group with the new block end at cyc 176 (event 8). This is the only such
+placement in the run, so the loop predictor, TAGE and SC counts are 111, not
+112.</p>
+<p>The figure below shows the block before and after the split.</p>
+<p><a href="../fd12_blocks.svg"><img alt="fd12 the block at 0x8000_0010 before and after the FTB split" src="../fd12_blocks.svg" /></a></p>
+<p>At cyc 166 (event 6), <code>tb.bkend_ftq_redir_val</code> is asserted with
+<code>tb.bkend_ftq_redir_pc</code> 0x8000_0028, <code>tb.bkend_ftq_redir_pos</code> 6 and
+<code>tb.bkend_ftq_redir_taken</code> 1.</p>
+<p>At cyc 168 (event 7), <code>u_ftq.u_resolve.rsv_plc_occ</code> is asserted.
+<code>u_bpu.w_ubtb_upd_u0.[0].valid</code> is asserted with <code>.pc</code> 0x8000_0010 and <code>.pos</code> 6,
+and <code>lp_upd_p0.[0].pc</code> is 0x8000_001C. <code>w_lp_upd_val_p0</code>, <code>w_tage_upd_val_u0</code>
+and <code>w_sc_upd_val_u0</code> are deasserted. <code>ftb_upd_valid_u0</code> is asserted with
+<code>ftb_upd_pos_u0</code> 6, <code>ftb_upd_hit_u0</code> 1, <code>u_bpu.u_ftb.u_ftb_cntrl.upd_split</code> 1
+and <code>u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos</code> 6.</p>
+<p>At cyc 176 (event 8), <code>u_ftq.w_ok_slot_p2</code> is asserted with <code>u_bpu.r_pc_p2</code>
+0x8000_0010 and <code>bpu_blk_pft_p2</code> 0x8000_001C. <code>bpu_slot_p2.[0].pos</code> is 4.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6401,51 +6566,51 @@ ftb_update, bp_cluster_p0. Look at:</p>
 </tr>
 <tr>
 <td>1</td>
-<td>20</td>
-<td>first p0 request withheld for an FTB update (<code>u_npc.h3_ftb_upd</code>), the cycle before the update</td>
-<td><code>ftq_pred_val_p0</code> low</td>
+<td>21</td>
+<td>first resolution from the backend (<code>bkend_ftq_rsv_val</code>): the inner loop branch (I:), with the first uBTB, FTB, loop predictor, TAGE and SC updates and the first p0 stall</td>
+<td>pass 0, <code>h3_ftb_upd</code></td>
 </tr>
 <tr>
 <td>2</td>
-<td>21</td>
-<td>first resolution from the backend (<code>bkend_ftq_rsv_val</code>)</td>
-<td></td>
+<td>42</td>
+<td>first consecutive FTB updates (<code>ftb_upd_valid_u0</code>): the inner loop branch (I:), through cyc 45, each with its own stall</td>
+<td>pass 0, <code>h3_ftb_upd</code></td>
 </tr>
 <tr>
 <td>3</td>
-<td>21</td>
-<td>first uBTB update (<code>w_ubtb_upd_u0.[0].valid</code>)</td>
-<td></td>
+<td>66</td>
+<td>first ITTAGE update: the indirect jump (J:)</td>
+<td>pass 0</td>
 </tr>
 <tr>
 <td>4</td>
-<td>21</td>
-<td>first FTB update (<code>ftb_upd_valid_u0</code>)</td>
-<td></td>
+<td>78</td>
+<td>first RAS commit (<code>w_ras_commit_val</code>): the indirect call (K:)</td>
+<td>pass 0</td>
 </tr>
 <tr>
 <td>5</td>
-<td>21</td>
-<td>first loop predictor, TAGE and SC updates, from one conditional</td>
-<td></td>
+<td>98</td>
+<td>first RETURN commit (<code>w_ras_commit_val</code>): the return from <code>fn</code></td>
+<td>pass 0</td>
 </tr>
 <tr>
 <td>6</td>
-<td>66</td>
-<td>first ITTAGE update: the indirect jump</td>
-<td></td>
+<td>166</td>
+<td>backend misprediction of the always-taken beq (B:) in the block at 0x8000_0010; redirect to 0x8000_0028</td>
+<td>pass 2, backend</td>
 </tr>
 <tr>
 <td>7</td>
-<td>78</td>
-<td>first RAS commit (<code>w_ras_commit_val</code>)</td>
-<td></td>
+<td>168</td>
+<td>resolution of the always-taken beq (B:) placed in an occupied slot (<code>rsv_plc_occ</code>): loop predictor, TAGE and SC updates suppressed; FTB entry split</td>
+<td>pass 2, sole occurrence; <code>upd_cut_pos</code> 6</td>
 </tr>
 <tr>
 <td>8</td>
-<td>168</td>
-<td>the beq placed in an occupied slot (<code>rsv_plc_occ</code>): the always-taken beq's loop predictor, TAGE and SC updates are suppressed</td>
-<td>the only one</td>
+<td>176</td>
+<td>first accepted p2 group for the block at 0x8000_0010 with block end 0x8000_001C</td>
+<td><code>u_ftq.w_ok_slot_p2</code></td>
 </tr>
 <tr>
 <td>9</td>
@@ -6511,8 +6676,23 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
+<td><code>tb.bkend_ftq_redir_pos</code></td>
+<td>halfword position of the redirected transfer</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_taken</code></td>
+<td>resolved direction of the redirected transfer</td>
+</tr>
+<tr>
+<td></td>
 <td><code>tb.bkend_ftq_rsv_val</code></td>
 <td>resolution from the backend, per slot</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.ftq_bkend_rsv_rdy</code></td>
+<td>the FTQ takes the resolution, per slot</td>
 </tr>
 <tr>
 <td></td>
@@ -6525,14 +6705,29 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>commit watermark FTQ index</td>
 </tr>
 <tr>
-<td>ftq_upd_conv</td>
-<td><code>tb.bkend_ftq_rsv_val</code></td>
-<td>resolution from the backend, per slot</td>
+<td>ftq_resolve</td>
+<td><code>u_ftq.u_resolve.rsv_plc_occ</code></td>
+<td>a resolution placed in an occupied slot</td>
 </tr>
 <tr>
 <td></td>
-<td><code>tb.ftq_bkend_rsv_rdy</code></td>
-<td>the FTQ takes the resolution, per slot</td>
+<td><code>u_ftq.u_upd_conv.lp_upd_p0.[0].pc</code></td>
+<td>address of the transfer being updated</td>
+</tr>
+<tr>
+<td>bp_cluster_update</td>
+<td><code>u_bpu.w_ubtb_upd_u0.[0].valid</code></td>
+<td>uBTB update valid, slot 0</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_ubtb_upd_u0.[0].pc</code></td>
+<td>block start address of the uBTB update</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.w_ubtb_upd_u0.[0].pos</code></td>
+<td>halfword position in the uBTB update</td>
 </tr>
 <tr>
 <td></td>
@@ -6546,13 +6741,13 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
-<td><code>u_bpu.w_ittage_upd_val_u0</code></td>
-<td>ITTAGE update valid, per slot</td>
+<td><code>u_bpu.w_sc_upd_val_u0</code></td>
+<td>SC update valid, per slot</td>
 </tr>
 <tr>
 <td></td>
-<td><code>u_bpu.w_sc_upd_val_u0</code></td>
-<td>SC update valid, per slot</td>
+<td><code>u_bpu.w_ittage_upd_val_u0</code></td>
+<td>ITTAGE update valid, per slot</td>
 </tr>
 <tr>
 <td></td>
@@ -6566,8 +6761,13 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
-<td><code>u_bpu.w_ubtb_upd_u0.[0].valid</code></td>
-<td>uBTB update valid, slot 0</td>
+<td><code>ras_commit_br_type</code></td>
+<td>branch type of the RAS commit</td>
+</tr>
+<tr>
+<td></td>
+<td><code>ras_commit_ret_addr</code></td>
+<td>return address of the RAS commit</td>
 </tr>
 <tr>
 <td>ftb_update</td>
@@ -6581,8 +6781,8 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
-<td><code>ftb_upd_hit_u0</code></td>
-<td>the FTB update hits an entry</td>
+<td><code>ftb_upd_pos_u0</code></td>
+<td>halfword position of the branch in the FTB update</td>
 </tr>
 <tr>
 <td></td>
@@ -6601,8 +6801,18 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 </tr>
 <tr>
 <td></td>
-<td><code>u_ftq.u_npc.h3_ftb_upd</code></td>
-<td>p0 hold for an FTB update</td>
+<td><code>ftb_upd_hit_u0</code></td>
+<td>the FTB update hits an entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_split</code></td>
+<td>the FTB update splits the entry</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos</code></td>
+<td>position the split ends the entry at</td>
 </tr>
 <tr>
 <td>bp_cluster_p0</td>
@@ -6622,7 +6832,52 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <tr>
 <td></td>
 <td><code>u_ftq.u_npc.w_hold</code></td>
-<td>holds the p0 request</td>
+<td>stalls the p0 request</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.u_npc.h3_ftb_upd</code></td>
+<td>the FTB update scheduler stalls the p0 request</td>
+</tr>
+<tr>
+<td>bp_cluster_p2</td>
+<td><code>u_bpu.r_pc_p2</code></td>
+<td>p2 prediction block start address</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_bpu.r_val_p2</code></td>
+<td>p2 valid</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_val_p2</code></td>
+<td>p2 group valid: p2 valid and an FTB hit</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_blk_pft_p2</code></td>
+<td>p2 prediction block end, next halfword after it</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p2.[0].slot_valid</code></td>
+<td>slot 0 holds a branch</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p2.[0].br_type</code></td>
+<td>slot 0 branch type</td>
+</tr>
+<tr>
+<td></td>
+<td><code>bpu_slot_p2.[0].pos</code></td>
+<td>slot 0 halfword position in the prediction block</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_ok_slot_p2</code></td>
+<td>the FTQ accepts the p2 group</td>
 </tr>
 </tbody>
 </table>
@@ -6631,7 +6886,31 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd12_training</code> runs the scenario; <code>make view S=fd12_training</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd12_training.svh</code>, <code>waves/fd12_training.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.6/examples/fe_demo/docs/fd12_training.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd12_training.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>upd_acc</code>: <code>rtl/core/frontend/ftq/rtl/ftq_upd_conv.sv:136-138</code> and
+<code>:171</code>. The handshake: <code>:29-37</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>upd_br_type</code>: <code>rtl/core/frontend/bpu/rtl/bp_cluster.sv:1739-1746</code>. The
+types: <code>planning/arch/fe_decisions.md</code> section 7.2. The gates, in the same
+file: uBTB <code>:1752-1753</code>, loop predictor <code>:1678-1679</code>, TAGE, ITTAGE and SC
+<code>:1798-1807</code>, FTB <code>:1643-1644</code>, RAS commit <code>:1649-1653</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>issue_next</code>: <code>rtl/core/frontend/ftq/rtl/ftq_ftb_sched.sv:327</code>, wired to
+<code>h3_ftb_upd</code> at <code>rtl/core/frontend/ftq/rtl/ftq.sv:493</code>. <code>w_hold</code>:
+<code>rtl/core/frontend/ftq/rtl/ftq_npc.sv:306-309</code>. The rationale: <code>:132-137</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>rsv_plc_occ</code>: <code>rtl/core/frontend/ftq/rtl/ftq_resolve.sv:443</code>, described
+at <code>:46-57</code>. The updates it gates: <code>:551-564</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 

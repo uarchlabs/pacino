@@ -2409,34 +2409,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2463,10 +2435,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-l1i-hit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 L1I hit
       
     </span>
   </a>
@@ -2474,10 +2446,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-l1i-miss-and-fill" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 L1I miss and fill
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-mshr-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 MSHR merge
       
     </span>
   </a>
@@ -6065,34 +6048,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Run the scenario">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#21-what-the-monitor-counts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 What the monitor counts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -6119,10 +6074,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-why-the-program-produces-the-behavior" class="md-nav__link">
+  <a href="#41-l1i-hit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Why the program produces the behavior
+        4.1 L1I hit
       
     </span>
   </a>
@@ -6130,10 +6085,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#42-reading-the-waveform" class="md-nav__link">
+  <a href="#42-l1i-miss-and-fill" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.2 Reading the waveform
+        4.2 L1I miss and fill
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-mshr-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 MSHR merge
       
     </span>
   </a>
@@ -6191,17 +6157,26 @@
 <p><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd13_l1i.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd13_l1i.sucl" target="_blank" rel="noopener"><strong>Open waveform</strong></a></p>
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <h2 id="1-introduction">1. Introduction<a class="headerlink" href="#1-introduction" title="Permanent link">&para;</a></h2>
-<p><code>fd13_l1i</code> is the FD-13 demonstration scenario. It is a demo, not a
-verification test. A loop inside one 64-byte line shows L1I hits; cold
-lines show misses and MSHR fills; and a call into the upper half of a
-cold line, run after a FENCE.I, makes the IFU request one line twice
-while its fill is outstanding, so the second request merges onto the
-MSHR register already fetching it. The run passes if a hit, a miss and
-a merge each happen at least once. DOC-007 re-timed the program: a
-line of filler instructions after the FENCE.I keeps the line from
-being fetched, and filled, before the call that should miss on it
-(section 2.2).</p>
-<p>The scenario runs on the one-slot model (Makefile <code>SCEN_2S</code>, DOC-006).</p>
+<p><code>fd13_l1i</code> (FD-13) shows the three L1I outcomes for a fetch request: </p>
+<ol>
+<li>a 2-cycle hit returning a full line</li>
+<li>a miss with an MSHR fill</li>
+<li>a second request merged onto a miss already in flight.</li>
+</ol>
+<p>The program runs a loop of 8 iterations within one 64-byte cache line, which
+produces the hits. After the initial line fill, the loop's fetch requests hit
+in the L1I.</p>
+<p>The program then calls a function whose entry is in the upper half of a line X,
+three times. These calls train the predictors.</p>
+<p>A FENCE.I then invalidates all L1I lines, while leaving the predictor state
+intact. The program makes a fourth call to the function.</p>
+<p>The prediction block at the call target requires lines X and X+1, so the IFU
+requests both.  The predicted successor block then requests line X while its
+miss is outstanding, and the MSHR merges this request onto the register already
+fetching the line.</p>
+<p>The result line in the log file reports the hits, misses and merges.</p>
+<p>This scenario runs in the 1-prediction slot Pacino configuration,
+NUM_PRED_SLOTS=1.</p>
 <h3 id="11-files">1.1 Files<a class="headerlink" href="#11-files" title="Permanent link">&para;</a></h3>
 <p><code>DEMO=$RVA_ROOT/examples/fe_demo</code></p>
 <table>
@@ -6236,6 +6211,18 @@ being fetched, and filled, before the call that should miss on it
 <td>Waveform (online)</td>
 <td><a href="https://app.surfer-project.org/?load_url=https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd13_l1i.fst&amp;startup_commands=run_command_file_from_url%20https%3A%2F%2Fuarchlabs.github.io%2Fpacino-waves%2Ffd13_l1i.sucl">Link</a></td>
 </tr>
+<tr>
+<td>Block connectivity</td>
+<td><a href="../fe_block.svg">$DEMO/docs/fe_block.svg</a></td>
+</tr>
+<tr>
+<td>Pipeline view</td>
+<td><a href="../fe_pipe.svg">$DEMO/docs/fe_pipe.svg</a></td>
+</tr>
+<tr>
+<td>Common description</td>
+<td><a href="../demo_explainer/">$DEMO/docs/demo_explainer.md</a></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -6250,131 +6237,197 @@ being fetched, and filled, before the call that should miss on it
 <div class="highlight"><pre><span></span><code>-I: fd13_l1i : PASS : cyc = 214
 </code></pre></div></p>
 <p>Log file output:
-<div class="highlight"><pre><span></span><code>-I: fd13_l1i: PASS, L1I hits 48, L1I misses 29, merges 1, events checked 8 of 8,
-    cyc 214
+<div class="highlight"><pre><span></span><code>-I: fd13_l1i: PASS, L1I hits 48, L1I misses 29, merges 1,
+    events checked 11 of 11, cyc 214
 </code></pre></div></p>
-<h3 id="21-what-the-monitor-counts">2.1 What the monitor counts<a class="headerlink" href="#21-what-the-monitor-counts" title="Permanent link">&para;</a></h3>
-<p>The counts come from <code>tb/fe_demo_mon.svh:515-526</code>, sampled every cycle
-while the stream is being measured (<code>meas</code>).</p>
-<div class="highlight"><pre><span></span><code>n_l1i_hit    per bank: u_l1i.b_rsp_valid[b], summed over the 2 banks
-n_l1i_miss   per bank: u_l1i.b_mis_valid[b], summed over the 2 banks
-n_l1i_merge  u_l1i.u_mshr.accept &amp;&amp; u_l1i.u_mshr.mrg_hit
-</code></pre></div>
-<p>The proof (<code>tb/fe_demo_proofs.svh:115</code>) is
-<code>n_l1i_hit &gt; 0 &amp;&amp; n_l1i_miss &gt; 0 &amp;&amp; n_l1i_merge &gt; 0</code>.
-<code>tb_fe_demo.sv</code> also requires the whole stream to retire with no errors
-before it accepts the proof.</p>
-<h3 id="22-reading-the-numbers">2.2 Reading the numbers<a class="headerlink" href="#22-reading-the-numbers" title="Permanent link">&para;</a></h3>
-<ul>
-<li>Hits and misses are bank lookups, not instructions or blocks. A
-  block needing two lines counts two lookups; a merged request counts
-  no lookup. Wrong-path requests inside the measured window are
-  counted too.</li>
-<li>DOC-002 changed <code>n_l1i_hit</code> and <code>n_l1i_miss</code> to sum the two banks in
-  a cycle; before, a cycle with both banks answering counted once. A
-  DOC-002 scratch check against an independent per-bank count found no
-  cycle with both banks answering in this run, so the figures are
-  unchanged.</li>
-<li>The merge figure is 1: the event of section 4.1, step 3.</li>
-<li>Why the fillers (DOC-007). The front end runs ahead of the backend,
-  so when the FENCE.I retires the blocks after it are already being
-  fetched. Without the fillers the fourth call follows the FENCE.I
-  directly: predecode finds it before the invalidate, and the block at
-  X+0x30 requests line X at cyc 152, the cycle after the invalidate is
-  done (<code>l1i_ifu_inv_done</code> at 151), so the request misses and starts a
-  fill. The restart after the FENCE.I (a backend redirect to the next
-  instruction, cyc 154) flushes that block; the fill goes on. The
-  restart PC, the call, starts a block the predictors have never seen,
-  since each block start has its own entry (BP-140), so the call is
-  found only by predecode, once the restart's own line, invalidated by
-  the FENCE.I, has been filled: a predecode redirect at cyc 174. X has
-  been filled by then; the fourth call's requests for X hit, and there
-  is no merge (L1I hits 47, misses 28, merges 0, cyc 208). With 24
-  fillers the call is 64 bytes past the FENCE.I. The fetch that runs
-  past the FENCE.I before the restart still reaches it: a predecode
-  redirect to X+0x30 at cyc 149. At cyc 154 the restart flushes the
-  block at X+0x30. That block had not yet requested X. In the DOC-007
-  runs the merge needs at least 12 fillers; with 0 or 6 there is none.</li>
-<li>Departure from <code>planning/showcase/fe_demo_scenarios.md</code> FD-13: the
-  program adds the fillers after the FENCE.I. The proof is FD-13's.</li>
-</ul>
+<p>The testbench monitor, <code>tb/fe_demo_mon.svh</code>, supplies the counts in the log
+line, while the expected instruction stream has not fully retired. Hits and
+misses are bank lookups: a block that needs two lines counts two lookups, a
+merged request counts none, and wrong-path requests are counted.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Counter</th>
+<th>Counted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L1I hits</td>
+<td><code>n_l1i_hit</code></td>
+<td><code>u_l1i.b_rsp_valid[b]</code>, summed over the banks</td>
+</tr>
+<tr>
+<td>L1I misses</td>
+<td><code>n_l1i_miss</code></td>
+<td><code>u_l1i.b_mis_valid[b]</code>, summed over the banks</td>
+</tr>
+<tr>
+<td>merges</td>
+<td><code>n_l1i_merge</code></td>
+<td><code>u_l1i.u_mshr.accept</code> and <code>u_l1i.u_mshr.mrg_hit</code></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="3-the-program">3. The program<a class="headerlink" href="#3-the-program" title="Permanent link">&para;</a></h2>
-<p>Source: <code>programs/fd13_l1i.svh</code>, task <code>prog_fd13</code>. Bare M-mode, code at
-RESET_VECTOR 0x8000_0000 (<code>bp_defines_pkg.sv:40</code>); X = 0x8000_0800.
-Addresses are derived from the writer's emitters.</p>
-<div class="highlight"><pre><span></span><code>0x8000_0000  mixed(2)                                     6 bytes
-top = +0x06  mixed(6)                     16 bytes, within line 0
-       +0x16 bne x6,x0,top                8 passes
-then four times (it = 0..3; before it = 3 a FENCE.I at +0x2C and
-mixed(FD13_FILL), +0x30 to +0x6F):
-             jal x1, X+0x30               call: +0x1A, +0x20, +0x26,
-                                          +0x70
-X+0x30       c.addi
-X+0x32       jal x0, X                    back into line X
-X+0x00       mixed(2)
-X+0x06       jalr x0,0(ra)                return
-             mixed(1)
-then mixed(3), jal x0,0                   halt, at +0x7E
+<p>The program is written by the task <code>prog_fd13</code> in <code>programs/fd13_l1i.svh</code>. The
+code consists of a short prologue, a loop of 8 passes starting at <code>top</code>, four
+calls to <code>X30</code>, and a short epilogue. X is the line at 0x8000_0800 and X+1 the
+line at 0x8000_0840.</p>
+<p>Each call goes to <code>X30</code>, in the upper half of line X. The jump at <code>X30</code> + 2
+(J:) goes back to the start of line X, and the return (R:) goes back to the
+instruction after the call. A FENCE.I and 24 filler instructions precede the
+fourth call.</p>
+<p>The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, <code>RESET_VECTOR</code> = 0x8000_0000
+(<code>bp_defines_pkg.sv</code>).</p>
+<div class="highlight"><pre><span></span><code>Address      Label  Instruction             Purpose
+0x8000_0000         c.addi a0, 1            ; prologue
+0x8000_0002         addi   t0, t0, 1        ; prologue
+
+0x8000_0006  top:   c.addi a0, 1            ; loop body
+0x8000_0008         addi   t0, t0, 1        ; loop body
+0x8000_000C         c.addi a0, 1            ; loop body
+0x8000_000E         c.addi a0, 1            ; loop body
+0x8000_0010         addi   t0, t0, 1        ; loop body
+0x8000_0014         c.addi a0, 1            ; loop body
+0x8000_0016  L:     bne    x6, x0, top      ; loop branch, 8 passes
+
+0x8000_001A  C1:    jal    x1, X30          ; first call
+0x8000_001E         c.addi a0, 1            ; after the return
+0x8000_0020  C2:    jal    x1, X30          ; second call
+0x8000_0024         c.addi a0, 1            ; after the return
+0x8000_0026  C3:    jal    x1, X30          ; third call
+0x8000_002A         c.addi a0, 1            ; after the return
+
+0x8000_002C         fence.i                 ; every L1I line invalid
+0x8000_0030         c.addi, addi, ...       ; 24 fillers, to 0x8000_006F
+0x8000_0070  C4:    jal    x1, X30          ; fourth call
+0x8000_0074         c.addi a0, 1            ; after the return
+
+0x8000_0076         c.addi a0, 1            ; epilogue
+0x8000_0078         addi   t0, t0, 1        ; epilogue
+0x8000_007C         c.addi a0, 1            ; epilogue
+0x8000_007E  hold:  jal    x0, hold         ; termination
+
+0x8000_0800  X:     c.addi a0, 1            ; start of line X
+0x8000_0802         addi   t0, t0, 1        ; filler
+0x8000_0806  R:     ret                     ; return
+
+0x8000_0830  X30:   c.addi a0, 1            ; upper half of line X
+0x8000_0832  J:     jal    x0, X            ; back to the start of line X
 </code></pre></div>
-<ul>
-<li>The loop of 8 passes is 20 bytes from +0x06 to +0x1A and stays in
-  the line 0x8000_0000: after its first fill every fetch of it hits.</li>
-<li>X is a cold line. The block at X+0x30 starts in the upper half of
-  line X (offset 0x30 of 64), so it needs lines X and X+1 (IFU-7).</li>
-<li>The first three calls train the predictors on the path main -&gt;
-  X+0x30 -&gt; X -&gt; main. <code>fence_i</code> (<code>fe_tb_writer.svh:673</code>) then makes
-  every L1I line invalid; the predictors keep what they learned.</li>
-<li><code>FD13_FILL</code>, 24 (<code>programs/fd13_l1i.svh</code>), is the number of filler
-  instructions after the FENCE.I: 64 bytes, one line. The fourth call
-  is then at +0x70.</li>
-</ul>
+<p>The loop, from 0x8000_0006 to 0x8000_001A, stays within the line at 0x8000_0000.
+A block that starts in the upper half of a line requires that line and the next,
+so the block at <code>X30</code> requests lines X and X+1.</p>
+<p>The FENCE.I invalidates every L1I line, and the predictors keep what the first
+three calls trained. The front end fetches ahead of the backend, so the fetch
+continues past the FENCE.I before the restart. The 24 fillers, one 64-byte line,
+keep that fetch from requesting line X before the fourth call.</p>
+<p>With one prediction slot, an FTB entry holds one branch. The accepted p2 slot
+groups, by block:</p>
+<table>
+<thead>
+<tr>
+<th>Block start</th>
+<th>Reached by</th>
+<th>Branch</th>
+<th>Position</th>
+<th>Block end</th>
+<th>Groups</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x8000_0006</td>
+<td><code>top</code></td>
+<td>L:</td>
+<td>8</td>
+<td>0x8000_0026</td>
+<td>10</td>
+</tr>
+<tr>
+<td>0x8000_0830</td>
+<td>a call</td>
+<td>J:</td>
+<td>1</td>
+<td>0x8000_0836</td>
+<td>4</td>
+</tr>
+<tr>
+<td>0x8000_0800</td>
+<td>J:</td>
+<td>R:</td>
+<td>3</td>
+<td>0x8000_080A</td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>c.addi</code> and <code>addi</code> instructions do no useful work. Their purpose is to mix
+16-bit and 32-bit instructions and to separate the branches.</p>
+<p>The directions and targets are chosen by the program writer and resolved by the
+modeled backend, and the register operands play no part in them.</p>
 <hr />
 <h2 id="4-walkthrough">4. Walkthrough<a class="headerlink" href="#4-walkthrough" title="Permanent link">&para;</a></h2>
-<h3 id="41-why-the-program-produces-the-behavior">4.1 Why the program produces the behavior<a class="headerlink" href="#41-why-the-program-produces-the-behavior" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Hits. <code>L1iReadLatency</code> is 2
-   (<code>rtl/core/frontend/icache/rtl/l1i_pkg.sv:122</code>). A hit leaves the
-   bank's compare stage as <code>rsp_valid = c_hit</code>
-   (<code>rtl/core/frontend/icache/rtl/l1i_ctrl.sv:229</code>, <code>:255</code>). In the run
-   a request at cyc 35 (id 0, line 0x8000_0000, in the loop) is
-   answered with id 0 at cyc 37.</li>
-<li>Misses. A miss is reported in the same stage, <code>mis_valid = c_miss</code>
-   (<code>l1i_ctrl.sv:230</code>, <code>:238</code>), for the MSHR register allocated when
-   the request was accepted; the fill comes from the memory port
-   (<code>l1i_mem_a_valid</code>, <code>l1i_mem_d_valid</code>).</li>
-<li>The merge. On the fourth pass, after the FENCE.I, the run shows
-   (cyc is <code>tb.cyc</code>, <code>fe_tb_dut.svh:129</code>):</li>
-<li>cyc 181: request id 0, line X (0x8000_0800), block at X+0x30</li>
-<li>cyc 182: request id 4, line X+1 (0x8000_0840), the same block</li>
-<li>cyc 183: request id 1, line X again, the predicted block at X,
-     with <code>u_mshr.mrg_hit</code> set</li>
-<li>responses: id 0 at cyc 193, id 1 at 194, id 4 at 198.
-   The IFU compares a block's first line only with the previous
-   request's line (TD-IFU-8,
-   <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:290</code>); the previous request
-   was X+1, so the block at X issues its own request. The MSHR finds a
-   valid register for line X whose data has not arrived
-   (<code>e_val &amp;&amp; !e_got</code>,
-   <code>rtl/core/frontend/icache/rtl/l1i_mshr.sv:232-233</code>) and sets
-   <code>mrg_hit</code> (<code>:256</code>, a cacheable request). A merged
-   request does not look up the arrays (<code>l1i_mshr.sv:309-310</code>:
-   <code>b_req_valid</code> excludes <code>mrg_hit</code>).</li>
-</ol>
-<h3 id="42-reading-the-waveform">4.2 Reading the waveform<a class="headerlink" href="#42-reading-the-waveform" title="Permanent link">&para;</a></h3>
-<p>The saved view is <code>waves/fd13_l1i.sucl</code>, which <code>make view S=fd13_l1i</code>
-opens in Surfer. Groups: clock, ftq_ifu, ifu_l1i, l1i. Look at:</p>
-<ul>
-<li><code>ifu_l1i_req_val</code> with <code>ifu_l1i_req_paddr</code> and <code>ifu_l1i_req_id</code>, and
-  <code>l1i_ifu_rsp_val</code> with <code>l1i_ifu_rsp_id</code> two cycles later: a hit.</li>
-<li><code>b_mis_valid</code>, an MSHR <code>e_val</code>, <code>l1i_mem_a_valid</code> with
-  <code>l1i_mem_a_address</code>, the <code>l1i_mem_d_valid</code> beats, <code>e_got</code> and
-  <code>b_fil_valid</code>: a miss and its fill.</li>
-<li>cyc 181 to 183: requests for X, X+1, X; <code>mrg_hit</code> set on the third.
-  <code>mrg_hit</code> is the MSHR's match of the presented request, so it is also
-  set in cycles with no request taken; the monitor counts it only with
-  <code>u_mshr.accept</code>.</li>
-</ul>
+<p>The walkthrough follows requests from the IFU through the L1I. Section 4.1
+describes a hit, section 4.2 a miss and its fill, and section 4.3 the merge.</p>
+<p>Cycle numbers below are events in <a href="#5-events">section 5</a>; each event is a
+marker in the waveform. A signal the testbench drives, such as
+<code>tb.l1i_mem_d_valid</code>, changes one time unit after the clock edge, so the
+waveform first shows the new value at the marker of the next cycle.</p>
+<p>The waveform group <code>ifu_l1i</code> contains the requests and responses, and <code>l1i</code> the
+bank results, the MSHR registers and the memory port.</p>
+<h3 id="41-l1i-hit">4.1 L1I hit<a class="headerlink" href="#41-l1i-hit" title="Permanent link">&para;</a></h3>
+<p>The L1I read latency is 2 cycles. A hit produces the response from the bank's
+compare stage, carrying the full 64-byte line on <code>l1i_ifu_rsp_data</code>.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> The
+first hit after the cold fills complete is in the loop, at cyc 35 (event 4).</p>
+<p>At cyc 35 (event 4), <code>ifu_l1i_req_val</code> and <code>ifu_l1i_req_rdy</code> are asserted with
+<code>ifu_l1i_req_id</code> 0 and <code>ifu_l1i_req_paddr</code> 0x8000_0000. At cyc 36,
+<code>u_l1i.b_rsp_valid.[0]</code> is asserted. At cyc 37, <code>l1i_ifu_rsp_val</code> is asserted
+with <code>l1i_ifu_rsp_id</code> 0.</p>
+<p>The first hit in the run is earlier, at cyc 26 (event 3), while cold fills are
+still in progress.</p>
+<h3 id="42-l1i-miss-and-fill">4.2 L1I miss and fill<a class="headerlink" href="#42-l1i-miss-and-fill" title="Permanent link">&para;</a></h3>
+<p>A miss is reported in the same compare stage, for the MSHR register allocated
+when the request was accepted, and the line is fetched through the memory
+port.<sup id="fnref:2"><a class="footnote-ref" href="#fn:2">2</a></sup> The first miss is the line at 0x8000_0000.</p>
+<p>At cyc 4, the request is accepted with <code>ifu_l1i_req_id</code> 0. At cyc 5 (event 1),
+<code>u_l1i.b_mis_valid.[0]</code> and <code>u_l1i.u_mshr.e_val.[0]</code> are asserted. At cyc 6
+(event 2), <code>tb.l1i_mem_a_valid</code> is asserted with <code>tb.l1i_mem_a_address</code>
+0x8000_0000 and <code>tb.l1i_mem_a_source</code> 0. The memory response beats are at cyc 14
+and 15, with <code>tb.l1i_mem_d_source</code> 0. At cyc 15, <code>u_l1i.u_mshr.b_fil_valid.[0]</code>
+writes the line into the array. At cyc 16, <code>u_l1i.u_mshr.e_got.[0]</code> and
+<code>l1i_ifu_rsp_val</code> are asserted with <code>l1i_ifu_rsp_id</code> 0.</p>
+<h3 id="43-mshr-merge">4.3 MSHR merge<a class="headerlink" href="#43-mshr-merge" title="Permanent link">&para;</a></h3>
+<p>After the FENCE.I, the block at <code>X30</code> requests lines X and X+1, then the
+predicted block at X requests line X again. The IFU reuses a line only when the
+block's first line equals the line of the previous request.<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">3</a></sup> The previous
+request is X+1, so the block at X issues its own request. A block on the same
+line as the previous request never merges, because the IFU reuses that line.</p>
+<p>The MSHR finds a valid register for line X whose data has not arrived, and sets
+<code>mrg_hit</code>. A merged request does not look up the arrays.<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">4</a></sup> Line X therefore
+has one memory request, and its fill answers both requests.</p>
+<p>At cyc 176 (event 7), the fourth call is found at F3: <code>u_ftq.w_pd_redir_val</code> is
+asserted with <code>u_ftq.w_pd_redir_pc</code> 0x8000_0830.</p>
+<p>At cyc 181, <code>ifu_l1i_req_id</code> 0 requests 0x8000_0800. At cyc 182, id 4 requests
+0x8000_0840. At cyc 183 (event 8), id 1 requests 0x8000_0800, with
+<code>u_l1i.u_mshr.accept</code> and <code>u_l1i.u_mshr.mrg_hit</code> asserted.
+<code>u_l1i.u_mshr.e_val.[0]</code> is asserted and <code>u_l1i.u_mshr.e_got.[0]</code> is deasserted.
+<code>tb.l1i_mem_a_valid</code> is asserted with address 0x8000_0800 and source 0, the only
+memory request for line X after the FENCE.I.</p>
+<p>The memory response beats with source 0 are at cyc 191 and 192. At cyc 192,
+<code>u_l1i.u_mshr.b_fil_valid.[0]</code> writes the line. At cyc 193, <code>l1i_ifu_rsp_val</code> is
+asserted with <code>l1i_ifu_rsp_id</code> 0, and at cyc 194 (event 9) with
+<code>l1i_ifu_rsp_id</code> 1, the merged request. Line X+1 is answered at cyc 198, with
+<code>l1i_ifu_rsp_id</code> 4.</p>
+<p>The figure below shows these cycles.</p>
+<p><a href="../fd13_merge.svg"><img alt="fd13 the MSHR merge on line X" src="../fd13_merge.svg" /></a></p>
+<p><code>mrg_hit</code> is the MSHR's match of the presented request, so it is also asserted
+in cycles with no request taken. The merge count therefore also requires
+<code>u_l1i.u_mshr.accept</code>.</p>
 <hr />
 <h2 id="5-events">5. Events<a class="headerlink" href="#5-events" title="Permanent link">&para;</a></h2>
 <table>
@@ -6397,40 +6450,58 @@ opens in Surfer. Groups: clock, ftq_ifu, ifu_l1i, l1i. Look at:</p>
 <td>1</td>
 <td>5</td>
 <td>first L1I miss (<code>b_mis_valid</code>), the cold line 0x8000_0000</td>
-<td></td>
+<td>bank 0</td>
 </tr>
 <tr>
 <td>2</td>
-<td>26</td>
-<td>first L1I hit (<code>b_rsp_valid</code>)</td>
-<td></td>
+<td>6</td>
+<td>first memory request (<code>tb.l1i_mem_a_valid</code>), line 0x8000_0000</td>
+<td>source 0</td>
 </tr>
 <tr>
 <td>3</td>
-<td>151</td>
-<td>the invalidate is done (<code>l1i_ifu_inv_done</code>): the FENCE.I has made every line invalid</td>
-<td></td>
+<td>26</td>
+<td>first L1I hit (<code>b_rsp_valid</code>)</td>
+<td>bank 0</td>
 </tr>
 <tr>
 <td>4</td>
+<td>35</td>
+<td>the 2-cycle hit: a request for line 0x8000_0000 in the loop, answered at cyc 37</td>
+<td><code>ifu_l1i_req_id</code> 0</td>
+</tr>
+<tr>
+<td>5</td>
+<td>151</td>
+<td>the invalidate is done (<code>l1i_ifu_inv_done</code>): the FENCE.I has made every line invalid</td>
+<td>FENCE.I at 0x8000_002C</td>
+</tr>
+<tr>
+<td>6</td>
 <td>154</td>
 <td>the restart after the FENCE.I: a backend redirect to 0x8000_0030, the next instruction</td>
 <td>backend</td>
 </tr>
 <tr>
-<td>5</td>
+<td>7</td>
 <td>176</td>
-<td>the fourth call found at F3 after the restart; predecode redirect to 0x8000_0830, X+0x30</td>
-<td>the last</td>
+<td>the fourth call found at F3 after the restart; predecode redirect to 0x8000_0830</td>
+<td>the last such redirect</td>
 </tr>
 <tr>
-<td>6</td>
+<td>8</td>
 <td>183</td>
 <td>the merge: the predicted block at X requests line X while its miss is in flight (<code>mrg_hit</code>)</td>
-<td>the one merge</td>
+<td>the only merge; <code>ifu_l1i_req_id</code> 1</td>
 </tr>
 <tr>
-<td>7</td>
+<td>9</td>
+<td>194</td>
+<td>the merged request answered (<code>l1i_ifu_rsp_id</code> 1), by the fill of line X</td>
+<td>one memory request for X</td>
+</tr>
+<tr>
+<td>10</td>
 <td>214</td>
 <td>the run ends</td>
 <td></td>
@@ -6465,6 +6536,26 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td></td>
 <td><code>tb.cyc</code></td>
 <td>cycle number</td>
+</tr>
+<tr>
+<td>backend</td>
+<td><code>tb.bkend_ftq_redir_val</code></td>
+<td>backend redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tb.bkend_ftq_redir_pc</code></td>
+<td>backend redirect PC</td>
+</tr>
+<tr>
+<td>predecode</td>
+<td><code>u_ftq.w_pd_redir_val</code></td>
+<td>predecode redirect</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_ftq.w_pd_redir_pc</code></td>
+<td>predecode redirect target</td>
 </tr>
 <tr>
 <td>ftq_ifu</td>
@@ -6552,6 +6643,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td>id of the request answered</td>
 </tr>
 <tr>
+<td></td>
+<td><code>l1i_ifu_inv_done</code></td>
+<td>the invalidate is done</td>
+</tr>
+<tr>
 <td>l1i</td>
 <td><code>u_l1i.b_rsp_valid.[0]</code></td>
 <td>L1I hit response, bank 0</td>
@@ -6570,6 +6666,11 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <td></td>
 <td><code>u_l1i.b_mis_valid.[1]</code></td>
 <td>L1I miss, bank 1</td>
+</tr>
+<tr>
+<td></td>
+<td><code>u_l1i.u_mshr.accept</code></td>
+<td>the MSHR accepts the presented request</td>
 </tr>
 <tr>
 <td></td>
@@ -6658,7 +6759,28 @@ Signal paths below are under <code>tb.dut</code> unless they start with <code>tb
 <p>Runs Surfer in the browser, with nothing to install. The signal setup takes a few seconds to apply.</p>
 <p><strong>Run it</strong> from <code>examples/fe_demo/</code>: <code>make fd13_l1i</code> runs the scenario; <code>make view S=fd13_l1i</code> opens its waveform in Surfer.</p>
 <p><strong>Files:</strong> <code>programs/fd13_l1i.svh</code>, <code>waves/fd13_l1i.sucl</code>.</p>
-<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.6/examples/fe_demo/docs/fd13_l1i.md">Source of this page on GitHub</a></p>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-0.0.7/examples/fe_demo/docs/fd13_l1i.md">Source of this page on GitHub</a></p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p><code>L1iReadLatency</code>: <code>rtl/core/frontend/icache/rtl/l1i_pkg.sv:122</code>.
+<code>c_hit</code>, <code>rsp_valid</code>: <code>rtl/core/frontend/icache/rtl/l1i_ctrl.sv:229</code> and
+<code>:255</code>.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:2">
+<p><code>c_miss</code>, <code>mis_valid</code>: <code>rtl/core/frontend/icache/rtl/l1i_ctrl.sv:230</code> and
+<code>:238</code>.&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p><code>w_reuse0</code>: <code>rtl/core/frontend/ifu/rtl/ifu_fetch.sv:289-290</code>.&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p><code>e_val &amp;&amp; !e_got</code>: <code>rtl/core/frontend/icache/rtl/l1i_mshr.sv:232-233</code>.
+<code>mrg_hit</code>: <code>:256</code>. <code>b_req_valid</code>: <code>:309-310</code>.&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
 
 
 
