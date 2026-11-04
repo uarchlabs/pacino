@@ -20,17 +20,20 @@ group_marked markers
 item_focus f
 marker_set c111_first_uncached_request 1145
 marker_set c126_first_uncached_block_closed_after_one 1295
+marker_set c129_the_commit_gate_opens_for_the 1325
 marker_set c306_first_request_for_0x8120_3200 3095
+marker_set c427_third_pass_of_the_loop 4305
 marker_set c555_first_request_for_0x8120_3400 5585
+marker_set c608_the_ret_writes_back_with_no 6115
 marker_set c647_first_uncached_request_from_the_IO 6505
 marker_set c772_last_uncached_request 7755
 marker_set c797_the_run_ends 8005
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus n
+item_focus ba
 group_marked ftq_ifu
-item_focus o
+item_focus bb
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -53,9 +56,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_xlate
 variable_add tb.dut.u_ifu.u_xlate.xq_val
-item_focus bi
+item_focus bl
 group_marked ifu_xlate
-item_focus bj
+item_focus bm
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_xlate.xq_pop
 item_set_format Bit
@@ -75,21 +78,48 @@ variable_add tb.dut.u_ifu.u_xlate.xq_fault1
 item_set_format Enum
 variable_add tb.dut.u_ifu.u_xlate.xq_uc
 item_set_format Bit
+variable_add tb.dut.itlb_ifu_rsp_val
+item_set_format Bit
+variable_add tb.dut.itlb_ifu_ppn
+item_set_format Hexadecimal
+variable_add tb.dut.itlb_ifu_pma
+item_set_format Binary
+item_unfocus
+# group ifu_f3
+variable_add tb.dut.ifu_ftq_pdwb_val
+item_focus cj
+group_marked ifu_f3
+item_focus ck
+item_set_format Bit
+variable_add tb.dut.ifu_ftq_pdwb_idx
+item_set_format Unsigned
+variable_add tb.dut.ifu_ftq_mis_val
+item_set_format Bit
+variable_add tb.dut.ifu_ftq_mis_pos
+item_set_format Unsigned
+variable_add tb.dut.ifu_ftq_uc_end
+item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_val
+item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_pc
+item_set_format Hexadecimal
 item_unfocus
 # group ifu_fetch
 variable_add tb.dut.u_ifu.u_fetch.xq_uc
-item_focus cd
+item_focus db
 group_marked ifu_fetch
-item_focus ce
+item_focus dc
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_fetch.w_uc_gate
+item_set_format Bit
+variable_add tb.dut.u_ifu.u_fetch.w_reuse0
 item_set_format Bit
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus cg
+item_focus df
 group_marked ifu_l1i
-item_focus ch
+item_focus dg
 item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Bit
@@ -106,9 +136,9 @@ item_set_format Unsigned
 item_unfocus
 # group l1i
 variable_add tb.dut.u_l1i.b_rsp_valid.[0]
-item_focus co
+item_focus dn
 group_marked l1i
-item_focus cp
+item_focus do
 item_set_format Bit
 variable_add tb.dut.u_l1i.b_rsp_valid.[1]
 item_set_format Bit
@@ -151,9 +181,9 @@ item_set_format Bit
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus ed
+item_focus fc
 group_marked backend
-item_focus ee
+item_focus fd
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -172,9 +202,9 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus em
+item_focus fl
 group_marked decode
-item_focus en
+item_focus fm
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit

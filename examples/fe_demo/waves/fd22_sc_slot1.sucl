@@ -25,14 +25,15 @@ marker_set c56_A_mispredicted 595
 marker_set c110_first_p3_redirect_from_slot_1 1135
 marker_set c114_SC_corrects_TAGEs_taken_for_B 1175
 marker_set c204_last_backend_misprediction_of_B 2075
+marker_set c280_first_SC_correction_of_B_after 2835
 marker_set c358_back_edge_falls_through 3615
 marker_set c368_the_run_ends 3715
 item_unfocus
 # group tage_p2
 variable_add tb.dut.u_bpu.w_tage_pred_rdy_p2
-item_focus p
-group_marked tage_p2
 item_focus ba
+group_marked tage_p2
+item_focus bb
 item_set_format Binary
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp
 item_set_format Unsigned
@@ -57,10 +58,12 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus bl
-group_marked bp_cluster_p2
 item_focus bm
+group_marked bp_cluster_p2
+item_focus bn
 item_set_format Bit
+variable_add tb.dut.u_bpu.r_pc_p2
+item_set_format Hexadecimal
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
 variable_add tb.dut.bpu_slot_idx_p2
@@ -104,9 +107,9 @@ item_set_format Unsigned
 item_unfocus
 # group sc_p3
 variable_add tb.dut.u_bpu.w_sc_pred_rdy_p3
-item_focus db
+item_focus dd
 group_marked sc_p3
-item_focus dc
+item_focus de
 item_set_format Binary
 variable_add tb.dut.u_bpu.w_sc_hit_p3.[0]
 item_set_format Bit
@@ -119,10 +122,12 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p3
 variable_add tb.dut.u_bpu.r_val_p3
-item_focus dh
+item_focus dj
 group_marked bp_cluster_p3
-item_focus di
+item_focus dk
 item_set_format Bit
+variable_add tb.dut.u_bpu.r_pc_p3
+item_set_format Hexadecimal
 variable_add tb.dut.bpu_slot_val_p3
 item_set_format Bit
 variable_add tb.dut.bpu_slot_idx_p3
@@ -164,9 +169,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus em
+item_focus ep
 group_marked ftq
-item_focus en
+item_focus fa
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -186,5 +191,14 @@ variable_add tb.dut.ftq_full
 item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
+item_unfocus
+# group backend
+variable_add tb.bkend_ftq_redir_val
+item_focus fk
+group_marked backend
+item_focus fl
+item_set_format Bit
+variable_add tb.bkend_ftq_redir_pc
+item_set_format Hexadecimal
 item_unfocus
 zoom_to 16 336

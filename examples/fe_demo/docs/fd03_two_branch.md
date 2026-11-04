@@ -26,7 +26,7 @@ The FTQ accepts 78 p1 predictions and 74 p2 slot groups with both slots valid.
 The result line in the log file reports both counts.
 
 This scenario runs in the 2-prediction slot Pacino configuration,
-NUM_PRED_SLOTS=2, both prediction slots are used.
+NUM_PRED_SLOTS=2, and both prediction slots are used.
 
 ### 1.1 Files
 
@@ -91,7 +91,7 @@ Each pass goes from `top` to X, then to Y, then through `back` to the back edge
 `BE`. The conditional branches are X.c1 at 0x8000_0402, X.c2 at 0x8000_0408,
 Y.c1 at 0x8000_0442 and Y.c2 at 0x8000_0448.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

@@ -91,8 +91,11 @@
     evt_def("reset_released", EV_EXACT);
     evt_def("first_uncached_request", EV_WINDOW);
     evt_def("first_uncached_block_closed_after_one", EV_WINDOW);
+    evt_def("the_commit_gate_opens_for_the", EV_WINDOW);
     evt_def("first_request_for_0x8120_3200", EV_WINDOW);
+    evt_def("third_pass_of_the_loop", EV_WINDOW);
     evt_def("first_request_for_0x8120_3400", EV_WINDOW);
+    evt_def("the_ret_writes_back_with_no", EV_WINDOW);
     evt_def("first_uncached_request_from_the_IO", EV_WINDOW);
     evt_def("last_uncached_request", EV_WINDOW, 0, 1);
     evt_def("the_run_ends", EV_WINDOW);
@@ -105,10 +108,19 @@
     e[1] = fd18_uc('0, 'h81203);
     // F3 ends an uncached block after its first instruction.
     e[2] = dut.ifu_ftq_pdwb_val && dut.ifu_ftq_uc_end;
-    e[3] = fd18_uc(PA_WIDTH'('h8120_3200), 0);
-    e[4] = fd18_uc(PA_WIDTH'('h8120_3400), 0);
-    e[5] = fd18_uc('0, 'h81204);
-    e[6] = dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
+    // The entry after the first uncached one: index 3 in this run.
+    e[3] = dut.u_ifu.u_fetch.xq_uc && dut.u_ifu.u_fetch.w_uc_gate &&
+           (int'(dut.ftq_ifu_commit_ptr) == 3);
+    e[4] = fd18_uc(PA_WIDTH'('h8120_3200), 0);
+    // An uncached block matched at F0 that reuses the previous line.
+    e[5] = dut.u_ifu.u_fetch.xq_uc && dut.u_ifu.u_fetch.w_match &&
+           dut.u_ifu.u_fetch.w_reuse0;
+    e[6] = fd18_uc(PA_WIDTH'('h8120_3400), 0);
+    // The ret's writeback, FTQ index 26 in this run: no redirect.
+    e[7] = dut.ifu_ftq_pdwb_val && (int'(dut.ifu_ftq_pdwb_idx) == 26) &&
+           !dut.ifu_ftq_mis_val && !dut.ifu_ftq_uc_end;
+    e[8] = fd18_uc('0, 'h81204);
+    e[9] = dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
            dut.ifu_l1i_req_uncached;
     return e;
   endfunction

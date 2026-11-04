@@ -146,7 +146,7 @@
       "fd19_fencei_cbo": begin
         msg = $sformatf({"whole-cache invalidates %0d, line invalidates ",
                          "%0d, invalidates done %0d, maintenance ",
-                         "acknowledgements %0d, restarts at the next ",
+                         "acknowledgments %0d, restarts at the next ",
                          "instruction %0d"}, n_inv_all, n_inv_line,
                         n_inv_done, n_mt_ack, n_restart);
         return (n_inv_all > 0) && (n_inv_line > 0) && (n_inv_done >= 2) &&

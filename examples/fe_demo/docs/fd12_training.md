@@ -12,7 +12,7 @@
 
 ## 1. Introduction
 
-`fd12_training` (FD-12) shows resolved branches initiaing update requests
+`fd12_training` (FD-12) shows resolved branches initiating update requests
 routed to the respective predictor based on branch type. It also illustrates
 the operation of the single ported FTB.
 
@@ -23,7 +23,7 @@ of 6 iterations. The outer loop includes:
     2. an indirect jump
     3. an indirect call and its return.
 
-The inner loop includes a backwards branch executing the stated 6 iterations.
+The inner loop includes a backward branch executing the stated 6 iterations.
 
 This code then results in all predictors receiving illustrative updates.
 
@@ -116,7 +116,7 @@ execution except the last iterations.
 The beq (B:) operand selection, x0 and x0, results in the branch always being
 taken.  This is configured to illustrate conditional branch training behavior.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

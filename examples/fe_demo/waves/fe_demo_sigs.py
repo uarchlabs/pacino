@@ -201,12 +201,13 @@ FORMATS = [
      r'bkend_ftq_rsv_val|ftq_bkend_rsv_rdy|bpu_tage_upd_rdy',
      'Binary', 'a per-slot mask'),
     (r'ifu_ibuf_en', 'Binary', 'a per-lane mask'),
+    (r'itlb_ifu_pma', 'Binary', 'a set of page attribute bits'),
     # PROVISIONAL: TAGE's 3-bit direction counter, Binary as the
     # descriptions and the glossary write it (3'b100).
     (r'tage_prm_ctr', 'Binary', 'a direction counter, PROVISIONAL'),
     # Counts and iteration numbers.
-    (r'r_count|w_n_pres|w_n_pop|spec_rctr|uaon|lp_conf|lp_past_itr|'
-     r'lp_curs', 'Unsigned', 'a count or iteration number'),
+    (r'r_count|w_n_pres|w_n_pop|w_age_alloc|spec_rctr|uaon|lp_conf|'
+     r'lp_past_itr|lp_curs', 'Unsigned', 'a count or iteration number'),
     (r'waddr', 'Unsigned', 'an SRAM init write address'),
     # PROVISIONAL: indices, pointers, positions, ids and table numbers.
     (r'.*_idx(_p\d)?|.*_ptr|(.*_)?pos(_u\d)?|tosr|tosw|bos|csp|.*_id|'
@@ -325,11 +326,15 @@ def scenarios(n):
             'tb.pd_out.[0].pos', 'tb.pd_out.[0].instr',
             'tb.pd_out.[0].is_rvc', 'tb.pd_out.[0].fault_cause',
             'tb.pd_out.[0].fault_va']
-    # fd17: lane 0 in full, lane 4 (the straddling instruction) and the
-    # is_rvc of every lane; the other lanes' rows are not walked.
-    dec_rvc = dec0 + ['tb.pd_out.[4].valid', 'tb.pd_out.[4].start_pc',
-                      'tb.pd_out.[4].pos', 'tb.pd_out.[4].is_rvc'] + \
-        ['tb.pd_out.[%d].is_rvc' % i for i in (1, 2, 3, 5, 6, 7)]
+    # fd17: lane 0 in full, lanes 1 and 2 (the compressed transfers), lane 4
+    # (the straddling instruction) and the is_rvc of every lane.
+    dec_rvc = dec0 + \
+        ['tb.pd_out.[%d].%s' % (i, f) for i in (1, 2)
+         for f in ('valid', 'start_pc', 'instr', 'is_rvc')] + \
+        ['tb.pd_out.[3].is_rvc', 'tb.pd_out.[4].valid',
+         'tb.pd_out.[4].start_pc', 'tb.pd_out.[4].pos',
+         'tb.pd_out.[4].instr', 'tb.pd_out.[4].is_rvc'] + \
+        ['tb.pd_out.[%d].is_rvc' % i for i in (5, 6, 7)]
     backend = ['tb.bkend_ftq_redir_val', 'tb.bkend_ftq_redir_idx',
                'tb.bkend_ftq_redir_pc', 'tb.bkend_ftq_redir_cause',
                'tb.bkend_ftq_redir_self', 'tb.bkend_ftq_rsv_val',
@@ -467,7 +472,15 @@ def scenarios(n):
     f3_strad = [I + '.u_f3.r_strad_val', I + '.u_f3.r_strad_pc',
                 I + '.u_f3.r_strad_idx']
     # ifu_fetch's commit gate on an uncached block.
-    fetch_uc = [I + '.u_fetch.xq_uc', I + '.u_fetch.w_uc_gate']
+    fetch_uc = [I + '.u_fetch.xq_uc', I + '.u_fetch.w_uc_gate',
+                I + '.u_fetch.w_reuse0']
+    # fd18: the page attributes, and how each uncached block ends.
+    xq_pma = xq + [D + '.itlb_ifu_rsp_val', D + '.itlb_ifu_ppn',
+                   D + '.itlb_ifu_pma']
+    f3_uc = [D + '.ifu_ftq_pdwb_val', D + '.ifu_ftq_pdwb_idx',
+             D + '.ifu_ftq_mis_val', D + '.ifu_ftq_mis_pos',
+             D + '.ifu_ftq_uc_end', Q + '.w_pd_redir_val',
+             Q + '.w_pd_redir_pc']
     # fd23: the p2 block's start, the FTB's branch fields, the cluster's
     # cut and the block's end (bp_cluster p2_class_comb, p2_succ_comb);
     # and the FTB update that splits the entry (ftb_cntrl THE UPDATE).
@@ -616,28 +629,65 @@ def scenarios(n):
                                 'is_rvc')])]),
         ('fd17_rvc', [('clock', clk), ('ftq_ifu', ftq_ifu),
                       ('ifu_f3', ifu_f3), ('ifu_f3_straddle', f3_strad),
-                      ('ibuf', ibuf), ('decode', dec_rvc)]),
+                      ('ibuf', ibuf),
+                      ('backend', ['tb.bkend_ftq_redir_val',
+                                   'tb.bkend_ftq_redir_pc']),
+                      ('decode', dec_rvc)]),
         ('fd18_uncached', [('clock', clk), ('ftq_ifu', ftq_ifu),
-                           ('ifu_xlate', xq), ('ifu_fetch', fetch_uc),
+                           ('ifu_xlate', xq_pma), ('ifu_f3', f3_uc),
+                           ('ifu_fetch', fetch_uc),
                            ('ifu_l1i', ifu_l1i), ('l1i', l1i),
                            ('backend', backend), ('decode', dec0)]),
         ('fd19_fencei_cbo', [('clock', clk), ('backend', backend),
                              ('maintenance', maint), ('ftq_ifu', ftq_ifu),
-                             ('ifu_l1i', ifu_l1i)]),
-        ('fd20_backpressure', [('clock', clk), ('bp_cluster_p0', bpu_p0),
-                               ('ftq', ftq_ptr), ('ftq_ifu', ftq_ifu),
+                             ('ifu_l1i', ifu_l1i +
+                              ['tb.l1i_mem_a_valid',
+                               'tb.l1i_mem_a_address']),
+                             ('decode', ['tb.dec_ibuf_rdy',
+                                         'tb.pd_out.[0].valid',
+                                         'tb.pd_out.[0].start_pc',
+                                         'tb.pd_out.[0].instr'])]),
+        ('fd20_backpressure', [('clock', clk),
+                               ('bp_cluster_p0', bpu_p0 +
+                                [Q + '.u_npc.h2_ftq_full',
+                                 Q + '.u_npc.h3_ftb_upd']),
+                               ('ftq', ftq_ptr[:1] +
+                                [Q + '.u_ptr.w_age_alloc'] + ftq_ptr[1:]),
+                               ('ftq_ifu', ftq_ifu +
+                                [I + '.u_lbuf.w_slot_ok']),
                                ('ibuf', ibuf_occ), ('decode', dec0)]),
         ('fd21_commit', [('clock', clk), ('backend', backend),
-                         ('ftq', ftq_ptr), ('ras_commit', ras_cmt),
+                         ('ftq', ftq_ptr[:1] +
+                          [Q + '.w_commit_step_val',
+                           Q + '.u_commit.w_walk_stop',
+                           D + '.ftq_ifu_flush_val'] + ftq_ptr[1:]),
+                         ('ras_commit', ras_cmt),
                          ('ras', ras)]),
         ('fd22_sc_slot1', [('clock', clk), ('tage_p2', tage_p2),
-                           ('bp_cluster_p2', bpu_p2), ('sc_p3', sc_p3),
-                           ('bp_cluster_p3', bpu_p3), ('ftq', ftq)]),
-        ('fd23_jump_cut', [('clock', clk), ('bp_cluster_p2_ftb', jmp_end),
-                           ('bp_cluster_p2', bpu_p2), ('ftq', ftq),
+                           ('bp_cluster_p2', bpu_p2[:1] + [B + '.r_pc_p2'] +
+                            bpu_p2[1:]), ('sc_p3', sc_p3),
+                           ('bp_cluster_p3', bpu_p3[:1] + [B + '.r_pc_p3'] +
+                            bpu_p3[1:]), ('ftq', ftq),
+                           ('backend', ['tb.bkend_ftq_redir_val',
+                                        'tb.bkend_ftq_redir_pc'])]),
+        ('fd23_jump_cut', [('clock', clk),
+                           ('bp_cluster_p2_ftb', jmp_end +
+                            [D + '.bpu_pred_pft_p1']),
+                           ('bp_cluster_p2', bpu_p2),
+                           ('bp_cluster_p3', redir(D + '.bpu_redir_p3')),
+                           ('ftq', ftq + [Q + '.w_pd_redir_val',
+                                          Q + '.w_pd_redir_pc']),
                            ('bp_cluster_p0', bpu_p0),
-                           ('ftb_update', ftb_split)]),
-        ('fd24_call_slot1', [('clock', clk), ('bp_cluster_p2', bpu_p2),
-                             ('ras', ras), ('ftq', ftq),
-                             ('ras_commit', ras_cmt)]),
+                           ('ftb_update', ftb_split),
+                           ('backend', ['tb.bkend_ftq_redir_val',
+                                        'tb.bkend_ftq_redir_pc'])]),
+        ('fd24_call_slot1', [('clock', clk),
+                             ('bp_cluster_p2', bpu_p2[:1] + [B + '.r_pc_p2'] +
+                              bpu_p2[1:]),
+                             ('ras', ras),
+                             ('ftq', ftq + [Q + '.w_pd_redir_val',
+                                            Q + '.w_pd_redir_pc']),
+                             ('ras_commit', ras_cmt),
+                             ('backend', ['tb.bkend_ftq_redir_val',
+                                          'tb.bkend_ftq_redir_pc'])]),
     ]

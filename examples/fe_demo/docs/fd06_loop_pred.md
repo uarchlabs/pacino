@@ -86,7 +86,7 @@ The code consists of a short prologue, then a 16-pass outer loop starting at
 The inner loop's branch I at 0x8000_0016 returns to `itop`. The outer loop's
 branch O at 0x8000_0020 returns to `otop`.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

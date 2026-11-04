@@ -90,7 +90,7 @@ even passes. The call K at 0x8000_0508 goes to `fa` on odd passes and `fb` on
 even passes. The branch X at 0x8000_050E is taken only on the last pass, and
 exits the loop.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

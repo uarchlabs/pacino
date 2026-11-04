@@ -65,6 +65,7 @@
     evt_def("C_mispredicted_taken", EV_WINDOW, 1);
     evt_def("first_RAS_push_from_slot_1", EV_WINDOW);
     evt_def("TOSR_1", EV_WINDOW);
+    evt_def("the_next_call_commits", EV_WINDOW);
     evt_def("back_edge_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
@@ -95,6 +96,9 @@
     e[6] = (dut.u_bpu.u_ras.tosr == 1) && (dut.u_bpu.u_ras.tosw == 2) &&
            (dut.u_bpu.u_ras.spec_ret_addr[1] == FD24_RA) &&
            dut.u_bpu.r_val_p2 && (dut.u_bpu.r_pc_p2 == FD24_F) && ras_ret;
-    e[7] = ev_redir(RESET_VECTOR + VA_WIDTH'('h1E));
+    // The commit stack at depth 1 once the speculative stack has moved:
+    // csp is also 1 earlier, for the calls predecode found.
+    e[7] = (dut.u_bpu.u_ras.csp == 1) && (dut.u_bpu.u_ras.tosw != 0);
+    e[8] = ev_redir(RESET_VECTOR + VA_WIDTH'('h1E));
     return e;
   endfunction

@@ -101,7 +101,7 @@ Each pass runs the conditional `A`, then a call to `fn` from 0x8000_0010, and
 the return to 0x8000_0014. The back edge at 0x8000_0016 returns to `top`. The
 back edge is taken on passes 0 to 30.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

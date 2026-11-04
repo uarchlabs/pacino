@@ -106,7 +106,7 @@ The loop body holds two conditional branches. The bne branch at 0x8000_000E
 has a randomized direction. The bne branch at 0x8000_0016 returns to label
 `top`. This is the loop's back edge, labeled `BE` in the listing below.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` =
 0x8000_0000 (`bp_defines_pkg.sv`), and the loop's first instruction, top, is
 at 0x8000_0008.
@@ -172,7 +172,7 @@ marker in the waveform.
 Pacino's TAGE implementation uses 5 tables, T0-T4. T0 is the base predictor
 which is untagged. T1 to T4 are tagged and use direction history in their
 access address generation and entry matching. The tagged tables use
-increasing number of history bits (length), 8, 13, 32 and 119, respectively.
+an increasing number of history bits (length), 8, 13, 32 and 119, respectively.
 
 T0 holds a 2-bit counter per entry and always produces a prediction.
 
@@ -185,9 +185,9 @@ same 8-bit tag.[^tagwidth]
 
 [![TAGE tagged table entry](tage_entry.svg)](tage_entry.svg)
 
-For the tagged table two predictions are possible, a 'primary' and an
+For the tagged tables, two predictions are possible, a 'primary' and an
 'alternative' prediction. The table with the longest history that matches
-the tag produces the primary prediction, the next longest matching table
+the tag produces the primary prediction, and the next longest matching table
 is the alternative prediction or T0 when no other tagged table matches.
 
 A prediction moves through four stages, p0 to p3. The FTQ presents the request

@@ -88,7 +88,7 @@ The regions are 0x800 apart, from b[0] at 0x8000_1000 to b[7] at 0x8000_4800.
 Each of b[0] to b[6] ends in a JAL to the next region. b[7] holds a conditional
 branch, at 0x8000_4802, and the JAL back to b[0], at 0x8000_4806.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

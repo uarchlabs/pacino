@@ -24,15 +24,18 @@ marker_set c51_back_edge_mispredicted 545
 marker_set c76_C_mispredicted_taken 795
 marker_set c90_first_RAS_push_from_slot_1 935
 marker_set c91_TOSR_1 945
+marker_set c98_the_next_call_commits 1015
 marker_set c261_back_edge_falls_through 2645
 marker_set c270_the_run_ends 2735
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus o
-group_marked bp_cluster_p2
 item_focus p
+group_marked bp_cluster_p2
+item_focus ba
 item_set_format Bit
+variable_add tb.dut.u_bpu.r_pc_p2
+item_set_format Hexadecimal
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
 variable_add tb.dut.bpu_slot_idx_p2
@@ -76,9 +79,9 @@ item_set_format Unsigned
 item_unfocus
 # group ras
 variable_add tb.dut.u_bpu.u_ras.tosr
-item_focus ce
+item_focus cg
 group_marked ras
-item_focus cf
+item_focus ch
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.tosw
 item_set_format Unsigned
@@ -113,9 +116,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus df
+item_focus dh
 group_marked ftq
-item_focus dg
+item_focus di
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -135,12 +138,16 @@ variable_add tb.dut.ftq_full
 item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_val
+item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_pc
+item_set_format Hexadecimal
 item_unfocus
 # group ras_commit
 variable_add tb.dut.ras_commit_val
-item_focus ea
+item_focus ee
 group_marked ras_commit
-item_focus eb
+item_focus ef
 item_set_format Bit
 variable_add tb.dut.ras_commit_br_type
 item_set_format Enum
@@ -151,6 +158,15 @@ item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.commit_top_valid
 item_set_format Bit
 variable_add tb.dut.u_bpu.u_ras.commit_top_addr
+item_set_format Hexadecimal
+item_unfocus
+# group backend
+variable_add tb.bkend_ftq_redir_val
+item_focus el
+group_marked backend
+item_focus em
+item_set_format Bit
+variable_add tb.bkend_ftq_redir_pc
 item_set_format Hexadecimal
 item_unfocus
 zoom_to 16 336

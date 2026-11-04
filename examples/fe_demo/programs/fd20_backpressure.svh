@@ -13,7 +13,7 @@
 //             the provisional answer to FD-U2)
 //   waveform  the ibuf occupancy, the FTQ pointers, the p0 request
 //   trace     the stalls
-//   proof     cycles with the ibuf refusing the IFU, with the FTQ full,
+//   proof     cycles with the ibuf stalling the IFU, with the FTQ full,
 //             with decode holding a bundle while dec_ibuf_rdy is low,
 //             and with no p0 request
 // ===================================================================
@@ -44,8 +44,10 @@
   function automatic void fd20_evt_defs();
     evt_def("reset_released", EV_EXACT);
     evt_def("decode_first_holds_a_bundle", EV_WINDOW);
-    evt_def("the_instruction_buffer_first_refuses_the", EV_WINDOW);
+    evt_def("the_instruction_buffer_first_deasserts_ready", EV_WINDOW);
+    evt_def("the_IFU_first_deasserts_ready", EV_WINDOW);
     evt_def("the_FTQ_first_full", EV_WINDOW);
+    evt_def("a_commit_clears_ftq_full", EV_WINDOW);
     evt_def("back_edge_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
@@ -55,11 +57,16 @@
     e    = '0;
     e[0] = ev_p0(RESET_VECTOR);
     e[1] = pd_out[0].valid && !dec_ibuf_rdy;
-    // The ibuf refuses the IFU's block, at the occupancy the ready is
+    // The ibuf stalls the IFU's block, at the occupancy the ready is
     // computed from.
     e[2] = dut.ifu_ibuf_val && !dut.ibuf_ifu_rdy &&
            (dut.u_ibuf.r_count == 52);
-    e[3] = ftq_full && !dut.ftq_pred_val_p0;
-    e[4] = ev_redir(RESET_VECTOR + VA_WIDTH'('h4A));
+    // The IFU stalls the FTQ because its line buffer has no free slot.
+    e[3] = dut.ftq_ifu_req_val && !dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val && !dut.u_ifu.u_lbuf.w_slot_ok;
+    e[4] = ftq_full && !dut.ftq_pred_val_p0;
+    // The first p0 request after the FTQ has been full.
+    e[5] = (n_ftq_full > 0) && !ftq_full && dut.ftq_pred_val_p0;
+    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h4A));
     return e;
   endfunction

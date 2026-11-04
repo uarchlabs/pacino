@@ -87,7 +87,7 @@ Each pass runs one `jal` at 0x8000_000A to `T0`, then 12 more through a chain of
 blocks. The last of them, in `T11`, goes to 0x8000_0108, where the back edge at
 0x8000_010A returns to `top`. The back edge is taken on passes 0 and 1.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

@@ -10,8 +10,7 @@
 //   program   a function called twice, rewritten by a store, a FENCE.I,
 //             and called again (the new code runs); then a second
 //             function the same way with a cbo.inval of its line, after
-//             a mispredicted branch and before cold code, so fills are
-//             in flight when the L1I takes the invalidate
+//             a mispredicted branch and before code the L1I already holds
 //   waveform  the IFU maintenance, the L1I invalidate, done, the restart
 //   trace     the maintenance handshake
 //   proof     an invalidate of all lines (FENCE.I) and of one line
@@ -39,7 +38,7 @@
     smc_store(g);
     W.cskip(1'b1, 1);                       // taken, cold: mispredicted
     W.cbo_inval(5'd10, PA_WIDTH'(g) + PA_WIDTH'('h24));
-    W.mixed(60);                            // cold lines after it
+    W.mixed(60);                            // code after it
     smc_call_new(g);
     W.mixed(2);
     demo_go(40000);
@@ -63,15 +62,19 @@
     evt_def("reset_released", EV_EXACT);
     evt_def("the_FENCEI_reaches_the_L1I", EV_WINDOW);
     evt_def("first_invalidate_done", EV_WINDOW);
-    evt_def("first_maintenance_acknowledgement", EV_WINDOW);
+    evt_def("first_maintenance_acknowledgment", EV_WINDOW);
     evt_def("the_restart_after_the_FENCEI", EV_WINDOW, 1);
     evt_def("fetch_starts_at_0x8000_0024", EV_WINDOW);
+    evt_def("memory_request_for_0x8000_0000", EV_WINDOW);
+    evt_def("the_new_body_of_f_reaches", EV_WINDOW);
     evt_def("the_branch_at_0x8000_0040_mispredicted", EV_WINDOW, 1);
     evt_def("the_cboinval_reaches_the_L1I", EV_WINDOW);
     evt_def("second_invalidate_done", EV_WINDOW, 0, 1);
-    evt_def("second_maintenance_acknowledgement", EV_WINDOW, 0, 1);
+    evt_def("second_maintenance_acknowledgment", EV_WINDOW, 0, 1);
     evt_def("the_restart_after_the_cboinval", EV_WINDOW, 1);
     evt_def("fetch_starts_at_0x8000_004A", EV_WINDOW);
+    evt_def("memory_request_for_0x8000_0C40", EV_WINDOW);
+    evt_def("the_new_body_of_g_reaches", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
@@ -84,13 +87,24 @@
     e[3]  = ifu_cmt_maint_ack;
     e[4]  = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h24));
     e[5]  = fd19_fetch(RESET_VECTOR + VA_WIDTH'('h24));
-    e[6]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h46));
-    e[7]  = dut.ifu_l1i_inv_val && dut.ifu_l1i_inv_rdy &&
+    // After the FENCE.I, the line at 0x8000_0000 misses again.
+    e[6]  = l1i_mem_a_valid && (n_inv_all > 0) &&
+            (l1i_mem_a_address == PA_WIDTH'('h8000_0000));
+    // The new body: addi t1, t1, 1 at the function's first address.
+    e[7]  = pd_out[0].valid && (pd_out[0].instr == 32'h0013_0313) &&
+            (pd_out[0].start_pc == RESET_VECTOR + VA_WIDTH'('h800));
+    e[8]  = ev_redir(RESET_VECTOR + VA_WIDTH'('h46));
+    e[9]  = dut.ifu_l1i_inv_val && dut.ifu_l1i_inv_rdy &&
             !dut.ifu_l1i_inv_all;
     // The last of the two dones and acks: the cbo.inval's.
-    e[8]  = dut.l1i_ifu_inv_done;
-    e[9]  = ifu_cmt_maint_ack;
-    e[10] = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h4A));
-    e[11] = fd19_fetch(RESET_VECTOR + VA_WIDTH'('h4A));
+    e[10] = dut.l1i_ifu_inv_done;
+    e[11] = ifu_cmt_maint_ack;
+    e[12] = ev_redir_any(RESET_VECTOR + VA_WIDTH'('h4A));
+    e[13] = fd19_fetch(RESET_VECTOR + VA_WIDTH'('h4A));
+    // After the cbo.inval, the line of g misses again.
+    e[14] = l1i_mem_a_valid && (n_inv_line > 0) &&
+            (l1i_mem_a_address == PA_WIDTH'('h8000_0C40));
+    e[15] = pd_out[0].valid && (pd_out[0].instr == 32'h0013_0313) &&
+            (pd_out[0].start_pc == RESET_VECTOR + VA_WIDTH'('hC40));
     return e;
   endfunction

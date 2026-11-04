@@ -46,12 +46,14 @@ variable_add tb.dut.u_bpu.w_cut_p2
 item_set_format Bit
 variable_add tb.dut.bpu_blk_pft_p2
 item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_pft_p1
+item_set_format Hexadecimal
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus bi
-group_marked bp_cluster_p2
 item_focus bj
+group_marked bp_cluster_p2
+item_focus bk
 item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
@@ -94,11 +96,24 @@ item_set_format Hexadecimal
 variable_add tb.dut.bpu_redir_idx_p2
 item_set_format Unsigned
 item_unfocus
+# group bp_cluster_p3
+variable_add tb.dut.bpu_redir_p3.[0].valid
+item_focus cp
+group_marked bp_cluster_p3
+item_focus da
+item_set_format Bit
+variable_add tb.dut.bpu_redir_p3.[0].target_pc
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_redir_p3.[1].valid
+item_set_format Bit
+variable_add tb.dut.bpu_redir_p3.[1].target_pc
+item_set_format Hexadecimal
+item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus co
+item_focus de
 group_marked ftq
-item_focus cp
+item_focus df
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -118,12 +133,16 @@ variable_add tb.dut.ftq_full
 item_set_format Bit
 variable_add tb.dut.ftq_empty
 item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_val
+item_set_format Bit
+variable_add tb.dut.u_ftq.w_pd_redir_pc
+item_set_format Hexadecimal
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus dj
+item_focus eb
 group_marked bp_cluster_p0
-item_focus dk
+item_focus ec
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
@@ -134,9 +153,9 @@ item_set_format Bit
 item_unfocus
 # group ftb_update
 variable_add tb.dut.ftb_upd_valid_u0
-item_focus do
+item_focus eg
 group_marked ftb_update
-item_focus dp
+item_focus eh
 item_set_format Bit
 variable_add tb.dut.ftb_upd_pc_u0
 item_set_format Hexadecimal
@@ -152,5 +171,14 @@ variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split
 item_set_format Bit
 variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos
 item_set_format Unsigned
+item_unfocus
+# group backend
+variable_add tb.bkend_ftq_redir_val
+item_focus ep
+group_marked backend
+item_focus fa
+item_set_format Bit
+variable_add tb.bkend_ftq_redir_pc
+item_set_format Hexadecimal
 item_unfocus
 zoom_to 16 336

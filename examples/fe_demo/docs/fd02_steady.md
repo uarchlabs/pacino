@@ -13,7 +13,7 @@
 ## 1. Introduction
 
 `fd02_steady` (FD-2) runs 2 KB of straight-line code. There are no branches,
-therefore every uBTB lookup will miss. Consequently the p1 prediction address
+so every uBTB lookup will miss. Consequently the p1 prediction address
 returned is the fall-through address, the lookup PC + 32 bytes returned in p1
 on `bpu_pred_pft_p1`.
 

@@ -21,13 +21,17 @@ item_focus f
 marker_set c21_the_straddling_instruction_reaches_decode 245
 marker_set c22_the_next_bundle_starts_on_its 255
 marker_set c28_first_fetch_of_fn 315
+marker_set c48_first_block_with_a_nonaligned_start 515
+marker_set c57_block_at_0x8000_0066 605
+marker_set c69_block_at_0x8000_0050 725
+marker_set c90_first_predictedtaken_compressed_transfer 935
 marker_set c198_the_run_ends 2015
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus k
+item_focus o
 group_marked ftq_ifu
-item_focus l
+item_focus p
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -50,9 +54,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_f3
 variable_add tb.dut.ifu_ftq_pdwb_val
-item_focus bf
+item_focus bj
 group_marked ifu_f3
-item_focus bg
+item_focus bk
 item_set_format Bit
 variable_add tb.dut.ifu_ftq_pdwb_idx
 item_set_format Unsigned
@@ -71,9 +75,9 @@ item_set_format Bit
 item_unfocus
 # group ifu_f3_straddle
 variable_add tb.dut.u_ifu.u_f3.r_strad_val
-item_focus bo
+item_focus cc
 group_marked ifu_f3_straddle
-item_focus bp
+item_focus cd
 item_set_format Bit
 variable_add tb.dut.u_ifu.u_f3.r_strad_pc
 item_set_format Hexadecimal
@@ -82,20 +86,29 @@ item_set_format Unsigned
 item_unfocus
 # group ibuf
 variable_add tb.dut.ifu_ibuf_val
-item_focus cc
+item_focus cg
 group_marked ibuf
-item_focus cd
+item_focus ch
 item_set_format Bit
 variable_add tb.dut.ifu_ibuf_en
 item_set_format Binary
 variable_add tb.dut.ibuf_ifu_rdy
 item_set_format Bit
 item_unfocus
+# group backend
+variable_add tb.bkend_ftq_redir_val
+item_focus ck
+group_marked backend
+item_focus cl
+item_set_format Bit
+variable_add tb.bkend_ftq_redir_pc
+item_set_format Hexadecimal
+item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus cg
+item_focus cn
 group_marked decode
-item_focus ch
+item_focus co
 item_set_format Bit
 variable_add tb.pd_out.[0].valid
 item_set_format Bit
@@ -113,19 +126,33 @@ variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
+variable_add tb.pd_out.[1].valid
+item_set_format Bit
+variable_add tb.pd_out.[1].start_pc
+item_set_format Hexadecimal
+variable_add tb.pd_out.[1].instr
+item_set_format Hexadecimal
+variable_add tb.pd_out.[1].is_rvc
+item_set_format Bit
+variable_add tb.pd_out.[2].valid
+item_set_format Bit
+variable_add tb.pd_out.[2].start_pc
+item_set_format Hexadecimal
+variable_add tb.pd_out.[2].instr
+item_set_format Hexadecimal
+variable_add tb.pd_out.[2].is_rvc
+item_set_format Bit
+variable_add tb.pd_out.[3].is_rvc
+item_set_format Bit
 variable_add tb.pd_out.[4].valid
 item_set_format Bit
 variable_add tb.pd_out.[4].start_pc
 item_set_format Hexadecimal
 variable_add tb.pd_out.[4].pos
 item_set_format Unsigned
+variable_add tb.pd_out.[4].instr
+item_set_format Hexadecimal
 variable_add tb.pd_out.[4].is_rvc
-item_set_format Bit
-variable_add tb.pd_out.[1].is_rvc
-item_set_format Bit
-variable_add tb.pd_out.[2].is_rvc
-item_set_format Bit
-variable_add tb.pd_out.[3].is_rvc
 item_set_format Bit
 variable_add tb.pd_out.[5].is_rvc
 item_set_format Bit

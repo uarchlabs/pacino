@@ -91,7 +91,7 @@ The loop holds three conditional branches. A at 0x8000_000E is taken on odd
 passes, and skips to `At`. B at 0x8000_001A is taken on every third pass, and
 skips to `Bt`. The back edge `BE` at 0x8000_0026 returns to `top`.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

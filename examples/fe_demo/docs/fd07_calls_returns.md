@@ -99,7 +99,7 @@ times from the one call site at 0x8000_080A. It then calls B through x5, and B
 and the main code switch by the return-calls B1 and A1. B returns through x5 at
 B2, and the back edge at 0x8000_002A returns to `top`.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

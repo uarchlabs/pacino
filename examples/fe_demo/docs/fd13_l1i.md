@@ -104,7 +104,7 @@ Each call goes to `X30`, in the upper half of line X. The jump at `X30` + 2
 instruction after the call. A FENCE.I and 24 filler instructions precede the
 fourth call.
 
-The program runs in machine mode with translation off, the addresses are
+The program runs in machine mode with translation off, so the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
 (`bp_defines_pkg.sv`).
 

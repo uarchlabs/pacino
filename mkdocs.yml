@@ -60,6 +60,14 @@ extra:
     - fd14_translation
     - fd15_faults
     - fd16_page_cross
+    - fd17_rvc
+    - fd18_uncached
+    - fd19_fencei_cbo
+    - fd20_backpressure
+    - fd21_commit
+    - fd22_sc_slot1
+    - fd23_jump_cut
+    - fd24_call_slot1
 
 nav:
   - Home: index.md

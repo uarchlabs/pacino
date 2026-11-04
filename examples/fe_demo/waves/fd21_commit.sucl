@@ -18,19 +18,21 @@ marker_set c0_reset_released 36
 item_focus e
 group_marked markers
 item_focus f
-marker_set c40_first_commit_watermark_from_the_backend 435
-marker_set c40_the_commit_pointer_first_moves 435
-marker_set c40_first_RAS_commit_of_a_call 435
+marker_set c40_first_commit 435
+marker_set c41_the_commit_stack_reaches_depth_1 445
 marker_set c62_the_commit_stack_reaches_depth_2 655
-marker_set c62_first_RAS_commit_of_a_return 655
+marker_set c63_the_return_has_popped 665
+marker_set c124_the_speculative_stack_first_moves 1275
+marker_set c134_the_next_call_commits 1375
 marker_set c204_back_edge_falls_through 2075
+marker_set c205_the_walk_commits_four_entries_in 2085
 marker_set c214_the_run_ends 2175
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus n
+item_focus p
 group_marked backend
-item_focus o
+item_focus ba
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -49,10 +51,16 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_commit_ptr
-item_focus bg
+item_focus bi
 group_marked ftq
-item_focus bh
+item_focus bj
 item_set_format Unsigned
+variable_add tb.dut.u_ftq.w_commit_step_val
+item_set_format Bit
+variable_add tb.dut.u_ftq.u_commit.w_walk_stop
+item_set_format Bit
+variable_add tb.dut.ftq_ifu_flush_val
+item_set_format Bit
 variable_add tb.dut.ftq_full
 item_set_format Bit
 variable_add tb.dut.ftq_empty
@@ -64,9 +72,9 @@ item_set_format Unsigned
 item_unfocus
 # group ras_commit
 variable_add tb.dut.ras_commit_val
-item_focus bm
+item_focus cb
 group_marked ras_commit
-item_focus bn
+item_focus cc
 item_set_format Bit
 variable_add tb.dut.ras_commit_br_type
 item_set_format Enum
@@ -81,9 +89,9 @@ item_set_format Hexadecimal
 item_unfocus
 # group ras
 variable_add tb.dut.u_bpu.u_ras.tosr
-item_focus cd
+item_focus ci
 group_marked ras
-item_focus ce
+item_focus cj
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.tosw
 item_set_format Unsigned

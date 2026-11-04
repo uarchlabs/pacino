@@ -66,6 +66,10 @@
     evt_def("the_straddling_instruction_reaches_decode", EV_WINDOW);
     evt_def("the_next_bundle_starts_on_its", EV_WINDOW);
     evt_def("first_fetch_of_fn", EV_WINDOW);
+    evt_def("first_block_with_a_nonaligned_start", EV_WINDOW);
+    evt_def("block_at_0x8000_0066", EV_WINDOW);
+    evt_def("block_at_0x8000_0050", EV_WINDOW);
+    evt_def("first_predictedtaken_compressed_transfer", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
@@ -83,6 +87,21 @@
            (pd_out[0].start_pc == RESET_VECTOR + VA_WIDTH'('h42));
     e[3] = dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
            !dut.ftq_ifu_flush_val &&
+           (dut.ftq_ifu_start_pc == RESET_VECTOR + VA_WIDTH'('h400));
+    // The blocks after the c.jr, the c.j and the c.beqz of the first pass.
+    e[4] = dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val &&
+           (dut.ftq_ifu_start_pc == RESET_VECTOR + VA_WIDTH'('h5C));
+    e[5] = dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val &&
+           (dut.ftq_ifu_start_pc == RESET_VECTOR + VA_WIDTH'('h66));
+    e[6] = dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val &&
+           (dut.ftq_ifu_start_pc == RESET_VECTOR + VA_WIDTH'('h50));
+    // The block of fn with the c.jr predicted taken, at position 3.
+    e[7] = dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+           !dut.ftq_ifu_flush_val && dut.ftq_ifu_taken_val &&
+           (int'(dut.ftq_ifu_taken_pos) == 3) &&
            (dut.ftq_ifu_start_pc == RESET_VECTOR + VA_WIDTH'('h400));
     return e;
   endfunction

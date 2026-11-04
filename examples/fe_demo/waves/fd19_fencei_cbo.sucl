@@ -20,22 +20,26 @@ group_marked markers
 item_focus f
 marker_set c71_the_FENCEI_reaches_the_L1I 745
 marker_set c74_first_invalidate_done 775
-marker_set c75_first_maintenance_acknowledgement 785
+marker_set c75_first_maintenance_acknowledgment 785
 marker_set c77_the_restart_after_the_FENCEI 805
 marker_set c79_fetch_starts_at_0x8000_0024 825
+marker_set c82_memory_request_for_0x8000_0000 855
+marker_set c106_the_new_body_of_f_reaches 1095
 marker_set c174_the_branch_at_0x8000_0040_mispredicted 1775
 marker_set c184_the_cboinval_reaches_the_L1I 1875
 marker_set c187_second_invalidate_done 1905
-marker_set c188_second_maintenance_acknowledgement 1915
+marker_set c188_second_maintenance_acknowledgment 1915
 marker_set c190_the_restart_after_the_cboinval 1935
 marker_set c192_fetch_starts_at_0x8000_004A 1955
+marker_set c210_memory_request_for_0x8000_0C40 2135
+marker_set c222_the_new_body_of_g_reaches 2255
 marker_set c235_the_run_ends 2385
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus bc
+item_focus bg
 group_marked backend
-item_focus bd
+item_focus bh
 item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -54,9 +58,9 @@ item_set_format Unsigned
 item_unfocus
 # group maintenance
 variable_add tb.cmt_ifu_maint_val
-item_focus bl
+item_focus bp
 group_marked maintenance
-item_focus bm
+item_focus ca
 item_set_format Bit
 variable_add tb.cmt_ifu_maint_rdy
 item_set_format Bit
@@ -87,9 +91,9 @@ item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus ck
+item_focus co
 group_marked ftq_ifu
-item_focus cl
+item_focus cp
 item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Bit
@@ -112,9 +116,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus df
+item_focus dj
 group_marked ifu_l1i
-item_focus dg
+item_focus dk
 item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Bit
@@ -128,5 +132,22 @@ variable_add tb.dut.l1i_ifu_rsp_val
 item_set_format Bit
 variable_add tb.dut.l1i_ifu_rsp_id
 item_set_format Unsigned
+variable_add tb.l1i_mem_a_valid
+item_set_format Bit
+variable_add tb.l1i_mem_a_address
+item_set_format Hexadecimal
+item_unfocus
+# group decode
+variable_add tb.dec_ibuf_rdy
+item_focus ed
+group_marked decode
+item_focus ee
+item_set_format Bit
+variable_add tb.pd_out.[0].valid
+item_set_format Bit
+variable_add tb.pd_out.[0].start_pc
+item_set_format Hexadecimal
+variable_add tb.pd_out.[0].instr
+item_set_format Hexadecimal
 item_unfocus
 zoom_to 16 336

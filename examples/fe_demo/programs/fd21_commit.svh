@@ -58,18 +58,20 @@
   // =================================================================
   // The event checks (FDT-10c, tb/fe_demo_events.svh): one per row of
   // the Events table of docs/fd21_commit.md, in table order. The
-  // epilogue after the back edge is +0x26. The backend's commit
-  // watermark and redirect are driven by the testbench: late. The
-  // commit walk and the RAS commit stack are design registers.
+  // epilogue after the back edge is +0x26. The backend's redirect is
+  // driven by the testbench: late. The commit walk and the RAS stacks
+  // are design registers.
   // =================================================================
   function automatic void fd21_evt_defs();
     evt_def("reset_released", EV_EXACT);
-    evt_def("first_commit_watermark_from_the_backend", EV_WINDOW, 1);
-    evt_def("the_commit_pointer_first_moves", EV_WINDOW);
-    evt_def("first_RAS_commit_of_a_call", EV_WINDOW);
+    evt_def("first_commit", EV_WINDOW);
+    evt_def("the_commit_stack_reaches_depth_1", EV_WINDOW);
     evt_def("the_commit_stack_reaches_depth_2", EV_WINDOW);
-    evt_def("first_RAS_commit_of_a_return", EV_WINDOW);
+    evt_def("the_return_has_popped", EV_WINDOW);
+    evt_def("the_speculative_stack_first_moves", EV_WINDOW);
+    evt_def("the_next_call_commits", EV_WINDOW);
     evt_def("back_edge_falls_through", EV_WINDOW, 1);
+    evt_def("the_walk_commits_four_entries_in", EV_WINDOW);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
 
@@ -77,12 +79,23 @@
     logic [EV_MAX-1:0] e;
     e    = '0;
     e[0] = ev_p0(RESET_VECTOR);
-    e[1] = bkend_ftq_commit_val;
-    e[2] = dut.u_ftq.w_commit_step_val;
-    e[3] = dut.u_bpu.w_ras_commit_val &&
+    // The first step of the walk, which commits the call to f.
+    e[1] = dut.u_ftq.w_commit_step_val && dut.u_bpu.w_ras_commit_val &&
            (dut.ras_commit_br_type == DIRECT_CALL);
-    e[4] = dut.u_bpu.u_ras.csp == 2;
-    e[5] = dut.u_bpu.w_ras_commit_val && (dut.ras_commit_br_type == RETURN);
-    e[6] = ev_redir(RESET_VECTOR + VA_WIDTH'('h26));
+    e[2] = (dut.u_bpu.u_ras.csp == 1) &&
+           (dut.u_bpu.u_ras.commit_top_addr ==
+            RESET_VECTOR + VA_WIDTH'('h20));
+    e[3] = (dut.u_bpu.u_ras.csp == 2) && dut.u_bpu.w_ras_commit_val &&
+           (dut.ras_commit_br_type == RETURN);
+    // After that return, commit pointer 3 in this run.
+    e[4] = (dut.u_bpu.u_ras.csp == 1) && (int'(dut.u_ftq.w_commit_ptr) == 3);
+    e[5] = (dut.u_bpu.u_ras.tosw == 2) && (dut.u_bpu.u_ras.csp == 0);
+    // The first call committed after the speculative stack has moved.
+    e[6] = dut.u_bpu.w_ras_commit_val &&
+           (dut.ras_commit_br_type == DIRECT_CALL) &&
+           (dut.u_bpu.u_ras.tosw != 0);
+    e[7] = ev_redir(RESET_VECTOR + VA_WIDTH'('h26));
+    // The first step of the last walk, commit pointer 38 in this run.
+    e[8] = dut.u_ftq.w_commit_step_val && (int'(dut.u_ftq.w_commit_ptr) == 38);
     return e;
   endfunction

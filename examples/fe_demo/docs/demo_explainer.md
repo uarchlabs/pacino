@@ -29,7 +29,7 @@ A glossary of frontend terms is included at the end.
 | `examples/fe_demo/waves`   | `waves/`    | Surfer signal files             |
 
 The shared testbench models are found in `rtl/core/frontend/fe_top/tb/models/`,
-shortened to `models/` below. 
+shortened to `models/` below.
 
 ---
 
@@ -44,12 +44,12 @@ A scenario has three files, the "program", the wave control file and the
 writeup:
 
 - `programs/fdNN_<name>.svh`
-    - contains the task `prog_fdNN` which populates the models memory
-      and begins exectution.
-    - In the demos there is no assembly step, the instructions are
+    - contains the task `prog_fdNN` which populates the model's memory
+      and begins execution.
+    - In the demos there is no assembly step; the instructions are
       written to model memory directly as instruction words.
 - `waves/fdNN_<name>.sucl`
-    - this is Surfer command file: containing signals, groups and markers
+    - this is a Surfer command file containing signals, groups and markers
     - Events in the waveforms are annotated using these markers. The
       markers are also described in the scenario description.
 - `docs/fdNN_<name>.md`
@@ -57,7 +57,7 @@ writeup:
 
 A run has four steps:
 
-1. `begin_scen` prints the start line, resets all models and the monitors.
+1. `begin_scen` prints the start line and resets all models and the monitors.
 2. The program task writes the program and the expected instruction list 
    to the model memory.
 3. `demo_go` releases reset and runs until every expected instruction 
@@ -75,12 +75,12 @@ There are two simulation models, based on the number of prediction slots
 selected. `NUM_PRED_SLOTS` selects 1 or 2 prediction slots. Pacino's FE
 runs either.
 
-`NUM_PRED_SLOTS`=1 is used for the simpler explanations to reduce amount of
-data and the number of signals that much be recorded.
+`NUM_PRED_SLOTS`=1 is used for the simpler explanations to reduce the amount of
+data and the number of signals that must be recorded.
 
 Full performance, `NUM_PRED_SLOTS`=2, scenarios are included to show dual
-prediction operation. `NUM_PRED_SLOTS`=2 is configuration used for performance
-analysis.
+prediction operation. `NUM_PRED_SLOTS`=2 is the configuration used for
+performance analysis.
 
 FD-3, FD-22, FD-23 and FD-24 run the dual prediction model.
 
@@ -88,11 +88,11 @@ FD-3, FD-22, FD-23 and FD-24 run the dual prediction model.
 initial value before they can predict. In the design, TAGE, ITTAGE and SC
 each walk their tables after reset, writing one entry per cycle, and raise a
 ready when the walk ends: ITTAGE at cyc 513, SC at cyc 1025 and TAGE at cyc
-2049 (FD-1). Until all three readies are high, the FTQ holds its p0 request
-(`u_ftq.u_npc.w_hold`).
+2049 (FD-1). The FTQ holds its p0 request (`u_ftq.u_npc.w_hold`) until all
+three readies are high.
 
-Every scenario except FD-1 skips the walk. The Makefile passes
-`+TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1` (`FE_FAST_INIT`,
+Every scenario except FD-1 skips the table initialization walk. The Makefile
+passes `+TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1` (`FE_FAST_INIT`,
 `rtl/core/frontend/fe_top/fe_top_srcs.mk`). With these, a SystemVerilog
 `initial` block in each table writes its initial values at time 0, and each
 predictor ties its ready to 1 (`tage.sv` line 333, and the same mux in
@@ -119,7 +119,8 @@ image. The page table walker reads from this image.
 
 Scenarios run either in machine mode with physical addresses or in supervisor
 mode under Sv39 translation. For the Sv39 scenarios, the writer also builds the
-page tables in the memory image. FD-15 also uses two-stage (guest) translation.
+page tables in the memory image. FD-14 and FD-15 also use two-stage (guest)
+translation.
 
 The program writer includes tasks which emit either 16b or 32b instructions.
 The writer emits either "filler" or "active" instructions.
@@ -130,7 +131,7 @@ the frontend.
 
 The active instructions are branches or jumps, plus `fence.i`, `cbo.inval` and
 a store used in FD-13 and FD-19. Filler instructions are variations of addi.
-The emitters write filler instructions and branches/etc; `demo_go` terminates
+The emitters write filler instructions, branches, etc.; `demo_go` terminates
 each program with an instruction which jumps to itself, a halt.
 
 The memory image is written before reset is released.

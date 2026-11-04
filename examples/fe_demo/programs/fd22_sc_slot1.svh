@@ -73,6 +73,7 @@
     evt_def("first_p3_redirect_from_slot_1", EV_WINDOW);
     evt_def("SC_corrects_TAGEs_taken_for_B", EV_WINDOW);
     evt_def("last_backend_misprediction_of_B", EV_WINDOW, 1, 1);
+    evt_def("first_SC_correction_of_B_after", EV_WINDOW);
     evt_def("back_edge_falls_through", EV_WINDOW, 1);
     evt_def("the_run_ends", EV_WINDOW);
   endfunction
@@ -96,6 +97,9 @@
     e[5] = fd22_p3(S1, fd22_at('h1C));
     e[6] = fd22_p3(S1, fd22_at('h28));
     e[7] = ev_redir(fd22_at('h1A));
-    e[8] = ev_redir(fd22_at('h30));
+    // The fifth count of the monitor's n_sc_s1: four reversals of B come
+    // before the last backend misprediction of B, in this run.
+    e[8] = fd22_p3(S1, fd22_at('h28)) && (n_sc_s1 == 4);
+    e[9] = ev_redir(fd22_at('h30));
     return e;
   endfunction
