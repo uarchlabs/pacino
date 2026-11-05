@@ -5,10 +5,18 @@
 # Status of the unwritten doc pages. tools/gen_doc_placeholders.py reads
 # this table and writes a placeholder block into each listed page.
 #
-# Key: path under docs/.
+# Key: path under docs/, for a page; or, for a heading of a unit page
+# (showcase_release_decisions.md SR-17a), the page's path, #, and the
+# heading's text as the page writes it, quoted:
+#   "frontend/icache/index.md#Tags":
+# The heading must be on the page, once. Its block is written under it, and
+# the page's title and headings are the page's own. A heading with
+# headings under it and no text of its own, such as the MMU page's L2 TLB,
+# has no entry. A unit page has no page entry.
 #   rtl:    done | active | planned | not-in-design
 #   docs:   planned | active
-#   covers: one line, completing "This page will cover ..."
+#   covers: one line, completing "This page will cover ..."; on a unit page
+#           the site shows it as a sentence
 #   see:    optional list, each item one of
 #             - blog: <post slug>         with title: <post title>
 #             - tasks: [<IA task ID>, ...]
@@ -18,14 +26,16 @@
 #           paths under planning/arch/ or planning/interfaces/, in display
 #           order. tools/mkdocs_showcase.py shows them at build time in place
 #           of the placeholder (showcase_release_decisions.md SR-17 to SR-19);
-#           the page itself keeps its placeholder block
+#           the page itself keeps its placeholder block. On a unit page each
+#           document is shown once, in the Overview heading, and named under
+#           each heading that lists it (SR-17a)
 #
 # Evidence: rtl/, planning/arch/, docs/sessions.json, examples/fe_demo/,
 # the README status table and directory tree, and the blog's _posts/.
 
 # -- Frontend: branch prediction -------------------------------------------
 
-frontend/bpu/overview.md:
+"frontend/bpu/index.md#Overview":
   rtl: done
   docs: planned
   covers: the branch prediction cluster, its seven predictors, the p1, p2 and p3 override order, and how predictions reach the FTQ.
@@ -44,7 +54,7 @@ frontend/bpu/overview.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/dual_prediction.md:
+"frontend/bpu/index.md#Dual Prediction":
   rtl: done
   docs: planned
   covers: the two branch slots, br0 and br1, predicted from one 32-byte block lookup, and how a taken branch ends the block.
@@ -58,7 +68,7 @@ frontend/bpu/dual_prediction.md:
     - planning/arch/fe_decisions.md
     - planning/arch/bp_cluster.md
 
-frontend/bpu/ftb.md:
+"frontend/bpu/index.md#Fetch Target Buffer":
   rtl: done
   docs: planned
   covers: the fetch target buffer, its entry format, PLRU replacement and the confidence override at p2.
@@ -76,7 +86,7 @@ frontend/bpu/ftb.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/history_module.md:
+"frontend/bpu/index.md#History Module":
   rtl: done
   docs: planned
   covers: the branch history the predictors index with, its speculative update, and its correction after a redirect.
@@ -90,7 +100,7 @@ frontend/bpu/history_module.md:
     - planning/arch/bp_cluster.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/ittage.md:
+"frontend/bpu/index.md#ITTage":
   rtl: done
   docs: planned
   covers: the ITTAGE indirect target predictor, its tables, allocation and update rules.
@@ -115,7 +125,7 @@ frontend/bpu/ittage.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/loop_predictor.md:
+"frontend/bpu/index.md#Loop Predictor":
   rtl: done
   docs: planned
   covers: the loop predictor, how it counts iterations at p1 and when its prediction is trusted over the other predictors.
@@ -130,7 +140,7 @@ frontend/bpu/loop_predictor.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/ras.md:
+"frontend/bpu/index.md#Return Address Stack":
   rtl: done
   docs: planned
   covers: the return address stack, its push and pop on calls and returns, and its repair after a redirect.
@@ -146,7 +156,7 @@ frontend/bpu/ras.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/sc.md:
+"frontend/bpu/index.md#Statistical Corrector":
   rtl: done
   docs: planned
   covers: the statistical corrector, its tables and thresholds, and when it reverses the TAGE direction at p3.
@@ -165,7 +175,7 @@ frontend/bpu/sc.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/tage.md:
+"frontend/bpu/index.md#TAGE":
   rtl: done
   docs: planned
   covers: the TAGE direction predictor, its tagged tables, provider selection, allocation and use_alt_on_na.
@@ -196,7 +206,7 @@ frontend/bpu/tage.md:
     - planning/arch/bp_arb_spec.md
     - planning/interfaces/bpu_port_inventory.md
 
-frontend/bpu/ubtb.md:
+"frontend/bpu/index.md#uBTB":
   rtl: done
   docs: planned
   covers: the micro BTB, the single-cycle p1 predictor that starts fetch before the slower predictors respond.
@@ -211,7 +221,7 @@ frontend/bpu/ubtb.md:
 
 # -- Frontend: decode ------------------------------------------------------
 
-frontend/decode/overview.md:
+"frontend/decode/index.md#Overview":
   rtl: done
   docs: planned
   covers: the instruction decoder, how fetched instructions become decoded packets for rename, and its RVA23 coverage.
@@ -222,7 +232,7 @@ frontend/decode/overview.md:
   spec:
     - planning/arch/dcd_decisions.md
 
-frontend/decode/float_decode.md:
+"frontend/decode/index.md#Float Decode":
   rtl: done
   docs: planned
   covers: decode of the scalar floating-point instructions, including the fused multiply-add forms.
@@ -232,13 +242,13 @@ frontend/decode/float_decode.md:
   spec:
     - planning/arch/dcd_decisions.md
 
-frontend/decode/fusion_combiner.md:
+"frontend/decode/index.md#Fusion Combiner":
   rtl: planned
   docs: planned
   covers: macro-op fusion, combining adjacent instructions into one operation; no fusion logic is in the current decoder.
   guess: true
 
-frontend/decode/integer_decode.md:
+"frontend/decode/index.md#Integer Decode":
   rtl: done
   docs: planned
   covers: decode of the scalar integer instructions and the RVA23 integer extensions.
@@ -250,7 +260,7 @@ frontend/decode/integer_decode.md:
   spec:
     - planning/arch/dcd_decisions.md
 
-frontend/decode/rvc_expander.md:
+"frontend/decode/index.md#RVC Expander":
   rtl: done
   docs: planned
   covers: expansion of compressed (RVC) instructions, including Zcb, to their 32-bit forms; the expander sits in the IFU.
@@ -260,7 +270,7 @@ frontend/decode/rvc_expander.md:
   spec:
     - planning/arch/ifu_decisions.md
 
-frontend/decode/vector_decode.md:
+"frontend/decode/index.md#Vector Decode":
   rtl: done
   docs: planned
   covers: decode of the RVV vector instructions and the vsetvl dependency information passed to rename.
@@ -272,7 +282,7 @@ frontend/decode/vector_decode.md:
 
 # -- Frontend: fetch -------------------------------------------------------
 
-frontend/fetch/overview.md:
+"frontend/fetch/index.md#Overview":
   rtl: done
   docs: planned
   covers: the instruction fetch unit, how it takes FTQ entries, reads the L1I, translates through the ITLB and writes the instruction buffer.
@@ -286,7 +296,7 @@ frontend/fetch/overview.md:
     - planning/arch/ibuf_decisions.md
     - planning/interfaces/ifu_ibuf_interfaces.md
 
-frontend/fetch/branch_detector.md:
+"frontend/fetch/index.md#Branch Detector":
   rtl: done
   docs: planned
   covers: predecode in the IFU, which finds the branches in a fetch block and redirects fetch when the prediction missed one.
@@ -300,7 +310,7 @@ frontend/fetch/branch_detector.md:
     - planning/arch/ifu_decisions.md
     - planning/arch/dcd_decisions.md
 
-frontend/fetch/ftq.md:
+"frontend/fetch/index.md#Fetch Target Queue":
   rtl: done
   docs: planned
   covers: the fetch target queue, its pointers, redirect and rollback, and how it trains the predictors at commit.
@@ -316,7 +326,7 @@ frontend/fetch/ftq.md:
     - planning/interfaces/ftq_ifu_interfaces.md
     - planning/interfaces/ftq_backend_interfaces.md
 
-frontend/fetch/prefusion_detector.md:
+"frontend/fetch/index.md#Pre-Fusion Detector":
   rtl: planned
   docs: planned
   covers: detection of fusible instruction pairs before decode; no fusion logic is in the current frontend.
@@ -324,7 +334,7 @@ frontend/fetch/prefusion_detector.md:
 
 # -- Frontend: instruction cache -------------------------------------------
 
-frontend/icache/overview.md:
+"frontend/icache/index.md#Overview":
   rtl: done
   docs: planned
   covers: the L1 instruction cache generated by cachegen, its organization, hit and miss paths, and maintenance operations.
@@ -335,10 +345,9 @@ frontend/icache/overview.md:
   spec:
     - planning/arch/icache_decisions.md
     - planning/arch/cachegen_decisions.md
-    - planning/arch/pacino_cache.md
     - planning/interfaces/l1i_ifu_interfaces.md
 
-frontend/icache/data_arrays.md:
+"frontend/icache/index.md#Data Arrays":
   rtl: done
   docs: planned
   covers: the L1I data arrays, their banking and how a fetch block is read.
@@ -347,7 +356,7 @@ frontend/icache/data_arrays.md:
   spec:
     - planning/arch/icache_decisions.md
 
-frontend/icache/il2_interface.md:
+"frontend/icache/index.md#IL2 Interface":
   rtl: done
   docs: planned
   covers: the L1I memory-side port, the TileLink requests it sends on a miss and how fills return.
@@ -358,7 +367,7 @@ frontend/icache/il2_interface.md:
   spec:
     - planning/arch/icache_decisions.md
 
-frontend/icache/itlb.md:
+"frontend/icache/index.md#I-TLB":
   rtl: done
   docs: planned
   covers: the instruction TLB, its lookup, permission checks and refill from the page table walker.
@@ -372,7 +381,7 @@ frontend/icache/itlb.md:
     - planning/interfaces/itlb_l2tlb_interfaces.md
     - planning/arch/icache_decisions.md
 
-frontend/icache/mshrs.md:
+"frontend/icache/index.md#MSHRs":
   rtl: done
   docs: planned
   covers: the L1I miss status holding registers, miss merging, and the reserve kept for demand misses.
@@ -382,7 +391,7 @@ frontend/icache/mshrs.md:
   spec:
     - planning/arch/icache_decisions.md
 
-frontend/icache/plru.md:
+"frontend/icache/index.md#PLRU":
   rtl: done
   docs: planned
   covers: tree pseudo-LRU replacement in the L1I and how a victim way is chosen.
@@ -391,7 +400,7 @@ frontend/icache/plru.md:
   spec:
     - planning/arch/icache_decisions.md
 
-frontend/icache/prefetcher.md:
+"frontend/icache/index.md#Prefetcher":
   rtl: planned
   docs: planned
   covers: instruction prefetch; the L1I has no prefetcher, prefetch requests are to come from the IFU, and they are deferred (IFU-U6).
@@ -400,7 +409,7 @@ frontend/icache/prefetcher.md:
     - planning/arch/ifu_decisions.md
     - planning/interfaces/l1i_ifu_interfaces.md
 
-frontend/icache/tags.md:
+"frontend/icache/index.md#Tags":
   rtl: done
   docs: planned
   covers: the L1I tag and metadata arrays and the hit check.
@@ -410,7 +419,7 @@ frontend/icache/tags.md:
   spec:
     - planning/arch/icache_decisions.md
 
-frontend/icache/victim_buffer.md:
+"frontend/icache/index.md#Victim Buffer":
   rtl: not-in-design
   docs: planned
   covers: why pacino does not implement a victim buffer for the L1I (L1I-17).
@@ -674,7 +683,7 @@ memory/vlsu/vsplit.md:
 
 # -- MMU -------------------------------------------------------------------
 
-mmu/overview.md:
+"mmu/index.md#Overview":
   rtl: done
   docs: planned
   covers: the MMU as built so far, the ITLB, the shared page table walker and the PMP and PMA checker, and the planned DTLB and L2 TLB.
@@ -685,7 +694,7 @@ mmu/overview.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l1_tlb.md:
+"mmu/index.md#L1 TLB":
   rtl: done
   docs: planned
   covers: the first-level TLBs; the ITLB is built, the DTLB is planned.
@@ -698,7 +707,7 @@ mmu/l1_tlb.md:
     - planning/interfaces/itlb_ifu_interfaces.md
     - planning/interfaces/itlb_l2tlb_interfaces.md
 
-mmu/pma.md:
+"mmu/index.md#PMA":
   rtl: done
   docs: planned
   covers: physical memory attribute checks on fetch, including uncached and non-idempotent regions.
@@ -709,7 +718,7 @@ mmu/pma.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/pmp.md:
+"mmu/index.md#PMP":
   rtl: done
   docs: planned
   covers: physical memory protection checks and the access faults they raise.
@@ -719,7 +728,7 @@ mmu/pmp.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l2tlb/hypervisor_ptw.md:
+"mmu/index.md#Hypervisor Page Table Walker":
   rtl: done
   docs: planned
   covers: two-stage translation for the hypervisor extension, Sv39 over Sv39x4; the nested walk is done by the one page table walker.
@@ -730,7 +739,7 @@ mmu/l2tlb/hypervisor_ptw.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l2tlb/ll_ptw.md:
+"mmu/index.md#Last Level Page Table Walker":
   rtl: planned
   docs: planned
   covers: a separate last-level page table walker; the current design has one walker that serves the ITLB directly.
@@ -738,7 +747,7 @@ mmu/l2tlb/ll_ptw.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l2tlb/miss_queue.md:
+"mmu/index.md#Miss Queue":
   rtl: planned
   docs: planned
   covers: the L2 TLB miss queue; there is no L2 TLB now, and one is a later performance step (MMU-1).
@@ -746,7 +755,7 @@ mmu/l2tlb/miss_queue.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l2tlb/page_cache.md:
+"mmu/index.md#Page Cache":
   rtl: planned
   docs: planned
   covers: caching of non-leaf page table entries in the L2 TLB; there is no L2 TLB now (MMU-1).
@@ -754,7 +763,7 @@ mmu/l2tlb/page_cache.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l2tlb/prefetcher.md:
+"mmu/index.md#Prefetcher":
   rtl: planned
   docs: planned
   covers: L2 TLB prefetch; there is no L2 TLB now (MMU-1).
@@ -762,7 +771,7 @@ mmu/l2tlb/prefetcher.md:
   spec:
     - planning/arch/mmu_decisions.md
 
-mmu/l2tlb/ptw.md:
+"mmu/index.md#Page Table Walker":
   rtl: done
   docs: planned
   covers: the page table walker, Sv39 and nested Sv39x4 walks, hardware A/D updates (Svadu), and one walk at a time.

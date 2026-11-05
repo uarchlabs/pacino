@@ -81,6 +81,14 @@ production-quality outputs.
                 Declare ports on one line when they fit within 80 cols
 - Spelling:     American English in all prose, comments and identifiers.
 
+## Commands
+- Construct commands that minimize triggering a permissions request
+- Read, search and list files with the Read, Grep and Glob tools, not
+  with shell commands. A Bash command names its files by literal paths:
+  no shell variables, $(...) or backticks, loops, or xargs. Run
+  tools/regress.sh and tools/regress_demo.sh in the foreground and take
+  the summary from their output.
+
 ## Combinatorial Logic Style
 
 - Prefer always_comb blocks over cascaded continuous

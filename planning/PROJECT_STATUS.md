@@ -16,6 +16,48 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-083, after DOC-014; DOC-015 written: one page per unit.
+
+DOC-014 COMPLETE (Jeff). 22m40s active; 26% context. Task file written by
+the PA.
+  regress.sh 274 targets PASS. tools/tests 78 OK. mkdocs build 0
+    warnings, local and CI form. Status line and advisory word for word on
+    38 pages; word comparison equal in 216 sections; 105 other pages'
+    article HTML equal to the baseline.
+  Built: spec: lists on 38 of 44 frontend, MMU and System pages, unit
+    documents repeated (SR-17); a document missing at the tag a note with
+    a warning (SR-18); the Overview page text and the top menu: Home,
+    Overview, IA Tasks, Showcase, Frontend, Backend, Memory, Caches, MMU,
+    System, the last five dimmed by position (overrides/main.html);
+    overrides/** in the workflow's paths; names in angle brackets escaped
+    (10 were dropped). spec_map_proposed.yaml removed.
+  Jeff ran the generator after the task for the two covers lines; the PA
+    had not given the IA a waiver for them.
+  Site 25.9 MB -> 33.6 MB, search index 690 KB -> 4.3 MB, mostly the BPU
+    documents repeated on the predictor pages.
+  PA errors: the covers lines conflicted with --check 0 and the docs/
+    rule; "each block's link checked" (the diagram has no links); the
+    task's Context Loaded lists the file it deletes, so
+    validate_and_extract.py now fails on DOC-014.md (left, as a record).
+  Jeff: dimmed was meant as disabled; left as is for now. The permission
+    prompts in the IA sessions are worse after the PA's settings advice;
+    open.
+  Not fixed, seen: docs/overview.md's Documentation table still says
+    Memory subsystem and Cache subsystem.
+RULED (Jeff, taking the PA's recommendations): each frontend unit and
+  the MMU one page, a heading per block, documents shown once in the
+  Overview and named under each heading (SR-17a); System unchanged; no
+  redirects for the old URLs; DOC-014's mapping kept, pacino_cache.md
+  removed.
+DOC-015 written: the merge. Carries a waiver for the five unit pages,
+  the 39 pages it deletes, and one generator run.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, showcase_release_decisions.md.
+
+Next free: BP-141, SYS-003, DOC-016, INFRA-014, TOOLS-007, TD#196.
+
+---
 ## Session-083: DOC-014 written, working specifications part 2.
 
 Task file written by the PA; not yet run.

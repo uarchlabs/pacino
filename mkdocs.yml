@@ -105,39 +105,10 @@ nav:
 
   - Frontend:
     - Overview: frontend/overview.md
-    - Instruction Cache:
-      - Overview: frontend/icache/overview.md
-      - Tags: frontend/icache/tags.md
-      - Data Arrays: frontend/icache/data_arrays.md
-      - I-TLB: frontend/icache/itlb.md
-      - PLRU: frontend/icache/plru.md
-      - Victim Buffer: frontend/icache/victim_buffer.md
-      - MSHRs: frontend/icache/mshrs.md
-      - Prefetcher: frontend/icache/prefetcher.md
-      - IL2 Interface: frontend/icache/il2_interface.md
-    - Instruction Fetch:
-      - Overview: frontend/fetch/overview.md
-      - Fetch Target Queue: frontend/fetch/ftq.md
-      - Branch Detector: frontend/fetch/branch_detector.md
-      - Pre-Fusion Detector: frontend/fetch/prefusion_detector.md
-    - Decode:
-      - Overview: frontend/decode/overview.md
-      - RVC Expander: frontend/decode/rvc_expander.md
-      - Fusion Combiner: frontend/decode/fusion_combiner.md
-      - Integer Decode: frontend/decode/integer_decode.md
-      - Float Decode: frontend/decode/float_decode.md
-      - Vector Decode: frontend/decode/vector_decode.md
-    - Branch Prediction Unit:
-      - Overview: frontend/bpu/overview.md
-      - uBTB: frontend/bpu/ubtb.md
-      - TAGE: frontend/bpu/tage.md
-      - Statistical Corrector: frontend/bpu/sc.md
-      - Fetch Target Buffer: frontend/bpu/ftb.md
-      - Loop Predictor: frontend/bpu/loop_predictor.md
-      - ITTage: frontend/bpu/ittage.md
-      - Return Address Stack: frontend/bpu/ras.md
-      - History Module: frontend/bpu/history_module.md
-      - Dual Prediction: frontend/bpu/dual_prediction.md
+    - Instruction Cache: frontend/icache/index.md
+    - Instruction Fetch: frontend/fetch/index.md
+    - Decode: frontend/decode/index.md
+    - Branch Prediction Unit: frontend/bpu/index.md
 
   - Backend:
     - Overview: backend/overview.md
@@ -222,18 +193,7 @@ nav:
       - MMIO Bridge: cache/l2/mmio_bridge.md
       - Error Handling: cache/l2/error_handling.md
 
-  - MMU:
-    - Overview: mmu/overview.md
-    - L1 TLB: mmu/l1_tlb.md
-    - L2 TLB:
-      - Page Cache: mmu/l2tlb/page_cache.md
-      - Page Table Walker: mmu/l2tlb/ptw.md
-      - Last Level Page Table Walker: mmu/l2tlb/ll_ptw.md
-      - Hypervisor Page Table Walker: mmu/l2tlb/hypervisor_ptw.md
-      - Miss Queue: mmu/l2tlb/miss_queue.md
-      - Prefetcher: mmu/l2tlb/prefetcher.md
-    - PMP: mmu/pmp.md
-    - PMA: mmu/pma.md
+  - MMU: mmu/index.md
 
   - System:
     - CSR: system/csr.md

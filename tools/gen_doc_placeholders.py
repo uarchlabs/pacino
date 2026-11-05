@@ -18,6 +18,14 @@ replaces only that block.
 A page is touched only if its body, below the title, is empty apart from an
 existing placeholder block. A page with written content is skipped and
 listed. Exit status is 1 if the table has errors, 0 otherwise.
+
+A unit page (showcase_release_decisions.md SR-17a) has a heading per block,
+and the table an entry per heading, keyed <page>#<heading text>. The page's
+title and headings are its own; the generator writes the block under each
+listed heading whose text below it, up to the next heading, is empty apart
+from an existing block. A key naming no heading of the page, or a page with
+two headings of the same text, is an error. A heading with written content
+is skipped and listed.
 """
 
 import json
@@ -57,6 +65,9 @@ ENTRY_KEYS = {"rtl", "docs", "covers", "see", "guess", "spec"}
 SPEC_DIRS = ("planning/arch/", "planning/interfaces/")
 
 BLOCK_RE = re.compile(re.escape(START) + r".*?" + re.escape(END), re.S)
+# A heading below the page title, on a unit page.
+SECTION_RE = re.compile(r"(#{2,6})[ \t]+(\S.*?)[ \t]*")
+FENCE = "```"
 
 # -- Table validation ----------------------------------------------------------
 
@@ -201,6 +212,89 @@ def split_page(text):
 def is_empty_body(body):
     return not BLOCK_RE.sub("", body).strip()
 
+
+def split_key(key):
+    """(page, heading text) of a table key; heading is None for a page."""
+    page, sep, heading = str(key).partition("#")
+    return page, (heading if sep else None)
+
+
+class Section:
+    """A heading of a unit page and the text below it, up to the next
+    heading."""
+
+    def __init__(self, level, name, line):
+        self.level, self.name, self.line, self.lines = level, name, line, []
+
+    @property
+    def text(self):
+        return "".join(self.lines)
+
+
+def split_sections(body):
+    """(text before the first heading, [Section, ...]) of the body below a
+    page's title. A line in a fenced block is not a heading."""
+    pre, sections, fenced = [], [], False
+    for line in body.splitlines(keepends=True):
+        if line.lstrip().startswith(FENCE):
+            fenced = not fenced
+        m = None if fenced else SECTION_RE.fullmatch(line.rstrip("\n"))
+        if m:
+            sections.append(Section(len(m.group(1)), m.group(2),
+                                    line.rstrip("\n")))
+        elif sections:
+            sections[-1].lines.append(line)
+        else:
+            pre.append(line)
+    return "".join(pre), sections
+
+
+def is_group(sections, i):
+    """True when sections[i] has headings under it and no text of its own,
+    such as the MMU page's L2 TLB."""
+    return (i + 1 < len(sections)
+            and sections[i + 1].level > sections[i].level
+            and not sections[i].text.strip())
+
+
+def unit_errors(page, text, heads):
+    """What is wrong with a unit page against its heading entries."""
+    where = f"{TABLE_FILE}: {page}"
+    parts = split_page(text)
+    if parts is None:
+        return [f"{where}: page has no # title line"]
+    _, sections = split_sections(parts[1])
+    names = [s.name for s in sections]
+    errors = [f"{where}: heading '{n}' appears twice"
+              for n in sorted({n for n in names if names.count(n) > 1})]
+    errors += [f"{where}#{h}: no such heading in {DOCS_DIR / page}"
+               for h in heads if h not in names]
+    return errors
+
+
+def render_unit(text, heads):
+    """(the unit page with each listed, unwritten heading's block written,
+    the keys skipped for written content, the headings left empty that the
+    table does not list)."""
+    head, body = split_page(text)
+    pre, sections = split_sections(body)
+    out, skipped, unlisted = [head.rstrip("\n")], [], []
+    if pre.strip():
+        out.append(pre.strip("\n"))
+    for i, s in enumerate(sections):
+        out.append(s.line)
+        entry = heads.get(s.name)
+        if entry is not None and is_empty_body(s.text):
+            out.append(render_block(entry[1]))
+            continue
+        if entry is not None:
+            skipped.append(entry[0])
+        elif is_empty_body(s.text) and not is_group(sections, i):
+            unlisted.append(s.name)
+        if s.text.strip():
+            out.append(s.text.strip("\n"))
+    return "\n\n".join(out) + "\n", skipped, unlisted
+
 # -- Main ----------------------------------------------------------------------
 
 def main():
@@ -209,17 +303,28 @@ def main():
     task_ids = load_task_ids()
 
     errors = []
+    units = {}  # unit page -> {heading text: (key, entry)}, in table order
     for key, e in table.items():
         check_entry(key, e, task_ids, errors)
-        if not (DOCS_DIR / key).is_file():
+        page, heading = split_key(key)
+        if not (DOCS_DIR / page).is_file():
             errors.append(f"{TABLE_FILE}: {key}: no such page in {DOCS_DIR}")
+        elif heading is not None:
+            units.setdefault(page, {})[heading] = (key, e)
+    for page, heads in units.items():
+        if page in table:
+            errors.append(f"{TABLE_FILE}: {page}: has a page entry and "
+                          f"heading entries")
+        errors += unit_errors(page, (DOCS_DIR / page).read_text(), heads)
     if errors:
         for msg in errors:
             print(f"error: {msg}", file=sys.stderr)
         return 1
 
-    changed, unchanged, skipped = [], [], []
+    changed, unchanged, skipped, unlisted = [], [], [], []
     for key, e in table.items():
+        if split_key(key)[1] is not None:
+            continue
         path = DOCS_DIR / key
         text = path.read_text()
         parts = split_page(text)
@@ -233,20 +338,32 @@ def main():
         changed.append(key)
         if not check_only:
             path.write_text(new)
+    for page, heads in units.items():
+        path = DOCS_DIR / page
+        text = path.read_text()
+        new, skip, empty = render_unit(text, heads)
+        skipped += skip
+        unlisted += [f"{page}#{h}" for h in empty]
+        if new == text:
+            unchanged.append(page)
+            continue
+        changed.append(page)
+        if not check_only:
+            path.write_text(new)
 
     # Unwritten pages the table does not list.
-    unlisted = []
     for path in sorted(DOCS_DIR.rglob("*.md")):
         key = path.relative_to(DOCS_DIR).as_posix()
         parts = split_page(path.read_text())
-        if key not in table and parts and is_empty_body(parts[1]):
+        if (key not in table and key not in units and parts
+                and is_empty_body(parts[1])):
             unlisted.append(key)
 
     verb = "would change" if check_only else "changed"
     print(f"{len(changed)} {verb}, {len(unchanged)} unchanged, "
           f"{len(skipped)} skipped")
     for key in skipped:
-        print(f"skipped, page has written content: {key}")
+        print(f"skipped, page or heading has written content: {key}")
     for key in unlisted:
         print(f"not in {TABLE_FILE}, left empty: {key}")
     return 0

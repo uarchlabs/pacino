@@ -78,6 +78,21 @@
 # - a paragraph holding an indented line, which Markdown would join into one
 #   run of text, is shown as a fenced block, and a rule directly under text
 #   is kept a rule rather than read as a heading underline (keep_indented)
+#
+# THE UNIT PAGES (SR-17a, DOC-015). A frontend unit and the MMU are one page
+# each, docs/<unit>/index.md, with a heading per block; the table has an
+# entry per heading, keyed <page>#<heading text>. Each listed heading whose
+# text is only its placeholder block is rendered, at build time, as its
+# status line, its covers line as a sentence and its related links (the see:
+# list, as the placeholder words them). The Overview heading then shows the
+# advisory and each document named by any heading of the page once, in its
+# own collapsed section: the Overview's own documents first, then each
+# heading's in page order. Every other heading names its documents in a
+# Specification line, each linked to its section in the Overview; a link
+# to a section opens it. A heading with no document keeps the placeholder's
+# status form and has no Specification line. A heading with written content
+# and a spec: list stops the build; one without a list is left as written.
+# The page's table of contents lists the page's own headings only.
 
 import os
 import re
@@ -85,7 +100,8 @@ from urllib.parse import quote
 
 import yaml
 from gen_doc_placeholders import (RTL_WORDS, TABLE_FILE, is_empty_body,
-                                  spec_errors, split_page)
+                                  see_line, spec_errors, split_key, split_page,
+                                  split_sections, status_line)
 from mkdocs.plugins import get_plugin_logger
 from mkdocs.structure.files import File, InclusionLevel
 
@@ -113,6 +129,16 @@ SHOWN = None
 HIDDEN = set()
 # The doc_status.yaml entries with a spec: list, by page, from on_config.
 SPECS = {}
+# The unit pages' heading entries, {page: {heading text: entry}}, from
+# on_config (SR-17a).
+UNITS = {}
+# The heading texts of each unit page, from on_page_markdown, for its table
+# of contents.
+UNIT_HEADINGS = {}
+# The heading on a unit page that shows the documents.
+OVERVIEW = "Overview"
+# The Specification line of a heading on a unit page.
+SPEC_LINE = "Specification: {} (in the Overview above)"
 
 FENCE = "```"
 HEADING_RE = re.compile(r"(#{1,6})(\s.*)")
@@ -178,25 +204,44 @@ def drop_nav(nav, shown):
     return out
 
 
-def load_specs():
-    """The doc_status.yaml entries with a spec: list, by page. The list is
-    the checkout's, main in CI (SR-18). A list of the wrong form stops the
-    build; CI does not run gen_doc_placeholders.py."""
+def read_table():
     with open(os.path.join(ROOT, TABLE_FILE)) as f:
-        table = yaml.safe_load(f) or {}
-    specs = {k: e for k, e in table.items() if "spec" in e}
-    for key, e in specs.items():
-        errors = spec_errors(e["spec"])
-        if errors:
-            raise ValueError(f"{TABLE_FILE}: {key}: " + "; ".join(errors))
-    return specs
+        return yaml.safe_load(f) or {}
+
+
+def load_specs(table=None):
+    """The doc_status.yaml page entries with a spec: list, by page. The list
+    is the checkout's, main in CI (SR-18). A list of the wrong form stops the
+    build; CI does not run gen_doc_placeholders.py."""
+    table = read_table() if table is None else table
+    for key, e in table.items():
+        if "spec" in e:
+            errors = spec_errors(e["spec"])
+            if errors:
+                raise ValueError(f"{TABLE_FILE}: {key}: " + "; ".join(errors))
+    return {k: e for k, e in table.items()
+            if "spec" in e and split_key(k)[1] is None}
+
+
+def load_units(table=None):
+    """The heading entries of the unit pages, {page: {heading text: entry}},
+    in table order (SR-17a)."""
+    table = read_table() if table is None else table
+    units = {}
+    for key, e in table.items():
+        page, heading = split_key(key)
+        if heading is not None:
+            units.setdefault(page, {})[heading] = e
+    return units
 
 
 def on_config(config):
-    global SHOWN, HIDDEN, SPECS
+    global SHOWN, HIDDEN, SPECS, UNITS
     SHOWN = shown_list(config)
     HIDDEN = set()
-    SPECS = load_specs()
+    table = read_table()
+    SPECS = load_specs(table)
+    UNITS = load_units(table)
     if SHOWN is not None and config.get("nav"):
         config["nav"] = drop_nav(config["nav"], SHOWN)
     return config
@@ -455,10 +500,20 @@ def spec_source():
     return spec_dir or ROOT, name, "main"
 
 
-def spec_section(path, base, name, ref, repo, page):
+def spec_anchor(path):
+    """The id of a document's section on a unit page, from its file name."""
+    return "spec-" + re.sub(r"[^a-z0-9]+", "-",
+                            os.path.basename(path).lower()).strip("-")
+
+
+def spec_section(path, base, name, ref, repo, page, anchor=False):
     """One document as a collapsed section, as Markdown lines. A document
     not in the tag is a one-line note and a warning (SR-18); with no tag the
-    documents are the checkout's, and a missing one stops the build."""
+    documents are the checkout's, and a missing one stops the build. With
+    anchor, the section, or the note, holds the target of the document's
+    Specification links (spec_anchor); Material opens a collapsed section
+    holding the target of a link."""
+    mark = f'<a id="{spec_anchor(path)}"></a>' if anchor else ""
     src = os.path.join(base, path)
     if not os.path.isfile(src):
         if release()[1] is None:
@@ -466,7 +521,7 @@ def spec_section(path, base, name, ref, repo, page):
                           f" {base}")
         log.warning(f"{page}: spec document {path} is not in {name}; shown"
                     f" as a note")
-        return [f"`{path}` is not in {name}.", ""]
+        return [f"{mark}`{path}` is not in {name}.", ""]
     with open(src, encoding="utf-8") as f:
         lines = f.read().split("\n")
     # The SPDX comments go directly before the section, unindented. Indented
@@ -477,7 +532,7 @@ def spec_section(path, base, name, ref, repo, page):
         n += 1
     spdx, lines = lines[:n], lines[n:]
     body = demote_headings(keep_indented(lines))
-    head = [f"[{path} on GitHub]({repo}/blob/{ref}/{path})", ""]
+    head = [f"{mark}[{path} on GitHub]({repo}/blob/{ref}/{path})", ""]
     return (spdx + ["", f'??? abstract "{os.path.basename(path)}"', ""]
             + [f"    {l}" if l.strip() else "" for l in head + body] + [""])
 
@@ -500,13 +555,134 @@ def spec_page(markdown, src, entry, repo):
     return "\n".join(lines)
 
 
+def covers_sentence(e):
+    """The covers line as a sentence: its first letter capitalized, ending in
+    a period."""
+    covers = str(e["covers"]).strip()
+    covers = covers[:1].upper() + covers[1:]
+    return covers if covers.endswith(".") else covers + "."
+
+
+def related_line(e):
+    """The see: links as the placeholder words them, joined after
+    "Related:", or None with no see: list. A hidden scenario's item is
+    dropped, as from the placeholder's list (SR-15)."""
+    items = [see_line(item) for item in e.get("see") or []
+             if item.get("demo") not in HIDDEN]
+    return "Related: " + "; ".join(items) if items else None
+
+
+def heading_lines(e):
+    """A heading's status line and covers sentence, as Markdown lines."""
+    status = (SPEC_STATUS.format(RTL_WORDS[e["rtl"]]) if "spec" in e
+              else status_line(e))
+    return [status, "", covers_sentence(e), ""]
+
+
+def unit_page(markdown, src, heads, repo):
+    """The unit page with each listed, unwritten heading rendered, and the
+    documents shown once, in the Overview heading (SR-17a)."""
+    parts = split_page(markdown)
+    if parts is None:
+        raise ValueError(f"{src}: a unit page has no # title line")
+    pre, sections = split_sections(parts[1])
+    names = [s.name for s in sections]
+    missing = [h for h in heads if h not in names]
+    if missing:
+        raise ValueError(f"{TABLE_FILE}: {src}: no such heading: "
+                         + ", ".join(missing))
+    docs = []
+    order = ([OVERVIEW] if OVERVIEW in heads else []) + names
+    for name in order:
+        for path in (heads.get(name) or {}).get("spec", []):
+            if path not in docs:
+                docs.append(path)
+    if docs and OVERVIEW not in names:
+        raise ValueError(f"{src}: lists planning documents and has no"
+                         f" {OVERVIEW} heading")
+    UNIT_HEADINGS[src] = set(names)
+    base, name, ref = spec_source()
+    out = [parts[0].rstrip("\n"), ""]
+    if pre.strip():
+        out += [pre.strip("\n"), ""]
+    for s in sections:
+        e = heads.get(s.name)
+        out += [s.line, ""]
+        if e is None or not is_empty_body(s.text):
+            if e is not None and "spec" in e:
+                raise ValueError(f"{src}: heading '{s.name}' has a spec:"
+                                 f" list and written content")
+            if s.text.strip():
+                out += [s.text.strip("\n"), ""]
+            continue
+        out += heading_lines(e)
+        related = related_line(e)
+        if s.name == OVERVIEW:
+            if related:
+                out += [related, ""]
+            if docs:
+                out += ['!!! note "Working specification"', "",
+                        "    " + ADVISORY.format(name), ""]
+                for path in docs:
+                    out += spec_section(path, base, name, ref, repo, src,
+                                        anchor=True)
+            continue
+        if "spec" in e:
+            links = ", ".join(f"[{os.path.basename(p)}](#{spec_anchor(p)})"
+                              for p in e["spec"])
+            out += [SPEC_LINE.format(links), ""]
+        if related:
+            out += [related, ""]
+    return "\n".join(out)
+
+
+def keep_headings(items, names):
+    """The table of contents items whose title is a heading of the page,
+    each with its children so kept; nothing under the Overview, which holds
+    the documents."""
+    kept = []
+    for item in items:
+        if item.title not in names:
+            continue
+        item.children = ([] if item.title == OVERVIEW
+                         else keep_headings(item.children, names))
+        kept.append(item)
+    return kept
+
+
+def plain_ids(html, items):
+    """html with each of the items' headings given its plain id, such as
+    tage. A heading of a document in the Overview, earlier on the page, may
+    have taken it, leaving the page's own heading tage_1; the two ids are
+    exchanged, in the ids and in every link to them, so each link still
+    opens what it opened."""
+    for item in items:
+        html = plain_ids(html, item.children)
+        plain = re.sub(r"_\d+$", "", item.id)
+        if plain == item.id or f'id="{plain}"' not in html:
+            continue
+        swap = {plain: item.id, item.id: plain}
+        html = re.sub(r'(id="|href="#)(' + re.escape(plain) + "|"
+                      + re.escape(item.id) + ')"',
+                      lambda m: m.group(1) + swap[m.group(2)] + '"', html)
+        item.id = plain
+    return html
+
+
 def on_page_content(html, page, config, files):
     """A page with a spec: list has no heading of its own under its title
     (spec_page), so every other entry of its table of contents is from a
-    document, and is removed."""
-    if page.file.src_uri in SPECS:
+    document, and is removed. A unit page's table of contents keeps its own
+    headings only, each with its plain id (plain_ids)."""
+    src = page.file.src_uri
+    if src in SPECS:
         for item in page.toc:
             item.children = []
+    if src in UNITS:
+        names = UNIT_HEADINGS.get(src, set())
+        for item in page.toc:
+            item.children = keep_headings(item.children, names)
+            html = plain_ids(html, item.children)
     return html
 
 
@@ -516,6 +692,8 @@ def on_page_markdown(markdown, page, config, files):
     repo = config.get("repo_url", "").rstrip("/")
     if src in SPECS:
         markdown = spec_page(markdown, src, SPECS[src], repo)
+    if src in UNITS:
+        markdown = unit_page(markdown, src, UNITS[src], repo)
     markdown = unlink_hidden(markdown)
     if src == LANDING:
         text = release_text(ci, tag, repo)

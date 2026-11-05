@@ -6,7 +6,7 @@
  FILE:    showcase_release_decisions.md
  SOURCE:  session-082, session-083
  STATUS:  DRAFT
- UPDATED: 2026-11-04
+ UPDATED: 2026-11-05
  CONTACT: Jeff Nye
 ```
 
@@ -159,6 +159,24 @@ SR-17  A doc page whose tools/doc_status.yaml entry has a spec: list
        DOC-013). A page with written content and a spec: list, an
        empty spec: list, or a path listed twice stops the build
        (DOC-013).
+SR-17a Each frontend unit (instruction cache, instruction fetch,
+       decode, branch prediction unit) and the MMU is one page, with a
+       heading per block in place of a page per block (Jeff,
+       session-083, DOC-015). frontend/overview.md stays its own page,
+       and so does each System page. On a unit page the table has an
+       entry per heading, and:
+         - the Overview heading shows the advisory once, and each
+           document named by any heading of the page once, each in its
+           own collapsed section: the Overview's own documents first,
+           then each heading's in page order
+         - every other heading shows its status line, its covers line
+           as a sentence, the names of its documents, each linked to
+           its section in the Overview, and its related links (the
+           see: list)
+       This replaces, on the unit pages, the repetition of SR-17: a
+       document is named on each heading it covers and shown once. A
+       heading with written content and a spec: list stops the build,
+       as a page does under SR-17.
 SR-18  In CI the documents are the latest tag's (SR-4), extracted with
        the Showcase pages (SR-6a); the advisory reads, in full, "This
        page shows the planning documents and specifications for RTL tag
@@ -215,4 +233,7 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
               "interim documentation" and no covers line; SR-18 the
               advisory's text; SR-19 the advisory no longer states the
               license.
+  2026-11-05  session-083, after DOC-014 (Jeff). SR-17a: one page per
+              frontend unit and for the MMU, the documents shown once in
+              each page's Overview and named under each heading.
 ```

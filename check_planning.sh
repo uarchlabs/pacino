@@ -167,6 +167,8 @@
 # showcase_release_decisions.md), and for PROJECT_CORE.md, the installed
 # copy brought to the session-082 status line correction. -v added,
 # session-083 (Jeff): without it only mismatches are listed.
+# Updated after DOC-014 and when DOC-015 was written, session-083
+# (PROJECT_STATUS.md, showcase_release_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -209,7 +211,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   80f5097f26c8
-PLAN  PROJECT_STATUS.md                 019d27d99d96
+PLAN  PROJECT_STATUS.md                 7c3df1027722
 
 UNKN  CLAUDE.md                         32e0de73df01
 
@@ -281,7 +283,7 @@ INTF  ubtb_interfaces.md          a8e591bbeda2
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
-SHOW  showcase_release_decisions.md   0caf78c7ae47
+SHOW  showcase_release_decisions.md   7fa5fbff6168
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF
