@@ -146,8 +146,11 @@ SR-17  A doc page whose tools/doc_status.yaml entry has a spec: list
        shows those planning documents, from planning/arch/ and
        planning/interfaces/, in the list's order, in place of its
        "Not written yet" placeholder (web plan B4), under an advisory
-       naming the release they come from. The page keeps its title,
-       status line and "This page will cover" line. The documents are
+       naming the release they come from. The page keeps its title, and
+       its status line reads "<the rtl field's words>, interim
+       documentation", for example "RTL complete, interim
+       documentation"; it has no "This page will cover" line (Jeff,
+       session-083, before DOC-014). The documents are
        shown as they are, header, status line and history included;
        nothing under planning/ or docs/ is changed. A page without a
        spec: list is unchanged (Jeff, session-083). A document that
@@ -157,9 +160,12 @@ SR-17  A doc page whose tools/doc_status.yaml entry has a spec: list
        empty spec: list, or a path listed twice stops the build
        (DOC-013).
 SR-18  In CI the documents are the latest tag's (SR-4), extracted with
-       the Showcase pages (SR-6a); the advisory names the tag, and each
+       the Showcase pages (SR-6a); the advisory reads, in full, "This
+       page shows the planning documents and specifications for RTL tag
+       <tag>." (Jeff, session-083, before DOC-014), and each
        document links to its file on GitHub at the tag. A local build
-       (mkdocs serve) reads the working tree, the advisory says so, and
+       (mkdocs serve) reads the working tree, the advisory names the
+       working tree in place of the tag, and
        the links are to main. The spec: lists are read from the
        checkout's tools/doc_status.yaml, main in CI, as the shown list
        is (SR-14). The workflow passes the tag's extracted planning/
@@ -169,7 +175,8 @@ SR-18  In CI the documents are the latest tag's (SR-4), extracted with
        not stop the build (Jeff, session-083, after DOC-013; DOC-013
        built a stop, to be changed in part 2).
 SR-19  The documents keep their license, Apache-2.0, and their SPDX
-       header; the advisory states the license. The site footer's CC BY
+       header. The advisory does not state the license (Jeff,
+       session-083, before DOC-014; it did). The site footer's CC BY
        4.0 line is not changed for these pages, for the time being
        (Jeff, session-083).
 
@@ -204,4 +211,8 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
               document on every page of the unit, and the build stops
               DOC-013 added; SR-18 SHOWCASE_SPEC_DIR, and a document not
               in the tag shown as a note with a warning.
+  2026-11-05  session-083, before DOC-014 (Jeff). SR-17 the status line
+              "interim documentation" and no covers line; SR-18 the
+              advisory's text; SR-19 the advisory no longer states the
+              license.
 ```

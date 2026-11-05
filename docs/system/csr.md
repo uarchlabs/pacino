@@ -11,7 +11,7 @@
 
     **Status:** RTL planned. Documentation planned.
 
-    This page will cover the control and status registers; the CSR layouts and group structs are in csr_pkg.
+    This page will cover the control and status registers, their layouts and the group structs of csr_pkg.
 
     Meanwhile:
 

@@ -16,6 +16,28 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-083: DOC-014 written, working specifications part 2.
+
+Task file written by the PA; not yet run.
+RULED (Jeff), into DOC-014 before it runs: a spec page's status line is
+  "<rtl words>, interim documentation" with no covers line (SR-17); the
+  advisory reads "This page shows the planning documents and
+  specifications for RTL tag <tag>." (SR-18) and no longer states the
+  license (SR-19); the Overview page's first paragraph split in three;
+  the top menu Home, Overview, IA Tasks, Showcase, Frontend, Backend,
+  Memory, Caches, MMU, System, the last five dimmed, Memory Subsystem
+  and Cache Subsystem renamed Memory and Caches. DOC-014 carries a
+  waiver for docs/overview.md.
+PROJECT_CORE.md, PA-direct correction: the installed copy did not match
+  check_planning.sh. It lacked the session-082 record correction "the IA
+  status line is .claude/statusline.sh at the repo root"; Tools Status
+  now says so. Its other session-082 corrections were present.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md,
+showcase_release_decisions.md.
+
+---
 ## Session-083, after DOC-013: working specifications, part 1 (TAGE).
 
 DOC-013 COMPLETE (Jeff). 1h46m52s active; 22% context. Task file

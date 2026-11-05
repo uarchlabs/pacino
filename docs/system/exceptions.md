@@ -11,7 +11,7 @@
 
     **Status:** RTL planned. Documentation planned.
 
-    This page will cover exceptions and traps; the frontend raises fetch faults today, and trap handling.
+    This page will cover exceptions and traps; the frontend raises fetch faults today, and trap handling is planned with the backend.
 
     Meanwhile:
 

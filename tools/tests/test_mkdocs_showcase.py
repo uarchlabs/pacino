@@ -14,11 +14,12 @@
 # hides have no page, no nav entry and no landing table row; TestShownList
 # checks the list, the nav filter and the link handling on their own.
 #
-# The working specifications (DOC-013, SR-17 to SR-19): TestSpec checks the
-# line handling and the rendered Markdown of a page with a spec: list, local
-# and in CI with a tag, and of a page without one. The local and tag builds
-# of TestBuild check the built page; the tag build reads a copy of
-# planning/arch and planning/interfaces with one line added.
+# The working specifications (DOC-013, DOC-014, SR-17 to SR-19): TestSpec checks
+# the line handling and the rendered Markdown of a page with a spec: list, local
+# and in CI with a tag, a document missing at the tag, and a page without a
+# list. The local and tag builds of TestBuild check the built page; the tag
+# build reads a copy of planning/arch and planning/interfaces with one line
+# added and one document removed. TestBuild also checks the top menu's order.
 #
 #   python3 -m unittest discover -s tools/tests -v
 
@@ -215,6 +216,9 @@ class TestSpec(unittest.TestCase):
             (["```", "x", "  y", "```"], ["```", "x", "  y", "```"]),
             # A name pattern keeps its asterisk.
             (["A_* and B_*, `C_*`"], ["A_\\* and B_\\*, `C_*`"]),
+            # A name in angle brackets is shown; an autolink stays a link.
+            (["(<PRED>_X, `<PRED>_Y`) <https://a.b/c>"],
+             ["(&lt;PRED&gt;_X, `<PRED>_Y`) <https://a.b/c>"]),
         ]
         for lines, want in cases:
             self.assertEqual(hook.keep_indented(lines), want, lines)
@@ -226,17 +230,17 @@ class TestSpec(unittest.TestCase):
             ["### a", "#### b", "###### c", "###### d",
              "#not", "```", "# e", "```"])
 
-    def check_page(self, out, name, ref):
-        self.assertIn(hook.ADVISORY.format(name), out)
-        self.assertIn('!!! note "Working specification"', out)
-        self.assertIn("Apache-2.0.", out)
+    def check_page(self, out, advisory, ref):
+        self.assertIn('!!! note "Working specification"\n\n    ' + advisory
+                      + "\n", out)
         self.assertNotIn("Not written yet", out)
         self.assertNotIn("Meanwhile", out)
         self.assertNotIn("placeholder:", out)
+        self.assertNotIn("This page will cover", out)
         self.assertTrue(out.startswith(
             "<!-- SPDX-License-Identifier: CC-BY-4.0 -->\n# Unit\n\n"
-            "**Status:** RTL complete. Documentation planned.\n\n"
-            "This page will cover the unit.\n\n"), out)
+            "**Status:** RTL complete, interim documentation\n\n"
+            '!!! note "Working specification"'), out)
         a = out.index('??? abstract "a_decisions.md"')
         b = out.index('??? abstract "a_interfaces.md"')
         self.assertLess(out.index('!!! note "Working'), a)
@@ -257,7 +261,8 @@ class TestSpec(unittest.TestCase):
     def test_local(self):
         out = hook.spec_page(self.PAGE, "unit.md", dict(
             self.ENTRY, spec=["planning/arch/tage_cntrl_decisions.md"]), REPO)
-        self.assertIn(hook.ADVISORY.format("the working tree"), out)
+        self.assertIn("    This page shows the planning documents and"
+                      " specifications for the working tree.\n", out)
         self.assertIn(f"{REPO}/blob/main/planning/arch/"
                       "tage_cntrl_decisions.md", out)
         self.assertIn('??? abstract "tage_cntrl_decisions.md"', out)
@@ -266,7 +271,15 @@ class TestSpec(unittest.TestCase):
     def test_ci_tag(self):
         os.environ.update(SHOWCASE_CI="1", SHOWCASE_TAG="fe-1.2.3",
                           SHOWCASE_SPEC_DIR=self.tmp)
-        self.check_page(self.render(), "fe-1.2.3", "fe-1.2.3")
+        self.check_page(self.render(), "This page shows the planning documents"
+                        " and specifications for RTL tag fe-1.2.3.", "fe-1.2.3")
+
+    def test_status_uses_the_rtl_words(self):
+        out = hook.spec_page(self.PAGE, "unit.md", dict(
+            self.ENTRY, rtl="not-in-design",
+            spec=["planning/arch/tage_cntrl_decisions.md"]), REPO)
+        self.assertIn("**Status:** Not in the current design, interim"
+                      " documentation\n", out)
 
     def test_ci_no_tag_reads_the_branch(self):
         os.environ["SHOWCASE_CI"] = "1"
@@ -279,11 +292,31 @@ class TestSpec(unittest.TestCase):
         with self.assertRaises(OSError):
             self.render()
 
-    def test_document_not_in_tag_fails(self):
+    def test_document_not_in_tag_is_a_note(self):
+        gone, kept = self.ENTRY["spec"]
+        os.remove(os.path.join(self.tmp, gone))
         os.environ.update(SHOWCASE_CI="1", SHOWCASE_TAG="fe-1.2.3",
-                          SHOWCASE_SPEC_DIR=os.path.join(self.tmp, "empty"))
+                          SHOWCASE_SPEC_DIR=self.tmp)
+        with self.assertLogs("mkdocs.plugins", "WARNING") as logs:
+            out = self.render()
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("unit.md", logs.output[0])
+        self.assertIn(gone, logs.output[0])
+        self.assertIn(f"\n`{gone}` is not in RTL tag fe-1.2.3.\n", out)
+        self.assertNotIn('??? abstract "a_decisions.md"', out)
+        self.assertIn('??? abstract "a_interfaces.md"', out)
+        self.assertLess(out.index(f"`{gone}`"),
+                        out.index(os.path.basename(kept)))
+
+    def test_document_missing_with_no_tag_fails(self):
+        # Local and CI with no tag read the checkout, where it is a table error.
         with self.assertRaises(OSError):
-            self.render()
+            hook.spec_page(self.PAGE, "unit.md", dict(
+                self.ENTRY, spec=["planning/arch/no_such_doc.md"]), REPO)
+        os.environ["SHOWCASE_CI"] = "1"
+        with self.assertRaises(OSError):
+            hook.spec_page(self.PAGE, "unit.md", dict(
+                self.ENTRY, spec=["planning/arch/no_such_doc.md"]), REPO)
 
     def test_written_page_fails(self):
         with self.assertRaises(ValueError):
@@ -321,7 +354,10 @@ class TestSpec(unittest.TestCase):
     def test_load_specs_repo_table(self):
         specs = hook.load_specs()
         self.assertIn("frontend/bpu/tage.md", specs)
-        self.assertNotIn("frontend/bpu/sc.md", specs)
+        self.assertIn("frontend/bpu/sc.md", specs)
+        # A written page, and one no document covers.
+        self.assertNotIn("frontend/overview.md", specs)
+        self.assertNotIn("frontend/decode/fusion_combiner.md", specs)
 
 
 @unittest.skipIf(MKDOCS is None, "mkdocs is not installed")
@@ -330,13 +366,20 @@ class TestBuild(unittest.TestCase):
     SPEC_MARK = "TAG_ONLY_LINE_DOC013"
     TAGE_DOC = "planning/arch/tage_cntrl_decisions.md"
     TAGE_PAGE = os.path.join(ROOT, "docs", "frontend", "bpu", "tage.md")
-    # The nine documents of frontend/bpu/tage.md, in display order.
+    # The nine documents of frontend/bpu/tage.md, in display order, then the
+    # unit's documents (SR-17).
     SECTIONS = ["tage_cntrl_decisions.md", "tage_cntrl_alloc_rules.md",
                 "tage_cntrl_ctr_update_rules.md",
                 "tage_cntrl_uaon_update_rules.md",
                 "tage_cntrl_use_update_rules.md",
                 "tage_table_entry_formats.md", "tage_table_hash_rules.md",
-                "tage_interfaces.md", "tage_table_interfaces.md"]
+                "tage_interfaces.md", "tage_table_interfaces.md",
+                "bp_cluster.md", "bp_arb_spec.md", "bpu_port_inventory.md"]
+    # Removed from the tag's copy: a listed document missing at the tag.
+    GONE_DOC = "planning/interfaces/ubtb_interfaces.md"
+    # The top menu, in order (DOC-014).
+    MENU = ["Home", "Overview", "IA Tasks", "Showcase", "Frontend", "Backend",
+            "Memory", "Caches", "MMU", "System"]
 
     @classmethod
     def setUpClass(cls):
@@ -364,6 +407,7 @@ class TestBuild(unittest.TestCase):
                             os.path.join(cls.spec, "planning", sub))
         with open(os.path.join(cls.spec, cls.TAGE_DOC), "a") as f:
             f.write(f"\n{cls.SPEC_MARK}\n")
+        os.remove(os.path.join(cls.spec, cls.GONE_DOC))
         with open(cls.TAGE_PAGE, "rb") as f:
             cls.page_md5 = hashlib.md5(f.read()).hexdigest()
         # The repo's shown list, and the scenario pages it hides.
@@ -396,9 +440,9 @@ class TestBuild(unittest.TestCase):
         if "fd09_tage" in self.shown:
             self.assertTrue(site_has("showcase/fe_demo/fd09_blocks.svg"))
 
-    # The architecture pages that link scenarios, read once per build.
-    ARCH = ["frontend/fetch/overview", "frontend/bpu/dual_prediction",
-            "frontend/bpu/sc", "mmu/pma"]
+    # The architecture pages that link scenarios, read once per build. A page
+    # with a spec: list shows no placeholder, so has no such link.
+    ARCH = ["system/exceptions"]
 
     def arch(self, read):
         return "".join(read(f"{p}/index.html") for p in self.ARCH)
@@ -416,10 +460,12 @@ class TestBuild(unittest.TestCase):
 
     def build(self, name, **kw):
         site = os.path.join(self.tmp, "site_" + name)
-        r = subprocess.run([MKDOCS, "build", "-q", "-d", site], cwd=ROOT,
+        # Not -q, which hides the warnings test_ci_tag looks for.
+        r = subprocess.run([MKDOCS, "build", "-d", site], cwd=ROOT,
                            env=env(**kw), text=True, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT)
         self.assertEqual(r.returncode, 0, r.stdout)
+        self.log = r.stdout
 
         def read(rel):
             with open(os.path.join(site, rel)) as f:
@@ -428,12 +474,14 @@ class TestBuild(unittest.TestCase):
         return read
 
     def check_spec(self, read, name, ref):
-        """The TAGE page as a page with a spec: list, and the SC page as one
-        without; the source page not written."""
+        """The TAGE page as a page with a spec: list, and the Fusion Combiner
+        page as one without; the source page not written."""
         page = read("frontend/bpu/tage/index.html")
-        self.assertIn(f"implemented from, as of {name}.", page)
-        self.assertIn("<strong>Status:</strong> RTL complete.", page)
-        self.assertIn("This page will cover the TAGE direction", page)
+        self.assertIn("This page shows the planning documents and"
+                      f" specifications for {name}.", page)
+        self.assertIn("<strong>Status:</strong> RTL complete, interim"
+                      " documentation</p>", page)
+        self.assertNotIn("This page will cover", page)
         self.assertNotIn("Not written yet", page)
         self.assertNotIn("Meanwhile", page)
         self.assertEqual(re.findall(
@@ -452,16 +500,25 @@ class TestBuild(unittest.TestCase):
         # An indented run keeps its line breaks and indentation.
         self.assertIn("Captures into meta:\n"
                       "  tage_prm_idx       -- already-hashed", page)
-        sc = read("frontend/bpu/sc/index.html")
-        self.assertIn("Not written yet", sc)
-        self.assertNotIn("Working specification", sc)
+        plain = read("frontend/decode/fusion_combiner/index.html")
+        self.assertIn("Not written yet", plain)
+        self.assertNotIn("Working specification", plain)
         with open(self.TAGE_PAGE, "rb") as f:
             self.assertEqual(hashlib.md5(f.read()).hexdigest(), self.page_md5)
         return page
 
+    def check_menu(self, read):
+        """The top menu's entries, in order, and its dimming style."""
+        page = read("overview/index.html")
+        self.assertEqual(re.findall(
+            r'<a href="[^"]*" class="md-tabs__link[^"]*">\s*(.*?)\s*</a>',
+            page, re.S), self.MENU)
+        self.assertIn(".md-tabs__item:nth-child(n+6) .md-tabs__link", page)
+
     def test_local(self):
         read = self.build("local")
         self.check_shown(read, self.site_has)
+        self.check_menu(read)
         page = self.check_spec(read, "the working tree", "main")
         self.assertNotIn(self.SPEC_MARK, page)
         self.assertIn("<strong>Local preview of the branch.</strong>",
@@ -481,8 +538,17 @@ class TestBuild(unittest.TestCase):
         read = self.build("tag", SHOWCASE_CI="1", SHOWCASE_TAG="fe-9.9.9",
                           SHOWCASE_DEMO_DIR=self.demo,
                           SHOWCASE_SPEC_DIR=self.spec)
-        spec = self.check_spec(read, "fe-9.9.9", "fe-9.9.9")
+        spec = self.check_spec(read, "RTL tag fe-9.9.9", "fe-9.9.9")
         self.assertIn(self.SPEC_MARK, spec)
+        # The document removed from the tag's copy: a note and a warning, on
+        # the one page listing it, and the build went on.
+        ubtb = read("frontend/bpu/ubtb/index.html")
+        self.assertIn(f"<code>{self.GONE_DOC}</code> is not in RTL tag"
+                      " fe-9.9.9.", ubtb)
+        self.assertNotIn('<summary>ubtb_interfaces.md', ubtb)
+        self.assertIn("frontend/bpu/ubtb.md", self.log)
+        self.assertIn(self.GONE_DOC, self.log)
+        self.assertEqual(self.log.count(f"{self.GONE_DOC} is not in"), 1)
         with open(os.path.join(ROOT, self.TAGE_DOC)) as f:
             self.assertNotIn(self.SPEC_MARK, f.read())
         index = read("showcase/index.html")

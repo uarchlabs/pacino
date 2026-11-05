@@ -38,6 +38,11 @@ frontend/bpu/overview.md:
       title: Branch Prediction Cluster Simulation and Mutation-based Verification
     - tasks: [BP-084, BP-101, BP-138]
     - demo: fd02_steady
+  spec:
+    - planning/arch/bp_cluster.md
+    - planning/arch/fe_decisions.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/dual_prediction.md:
   rtl: done
@@ -49,6 +54,9 @@ frontend/bpu/dual_prediction.md:
     - demo: fd22_sc_slot1
     - demo: fd24_call_slot1
   guess: true
+  spec:
+    - planning/arch/fe_decisions.md
+    - planning/arch/bp_cluster.md
 
 frontend/bpu/ftb.md:
   rtl: done
@@ -60,6 +68,13 @@ frontend/bpu/ftb.md:
     - tasks: [BP-065, BP-066, BP-067]
     - demo: fd04_p2_override
     - demo: fd12_training
+  spec:
+    - planning/arch/ftb_decisions.md
+    - planning/arch/ftb_confidence_override_rules.md
+    - planning/interfaces/ftb_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/history_module.md:
   rtl: done
@@ -69,6 +84,11 @@ frontend/bpu/history_module.md:
     - blog: branch-history-and-the-first-prediction
       title: Branch History and the First Prediction
     - tasks: [BP-069, BP-074, BP-130]
+  spec:
+    - planning/arch/bp_history_decisions.md
+    - planning/interfaces/bp_history_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/ittage.md:
   rtl: done
@@ -81,6 +101,19 @@ frontend/bpu/ittage.md:
       title: ITTAGE -- Table, Controller, Wrapper, and First Integrated Testbench
     - tasks: [BP-034, BP-050, BP-055]
     - demo: fd08_indirect
+  spec:
+    - planning/arch/ittage_cntrl_decisions.md
+    - planning/arch/ittage_cntrl_alloc_rules.md
+    - planning/arch/ittage_cntrl_ctr_update_rules.md
+    - planning/arch/ittage_cntrl_uaon_update_rules.md
+    - planning/arch/ittage_cntrl_use_update_rules.md
+    - planning/arch/ittage_table_entry_formats.md
+    - planning/arch/ittage_table_hash_rules.md
+    - planning/interfaces/ittage_interfaces.md
+    - planning/interfaces/ittage_table_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/loop_predictor.md:
   rtl: done
@@ -91,6 +124,11 @@ frontend/bpu/loop_predictor.md:
       title: "Iteration Counting at s1: The Loop Predictor"
     - tasks: [BP-004, BP-091]
     - demo: fd06_loop_pred
+  spec:
+    - planning/interfaces/loop_pred_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/ras.md:
   rtl: done
@@ -101,6 +139,12 @@ frontend/bpu/ras.md:
       title: "The RAS and the FTB: Design Choices at p2"
     - tasks: [BP-062, BP-063, BP-064]
     - demo: fd07_calls_returns
+  spec:
+    - planning/arch/ras_decisions.md
+    - planning/interfaces/ras_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/sc.md:
   rtl: done
@@ -112,6 +156,14 @@ frontend/bpu/sc.md:
     - tasks: [BP-075, BP-078, BP-079]
     - demo: fd05_p3_override
     - demo: fd22_sc_slot1
+  spec:
+    - planning/arch/sc_decisions.md
+    - planning/arch/sc_table_hash_rules.md
+    - planning/interfaces/sc_interfaces.md
+    - planning/interfaces/sc_table_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/tage.md:
   rtl: done
@@ -140,6 +192,9 @@ frontend/bpu/tage.md:
     - planning/arch/tage_table_hash_rules.md
     - planning/interfaces/tage_interfaces.md
     - planning/interfaces/tage_table_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 frontend/bpu/ubtb.md:
   rtl: done
@@ -148,6 +203,11 @@ frontend/bpu/ubtb.md:
   see:
     - tasks: [BP-003, BP-018, BP-086]
     - demo: fd02_steady
+  spec:
+    - planning/interfaces/ubtb_interfaces.md
+    - planning/arch/bp_cluster.md
+    - planning/arch/bp_arb_spec.md
+    - planning/interfaces/bpu_port_inventory.md
 
 # -- Frontend: decode ------------------------------------------------------
 
@@ -159,6 +219,8 @@ frontend/decode/overview.md:
     - blog: what-rva23-actually-asks-of-a-decoder
       title: What RVA23 Actually Asks of a Decoder
     - tasks: [DECODE-002, DECODE-010, DECODE-011]
+  spec:
+    - planning/arch/dcd_decisions.md
 
 frontend/decode/float_decode.md:
   rtl: done
@@ -167,6 +229,8 @@ frontend/decode/float_decode.md:
   see:
     - blog: what-rva23-actually-asks-of-a-decoder
       title: What RVA23 Actually Asks of a Decoder
+  spec:
+    - planning/arch/dcd_decisions.md
 
 frontend/decode/fusion_combiner.md:
   rtl: planned
@@ -183,6 +247,8 @@ frontend/decode/integer_decode.md:
       title: What RVA23 Actually Asks of a Decoder
     - blog: scalar-foundation-to-vector-alu
       title: Scalar Foundation to Vector ALU
+  spec:
+    - planning/arch/dcd_decisions.md
 
 frontend/decode/rvc_expander.md:
   rtl: done
@@ -191,6 +257,8 @@ frontend/decode/rvc_expander.md:
   see:
     - tasks: [DECODE-003]
     - demo: fd17_rvc
+  spec:
+    - planning/arch/ifu_decisions.md
 
 frontend/decode/vector_decode.md:
   rtl: done
@@ -199,6 +267,8 @@ frontend/decode/vector_decode.md:
   see:
     - blog: scalar-foundation-to-vector-alu
       title: Scalar Foundation to Vector ALU
+  spec:
+    - planning/arch/dcd_decisions.md
 
 # -- Frontend: fetch -------------------------------------------------------
 
@@ -211,6 +281,10 @@ frontend/fetch/overview.md:
     - demo: fd13_l1i
     - demo: fd16_page_cross
     - demo: fd20_backpressure
+  spec:
+    - planning/arch/ifu_decisions.md
+    - planning/arch/ibuf_decisions.md
+    - planning/interfaces/ifu_ibuf_interfaces.md
 
 frontend/fetch/branch_detector.md:
   rtl: done
@@ -222,6 +296,9 @@ frontend/fetch/branch_detector.md:
     - tasks: [DECODE-001]
     - demo: fd10_pd_redirect
   guess: true
+  spec:
+    - planning/arch/ifu_decisions.md
+    - planning/arch/dcd_decisions.md
 
 frontend/fetch/ftq.md:
   rtl: done
@@ -231,6 +308,13 @@ frontend/fetch/ftq.md:
     - tasks: [BP-107, BP-112, BP-117, BP-139]
     - demo: fd11_be_mispredict
     - demo: fd21_commit
+  spec:
+    - planning/arch/ftq_decisions.md
+    - planning/arch/fe_decisions.md
+    - planning/arch/ftq_entry_formats.md
+    - planning/interfaces/ftq_bpu_interfaces.md
+    - planning/interfaces/ftq_ifu_interfaces.md
+    - planning/interfaces/ftq_backend_interfaces.md
 
 frontend/fetch/prefusion_detector.md:
   rtl: planned
@@ -248,6 +332,11 @@ frontend/icache/overview.md:
     - tasks: [TOOLS-004, TOOLS-005, BP-123]
     - demo: fd13_l1i
     - demo: fd19_fencei_cbo
+  spec:
+    - planning/arch/icache_decisions.md
+    - planning/arch/cachegen_decisions.md
+    - planning/arch/pacino_cache.md
+    - planning/interfaces/l1i_ifu_interfaces.md
 
 frontend/icache/data_arrays.md:
   rtl: done
@@ -255,6 +344,8 @@ frontend/icache/data_arrays.md:
   covers: the L1I data arrays, their banking and how a fetch block is read.
   see:
     - tasks: [TOOLS-004]
+  spec:
+    - planning/arch/icache_decisions.md
 
 frontend/icache/il2_interface.md:
   rtl: done
@@ -264,6 +355,8 @@ frontend/icache/il2_interface.md:
     - tasks: [TOOLS-004]
     - demo: fd13_l1i
   guess: true
+  spec:
+    - planning/arch/icache_decisions.md
 
 frontend/icache/itlb.md:
   rtl: done
@@ -273,6 +366,11 @@ frontend/icache/itlb.md:
     - tasks: [BP-118, BP-124]
     - demo: fd14_translation
     - demo: fd15_faults
+  spec:
+    - planning/arch/itlb_decisions.md
+    - planning/interfaces/itlb_ifu_interfaces.md
+    - planning/interfaces/itlb_l2tlb_interfaces.md
+    - planning/arch/icache_decisions.md
 
 frontend/icache/mshrs.md:
   rtl: done
@@ -281,6 +379,8 @@ frontend/icache/mshrs.md:
   see:
     - tasks: [TOOLS-004]
     - demo: fd13_l1i
+  spec:
+    - planning/arch/icache_decisions.md
 
 frontend/icache/plru.md:
   rtl: done
@@ -288,11 +388,17 @@ frontend/icache/plru.md:
   covers: tree pseudo-LRU replacement in the L1I and how a victim way is chosen.
   see:
     - tasks: [TOOLS-004]
+  spec:
+    - planning/arch/icache_decisions.md
 
 frontend/icache/prefetcher.md:
   rtl: planned
   docs: planned
   covers: instruction prefetch; the L1I has no prefetcher, prefetch requests are to come from the IFU, and they are deferred (IFU-U6).
+  spec:
+    - planning/arch/icache_decisions.md
+    - planning/arch/ifu_decisions.md
+    - planning/interfaces/l1i_ifu_interfaces.md
 
 frontend/icache/tags.md:
   rtl: done
@@ -301,11 +407,15 @@ frontend/icache/tags.md:
   see:
     - tasks: [TOOLS-004]
     - demo: fd13_l1i
+  spec:
+    - planning/arch/icache_decisions.md
 
 frontend/icache/victim_buffer.md:
   rtl: not-in-design
   docs: planned
   covers: why pacino does not implement a victim buffer for the L1I (L1I-17).
+  spec:
+    - planning/arch/icache_decisions.md
 
 # -- Backend ---------------------------------------------------------------
 
@@ -572,6 +682,8 @@ mmu/overview.md:
     - tasks: [BP-123, BP-124, SYS-001]
     - demo: fd14_translation
   guess: true
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l1_tlb.md:
   rtl: done
@@ -581,6 +693,10 @@ mmu/l1_tlb.md:
     - tasks: [BP-118, BP-124]
     - demo: fd14_translation
   guess: true
+  spec:
+    - planning/arch/itlb_decisions.md
+    - planning/interfaces/itlb_ifu_interfaces.md
+    - planning/interfaces/itlb_l2tlb_interfaces.md
 
 mmu/pma.md:
   rtl: done
@@ -590,6 +706,8 @@ mmu/pma.md:
     - tasks: [BP-118]
     - demo: fd15_faults
     - demo: fd18_uncached
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/pmp.md:
   rtl: done
@@ -598,6 +716,8 @@ mmu/pmp.md:
   see:
     - tasks: [BP-118, SYS-002]
     - demo: fd15_faults
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l2tlb/hypervisor_ptw.md:
   rtl: done
@@ -607,30 +727,40 @@ mmu/l2tlb/hypervisor_ptw.md:
     - tasks: [BP-124]
     - demo: fd14_translation
   guess: true
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l2tlb/ll_ptw.md:
   rtl: planned
   docs: planned
   covers: a separate last-level page table walker; the current design has one walker that serves the ITLB directly.
   guess: true
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l2tlb/miss_queue.md:
   rtl: planned
   docs: planned
   covers: the L2 TLB miss queue; there is no L2 TLB now, and one is a later performance step (MMU-1).
   guess: true
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l2tlb/page_cache.md:
   rtl: planned
   docs: planned
   covers: caching of non-leaf page table entries in the L2 TLB; there is no L2 TLB now (MMU-1).
   guess: true
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l2tlb/prefetcher.md:
   rtl: planned
   docs: planned
   covers: L2 TLB prefetch; there is no L2 TLB now (MMU-1).
   guess: true
+  spec:
+    - planning/arch/mmu_decisions.md
 
 mmu/l2tlb/ptw.md:
   rtl: done
@@ -640,6 +770,10 @@ mmu/l2tlb/ptw.md:
     - tasks: [BP-123, BP-124]
     - demo: fd14_translation
     - demo: fd15_faults
+  spec:
+    - planning/arch/mmu_decisions.md
+    - planning/interfaces/ptw_mem_interfaces.md
+    - planning/interfaces/itlb_l2tlb_interfaces.md
 
 # -- Cache subsystem: data cache -------------------------------------------
 
@@ -772,10 +906,12 @@ cache/l2/tilelink.md:
 system/csr.md:
   rtl: planned
   docs: planned
-  covers: the control and status registers; the CSR layouts and group structs are in csr_pkg
+  covers: the control and status registers, their layouts and the group structs of csr_pkg.
   see:
     - tasks: [SYS-001, SYS-002]
   guess: true
+  spec:
+    - planning/arch/csr_decisions.md
 
 system/debug.md:
   rtl: planned
@@ -791,7 +927,7 @@ system/hpm.md:
 system/exceptions.md:
   rtl: planned
   docs: planned
-  covers: exceptions and traps; the frontend raises fetch faults today, and trap handling
+  covers: exceptions and traps; the frontend raises fetch faults today, and trap handling is planned with the backend.
   see:
     - demo: fd15_faults
   guess: true

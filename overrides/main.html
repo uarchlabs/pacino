@@ -10,4 +10,22 @@
       }
     </style>
   {% endif %}
+  {# Backend, Memory, Caches, MMU and System are dimmed in the top menu; they
+     stay links. They are the 6th to 10th entries of the mkdocs.yml nav, in the
+     tabs and, below the tabs' width, in the drawer that replaces them. #}
+  <style>
+    .md-tabs__item:nth-child(n+6) .md-tabs__link {
+      opacity: .35;
+    }
+    .md-tabs__item:nth-child(n+6) .md-tabs__link:hover,
+    .md-tabs__item:nth-child(n+6) .md-tabs__link:focus {
+      opacity: .6;
+    }
+    @media screen and (max-width: 76.234375em) {
+      .md-nav--primary > .md-nav__list > .md-nav__item:nth-child(n+6)
+        > .md-nav__link {
+        opacity: .45;
+      }
+    }
+  </style>
 {% endblock %}

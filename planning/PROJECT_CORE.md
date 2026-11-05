@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-28
+ UPDATED: 2026-11-05
  CONTACT: Jeff Nye
 ```
 
@@ -690,14 +690,14 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |check_rva23_coverage.py | --    | ./tools                  | Uses submodule: tools/riscv-opcodes |
 |                        |       |                          | make coverage: exits non-zero on MISSING |
 |                        |       |                          | --strict flag: treats ROUTED as MISSING (off by default) |
-| IA status line         | --    | ./claude/statusline.sh   | Two-line display:                             |
+| IA status line         | --    | .claude/statusline.sh    | Two-line display:                             |
 |                        |       |                          |  Total: <tokens> \| Ctx: <k used> \| Ctx: <%> |
 |                        |       |                          |  Reset: <Hh MMm>                              |
 |                        |       |                          |  Requires jq. Ctx% uses used_percentage (accurate field). |
 |                        |       |                          |  Reset countdown derived from |
 |                        |       |                          |  rate_limits.five_hour.resets_at. |
 |                        |       |                          |  Note: display lost on terminal scroll. Run script directly |
-|                        |       |                          |  to restore: ~/.claude/statusline.sh |
+|                        |       |                          |  to restore: .claude/statusline.sh (repo root) |
 | check_planning.sh      | --    | ./check_planning.sh      | md5 of every planning file against the PA's  |
 |                        |       |                          | delivered versions. PA idea; in use by       |
 |                        |       |                          | session-072, origin before that.             |

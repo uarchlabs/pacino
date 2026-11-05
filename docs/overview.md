@@ -8,7 +8,10 @@ title: "Overview"
 
 Pacino is an open source 8-issue out-of-order RISC-V processor targeting the
 RVA23S64 profile, designed using a structured AI co-design methodology.
-Click any block to explore the pipeline.
+
+Use the menu above to access documentation for the major units
+
+Click any block below to explore the pipeline.
 
 <iframe
   src="../microarchitecture.html"

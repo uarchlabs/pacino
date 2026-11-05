@@ -60,16 +60,19 @@
 #
 # THE WORKING SPECIFICATIONS (showcase_release_decisions.md SR-17 to SR-19,
 # DOC-013). A doc page whose tools/doc_status.yaml entry has a spec: list is
-# rendered, at build time only, as its title, status and covers lines, an
-# advisory, and each listed planning document in a collapsed section; its
-# placeholder block in docs/ is not changed. The status and covers lines come
-# from tools/gen_doc_placeholders.py. The CI build also sets
+# rendered, at build time only, as its title, a status line, an advisory, and
+# each listed planning document in a collapsed section; its placeholder block
+# in docs/ is not changed. The CI build also sets
 #   SHOWCASE_SPEC_DIR     with SHOWCASE_TAG: the directory holding the tag's
 #                         planning/arch and planning/interfaces, extracted
 #                         with the tag's examples/fe_demo
 # and the documents are read from there; the lists themselves are the
-# checkout's. A local build reads the working tree. The documents' text is
-# unchanged. Two things differ from the source so that it reads as written:
+# checkout's. A listed document that is not in the tag is a one-line note in
+# place of its section, with a build warning (SR-18); the build goes on, as a
+# list on main may name a document newer than the tag. A local build reads the
+# working tree, where a listed path that does not exist is an error in the
+# table and stops the build. The documents' text is unchanged. Two things
+# differ from the source so that it reads as written:
 # - headings are demoted by two levels and removed from the page's table of
 #   contents (on_page_content)
 # - a paragraph holding an indented line, which Markdown would join into one
@@ -81,9 +84,12 @@ import re
 from urllib.parse import quote
 
 import yaml
-from gen_doc_placeholders import (TABLE_FILE, covers_line, is_empty_body,
-                                  spec_errors, split_page, status_line)
+from gen_doc_placeholders import (RTL_WORDS, TABLE_FILE, is_empty_body,
+                                  spec_errors, split_page)
+from mkdocs.plugins import get_plugin_logger
 from mkdocs.structure.files import File, InclusionLevel
+
+log = get_plugin_logger("mkdocs_showcase")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -114,13 +120,14 @@ RULE_RE = re.compile(r"-{3,}\s*")
 COMMENT_RE = re.compile(r"<!--.*-->\s*")
 # A list item: its indent, its marker and the space that follows.
 ITEM_RE = re.compile(r"( *)([-*+]|\d+[.)])( +)\S")
+# A name in angle brackets, which Markdown would pass through as an HTML tag.
+NAME_TAG_RE = re.compile(r"<(/?[A-Za-z][\w-]*)>")
 # Below the page title and the collapsed section's own title.
 HEADING_DEMOTE = 2
-ADVISORY = (
-    "This page shows the planning documents this block was designed and"
-    " implemented from, as of {}. They record decisions and their history,"
-    " including superseded rulings, and will be replaced by a written"
-    " description. Planning documents are licensed under Apache-2.0.")
+# SR-18 fixes this text; the argument is what spec_source names.
+ADVISORY = "This page shows the planning documents and specifications for {}."
+# The status line of a page with a spec: list (SR-17).
+SPEC_STATUS = "**Status:** {}, interim documentation"
 
 
 def shown_list(config):
@@ -370,11 +377,14 @@ def preformatted(block):
     return not plain_list(block)
 
 
-def escape_wildcards(line):
-    """line with the * of a name pattern such as tbl_ri_* escaped, outside
-    inline code: two in one paragraph would be read as emphasis and lost."""
+def escape_names(line):
+    """line with what Markdown would lose from a name escaped, outside inline
+    code: the * of a pattern such as tbl_ri_*, as two in one paragraph would be
+    read as emphasis, and a placeholder such as <PRED>_STARVE_THRESH, read as an
+    HTML tag. An autolink, <https://...>, does not match NAME_TAG_RE."""
     parts = line.split("`")
-    parts[::2] = [p.replace("_*", "_\\*") for p in parts[::2]]
+    parts[::2] = [NAME_TAG_RE.sub(r"&lt;\1&gt;", p).replace("_*", "_\\*")
+                  for p in parts[::2]]
     return "`".join(parts)
 
 
@@ -390,7 +400,7 @@ def keep_indented(lines):
             out.extend(["", FENCE, *block, FENCE, ""])
         else:
             # Four or more spaces may be an indented code block.
-            out.extend(escape_wildcards(l) if indent_of(l) < 4 else l
+            out.extend(escape_names(l) if indent_of(l) < 4 else l
                        for l in block)
         block.clear()
 
@@ -440,16 +450,23 @@ def spec_source():
         raise OSError("SHOWCASE_TAG is set without SHOWCASE_SPEC_DIR: the"
                       " working specifications must come from the tag")
     if tag is not None:
-        return spec_dir, tag, tag
+        return spec_dir, f"RTL tag {tag}", tag
     name = "the main branch" if ci else "the working tree"
     return spec_dir or ROOT, name, "main"
 
 
-def spec_section(path, base, ref, repo):
-    """One document as a collapsed section, as Markdown lines."""
+def spec_section(path, base, name, ref, repo, page):
+    """One document as a collapsed section, as Markdown lines. A document
+    not in the tag is a one-line note and a warning (SR-18); with no tag the
+    documents are the checkout's, and a missing one stops the build."""
     src = os.path.join(base, path)
     if not os.path.isfile(src):
-        raise OSError(f"{TABLE_FILE}: spec document {path} is not in {base}")
+        if release()[1] is None:
+            raise OSError(f"{TABLE_FILE}: spec document {path} is not in"
+                          f" {base}")
+        log.warning(f"{page}: spec document {path} is not in {name}; shown"
+                    f" as a note")
+        return [f"`{path}` is not in {name}.", ""]
     with open(src, encoding="utf-8") as f:
         lines = f.read().split("\n")
     # The SPDX comments go directly before the section, unindented. Indented
@@ -460,28 +477,26 @@ def spec_section(path, base, ref, repo):
         n += 1
     spdx, lines = lines[:n], lines[n:]
     body = demote_headings(keep_indented(lines))
-    name = os.path.basename(path)
     head = [f"[{path} on GitHub]({repo}/blob/{ref}/{path})", ""]
-    return (spdx + ["", f'??? abstract "{name}"', ""]
+    return (spdx + ["", f'??? abstract "{os.path.basename(path)}"', ""]
             + [f"    {l}" if l.strip() else "" for l in head + body] + [""])
 
 
 def spec_page(markdown, src, entry, repo):
-    """The page's title, status and covers lines, the advisory and its
-    documents, in place of its placeholder block (SR-17)."""
+    """The page's title, status line, the advisory and its documents, in
+    place of its placeholder block (SR-17)."""
     parts = split_page(markdown)
     if parts is None or not is_empty_body(parts[1]):
         raise ValueError(f"{src}: has a spec: list and written content")
     base, name, ref = spec_source()
     lines = [
         parts[0].rstrip("\n"), "",
-        status_line(entry), "",
-        covers_line(entry), "",
+        SPEC_STATUS.format(RTL_WORDS[entry["rtl"]]), "",
         '!!! note "Working specification"', "",
         "    " + ADVISORY.format(name), "",
     ]
     for path in entry["spec"]:
-        lines += spec_section(path, base, ref, repo)
+        lines += spec_section(path, base, name, ref, repo, src)
     return "\n".join(lines)
 
 

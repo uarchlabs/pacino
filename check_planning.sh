@@ -163,12 +163,36 @@
 # Updated after DOC-013, session-083 (PROJECT_STATUS.md,
 # showcase_release_decisions.md), for CLAUDE.md as Jeff edited it (the
 # Firefox snap folder), and with status_decisions.md as Jeff added it.
+# Updated when DOC-014 was written, session-083 (PROJECT_STATUS.md,
+# showcase_release_decisions.md), and for PROJECT_CORE.md, the installed
+# copy brought to the session-082 status line correction. -v added,
+# session-083 (Jeff): without it only mismatches are listed.
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
-# Usage: ./check_planning.sh [root]   (default: current directory)
-#   root is the repo root, the directory that contains planning/.
+# Usage: ./check_planning.sh [-v|--verbose] [root]
+#   root     the repo root, the directory that contains planning/;
+#            default the current directory.
+#   -v       list every file, MATCH lines included. Without it only the
+#            DIFFER, MISSING and BADLOC lines are listed. The summary
+#            line is printed either way.
 # Exit status: 0 if every file matches, 1 otherwise.
 
-ROOT="${1:-.}"
+VERBOSE=0
+ROOT=""
+for arg in "$@"; do
+  case "$arg" in
+    -v|--verbose) VERBOSE=1 ;;
+    -h|--help)    sed -n '/^# Usage:/,/^# Exit status:/s/^# \{0,1\}//p' "$0"
+                  exit 0 ;;
+    -*)           printf 'check_planning.sh: unknown option %s\n' "$arg" >&2
+                  exit 2 ;;
+    *)            if [[ -n "$ROOT" ]]; then
+                    printf 'check_planning.sh: more than one root\n' >&2
+                    exit 2
+                  fi
+                  ROOT="$arg" ;;
+  esac
+done
+ROOT="${ROOT:-.}"
 
 PLAN="planning"
 ARCH="planning/arch"
@@ -184,8 +208,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   eb85bf4d58e6
-PLAN  PROJECT_STATUS.md                 83d12e09a2d0
+PLAN  PROJECT_CORE.md                   80f5097f26c8
+PLAN  PROJECT_STATUS.md                 019d27d99d96
 
 UNKN  CLAUDE.md                         32e0de73df01
 
@@ -257,7 +281,7 @@ INTF  ubtb_interfaces.md          a8e591bbeda2
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
-SHOW  showcase_release_decisions.md   04800ef7f254
+SHOW  showcase_release_decisions.md   0caf78c7ae47
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF
@@ -283,7 +307,7 @@ while read -r loc file want; do
   fi
   got=$(md5sum "$path" | cut -c1-12)
   if [[ "$got" == "$want" ]]; then
-    printf 'MATCH    %s\n' "$rel"
+    [[ $VERBOSE -eq 1 ]] && printf 'MATCH    %s\n' "$rel"
     match=$((match + 1))
   else
     printf 'DIFFER   %s  (got %s, want %s)\n' "$rel" "$got" "$want"
@@ -291,7 +315,9 @@ while read -r loc file want; do
   fi
 done <<< "$FILES"
 
-printf '\n%d match, %d differ, %d missing, %d bad location, of %d\n' \
+# A blank line before the summary only when lines were listed above it.
+[[ $VERBOSE -eq 1 || $((differ + missing + bad)) -gt 0 ]] && echo
+printf '%d match, %d differ, %d missing, %d bad location, of %d\n' \
   "$match" "$differ" "$missing" "$bad" "$total"
 
 [[ $differ -eq 0 && $missing -eq 0 && $bad -eq 0 ]]

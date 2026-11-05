@@ -13,6 +13,7 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'overrides/**'
       - 'examples/fe_demo/docs/**'
       - 'tools/mkdocs_showcase.py'
       - 'tools/fe_release.py'
