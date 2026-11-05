@@ -168,7 +168,9 @@
 # copy brought to the session-082 status line correction. -v added,
 # session-083 (Jeff): without it only mismatches are listed.
 # Updated after DOC-014 and when DOC-015 was written, session-083
-# (PROJECT_STATUS.md, showcase_release_decisions.md).
+# (PROJECT_STATUS.md, showcase_release_decisions.md). Updated after
+# DOC-015, session-083 (PROJECT_STATUS.md); CLAUDE.md as Jeff edited it
+# after DOC-015 is not yet recorded.
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -211,7 +213,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   80f5097f26c8
-PLAN  PROJECT_STATUS.md                 7c3df1027722
+PLAN  PROJECT_STATUS.md                 7b9460c384cf
 
 UNKN  CLAUDE.md                         32e0de73df01
 

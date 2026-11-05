@@ -16,6 +16,32 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-083, after DOC-015: one page per unit; handoff 084.
+
+DOC-015 COMPLETE (Jeff). 36m17s active; 36% context. Task file written
+by the PA. Results not assessed by the PA; handoff 084, Worth your
+attention 2.
+  regress.sh 274 targets PASS. tools/tests 89 OK. Build 0 warnings.
+  Built: docs/frontend/{icache,fetch,decode,bpu}/index.md and
+    docs/mmu/index.md, a heading per block; 39 pages deleted; table keys
+    "<page>#<heading>", 39 entries carried with 0 mismatches;
+    pacino_cache.md removed; documents once per page, 59 sections.
+    Site 32.9 MB -> 24.0 MB, search index 4.3 MB -> 2.3 MB.
+  Not pushed as of 15:36 (public repo at 0b9010e).
+  Jeff edited CLAUDE.md after DOC-015 (the PA's command rule and his
+    own line); its checksum is not yet in check_planning.sh.
+  The left menu: DOC-015 did not make the headings show in it, which
+    was the point of Jeff's tree. The PA delivered a whole mkdocs.yml,
+    built and tested on the public clone (handoff 084, attention 3).
+  Permission prompts in the IA sessions: unresolved (handoff 084,
+    rule 6).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md. CLAUDE.md as Jeff edited it is not.
+
+Next free: BP-141, SYS-003, DOC-016, INFRA-014, TOOLS-007, TD#196.
+
+---
 ## Session-083, after DOC-014; DOC-015 written: one page per unit.
 
 DOC-014 COMPLETE (Jeff). 22m40s active; 26% context. Task file written by
