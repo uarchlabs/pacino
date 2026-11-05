@@ -14,6 +14,11 @@
 #             - tasks: [<IA task ID>, ...]
 #             - demo: <examples/fe_demo/docs file name, no .md>
 #   guess:  true where the entry is not settled by evidence in the repo
+#   spec:   optional list of planning documents shown on the page, as repo
+#           paths under planning/arch/ or planning/interfaces/, in display
+#           order. tools/mkdocs_showcase.py shows them at build time in place
+#           of the placeholder (showcase_release_decisions.md SR-17 to SR-19);
+#           the page itself keeps its placeholder block
 #
 # Evidence: rtl/, planning/arch/, docs/sessions.json, examples/fe_demo/,
 # the README status table and directory tree, and the blog's _posts/.
@@ -125,6 +130,16 @@ frontend/bpu/tage.md:
       title: TAGE Coverage Methodology and Closure
     - tasks: [BP-056, BP-081]
     - demo: fd09_tage
+  spec:
+    - planning/arch/tage_cntrl_decisions.md
+    - planning/arch/tage_cntrl_alloc_rules.md
+    - planning/arch/tage_cntrl_ctr_update_rules.md
+    - planning/arch/tage_cntrl_uaon_update_rules.md
+    - planning/arch/tage_cntrl_use_update_rules.md
+    - planning/arch/tage_table_entry_formats.md
+    - planning/arch/tage_table_hash_rules.md
+    - planning/interfaces/tage_interfaces.md
+    - planning/interfaces/tage_table_interfaces.md
 
 frontend/bpu/ubtb.md:
   rtl: done

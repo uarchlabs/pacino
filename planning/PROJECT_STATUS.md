@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-03
+ UPDATED: 2026-11-01
  CONTACT: Jeff Nye
 ```
 
@@ -16,71 +16,24 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
-## Session-084: rulings on the fd03 to fd11 description rework.
+## Session-083: working specifications on the unwritten doc pages.
 
-Documents only. No task run. From the IA's fd11_planning_notes.md
-(the rework of the fe_demo descriptions, fd03 to fd11).
-  FDT-10c stands. The IA had moved testbench-driven rows one cycle
-    back without checking FDT-10c. fd11: its 7 rows restored to the
-    next cycle's marker, 2 newly set late; all 18 rows match their
-    checks (+EVDUMP). fd07, fd08, fd10: the IA corrected them without
-    authorization; reverted at Jeff's instruction to the state before
-    its edit, so 12 rows depart from FDT-10c (fd07 139, 172, 662, 683;
-    fd08 19, 60, 378, 607, 1056, 1137; fd10 175, 245; each one cycle
-    early). They pass as window checks of at least 8 cycles.
-RULED (Jeff):
-  FD-0b relaxed: a waveform line names the units that show the
-    behaviour; the Surfer file shows them and may show more. FDT-12a
-    takes the signals from waves/fe_demo_sigs.py. FD-3 to FD-10 lines
-    unchanged; FD-11 adds the IFU flush and restart.
-  FDT-13: citations are cyc <n> (event <k>), replacing the
-    session-083 cyc-only rule; section 4 gives RTL file and line in a
-    footnote; section 1.1 lists the block connectivity diagram, the
-    pipeline view and demo_explainer.md; hand-drawn figures allowed.
-  README.md fd07 entry approved: on a return tosr follows the link and
-    tosw holds; only a restore moves tosw back (ras.sv 348, 445-446;
-    FST counts). The IA applies it.
-For a later DOC task:
-  fd07, fd08, fd10 to FDT-10c: the 12 rows, the redirect citations in
-    their prose and the marker in fd07_pass6.svg; fd08 rows 60 and 378
-    are combinational from the redirect and need late.
-  programs/fd11_be_mispredict.svh header waveform line to FD-11's.
-  fd09_tage.md, a model page, cites by cyc only: bring it to FDT-13.
-  Four rows on a redirect cycle without late not checked against
-    FDT-10c: fd03 cyc 72, fd04 cyc 202, fd05 cyc 261, fd09 cyc 225.
+Documents only. No task run.
+showcase_release_decisions.md section 5, SR-17 to SR-19: a doc page with
+  a spec: list in tools/doc_status.yaml shows those planning documents,
+  from the latest tag in CI and the working tree locally, under an
+  advisory; SR-6a extracts the tag's planning/arch/ and
+  planning/interfaces/ too. From Jeff's spec pages prompt (part 1, TAGE),
+  revised by the PA: gen_doc_placeholders.py rejects the new field until
+  ENTRY_KEYS has it; the workflow's git archive and paths; the include
+  before unlink_hidden; demoted headings kept out of the table of
+  contents; the documents' indented lines kept; tests.
+fe-1.0.0 exists (Jeff).
+RULED (Jeff): the footer's CC BY 4.0 line stays on these pages for the
+  time being; the advisory states Apache-2.0 (SR-19).
 
 Documents changed, every one in check_planning.sh with its new
-checksum: PROJECT_STATUS.md, fe_demo_scenarios.md,
-fe_demo_tb_decisions.md.
-
-Next free: BP-141, SYS-003, DOC-013, INFRA-014, TOOLS-007, TD#196.
-
----
-## Session-084: FD-4 chained by JALs.
-
-FD-4 PROGRAM CHANGED (Jeff, after scratch runs of both forms), by
-the IA outside a task: in programs/fd04_p2_override.svh, b[0] to b[6]
-end in a JAL to the next block instead of an always-taken
-conditional. b[7] unchanged: a conditional, then a JAL back to b[0].
-One-slot build, as before.
-  Reason: the conditionals had no recorded reason (DOC-002 chose
-    them; FD-4 named no branch type), and they made a p2 redirect
-    depend on TAGE's direction as well as the FTB. With JALs, every
-    uBTB miss with an FTB hit at b[0] to b[6] raises a p2 redirect.
-    The b[7] split behaviour is kept.
-  Result: -I: fd04_p2_override: PASS, p2 redirects 64, events checked
-    14 of 14, cyc 520. Of the 64, 49 follow a uBTB miss and 15 a uBTB
-    hit at b[7] (TD#193). regress_demo.sh 24 of 24, events 227 of 227.
-    regress.sh not run; no rtl/ file changed.
-  docs/fd04_p2_override.md: its "Departure from FD-4" note removed
-    (it quoted an earlier FD-4 program line).
-  fe_demo_scenarios.md FD-4 program line rewritten to name the JAL
-    chain and b[7]'s conditional, longer than the IA's proposed line.
-
-Documents changed, every one in check_planning.sh with its new
-checksum: PROJECT_STATUS.md, fe_demo_scenarios.md.
-
-Next free: BP-141, SYS-003, DOC-013, INFRA-014, TOOLS-007, TD#196.
+checksum: PROJECT_STATUS.md, showcase_release_decisions.md.
 
 ---
 ## Session-083, after DOC-012: descriptions, markers group, console line.

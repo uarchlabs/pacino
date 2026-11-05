@@ -17,7 +17,7 @@
 
     - IA tasks: [BP-116](https://uarchlabs.github.io/pacino/sessions/#BP-116), [BP-123](https://uarchlabs.github.io/pacino/sessions/#BP-123), [BP-125](https://uarchlabs.github.io/pacino/sessions/#BP-125)
     - Frontend demo: [fd13_l1i: L1I Hit, Miss and MSHR Merge](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd13_l1i.md)
-    - Frontend demo: [fd16_page_cross: A Fetch Block Crossing a Page](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd16_page_cross.md)
+    - Frontend demo: [fd16_page_cross: A Prediction Block Crossing a Page](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd16_page_cross.md)
     - Frontend demo: [fd20_backpressure: Backpressure](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd20_backpressure.md)
 
 <!-- placeholder:end -->

@@ -6,7 +6,7 @@
  FILE:    showcase_release_decisions.md
  SOURCE:  session-082, session-083
  STATUS:  DRAFT
- UPDATED: 2026-11-01
+ UPDATED: 2026-11-04
  CONTACT: Jeff Nye
 ```
 
@@ -19,7 +19,8 @@ examples/fe_demo/ (planning/testbenches/fe_demo_tb_decisions.md,
 planning/showcase/fe_demo_scenarios.md).
 
 Which scenarios are shown on the site and published is section 4, the
-shown list.
+shown list. The planning documents shown on unwritten doc pages are
+section 5, the working specifications.
 
 ---
 
@@ -59,7 +60,9 @@ SR-6a  The CI build extracts the latest tag's examples/fe_demo/docs/,
        programs/ and waves/ with git archive into a directory outside
        the checkout, and tools/mkdocs_showcase.py takes the
        showcase/fe_demo pages from there. Nothing is written into a
-       tracked path, and the symlink is unchanged (DOC-008).
+       tracked path, and the symlink is unchanged (DOC-008). The same
+       extraction takes the tag's planning/arch/ and
+       planning/interfaces/ for the working specifications (SR-18).
 SR-7   A local preview (mkdocs serve) shows the branch's pages through
        the docs/showcase/fe_demo symlink, unchanged. The landing page
        says it shows the branch.
@@ -137,14 +140,39 @@ SR-16  tools/publish_waves.py builds every scenario and digests,
 
 ---
 
-## 5. Open
+## 5. Working specifications
+
+SR-17  A doc page whose tools/doc_status.yaml entry has a spec: list
+       shows those planning documents, from planning/arch/ and
+       planning/interfaces/, in the list's order, in place of its
+       "Not written yet" placeholder (web plan B4), under an advisory
+       naming the release they come from. The page keeps its title,
+       status line and "This page will cover" line. The documents are
+       shown as they are, header, status line and history included;
+       nothing under planning/ or docs/ is changed. A page without a
+       spec: list is unchanged (Jeff, session-083).
+SR-18  In CI the documents are the latest tag's (SR-4), extracted with
+       the Showcase pages (SR-6a); the advisory names the tag, and each
+       document links to its file on GitHub at the tag. A local build
+       (mkdocs serve) reads the working tree, the advisory says so, and
+       the links are to main. The spec: lists are read from the
+       checkout's tools/doc_status.yaml, main in CI, as the shown list
+       is (SR-14).
+SR-19  The documents keep their license, Apache-2.0, and their SPDX
+       header; the advisory states the license. The site footer's CC BY
+       4.0 line is not changed for these pages, for the time being
+       (Jeff, session-083).
+
+---
+
+## 6. Open
 
 SR-U1  A GitHub Release per tag with a short changelog. Optional; not
        tasked (Jeff, session-082).
 
 ---
 
-## 6. Document History
+## 7. Document History
 
 ```
   2026-10-28  session-082. Created (Jeff's rulings; DOC-008).
@@ -158,4 +186,8 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
               from Jeff's change to mkdocs.yml, mkdocs_showcase.py and
               publish_waves.py; it replaces the paragraph under the
               registry line. Open and History renumbered 5 and 6.
+  2026-11-04  session-083. Section 5, the working specifications,
+              SR-17 to SR-19 (Jeff's spec pages prompt); SR-6a the tag's
+              planning/arch/ and planning/interfaces/. Open and History
+              renumbered 6 and 7.
 ```

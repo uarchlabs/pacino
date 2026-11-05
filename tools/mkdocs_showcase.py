@@ -57,12 +57,35 @@
 # and publishes only the shown scenarios' waveforms. A name that is not
 # a scenario page stops the build. SHOWCASE_SHOW_ALL=1 shows every
 # scenario, for a local preview of the hidden pages; CI never sets it.
+#
+# THE WORKING SPECIFICATIONS (showcase_release_decisions.md SR-17 to SR-19,
+# DOC-013). A doc page whose tools/doc_status.yaml entry has a spec: list is
+# rendered, at build time only, as its title, status and covers lines, an
+# advisory, and each listed planning document in a collapsed section; its
+# placeholder block in docs/ is not changed. The status and covers lines come
+# from tools/gen_doc_placeholders.py. The CI build also sets
+#   SHOWCASE_SPEC_DIR     with SHOWCASE_TAG: the directory holding the tag's
+#                         planning/arch and planning/interfaces, extracted
+#                         with the tag's examples/fe_demo
+# and the documents are read from there; the lists themselves are the
+# checkout's. A local build reads the working tree. The documents' text is
+# unchanged. Two things differ from the source so that it reads as written:
+# - headings are demoted by two levels and removed from the page's table of
+#   contents (on_page_content)
+# - a paragraph holding an indented line, which Markdown would join into one
+#   run of text, is shown as a fenced block, and a rule directly under text
+#   is kept a rule rather than read as a heading underline (keep_indented)
 
 import os
 import re
 from urllib.parse import quote
 
+import yaml
+from gen_doc_placeholders import (TABLE_FILE, covers_line, is_empty_body,
+                                  spec_errors, split_page, status_line)
 from mkdocs.structure.files import File, InclusionLevel
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 WAVES = "https://uarchlabs.github.io/pacino-waves"
 SURFER_APP = "https://app.surfer-project.org/"
@@ -82,6 +105,22 @@ NUM_RE = re.compile(r"^(fd\d\d)_")
 SHOWN = None
 # The hidden scenarios, from on_files.
 HIDDEN = set()
+# The doc_status.yaml entries with a spec: list, by page, from on_config.
+SPECS = {}
+
+FENCE = "```"
+HEADING_RE = re.compile(r"(#{1,6})(\s.*)")
+RULE_RE = re.compile(r"-{3,}\s*")
+COMMENT_RE = re.compile(r"<!--.*-->\s*")
+# A list item: its indent, its marker and the space that follows.
+ITEM_RE = re.compile(r"( *)([-*+]|\d+[.)])( +)\S")
+# Below the page title and the collapsed section's own title.
+HEADING_DEMOTE = 2
+ADVISORY = (
+    "This page shows the planning documents this block was designed and"
+    " implemented from, as of {}. They record decisions and their history,"
+    " including superseded rulings, and will be replaced by a written"
+    " description. Planning documents are licensed under Apache-2.0.")
 
 
 def shown_list(config):
@@ -132,10 +171,25 @@ def drop_nav(nav, shown):
     return out
 
 
+def load_specs():
+    """The doc_status.yaml entries with a spec: list, by page. The list is
+    the checkout's, main in CI (SR-18). A list of the wrong form stops the
+    build; CI does not run gen_doc_placeholders.py."""
+    with open(os.path.join(ROOT, TABLE_FILE)) as f:
+        table = yaml.safe_load(f) or {}
+    specs = {k: e for k, e in table.items() if "spec" in e}
+    for key, e in specs.items():
+        errors = spec_errors(e["spec"])
+        if errors:
+            raise ValueError(f"{TABLE_FILE}: {key}: " + "; ".join(errors))
+    return specs
+
+
 def on_config(config):
-    global SHOWN, HIDDEN
+    global SHOWN, HIDDEN, SPECS
     SHOWN = shown_list(config)
     HIDDEN = set()
+    SPECS = load_specs()
     if SHOWN is not None and config.get("nav"):
         config["nav"] = drop_nav(config["nav"], SHOWN)
     return config
@@ -278,10 +332,175 @@ def drop_header(lines):
     return lines[:start] + lines[end + 1:], title
 
 
+def indent_of(line):
+    return len(line) - len(line.lstrip(" "))
+
+
+def plain_list(block):
+    """True when Markdown renders block as a list and loses nothing but the
+    wrap of its items: each indented line is a nested item at four spaces or
+    more, or a wrapped line under its item's text. A deeper line is aligned
+    by hand, and a nested item at one to three spaces would be flattened."""
+    m = ITEM_RE.match(block[0])
+    if m is None or m.group(1):
+        return False
+    text_col = m.end(3)
+    for line in block[1:]:
+        ind = indent_of(line)
+        m = ITEM_RE.match(line)
+        if m:
+            if 0 < ind < 4:
+                return False
+            text_col = m.end(3)
+        elif ind not in (0, text_col):
+            return False
+    return True
+
+
+def preformatted(block):
+    """True when Markdown would lose the line breaks and indentation of this
+    run of lines, so it is to be shown fenced."""
+    if not any(indent_of(line) for line in block):
+        return False
+    if block[0].lstrip().startswith("|"):
+        return False
+    # Four or more: already an indented code block, or a list's continuation.
+    if all(indent_of(line) >= 4 for line in block):
+        return False
+    return not plain_list(block)
+
+
+def escape_wildcards(line):
+    """line with the * of a name pattern such as tbl_ri_* escaped, outside
+    inline code: two in one paragraph would be read as emphasis and lost."""
+    parts = line.split("`")
+    parts[::2] = [p.replace("_*", "_\\*") for p in parts[::2]]
+    return "`".join(parts)
+
+
+def keep_indented(lines):
+    """lines with each paragraph holding an indented line fenced, whole, so
+    its line breaks and indentation stay and its text is shown as written.
+    A heading or a rule is not part of a paragraph, and a rule gets blank
+    lines so that the line above it is not read as a heading."""
+    out, block, fenced = [], [], False
+
+    def flush():
+        if block and preformatted(block):
+            out.extend(["", FENCE, *block, FENCE, ""])
+        else:
+            # Four or more spaces may be an indented code block.
+            out.extend(escape_wildcards(l) if indent_of(l) < 4 else l
+                       for l in block)
+        block.clear()
+
+    for line in lines:
+        if line.lstrip().startswith(FENCE):
+            flush()
+            fenced = not fenced
+            out.append(line)
+        elif fenced:
+            out.append(line)
+        elif not line.strip():
+            flush()
+            out.append(line)
+        elif HEADING_RE.fullmatch(line):
+            flush()
+            out.extend([line, ""])
+        elif RULE_RE.fullmatch(line):
+            flush()
+            out.extend(["", line, ""])
+        else:
+            block.append(line)
+    flush()
+    return out
+
+
+def demote_headings(lines):
+    """lines with each heading outside a fenced block HEADING_DEMOTE levels
+    lower, no lower than level 6."""
+    out, fenced = [], False
+    for line in lines:
+        if line.lstrip().startswith(FENCE):
+            fenced = not fenced
+        m = None if fenced else HEADING_RE.fullmatch(line)
+        if m:
+            level = min(6, len(m.group(1)) + HEADING_DEMOTE)
+            line = "#" * level + m.group(2)
+        out.append(line)
+    return out
+
+
+def spec_source():
+    """(the directory holding planning/, the name the advisory gives, the
+    ref the GitHub links use) of this build (SR-18)."""
+    ci, tag, _ = release()
+    spec_dir = os.environ.get("SHOWCASE_SPEC_DIR") or None
+    if tag is not None and spec_dir is None:
+        raise OSError("SHOWCASE_TAG is set without SHOWCASE_SPEC_DIR: the"
+                      " working specifications must come from the tag")
+    if tag is not None:
+        return spec_dir, tag, tag
+    name = "the main branch" if ci else "the working tree"
+    return spec_dir or ROOT, name, "main"
+
+
+def spec_section(path, base, ref, repo):
+    """One document as a collapsed section, as Markdown lines."""
+    src = os.path.join(base, path)
+    if not os.path.isfile(src):
+        raise OSError(f"{TABLE_FILE}: spec document {path} is not in {base}")
+    with open(src, encoding="utf-8") as f:
+        lines = f.read().split("\n")
+    # The SPDX comments go directly before the section, unindented. Indented
+    # they are read as inline text, and the address in the last one becomes
+    # a mail link inside the comment.
+    n = 0
+    while n < len(lines) and COMMENT_RE.fullmatch(lines[n]):
+        n += 1
+    spdx, lines = lines[:n], lines[n:]
+    body = demote_headings(keep_indented(lines))
+    name = os.path.basename(path)
+    head = [f"[{path} on GitHub]({repo}/blob/{ref}/{path})", ""]
+    return (spdx + ["", f'??? abstract "{name}"', ""]
+            + [f"    {l}" if l.strip() else "" for l in head + body] + [""])
+
+
+def spec_page(markdown, src, entry, repo):
+    """The page's title, status and covers lines, the advisory and its
+    documents, in place of its placeholder block (SR-17)."""
+    parts = split_page(markdown)
+    if parts is None or not is_empty_body(parts[1]):
+        raise ValueError(f"{src}: has a spec: list and written content")
+    base, name, ref = spec_source()
+    lines = [
+        parts[0].rstrip("\n"), "",
+        status_line(entry), "",
+        covers_line(entry), "",
+        '!!! note "Working specification"', "",
+        "    " + ADVISORY.format(name), "",
+    ]
+    for path in entry["spec"]:
+        lines += spec_section(path, base, ref, repo)
+    return "\n".join(lines)
+
+
+def on_page_content(html, page, config, files):
+    """A page with a spec: list has no heading of its own under its title
+    (spec_page), so every other entry of its table of contents is from a
+    document, and is removed."""
+    if page.file.src_uri in SPECS:
+        for item in page.toc:
+            item.children = []
+    return html
+
+
 def on_page_markdown(markdown, page, config, files):
     src = page.file.src_uri
     ci, tag, demo = release()
     repo = config.get("repo_url", "").rstrip("/")
+    if src in SPECS:
+        markdown = spec_page(markdown, src, SPECS[src], repo)
     markdown = unlink_hidden(markdown)
     if src == LANDING:
         text = release_text(ci, tag, repo)

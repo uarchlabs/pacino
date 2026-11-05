@@ -16,6 +16,8 @@ on:
       - 'examples/fe_demo/docs/**'
       - 'tools/mkdocs_showcase.py'
       - 'tools/fe_release.py'
+      - 'tools/doc_status.yaml'
+      - 'tools/gen_doc_placeholders.py'
       - '.github/workflows/docs.yml'
 
 permissions:
@@ -50,7 +52,8 @@ jobs:
       # the checkout; tools/mkdocs_showcase.py takes the Showcase pages
       # from there. With no tag the pages come from main through the
       # docs/showcase/fe_demo symlink, and the landing page says they are
-      # unreleased.
+      # unreleased. The tag's planning/arch and planning/interfaces are the
+      # working specifications (SR-18), read from the same directory.
       - name: Showcase release
         run: |
           echo "SHOWCASE_CI=1" >> "$GITHUB_ENV"
@@ -63,9 +66,11 @@ jobs:
           rm -rf "$dir"
           mkdir -p "$dir"
           git archive "$tag" examples/fe_demo/docs examples/fe_demo/programs \
-            examples/fe_demo/waves | tar -x -C "$dir"
+            examples/fe_demo/waves planning/arch planning/interfaces \
+            | tar -x -C "$dir"
           echo "SHOWCASE_TAG=$tag" >> "$GITHUB_ENV"
           echo "SHOWCASE_DEMO_DIR=$dir/examples/fe_demo" >> "$GITHUB_ENV"
+          echo "SHOWCASE_SPEC_DIR=$dir" >> "$GITHUB_ENV"
           commit=$(git rev-parse "$tag^{commit}")
           echo "The Showcase pages are $tag's, commit $commit"
 

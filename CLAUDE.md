@@ -121,6 +121,12 @@ production-quality outputs.
   and use make -C <dir> or a subshell ( cd <dir> && ... ) only where
   a tool must run in another directory. Scratch files go in the
   session's scratchpad directory.
+  EXCEPTION: Firefox is installed as a snap and cannot read the
+  scratchpad. A task that checks pages with headless Firefox may use
+  ~/snap/firefox/common/<TASK-ID>_tmp for the browser profile and
+  screenshots, and for nothing else. This folder needs no listing in
+  Context Loaded or Deliverables. The IA removes it before writing
+  Results Capture and reports there that it was created and removed.
 - Create every file, scratch scripts included, with the Write tool,
   then run a script as python3 <file> or bash <file>. Do not create
   or change files with shell heredocs, redirects or python3 - <<EOF.
@@ -324,4 +330,3 @@ important. It must be defines first then structs
 
 Updated at the start of each experiment session. See the experiment
 prompt (e.g. BP-001.md) for the current module and task description.
-

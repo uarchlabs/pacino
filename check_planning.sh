@@ -158,10 +158,8 @@
 # fe_demo_scenarios.md, showcase_release_decisions.md), and for
 # CLAUDE.md as Jeff edited it (tables exempt from 80 columns). Updated
 # after DOC-012, session-083 (PROJECT_STATUS.md, fe_demo_tb_decisions.md,
-# fe_demo_scenarios.md). Updated for the FD-4 JAL chain, session-084
-# (PROJECT_STATUS.md, fe_demo_scenarios.md). Updated for the
-# description rework rulings, session-084 (PROJECT_STATUS.md,
-# fe_demo_scenarios.md, fe_demo_tb_decisions.md).
+# fe_demo_scenarios.md). Updated for the working specifications,
+# session-083 (PROJECT_STATUS.md, showcase_release_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -184,7 +182,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   bfd51475d3cd
-PLAN  PROJECT_STATUS.md                 07339fd49ca1
+PLAN  PROJECT_STATUS.md                 04c05f6e6ea6
 
 UNKN  CLAUDE.md                         b79ebafb114a
 
@@ -255,7 +253,7 @@ INTF  ubtb_interfaces.md          a8e591bbeda2
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
-SHOW  showcase_release_decisions.md   4708b8db70e0
+SHOW  showcase_release_decisions.md   6c9fb509db50
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

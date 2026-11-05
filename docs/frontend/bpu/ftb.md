@@ -18,6 +18,6 @@
     - Blog: [The RAS and the FTB: Design Choices at p2](https://uarchlabs.github.io/blog/the-ras-and-the-ftb-design-choices-at-p2/)
     - IA tasks: [BP-065](https://uarchlabs.github.io/pacino/sessions/#BP-065), [BP-066](https://uarchlabs.github.io/pacino/sessions/#BP-066), [BP-067](https://uarchlabs.github.io/pacino/sessions/#BP-067)
     - Frontend demo: [fd04_p2_override: p2 Override](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd04_p2_override.md)
-    - Frontend demo: [fd12_training: Predictor Training and the FTB Update Bubble](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd12_training.md)
+    - Frontend demo: [fd12_training: Predictor Training](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fd12_training.md)
 
 <!-- placeholder:end -->
