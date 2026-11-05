@@ -19,7 +19,7 @@ theme:
     accent: deep orange
   features:
     - navigation.tabs
-    - navigation.sections
+    - navigation.expand
     - navigation.top
     - navigation.indexes
     - search.suggest
@@ -34,6 +34,12 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - footnotes
+
+# The Frontend and MMU nav entries link headings by absolute path
+# (/pacino/...); MkDocs would note each one at INFO level.
+validation:
+  nav:
+    absolute_links: ignore
 
 hooks:
   - tools/mkdocs_showcase.py
@@ -105,10 +111,43 @@ nav:
 
   - Frontend:
     - Overview: frontend/overview.md
-    - Instruction Cache: frontend/icache/index.md
-    - Instruction Fetch: frontend/fetch/index.md
-    - Decode: frontend/decode/index.md
-    - Branch Prediction Unit: frontend/bpu/index.md
+    - Instruction Cache:
+      - frontend/icache/index.md
+      - Overview: /pacino/frontend/icache/#overview
+      - Tags: /pacino/frontend/icache/#tags
+      - Data Arrays: /pacino/frontend/icache/#data-arrays
+      - I-TLB: /pacino/frontend/icache/#i-tlb
+      - PLRU: /pacino/frontend/icache/#plru
+      - Victim Buffer: /pacino/frontend/icache/#victim-buffer
+      - MSHRs: /pacino/frontend/icache/#mshrs
+      - Prefetcher: /pacino/frontend/icache/#prefetcher
+      - IL2 Interface: /pacino/frontend/icache/#il2-interface
+    - Instruction Fetch:
+      - frontend/fetch/index.md
+      - Overview: /pacino/frontend/fetch/#overview
+      - Fetch Target Queue: /pacino/frontend/fetch/#fetch-target-queue
+      - Branch Detector: /pacino/frontend/fetch/#branch-detector
+      - Pre-Fusion Detector: /pacino/frontend/fetch/#pre-fusion-detector
+    - Decode:
+      - frontend/decode/index.md
+      - Overview: /pacino/frontend/decode/#overview
+      - RVC Expander: /pacino/frontend/decode/#rvc-expander
+      - Fusion Combiner: /pacino/frontend/decode/#fusion-combiner
+      - Integer Decode: /pacino/frontend/decode/#integer-decode
+      - Float Decode: /pacino/frontend/decode/#float-decode
+      - Vector Decode: /pacino/frontend/decode/#vector-decode
+    - Branch Prediction Unit:
+      - frontend/bpu/index.md
+      - Overview: /pacino/frontend/bpu/#overview
+      - uBTB: /pacino/frontend/bpu/#ubtb
+      - TAGE: /pacino/frontend/bpu/#tage
+      - Statistical Corrector: /pacino/frontend/bpu/#statistical-corrector
+      - Fetch Target Buffer: /pacino/frontend/bpu/#fetch-target-buffer
+      - Loop Predictor: /pacino/frontend/bpu/#loop-predictor
+      - ITTage: /pacino/frontend/bpu/#ittage
+      - Return Address Stack: /pacino/frontend/bpu/#return-address-stack
+      - History Module: /pacino/frontend/bpu/#history-module
+      - Dual Prediction: /pacino/frontend/bpu/#dual-prediction
 
   - Backend:
     - Overview: backend/overview.md
@@ -193,7 +232,19 @@ nav:
       - MMIO Bridge: cache/l2/mmio_bridge.md
       - Error Handling: cache/l2/error_handling.md
 
-  - MMU: mmu/index.md
+  - MMU:
+    - mmu/index.md
+    - Overview: /pacino/mmu/#overview
+    - L1 TLB: /pacino/mmu/#l1-tlb
+    - L2 TLB:
+      - Page Cache: /pacino/mmu/#page-cache
+      - Page Table Walker: /pacino/mmu/#page-table-walker
+      - Last Level Page Table Walker: /pacino/mmu/#last-level-page-table-walker
+      - Hypervisor Page Table Walker: /pacino/mmu/#hypervisor-page-table-walker
+      - Miss Queue: /pacino/mmu/#miss-queue
+      - Prefetcher: /pacino/mmu/#prefetcher
+    - PMP: /pacino/mmu/#pmp
+    - PMA: /pacino/mmu/#pma
 
   - System:
     - CSR: system/csr.md
