@@ -201,119 +201,19 @@
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/dual_prediction/</loc>
+         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/</loc>
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/ftb/</loc>
+         <loc>https://uarchlabs.github.io/pacino/frontend/decode/</loc>
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/history_module/</loc>
+         <loc>https://uarchlabs.github.io/pacino/frontend/fetch/</loc>
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/ittage/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/loop_predictor/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/overview/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/ras/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/sc/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/tage/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/bpu/ubtb/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/decode/float_decode/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/decode/fusion_combiner/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/decode/integer_decode/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/decode/overview/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/decode/rvc_expander/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/decode/vector_decode/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/fetch/branch_detector/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/fetch/ftq/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/fetch/overview/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/fetch/prefusion_detector/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/data_arrays/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/il2_interface/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/itlb/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/mshrs/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/overview/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/plru/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/prefetcher/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/tags/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/frontend/icache/victim_buffer/</loc>
+         <loc>https://uarchlabs.github.io/pacino/frontend/icache/</loc>
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
@@ -401,43 +301,7 @@
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l1_tlb/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/overview/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/pma/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/pmp/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l2tlb/hypervisor_ptw/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l2tlb/ll_ptw/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l2tlb/miss_queue/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l2tlb/page_cache/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l2tlb/prefetcher/</loc>
-         <lastmod>2026-11-05</lastmod>
-    </url>
-    <url>
-         <loc>https://uarchlabs.github.io/pacino/mmu/l2tlb/ptw/</loc>
+         <loc>https://uarchlabs.github.io/pacino/mmu/</loc>
          <lastmod>2026-11-05</lastmod>
     </url>
     <url>
