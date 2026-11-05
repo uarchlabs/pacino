@@ -16,6 +16,49 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-083, after DOC-013: working specifications, part 1 (TAGE).
+
+DOC-013 COMPLETE (Jeff). 1h46m52s active; 22% context. Task file
+written by the PA; its results were assessed in another PA session.
+  regress.sh 274 targets PASS at 7414932 (pass not recorded: tree
+    dirty; Jeff reran after committing). tools/tests 76 OK (64 at
+    baseline). mkdocs build 0 warnings, local and CI form. Every page
+    but frontend/bpu/tage/ byte-identical to the baseline.
+  Built: spec: in tools/doc_status.yaml and gen_doc_placeholders.py
+    (path checks); the include in tools/mkdocs_showcase.py, before
+    unlink_hidden: advisory, nine collapsed sections, 137 headings
+    demoted and kept out of the table of contents, 60 indented
+    paragraphs fenced, SPDX comments before each section; the workflow
+    extracts the tag's planning/arch and planning/interfaces
+    (SHOWCASE_SPEC_DIR); tools/spec_map_proposed.yaml, 18 of 44 pages.
+  Live: https://uarchlabs.github.io/pacino/frontend/bpu/tage/ (Jeff
+    checked).
+  PA error: Problem 1 required --check to report 0 would change without
+    checking the baseline, which was 2 (demo-title drift in ftb.md and
+    fetch/overview.md). Jeff ran the generator; 0 now.
+  RULED (Jeff): a document missing at the tag is shown as a note with
+    a warning, not a stop (SR-18; DOC-013 built a stop); a unit's
+    documents repeat on its sub-pages (SR-17); status_decisions.md
+    added to check_planning.sh; CLAUDE.md: the Firefox snap folder
+    exception.
+  Part 2 (not yet written): the note in place of the stop; the
+    mapping with unit documents repeated; the truncated covers lines of
+    system/csr.md and system/exceptions.md; the word comparison of each
+    newly included document with its built section, and the planning
+    documents' link warnings listed separately.
+  Not fixed, seen: unindented lines still join (the Legend of
+    tage_cntrl_ctr_update_rules.md); fenced paragraphs show backticks
+    literally (38 in tage_table_interfaces.md); the workflow's git
+    archive line first ran at the deploy.
+  IA slips: one empty python3 - <<'X' heredoc (CLAUDE.md forbids it);
+    the Firefox folder outside the scratchpad, now allowed.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, showcase_release_decisions.md, CLAUDE.md.
+
+Next free: BP-141, SYS-003, DOC-014, INFRA-014, TOOLS-007, TD#196.
+
+---
 ## Session-083: working specifications on the unwritten doc pages.
 
 Documents only. No task run.

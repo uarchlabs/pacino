@@ -150,14 +150,24 @@ SR-17  A doc page whose tools/doc_status.yaml entry has a spec: list
        status line and "This page will cover" line. The documents are
        shown as they are, header, status line and history included;
        nothing under planning/ or docs/ is changed. A page without a
-       spec: list is unchanged (Jeff, session-083).
+       spec: list is unchanged (Jeff, session-083). A document that
+       covers a unit is listed on every page of that unit, its
+       overview and each sub-page it covers (Jeff, session-083, after
+       DOC-013). A page with written content and a spec: list, an
+       empty spec: list, or a path listed twice stops the build
+       (DOC-013).
 SR-18  In CI the documents are the latest tag's (SR-4), extracted with
        the Showcase pages (SR-6a); the advisory names the tag, and each
        document links to its file on GitHub at the tag. A local build
        (mkdocs serve) reads the working tree, the advisory says so, and
        the links are to main. The spec: lists are read from the
        checkout's tools/doc_status.yaml, main in CI, as the shown list
-       is (SR-14).
+       is (SR-14). The workflow passes the tag's extracted planning/
+       to the hook as SHOWCASE_SPEC_DIR (DOC-013). A listed document
+       that is not in the tag is shown as a one-line note naming it and
+       the tag, in place of its section, and the build warns; it does
+       not stop the build (Jeff, session-083, after DOC-013; DOC-013
+       built a stop, to be changed in part 2).
 SR-19  The documents keep their license, Apache-2.0, and their SPDX
        header; the advisory states the license. The site footer's CC BY
        4.0 line is not changed for these pages, for the time being
@@ -190,4 +200,8 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
               SR-17 to SR-19 (Jeff's spec pages prompt); SR-6a the tag's
               planning/arch/ and planning/interfaces/. Open and History
               renumbered 6 and 7.
+  2026-11-04  session-083, after DOC-013 (Jeff). SR-17 a unit's
+              document on every page of the unit, and the build stops
+              DOC-013 added; SR-18 SHOWCASE_SPEC_DIR, and a document not
+              in the tag shown as a note with a warning.
 ```
