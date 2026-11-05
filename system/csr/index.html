@@ -64,6 +64,22 @@
   <script data-goatcounter="https://uarchlabs.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
   
+  
+  <style>
+    .md-tabs__item:nth-child(n+6) .md-tabs__link {
+      opacity: .35;
+    }
+    .md-tabs__item:nth-child(n+6) .md-tabs__link:hover,
+    .md-tabs__item:nth-child(n+6) .md-tabs__link:focus {
+      opacity: .6;
+    }
+    @media screen and (max-width: 76.234375em) {
+      .md-nav--primary > .md-nav__list > .md-nav__item:nth-child(n+6)
+        > .md-nav__link {
+        opacity: .45;
+      }
+    }
+  </style>
 
   </head>
   
@@ -262,13 +278,13 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../frontend/overview/" class="md-tabs__link">
+        <a href="../../showcase/" class="md-tabs__link">
           
   
   
     
   
-  Frontend
+  Showcase
 
         </a>
       </li>
@@ -284,13 +300,13 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../showcase/" class="md-tabs__link">
+        <a href="../../frontend/overview/" class="md-tabs__link">
           
   
   
     
   
-  Showcase
+  Frontend
 
         </a>
       </li>
@@ -341,7 +357,7 @@
   
     
   
-  Memory Subsystem
+  Memory
 
         </a>
       </li>
@@ -373,7 +389,7 @@
   
     
   
-  Cache Subsystem
+  Caches
 
         </a>
       </li>
@@ -566,11 +582,7 @@
     
       
         
-      
-        
-      
-        
-      
+          
         
       
         
@@ -591,14 +603,15 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-            
+          <div class="md-nav__link md-nav__container">
+            <a href="../../showcase/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
     
   
-    Frontend
+    Showcase
   
 
     
@@ -606,47 +619,27 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Frontend
+    Showcase
   
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
               
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
             
               
                 
@@ -656,6 +649,40 @@
   
     
     
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
       
         
       
@@ -698,7 +725,7 @@
   <span class="md-ellipsis">
     
   
-    Instruction Cache
+    Frontend Demos
   
 
     
@@ -711,1234 +738,6 @@
         
         <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_2">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Instruction Cache
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/tags/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Tags
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/data_arrays/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data Arrays
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/itlb/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    I-TLB
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/plru/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    PLRU
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/victim_buffer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Victim Buffer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/mshrs/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    MSHRs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/prefetcher/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Prefetcher
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/icache/il2_interface/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    IL2 Interface
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Instruction Fetch
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Instruction Fetch
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/fetch/overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/fetch/ftq/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Fetch Target Queue
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/fetch/branch_detector/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Branch Detector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/fetch/prefusion_detector/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Pre-Fusion Detector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Decode
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Decode
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/decode/overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/decode/rvc_expander/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    RVC Expander
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/decode/fusion_combiner/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Fusion Combiner
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/decode/integer_decode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Integer Decode
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/decode/float_decode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Float Decode
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/decode/vector_decode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Vector Decode
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Branch Prediction Unit
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Branch Prediction Unit
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/ubtb/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    uBTB
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/tage/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    TAGE
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/sc/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Statistical Corrector
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/ftb/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Fetch Target Buffer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/loop_predictor/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Loop Predictor
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/ittage/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    ITTage
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/ras/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Return Address Stack
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/history_module/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    History Module
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../frontend/bpu/dual_prediction/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Dual Prediction
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-          
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="../../showcase/" class="md-nav__link ">
-              
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Showcase
-  
-
-    
-  </span>
-  
-  
-
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Showcase
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Frontend Demos
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2663,6 +1462,1223 @@
     
   
     fe_top Connectivity Inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frontend
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Frontend
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Instruction Cache
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Instruction Cache
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/tags/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tags
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/data_arrays/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/itlb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I-TLB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/plru/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLRU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/victim_buffer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Victim Buffer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/mshrs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MSHRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/prefetcher/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prefetcher
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/icache/il2_interface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IL2 Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Instruction Fetch
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Instruction Fetch
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/fetch/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/fetch/ftq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fetch Target Queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/fetch/branch_detector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Branch Detector
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/fetch/prefusion_detector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-Fusion Detector
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decode
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decode
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/decode/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/decode/rvc_expander/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RVC Expander
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/decode/fusion_combiner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fusion Combiner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/decode/integer_decode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integer Decode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/decode/float_decode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Float Decode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/decode/vector_decode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Decode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Branch Prediction Unit
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Branch Prediction Unit
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/ubtb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    uBTB
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/tage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TAGE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/sc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statistical Corrector
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/ftb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fetch Target Buffer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/loop_predictor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Loop Predictor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/ittage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ITTage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/ras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Return Address Stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/history_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../frontend/bpu/dual_prediction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual Prediction
   
 
     
@@ -3860,7 +3876,7 @@
   <span class="md-ellipsis">
     
   
-    Memory Subsystem
+    Memory
   
 
     
@@ -3876,7 +3892,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Memory Subsystem
+    Memory
   
 
           </label>
@@ -4741,7 +4757,7 @@
   <span class="md-ellipsis">
     
   
-    Cache Subsystem
+    Caches
   
 
     
@@ -4757,7 +4773,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Cache Subsystem
+    Caches
   
 
           </label>
@@ -6187,20 +6203,216 @@
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 <h1 id="control-and-status-registers">Control and Status Registers<a class="headerlink" href="#control-and-status-registers" title="Permanent link">&para;</a></h1>
-<!-- placeholder:start -->
-<!-- Generated by tools/gen_doc_placeholders.py from tools/doc_status.yaml.
-     Edit the table and rerun; edits made here are overwritten. -->
-
+<p><strong>Status:</strong> RTL planned, interim documentation</p>
 <div class="admonition note">
-<p class="admonition-title">Not written yet</p>
-<p><strong>Status:</strong> RTL planned. Documentation planned.</p>
-<p>This page will cover the control and status registers; the CSR layouts and group structs are in csr_pkg.</p>
-<p>Meanwhile:</p>
-<ul>
-<li>IA tasks: <a href="https://uarchlabs.github.io/pacino/sessions/#SYS-001">SYS-001</a>, <a href="https://uarchlabs.github.io/pacino/sessions/#SYS-002">SYS-002</a></li>
-</ul>
+<p class="admonition-title">Working specification</p>
+<p>This page shows the planning documents and specifications for RTL tag fe-1.0.0.</p>
 </div>
-<!-- placeholder:end -->
+<!-- SPDX-License-Identifier: Apache-2.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
+
+<details class="abstract">
+<summary>csr_decisions.md</summary>
+<p><a href="https://github.com/uarchlabs/pacino/blob/fe-1.0.0/planning/arch/csr_decisions.md">planning/arch/csr_decisions.md on GitHub</a></p>
+<h3 id="csr-decisions">CSR Decisions<a class="headerlink" href="#csr-decisions" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code> FILE:    csr_decisions.md
+ SOURCE:  session-079, TD#178
+ STATUS:  DRAFT
+ UPDATED: 2026-10-14
+ CONTACT: Jeff Nye
+</code></pre></div>
+<p>Owns the CSR-N and CSR-UN registries.</p>
+<hr />
+<h4 id="1-organization">1. Organization<a class="headerlink" href="#1-organization" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>CSR-1  rtl/core/csr/rtl/csr_pkg.sv declares, for each CSR in
+       sections 2 and 3:
+         CSR_&lt;NAME&gt;_ADDR   12-bit localparam
+         &lt;name&gt;_t          packed struct, full XLEN layout
+         encodings         MODE values, PMP A-field values
+         reset value
+       and the three group structs of section 4.
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>CSR-2  rtl/core/csr/tb/csr_tb_pkg.sv (testbench only) holds a
+       shadow of every CSR in csr_pkg and provides:
+         csr_write(addr, value)   applies the write rules of CSR-5
+         csr_read(addr)
+         pack functions           shadow -&gt; fe_cfg_t, fe_csr_t,
+                                  ptw_csr_t
+         csr_reset()              every CSR, priv, V and
+                                  ext_enable to reset (CSR-7)
+         set_ext_enable(v)        ext_enable has no address
+         set_priv(p), set_v(v)    priv and V have no address
+         set_pmp_g(g)             grain of the read-back rules; 10
+                                  unless a PMP checker testbench
+                                  builds another PMP_GRAN_LG2
+         named setters            each field of 0x7C0 and 0x7C1
+       The shadow is a class with static members behind these
+       package functions. An address with no CSR in csr_pkg stops the
+       simulation ($fatal).
+       Every testbench that drives a group member takes its value
+       from csr_tb_pkg. Testbenches of fe_top, the ITLB, the PMP
+       checker and the walker drive the struct ports from the pack
+       functions; testbenches of other modules drive their existing
+       ports from the struct members.
+</code></pre></div>
+<hr />
+<h4 id="2-custom-csrs">2. Custom CSRs<a class="headerlink" href="#2-custom-csrs" title="Permanent link">&para;</a></h4>
+<p>Machine-level read/write, range 0x7C0-0x7FF.</p>
+<div class="highlight"><pre><span></span><code>  0x7C0   CSR_7C0, predictor enables
+  bit     field                when 1
+  0       sc_enable            SC participates in prediction and update
+  1       ftb_fastpath_en      saturated FTB counter may commit at p2
+  2       tage_enable_aging    TAGE useful-counter aging runs
+  3       ittage_enable_aging  ITTAGE useful-counter aging runs
+  63:4    reserved, read 0, writes ignored
+
+  0x7C1   CSR_7C1, aging intervals
+  bits    field
+  31:0    tage_aging_interval
+  63:32   ittage_aging_interval
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>CSR-3  sc_enable = 0: no SC update is issued, the SC prediction
+       response is not consumed or waited on, SC-related FTB state
+       is still buffered. PROPOSED.
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>CSR-4  ext_enable is not a CSR and has no address. It is a member of
+       fe_cfg_t of type decode_pkg::ext_enable_t (one enable per
+       decoded extension), set only through set_ext_enable, reset
+       RVA23_ENABLE (all ones). Clearing a bit makes decode treat that
+       extension as illegal; such a configuration is not RVA23.
+</code></pre></div>
+<hr />
+<h4 id="3-standard-csrs">3. Standard CSRs<a class="headerlink" href="#3-standard-csrs" title="Permanent link">&para;</a></h4>
+<p>XLEN 64. Fields as defined in [PRIV]; the table gives the implemented
+subset. Bits not listed read 0.</p>
+<div class="highlight"><pre><span></span><code>  addr   CSR       field   bits    implemented
+  0x180  satp      MODE    63:60   0 Bare, 8 Sv39
+                   ASID    59:44   16 bits
+                   PPN     43:0    23:0 (PPN_WIDTH 24)
+  0x280  vsatp     MODE    63:60   0 Bare, 8 Sv39
+                   ASID    59:44   16 bits
+                   PPN     43:0    28:0 (GPA_WIDTH 41 - 12)
+  0x680  hgatp     MODE    63:60   0 Bare, 8 Sv39x4
+                   VMID    57:44   14 bits
+                   PPN     43:0    23:0; 1:0 read 0 in Sv39x4
+  0x30A  menvcfg   PBMTE   62
+                   ADUE    61
+  0x60A  henvcfg   PBMTE   62      read 0 when menvcfg.PBMTE = 0
+                   ADUE    61      read 0 when menvcfg.ADUE = 0
+  0x3A0  pmpcfg0   entries 0-7, one byte each:
+  0x3A2  pmpcfg2   entries 8-15  L 7, A 4:3, X 2, W 1, R 0
+                                   A: 0 OFF, 1 TOR, 3 NAPOT
+                                   (NA4 not selectable, G = 10)
+  0x3B0- pmpaddr0  ADDR    53:0    33:0 (PA_WIDTH 36)
+  0x3BF  -15
+</code></pre></div>
+<p>priv and V are hart state, not CSRs. priv encoding: 00 U, 01 S,
+11 M.</p>
+<p>CSR-5  csr_write rules:</p>
+<div class="highlight"><pre><span></span><code>  satp     unsupported MODE: no field written
+  hgatp    unsupported MODE: MODE unchanged, VMID and PPN written
+  vsatp    unsupported MODE: no field written. PROPOSED
+  pmpcfg   locked entry (L = 1): entry and its pmpaddr not written
+           A = NA4 written: stored as NAPOT
+           R = 0 with W = 1 written: stored with W = 0
+  pmpaddr  not written when the next entry is locked with A = TOR
+           read-back with G = 10: NAPOT entry, bits 8:0 read 1;
+           OFF or TOR entry, bits 9:0 read 0
+  henvcfg  PBMTE read 0 when menvcfg.PBMTE = 0
+           ADUE read 0 when menvcfg.ADUE = 0
+  all      unimplemented bits read 0
+</code></pre></div>
+<pre><code>   Read-0 rules apply at csr_read and in the pack functions; the
+   stored bit is kept.
+</code></pre>
+<hr />
+<h4 id="4-group-structs-and-rtl-connection">4. Group structs and RTL connection<a class="headerlink" href="#4-group-structs-and-rtl-connection" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>CSR-6  fe_top and the ITLB take fe_csr_t, fe_top takes fe_cfg_t and
+       the walker takes ptw_csr_t, as whole-group ports. The PMP
+       checker takes pmpcfg and pmpaddr, entries 0 to PMP_ENTRIES-1,
+       as csr_pkg pmpcfg_ent_t and pmpaddr_imp_t arrays; its
+       privilege input is not a group member (the walker's site
+       checks at S). Inside fe_top the members drive the existing
+       ports of the consumers below. Member names are the former
+       port names without the csr_itlb_ or csr_ptw_ prefix.
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>  fe_cfg_t   source: 0x7C0, 0x7C1, ext_enable
+  member                  consumer
+  sc_enable               bp_cluster, FTQ (sc carries the port,
+                          unused)
+  ftb_fastpath_en         bp_cluster (FTB fast path)
+  tage_enable_aging       tage
+  tage_aging_interval     tage
+  ittage_enable_aging     ittage
+  ittage_aging_interval   ittage
+  ext_enable              decode
+
+  fe_csr_t   source: satp, vsatp, hgatp, pmpcfg, pmpaddr, priv, V
+  member                  consumer
+  v, priv                 ITLB, ITLB PMP checker (priv only)
+  satp MODE, ASID         ITLB
+  vsatp MODE, ASID        ITLB
+  hgatp MODE, VMID        ITLB
+  pmpcfg[16], pmpaddr[16] ITLB PMP checker
+
+  ptw_csr_t  source: satp, vsatp, hgatp, menvcfg, henvcfg, pmpcfg,
+             pmpaddr
+  member                  consumer
+  satp, vsatp, hgatp
+    MODE, PPN             walker
+  menvcfg ADUE, PBMTE     walker
+  henvcfg ADUE, PBMTE     walker
+  pmpcfg[16], pmpaddr[16] walker PMP checker
+</code></pre></div>
+<pre><code>   fe_top takes fe_cfg_t and fe_csr_t and distributes the
+   members above. The walker is outside fe_top and takes
+   ptw_csr_t directly. The walker samples the MODE, PPN, ADUE
+   and PBMTE members at the start of each walk; its PMP checker
+   reads pmpcfg and pmpaddr every cycle.
+</code></pre>
+<p>CSR-7  Reset values (csr_reset):</p>
+<div class="highlight"><pre><span></span><code>  0x7C0     0x1                  sc_enable 1, the other three 0
+  0x7C1     0
+  satp      0x0000_0000_0008_F000  MODE Bare, ASID 0, PPN 0x8F000
+  vsatp     0
+  hgatp     0
+  menvcfg   0x4000_0000_0000_0000  PBMTE 1, ADUE 0
+  henvcfg   0x4000_0000_0000_0000  PBMTE 1, ADUE 0
+  pmpcfg0   0x1F                 entry 0 NAPOT RWX, entries 1-7 OFF
+  pmpcfg2   0
+  pmpaddr0  0x3_FFFF_FFFF        every implemented bit
+  pmpaddr1-15  0
+  priv      11 (M)
+  V         0
+  ext_enable  RVA23_ENABLE (all ones)
+</code></pre></div>
+<hr />
+<h4 id="5-open">5. Open<a class="headerlink" href="#5-open" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>CSR-U1 Names of the CSRs at 0x7C0 and 0x7C1.
+CSR-U2 Hardware delivery of CSR state to the groups, and ordering
+       of a CSR write against fetch, SFENCE.VMA, HFENCE, FENCE.I.
+</code></pre></div>
+<hr />
+<h4 id="6-references">6. References<a class="headerlink" href="#6-references" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>  [PRIV]   RISC-V Privileged Architecture, ISA manual v20260120
+           https://docs.riscv.org/reference/isa/v20260120/priv/priv-csrs.html
+           https://docs.riscv.org/reference/isa/v20260120/priv/machine.html
+           https://docs.riscv.org/reference/isa/v20260120/priv/supervisor.html
+           https://docs.riscv.org/reference/isa/v20260120/priv/hypervisor.html
+  [RVA23]  RVA23 Profiles v1.0
+           https://docs.riscv.org/reference/rva23/v1.0/rva23-profiles.html
+</code></pre></div>
+<hr />
+<h4 id="7-document-history">7. Document History<a class="headerlink" href="#7-document-history" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>  2026-10-13  session-079. Created for TD#178.
+  2026-10-14  session-079, after SYS-001. CSR-2 setters, CSR-5 rules
+              (NA4, R=0/W=1, next-entry TOR lock, henvcfg.PBMTE),
+              CSR-6 port shapes and walker sampling, CSR-7 reset
+              values.
+  2026-10-14  session-080, after SYS-002. CSR-5: every rule built.
+</code></pre></div>
+</details>
 
 
 
