@@ -6689,7 +6689,7 @@
       <div class="section-label">// overview</div>
       <div class="overview-quote">"I'm out of order? You're out of order!"</div>
       <p class="overview-text">
-        Pacino is an open source 8-issue out-of-order RISC-V processor targeting the RVA23S64 profile. RTL is written in SystemVerilog, simulated with Verilator, and verified with a combination of directed tests, functional coverage, formal analysis via SymbiYosys and riscv-formal, and spike-dasm as an independent oracle. Gate synthesis targets Yosys with FPGA mapping via Quartus and Vivado. Design decisions, AI-assisted co-design records, and architectural rationale are committed alongside the RTL.
+        Pacino is an open source 8-issue out-of-order RISC-V processor targeting the RVA23S64 profile. RTL is written in SystemVerilog, simulated with Verilator, and verified with directed tests, line coverage and mutation testing, with spike as an independent decode oracle. Formal analysis and physical design are in progress; the physical design toolchain has not been chosen. Design decisions, AI-assisted co-design records, and architectural rationale are committed alongside the RTL.
       </p>
     </section>
 
@@ -6699,7 +6699,7 @@
       <div class="method-block" style="padding:14px 20px;">
         <p style="font-family:monospace;font-size:12px;line-height:2;color:var(--muted);">
           <span style="color:var(--accent);">●</span>&nbsp; Frontend RTL complete: BPU, FTQ, IFU, I-cache, ITLB, PTW, decode<br>
-          <span style="color:var(--accent);">●</span>&nbsp; Frontend demo: 24 scenarios, waveforms and write-ups, see examples/fe_demo<br>
+          <span style="color:var(--accent);">●</span>&nbsp; Frontend demo: 24 scenarios, waveforms and write-ups, <a href="showcase/">see the Showcase</a><br>
           <span style="color:var(--accent);">●</span>&nbsp; BP-139/BP-140: every FTB branch predicted at any slot count, see IA Tasks tab<br>
           <span style="color:var(--accent);">●</span>&nbsp; BP-138: two prediction defects found by running the demo, see IA Tasks tab<br>
           <span style="color:var(--accent);">●</span>&nbsp; BPC testbench: 973 checks, full line coverage, mutation-tested, see Blog<br>
