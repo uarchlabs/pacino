@@ -119,6 +119,8 @@ fi
   [ -d "$SRC/.git" ] || git clone "$SURFER_URL" "$SRC"
   # The lock as committed, so the checkout is clean; the wellen pin
   # below changes it again.
+  git -C "$SRC" update-index --no-assume-unchanged Cargo.lock 2>/dev/null ||
+    true
   git -C "$SRC" checkout --quiet -- Cargo.lock 2>/dev/null || true
   if ! git -C "$SRC" checkout --quiet "$SURFER_REF" 2>/dev/null; then
     git -C "$SRC" fetch --tags origin
@@ -126,6 +128,11 @@ fi
   fi
   git -C "$SRC" submodule update --init --recursive
   (cd "$SRC" && cargo update --quiet -p wellen --precise "$WELLEN_VERSION")
+  # The wellen pin is the one intended change to the clone; hide it from
+  # git describe --dirty, which Surfer's build.rs uses for --version.
+  # Without this a fresh clone builds as v0.7.0-35-g010b840-dirty and
+  # verify_surfer rejects it.
+  git -C "$SRC" update-index --assume-unchanged Cargo.lock
   cargo install --locked --no-track --force --jobs "$JOBS" \
     --root "$RVA_ROOT/tools" --path "$SRC/surfer"
 )
