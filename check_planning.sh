@@ -169,8 +169,10 @@
 # session-083 (Jeff): without it only mismatches are listed.
 # Updated after DOC-014 and when DOC-015 was written, session-083
 # (PROJECT_STATUS.md, showcase_release_decisions.md). Updated after
-# DOC-015, session-083 (PROJECT_STATUS.md); CLAUDE.md as Jeff edited it
-# after DOC-015 is not yet recorded.
+# DOC-015, session-083 (PROJECT_STATUS.md). Updated when DOC-015 was
+# assessed, session-084 (PROJECT_STATUS.md,
+# showcase_release_decisions.md), and for CLAUDE.md as Jeff edited it
+# after DOC-015 (the Commands section).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -213,9 +215,9 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   80f5097f26c8
-PLAN  PROJECT_STATUS.md                 7b9460c384cf
+PLAN  PROJECT_STATUS.md                 9c8653c11c4c
 
-UNKN  CLAUDE.md                         32e0de73df01
+UNKN  CLAUDE.md                         6057733920a6
 
 ARCH  bp_arb_spec.md                    e948ad56ba7e
 ARCH  bp_cluster.md                     187952e94e30
@@ -285,7 +287,7 @@ INTF  ubtb_interfaces.md          a8e591bbeda2
 OBSV  fe_trace_decisions.md           5ec595a73e62
 OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
-SHOW  showcase_release_decisions.md   7fa5fbff6168
+SHOW  showcase_release_decisions.md   5aed9f2b3171
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

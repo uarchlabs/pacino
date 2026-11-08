@@ -177,6 +177,18 @@ SR-17a Each frontend unit (instruction cache, instruction fetch,
        document is named on each heading it covers and shown once. A
        heading with written content and a spec: list stops the build,
        as a page does under SR-17.
+       A heading's table entry is keyed "<page>#<heading text>", for
+       example "frontend/icache/index.md#Tags" (DOC-015). A heading
+       with no document shows the generator's status form, for example
+       "RTL planned. Documentation planned." (Fusion Combiner), with no
+       Specification line (Jeff, session-084). A page's own headings
+       keep their plain ids (#tage, not #tage_1): where a heading inside
+       a shown document takes the same id first, the hook exchanges the
+       two ids and the links to them (Jeff, session-084). A listed
+       heading missing from its page stops the build; a key with no
+       page, or a heading written twice on a page, is stopped by
+       gen_doc_placeholders.py only, not yet by the build (DOC-015; to
+       be added to the hook).
 SR-18  In CI the documents are the latest tag's (SR-4), extracted with
        the Showcase pages (SR-6a); the advisory reads, in full, "This
        page shows the planning documents and specifications for RTL tag
@@ -236,4 +248,8 @@ SR-U1  A GitHub Release per tag with a short changelog. Optional; not
   2026-11-05  session-083, after DOC-014 (Jeff). SR-17a: one page per
               frontend unit and for the MMU, the documents shown once in
               each page's Overview and named under each heading.
+  2026-11-08  session-084, after DOC-015 (Jeff). SR-17a the key form,
+              the status form of a heading with no document, plain ids
+              for a page's own headings, and the two cases the build
+              does not yet stop.
 ```

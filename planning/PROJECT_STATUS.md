@@ -16,6 +16,43 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-084: DOC-015 assessed; SR-17a recorded.
+
+DOC-015 ASSESSED (PA): complete as the task asked; pushed and live
+  (/pacino/frontend/{icache,fetch,decode,bpu}/ and /pacino/mmu/ load,
+  the 39 block pages are gone). Evidence mechanical: 39 entries carried
+  with 0 mismatches, word comparison equal in 59 sections, 105 other
+  pages equal to the baseline, 0 build warnings, tools/tests 89 OK,
+  regress.sh 274 targets PASS.
+  Record defects: regress.sh piped through tail, git sha line lost;
+    one cd, one shell redirect and a 12 GB scratch copy of tools/,
+    disclosed by the IA. DOC-015 ran before the Commands section of
+    CLAUDE.md; the next IA task is the first test of it.
+RULED (Jeff, taking the PA's recommendations):
+  - a page's own headings keep their plain ids (#tage), by the hook's
+    id exchange (SR-17a).
+  - a heading with no document (Fusion Combiner, Pre-Fusion Detector)
+    uses the heading form with the generator's status line (SR-17a).
+  - a key with no page and a heading written twice, now stopped by the
+    generator only, to be added to the hook in a later small task; not
+    urgent, not tasked.
+  - not pursued: the baseline size difference (33.6 MB recorded by
+    DOC-014, 32.9 MB measured by DOC-015); the Specification link
+    landing just under the sticky header.
+SR-17a recorded: the "<page>#<heading text>" key form, the no-document
+  status form, plain ids, and the two cases the build does not yet stop.
+CLAUDE.md as Jeff edited it after DOC-015 (the Commands section) now
+  recorded in check_planning.sh, from the file at c48980c.
+Small item: docs/mmu/l2tlb/ is an empty, untracked directory in Jeff's
+  working copy; rmdir locally.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, showcase_release_decisions.md, and
+CLAUDE.md's checksum recorded.
+
+Next free: BP-141, SYS-003, DOC-016, INFRA-014, TOOLS-007, TD#196.
+
+---
 ## Session-083, after DOC-015: one page per unit; handoff 084.
 
 DOC-015 COMPLETE (Jeff). 36m17s active; 36% context. Task file written
