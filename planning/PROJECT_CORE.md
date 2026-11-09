@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-05
+ UPDATED: 2026-11-09
  CONTACT: Jeff Nye
 ```
 
@@ -49,7 +49,7 @@ nowhere else.
         ia_context/ia_handoffs/.
 ```
 
-Task IDs use six prefixes:
+Task IDs use seven prefixes:
 
 ```
   BP-NNN     a BPU or front-end task, RTL or specification
@@ -63,6 +63,8 @@ Task IDs use six prefixes:
              (since session-079)
   DOC-NNN    demonstration and documentation: examples/, the
              showcase, generated documentation (since session-080)
+  PERF-NNN   performance analysis: perf/, the trace harness and its
+             runs (since session-084)
 ```
 
 A PA-direct edit -- a planning document the PA drafts and Jeff
@@ -372,7 +374,7 @@ Claude Code proposes (subject to Jeff review):
   planning/       specification and decision record. See below.
   prompts/        one file per task, BP-NNN.md / INFRA-NNN.md /
                   COMP-NNN.md / TOOLS-NNN.md / SYS-NNN.md /
-                  DOC-NNN.md
+                  DOC-NNN.md / PERF-NNN.md
   templates/      TASK_TEMPLATE.md
   pa_handoffs/    session_handoff-NNN.md, PA to next PA session
   ia_context/
@@ -385,8 +387,11 @@ Claude Code proposes (subject to Jeff review):
                   tools/regress_demo.sh, not tools/regress.sh
   misc/           notes outside the planning record:
                   ras_theory_of_operation.md
+  perf/           performance harness, PERF tasks (PF-2); created
+                  by the first PERF task that writes code
   rtl/            see Project Structure in CLAUDE.md
-  tools/          tools/bin install dir, riscv-opcodes submodule
+  tools/          tools/bin install dir, riscv-opcodes submodule;
+                  external repositories as submodules (PF-2)
 ```
 
 ---
@@ -410,6 +415,8 @@ Claude Code proposes (subject to Jeff review):
                         format
   planning/docs/        planning for the generated documentation,
                         which is written to docs/
+  planning/perf/        performance analysis: workloads, the
+                        harness, configurations and metrics
 ```
 
 A decision goes in arch/. A port list goes in interfaces/. When
@@ -586,6 +593,9 @@ planning/
     fe_trace_decisions.md    trace events, operation identity and
                              the text format. Owns TR-N, TR-UN
   docs/                      empty
+  perf/
+    perf_decisions.md        performance analysis on the CBP traces.
+                             Owns PF-N, PF-UN
 ```
 
 A REGISTRY RANGE IN THIS LIST IS NAVIGATIONAL. The owning

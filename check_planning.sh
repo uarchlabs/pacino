@@ -172,7 +172,9 @@
 # DOC-015, session-083 (PROJECT_STATUS.md). Updated when DOC-015 was
 # assessed, session-084 (PROJECT_STATUS.md,
 # showcase_release_decisions.md), and for CLAUDE.md as Jeff edited it
-# after DOC-015 (the Commands section).
+# after DOC-015 (the Commands section). Updated session-084 for
+# performance analysis (PROJECT_STATUS.md, PROJECT_CORE.md,
+# perf_decisions.md (new, location PERF)).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -208,14 +210,15 @@ VERF="planning/verification"
 SHOW="planning/showcase"
 OBSV="planning/observ"
 PDOC="planning/docs"
+PERF="planning/perf"
 MISC="misc"
 UNKN="."
 
 # One file per line: <location> <file> <md5 prefix, 12 chars>
-# <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
+# <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   80f5097f26c8
-PLAN  PROJECT_STATUS.md                 9c8653c11c4c
+PLAN  PROJECT_CORE.md                   d80e270480b6
+PLAN  PROJECT_STATUS.md                 5cd0d4f93f3e
 
 UNKN  CLAUDE.md                         6057733920a6
 
@@ -289,6 +292,8 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
+PERF  perf_decisions.md               93d82602b3ac
+
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF
 
@@ -299,7 +304,7 @@ while read -r loc file want; do
   total=$((total + 1))
 
   case "$loc" in
-    PLAN|ARCH|INTF|TEST|VERF|SHOW|OBSV|PDOC|MISC|UNKN) rel="${!loc}/$file" ;;
+    PLAN|ARCH|INTF|TEST|VERF|SHOW|OBSV|PDOC|PERF|MISC|UNKN) rel="${!loc}/$file" ;;
     *) printf 'BADLOC   %s  (location "%s")\n' "$file" "$loc"
        bad=$((bad + 1)); continue ;;
   esac

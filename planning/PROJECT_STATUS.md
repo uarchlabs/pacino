@@ -16,6 +16,34 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-084, continued: performance analysis started.
+
+PERFORMANCE ANALYSIS, FIRST LAYER (Jeff): the front end is measured
+  on the CBP2025 training traces (105 traces, 4.34e9 instructions)
+  against CBP's reference results, through a C++ harness driving a
+  Verilated fe_top behind a SystemVerilog wrapper, with no RTL change.
+  The question it answers: does the predictor configuration show
+  performance compatible with the SPEC targets, by extrapolation.
+  Recorded as PF-1 to PF-12 in the new planning/perf/perf_decisions.md,
+  with PF-U1 to PF-U8 open. Configurations are named by release tag:
+  fe-1.0.0 (as built) and fe-1.0.0/cbp16-64k (matched to the 64 KB
+  TAGE-SC-L reference).
+New task prefix PERF-NNN; new planning directory planning/perf/
+  (PROJECT_CORE).
+Next: PERF-001 (PF-12): fetch and check the traces, characterize
+  them (PF-U1), settle PF-U2, measure the speed of the Verilated
+  fe_top, total the predictor storage at fe-1.0.0 (PF-U7).
+Deferred by Jeff to the next push: deleting the test tags fe-0.0.1 to
+  fe-0.0.7.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md, perf_decisions.md (new,
+location PERF).
+
+Next free: BP-141, SYS-003, DOC-016, INFRA-014, TOOLS-007, PERF-001,
+TD#196.
+
+---
 ## Session-084: DOC-015 assessed; SR-17a recorded.
 
 DOC-015 ASSESSED (PA): complete as the task asked; pushed and live
