@@ -174,7 +174,11 @@
 # showcase_release_decisions.md), and for CLAUDE.md as Jeff edited it
 # after DOC-015 (the Commands section). Updated session-084 for
 # performance analysis (PROJECT_STATUS.md, PROJECT_CORE.md,
-# perf_decisions.md (new, location PERF)).
+# perf_decisions.md (new, location PERF)), and for
+# pacino_features.md (new, location ARCH).
+# Updated after PERF-001 and DOC-016, session-084 (PROJECT_STATUS.md,
+# perf_decisions.md, pacino_features.md), and for the move of
+# scan_traces.py to tools/ (PROJECT_CORE.md, perf_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -217,8 +221,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   d80e270480b6
-PLAN  PROJECT_STATUS.md                 5cd0d4f93f3e
+PLAN  PROJECT_CORE.md                   11e9e43d6380
+PLAN  PROJECT_STATUS.md                 2f78363d0fe3
 
 UNKN  CLAUDE.md                         6057733920a6
 
@@ -259,6 +263,7 @@ ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f90a7b3ce267
 ARCH  status_decisions.md               3451a10eeeaa
+ARCH  pacino_features.md                2a5cf900f8d9
 TEST  fe_demo_tb_decisions.md           220d9acc31ef
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
@@ -292,7 +297,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               93d82602b3ac
+PERF  perf_decisions.md               e88a5abfbe74
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

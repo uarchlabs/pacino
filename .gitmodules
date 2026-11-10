@@ -14,3 +14,6 @@
 [submodule "tools/ticfinder"]
 	path = tools/ticfinder
 	url = https://github.com/uarchlabs/ticfinder.git
+[submodule "tools/cbp2025"]
+	path = tools/cbp2025
+	url = https://github.com/jeffnye-gh/cbp2025.git

@@ -387,8 +387,9 @@ Claude Code proposes (subject to Jeff review):
                   tools/regress_demo.sh, not tools/regress.sh
   misc/           notes outside the planning record:
                   ras_theory_of_operation.md
-  perf/           performance harness, PERF tasks (PF-2); created
-                  by the first PERF task that writes code
+  perf/           performance data and harness, PERF tasks (PF-2):
+                  the trace checksum list and scan results; perf
+                  scripts are in tools/
   rtl/            see Project Structure in CLAUDE.md
   tools/          tools/bin install dir, riscv-opcodes submodule;
                   external repositories as submodules (PF-2)
@@ -545,6 +546,10 @@ planning/
     ittage_cntrl_use_update_rules.md
     ittage_table_entry_formats.md
     ittage_table_hash_rules.md
+    pacino_features.md       what pacino is as built: the RVA23S64
+                             options it adds, its features and
+                             sizes, each with its source. Decides
+                             nothing; owns no registry
     pacino_cache.md          GENERATED AND DATED. A snapshot of
                              the cachegen output tree. Not a
                              decision record and not maintained;

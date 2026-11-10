@@ -21,6 +21,7 @@ RTL is in SystemVerilog, simulation with Verilator 5.048
 # TOC
 
 1. [Quick start](#quick-start)
+1. [Performance analysis](#performance-analysis)
 1. [Project Status](#project-status)
 1. [Directory Structure](#directory-structure)
 1. [Constants](#constants)
@@ -252,6 +253,86 @@ To view BPU coverage reports
 ```bash
 firefox $RVA_ROOT/rtl/core/frontend/bpu/coverage/bpu/html/index.html
 ```
+
+## Performance analysis
+
+The performance work is the first layer of performance analysis: a
+filter for microarchitecture problems in the predictors and the fetch
+path, before any full-core model exists. Workload traces from the
+Championship Branch Prediction (CBP2025) are run through the front
+end, and its MPKI, overall and per predictor, is compared with CBP's
+reference results, to judge whether the predictor configuration
+performs compatibly with the SPEC targets by extrapolation. It does
+not measure the backend. The rules are in
+`planning/perf/perf_decisions.md`; the scripts are in `perf/`.
+
+### Traces
+
+The CBP2025 training set: 105 traces in six groups (int 37, web 26,
+infra 16, fp 14, compress 8, media 4). The traces are not in git. The
+download link is in `tools/cbp2025/README.md`, section Getting Traces
+(a Google Drive folder; `gdown --folder` also works). Each group is
+one `.tar.xz` archive, about 12.5 GB for the six. Unpack them so that
+each trace is one `.gz` file, one directory per group, about 15 GB in
+all:
+
+```
+<CBP_TRACES>/training_traces/compress/compress_0_trace.gz
+<CBP_TRACES>/training_traces/fp/fp_0_trace.gz
+...
+<CBP_TRACES>/training_traces/web/web_25_trace.gz
+```
+
+The scripts read the `.gz` files directly; nothing is unpacked
+further. The archives are not read, and can be kept beside the
+directories or deleted.
+
+### CBP_TRACES
+
+The scripts find the traces through the environment variable
+`CBP_TRACES`, the directory that holds `training_traces/`. The default
+is `../cbp_traces`, relative to the repo root, a directory beside the
+clone:
+
+```bash
+export CBP_TRACES=/path/to/cbp_traces   # only when not ../cbp_traces
+```
+
+### Checksums
+
+`perf/cbp2025_training.sha256` lists the SHA-256 of each training
+`.gz` file, with paths relative to `CBP_TRACES`. Check a set of traces
+with:
+
+```bash
+cd $CBP_TRACES
+sha256sum -c $RVA_ROOT/perf/cbp2025_training.sha256
+```
+
+Every line must read OK. `tools/scan_traces.py` checks each file against
+the same list before it reads it, and stops with a message naming
+this section when the trace directory, the list or a file is missing,
+or a checksum differs.
+
+```bash
+python3 tools/scan_traces.py     # writes perf/cbp2025_training_scan.csv
+```
+
+### Notice
+
+The traces are Arm's. The `readme.txt` beside them reads:
+
+> The example trace code is only provided for the sole purpose of the
+> competition as an aid to learning and academic advancement. Any
+> example trace code is provided "as is", without warranty of any kind,
+> express or implied. In no event shall Arm be liable for any claim,
+> damages or other liability, whether in action or contract, tort or
+> otherwise, arising from, out of or in connection with the example
+> trace code or its use.
+
+Optional, for Claude Code users who restrict reads outside the
+repository: add the trace directory with `--add-dir` or in your own
+settings (`additionalDirectories`).
 
 ## Push
 

@@ -16,6 +16,47 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-084, continued: PERF-001 and DOC-016 assessed.
+
+PERF-001 ASSESSED (PA): complete. All 105 traces equal the reference
+  counts exactly; CBP's simulator reproduces a reference row exactly;
+  the reference MPKI is conditional only, from the 64 KB TAGE-SC-L.
+  81 traces have PCs at or above 2^41; direct jumps beyond +-1 MB
+  occur 11.76e6 times in 89 traces. The fe_top testbench runs 4.4e3 to
+  8.3e3 instructions per second.
+DOC-016 ASSESSED (PA): complete; pacino_features.md section 2 drafted
+  from its report. TAGE, SC, ITTAGE and the loop predictor are built
+  once per prediction slot: all predictors 102.48 KB as built, TAGE +
+  SC + loop 41.75 KB (PERF-001 counted one copy, 67.29 and 20.88).
+RULED (Jeff), in perf_decisions.md: tools/cbp2025 pins 6cc9952 on
+  jeff/baseline (nine CBP2025 entries, CBP2016, TAGE192, golden
+  results); R is TAGE192; B, the matched configuration, only if A's
+  gap needs explaining, named fe-1.0.0/tage192 (replaces
+  fe-1.0.0/cbp16-64k below); CBP is temporary and the entries'
+  licenses are set aside; any change to the trace addresses means
+  every CBP predictor is rerun on the changed traces (PF-15); far
+  direct jumps become auipc and jalr (PF-15).
+OPEN: the address scheme (PF-U1): a Sv57 variant with the traces
+  unchanged, or Sv39 page tables keeping each PC's low 38 bits. Sv57
+  work starts from DOC-016's Problem 3 list of address widths.
+TD CANDIDATES from DOC-016, for Jeff to number (TD#196 is next):
+  folded.tage_phr never written, so the PHR feeds no predictor; SC ST2
+  and ST3 fold the same history bits; the loop predictor's age never
+  decrements; ftq_ifu.sv takes the predecode target from slot 0; a
+  resolve to a reallocated FTQ index is not detected;
+  l1i_mem_mst.sv drives a zero mask on a TileLink Get (unchecked).
+
+SCRIPT MOVED (Jeff): tools/scan_traces.py, from perf/; rerun from the
+  repository root, perf/cbp2025_training_scan.csv matches the
+  reference instruction counts for all 105 traces. PF-2 records the
+  split: scripts in tools/, data and the harness in perf/. The
+  README's Performance analysis section must name tools/scan_traces.py.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md, perf_decisions.md,
+pacino_features.md.
+
+---
 ## Session-084, continued: performance analysis started.
 
 PERFORMANCE ANALYSIS, FIRST LAYER (Jeff): the front end is measured
@@ -24,23 +65,38 @@ PERFORMANCE ANALYSIS, FIRST LAYER (Jeff): the front end is measured
   Verilated fe_top behind a SystemVerilog wrapper, with no RTL change.
   The question it answers: does the predictor configuration show
   performance compatible with the SPEC targets, by extrapolation.
-  Recorded as PF-1 to PF-12 in the new planning/perf/perf_decisions.md,
-  with PF-U1 to PF-U8 open. Configurations are named by release tag:
-  fe-1.0.0 (as built) and fe-1.0.0/cbp16-64k (matched to the 64 KB
-  TAGE-SC-L reference).
+  Recorded as PF-1 to PF-13 in the new planning/perf/perf_decisions.md,
+  with PF-U1 to PF-U10 open. PF-13: one instruction-supply interface,
+  PC-addressed with redirect and commit, for trace-driven and
+  execution-driven supply. PF-U9, a standalone model, and PF-U10, one
+  parameter source, discussed and not yet ruled. Configurations are
+  named by release tag: fe-1.0.0 (as built) and fe-1.0.0/cbp16-64k
+  (matched to the 64 KB TAGE-SC-L reference).
 New task prefix PERF-NNN; new planning directory planning/perf/
   (PROJECT_CORE).
-Next: PERF-001 (PF-12): fetch and check the traces, characterize
-  them (PF-U1), settle PF-U2, measure the speed of the Verilated
-  fe_top, total the predictor storage at fe-1.0.0 (PF-U7).
+Traces (PF-14): the CBP2025 training set, unpacked to .gz by Jeff,
+  outside the repository at ../cbp_traces; found by CBP_TRACES; all
+  perf setup notes in the main README.md. tools/cbp2025 is Jeff's
+  public fork, added as a submodule by Jeff.
+PERF-001 written (PF-12): check the traces against a SHA-256 list,
+  characterize them (PF-U1), settle PF-U2, measure the speed of the
+  Verilated fe_top, total the predictor storage at fe-1.0.0 (PF-U7),
+  and write the README's Performance analysis section. Runs
+  tools/regress.sh; no git command otherwise.
 Deferred by Jeff to the next push: deleting the test tags fe-0.0.1 to
   fe-0.0.7.
+pacino_features.md (new, planning/arch/): section 1 states RVA23S64 as
+  the umbrella and lists only the optional extensions pacino adds,
+  Svadu so far; section 2, pacino's features, is filled from DOC-016
+  (written), a read-only report from the RTL and parameter files. An
+  extended-address (Sv57) variant is discussed after DOC-016; it
+  would add Sv57 and Sv57x4 (Shgatpa) to section 1.
 
 Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, PROJECT_CORE.md, perf_decisions.md (new,
-location PERF).
+location PERF), pacino_features.md (new, location ARCH).
 
-Next free: BP-141, SYS-003, DOC-016, INFRA-014, TOOLS-007, PERF-001,
+Next free: BP-141, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
 TD#196.
 
 ---
