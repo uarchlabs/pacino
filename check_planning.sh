@@ -222,7 +222,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   11e9e43d6380
-PLAN  PROJECT_STATUS.md                 2f78363d0fe3
+PLAN  PROJECT_STATUS.md                 9f622f60d8c7
 
 UNKN  CLAUDE.md                         6057733920a6
 
@@ -297,7 +297,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               e88a5abfbe74
+PERF  perf_decisions.md               30207f0c82e6
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

@@ -39,12 +39,53 @@ RULED (Jeff), in perf_decisions.md: tools/cbp2025 pins 6cc9952 on
 OPEN: the address scheme (PF-U1): a Sv57 variant with the traces
   unchanged, or Sv39 page tables keeping each PC's low 38 bits. Sv57
   work starts from DOC-016's Problem 3 list of address widths.
-TD CANDIDATES from DOC-016, for Jeff to number (TD#196 is next):
-  folded.tage_phr never written, so the PHR feeds no predictor; SC ST2
-  and ST3 fold the same history bits; the loop predictor's age never
-  decrements; ftq_ifu.sv takes the predecode target from slot 0; a
-  resolve to a reallocated FTQ index is not detected;
-  l1i_mem_mst.sv drives a zero mask on a TileLink Get (unchecked).
+DOC-016's six findings, checked by the PA against the documents and
+  ruled by Jeff:
+  1. folded.tage_phr is never written, so SC ST4's PHR fallback
+     (sc_decisions.md, IDX_IMLI_PHR) sees zero. TAGE and ITTAGE use
+     no PHR, by design (HI2 open). FIX: write the PHR fold, the PHR
+     in age order.
+  2. SC ST1-ST3's fold widths equal their history lengths, as
+     sc_decisions.md defines SC_TBL_FH, and the 9-bit index cast keeps
+     the low 9 bits, so ST2 and ST3 index on the same bits. The RTL
+     matches the documents; the design was wrong. FIX: fold widths
+     equal the index width, 9.
+  3. The loop predictor's age is set to maximum and never decremented,
+     as loop_pred_interfaces.md specifies, so a full set evicts way 0.
+     The RTL matches the documents. FIX: an allocation blocked by a
+     victim with age above 0 decrements its age (Seznec).
+  4. ftq_ifu.sv takes a rewritten slot's target from slot 0 when
+     predecode computed none; W1 is silent. FIX only if reachable,
+     from the slot being rewritten.
+  5. A resolve to a reallocated FTQ index is not detected: documented
+     (ftq_backend_interfaces.md, assumption A1). Left as is.
+  6. The TileLink Get mask: TD#196.
+BP-141 written to fix everything DOC-016 found except finding 5,
+  TD#196 and the address widths, which are the Sv57 work (Jeff): 1 to
+  4 above; the FTB fast path, specified (ftb_decisions.md,
+  ftb_confidence_override_rules.md) and produced but read by nothing,
+  off at reset; pred_src's actual meaning recorded and its comments
+  corrected; module literals moved onto their package parameters,
+  unused non-address parameters removed by rule, stale comments
+  corrected; TD#195 (its files are edited); TD#194's tb_ras case, its
+  fix left for Jeff's ruling; en_zvfhmin checked (Zvfhmin shares V's
+  encodings and differs by SEW, which decode does not hold). Not
+  defects: en_zicbop is unread by design (BP-123); the ITLB VPN width
+  mismatch is a stale itlb.sv comment, itlb_l2tlb_interfaces.md having
+  been corrected in session-075. BP-141's Results Capture proposes the
+  planning text; the PA drafts it after BP-141.
+PREDICTOR ENABLES (Jeff): the custom CSRs 0x7C0 and 0x7C1 keep their
+  reset values (SC enabled; FTB fast path, TAGE aging and ITTAGE aging
+  disabled; intervals 0). For performance runs the harness enables SC,
+  the fast path and both agings once reset finishes, or at once with
+  fast init, with both intervals 262144 (2^18, TAGE's usual
+  useful-counter reset period; gem5 logUResetPeriod 18) (PF-5). The
+  aging and epoch design itself is TD#197 (Jeff): investigate the
+  options.
+OPENED: TD#196, TD#197.
+
+Next free: BP-142, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
 
 SCRIPT MOVED (Jeff): tools/scan_traces.py, from perf/; rerun from the
   repository root, perf/cbp2025_training_scan.csv matches the
@@ -7162,6 +7203,45 @@ numbers are issued from one sequence across both tables.
 |     |          | "Simple circular buffer" (linked since BP-120). For the  |
 |     |          | next BP task that edits those files. Opened session-082  |
 |     |          | (Jeff).                                                  |
+| 196 | icache   | OPEN, CORRECTNESS. THE L1I DRIVES A ZERO MASK ON A       |
+|     |          | TILELINK GET. l1i_mem_mst.sv:100 drives mem_a_mask '0;   |
+|     |          | TileLink requires a Get's mask bits set, all ones for a  |
+|     |          | full-beat Get. Found by DOC-016, not checked against the |
+|     |          | TileLink specification there; check it, then fix. The    |
+|     |          | memory model in tb_fe_top may not check the mask. Opened |
+|     |          | session-084 (Jeff).                                      |
+| 197 | bpu      | OPEN, PERFORMANCE. INVESTIGATE THE OPTIONS FOR USEFUL-   |
+|     |          | COUNTER AGING AND EPOCH COUNTING in TAGE and ITTAGE.     |
+|     |          | As built (tage_cntrl.sv:195-199, 397-446; ittage_cntrl   |
+|     |          | .sv:579-600; tage_cntrl_use_update_rules.md): one 32-bit |
+|     |          | interval down counter and one 2-bit epoch per slot, per  |
+|     |          | predictor, four of each in all; an entry's 2-bit EPC     |
+|     |          | takes the epoch on each useful update and allocation;    |
+|     |          | age = epoch - EPC mod 4 counts the useful value in full  |
+|     |          | at age 0, half at 1, none at 2 or 3. Findings:           |
+|     |          | (1) the two slots' counters tick together on every       |
+|     |          | prediction, since bp_cluster.sv:640-641 copies one       |
+|     |          | request-valid to both, and load from one interval input  |
+|     |          | per predictor, so the epochs move in lockstep although   |
+|     |          | slot 1's tables train far less often than slot 0's;      |
+|     |          | (2) the count is predictions, not branches or updates;   |
+|     |          | (3) the 2-bit age wraps, so an entry idle for four       |
+|     |          | intervals counts its stale useful value in full again;   |
+|     |          | (4) the counters load the interval at reset, when the    |
+|     |          | CSR holds 0, and an interval of 0 with aging on advances |
+|     |          | the epoch on every prediction. Options found: a fixed    |
+|     |          | period as in Seznec's TAGE (gem5 logUResetPeriod 18,     |
+|     |          | u >>= 1); ticks on each slot's own activity with an      |
+|     |          | interval per counter; adaptive tick counters as in       |
+|     |          | XiangShan, counting failed minus successful allocations  |
+|     |          | and resetting the useful bits at saturation (TAGE        |
+|     |          | bankTickCtrs, 7 bits; ITTAGE tickCtr, 8 bits). Jeff,     |
+|     |          | session-084: the enables stay CSR bits; the intervals    |
+|     |          | become parameters, one for TAGE and one for ITTAGE at    |
+|     |          | least, whether as CSR 0x7C1 reset values or build-time   |
+|     |          | constants not yet ruled. Until this closes, performance  |
+|     |          | runs use 2^18 for both (perf_decisions.md PF-5). Opened  |
+|     |          | session-084 (Jeff).                                      |
 
 ---
 

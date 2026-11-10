@@ -170,6 +170,27 @@ PF-5   A measured configuration is named by a release tag, <tag>, for
                               total storage; built only if needed
        The RTL is tweaked between tags; a result on an untagged tree
        is keyed by the sha (PF-9) until the next tag.
+       The predictor enables are custom CSRs 0x7C0 and 0x7C1
+       (csr_pkg.sv:121-133, 204-205). Their reset values are
+       unchanged: SC enabled; the FTB fast path, TAGE aging and ITTAGE
+       aging disabled; both aging intervals 0. For a performance run
+       the harness writes them once reset has finished, or at once
+       when fast init is used (Jeff, session-084):
+         sc_enable              1
+         ftb_fastpath_en        1
+         tage_enable_aging      1
+         ittage_enable_aging    1
+         tage_aging_interval    262144 (2^18)
+         ittage_aging_interval  262144 (2^18)
+       The interval is TAGE's usual useful-counter reset period: gem5's
+       TAGE model resets every 2^18 conditional-branch updates
+       (logUResetPeriod 18; L-TAGE 19), halving each useful counter.
+       Pacino's interval counts p2 predictions per slot
+       (tage_cntrl.sv:397-410), so it is not exactly a branch count.
+       A configuration that sets them otherwise says so in its name.
+       2^18 holds until TD#197, the investigation of the aging and
+       epoch design, closes; the intervals are to become parameters
+       (Jeff, session-084).
 
 ## 4. Measurement
 
@@ -343,4 +364,7 @@ PF-U10 One parameter source for the RTL and the model, from which
   2026-11-10  session-084 (Jeff). PF-2: perf scripts in tools/, perf
               data and the harness in perf/; PF-14 names the checksum
               list.
+  2026-11-10  session-084 (Jeff). PF-5: the CSR reset values are kept;
+              a performance run enables SC, the FTB fast path and
+              TAGE and ITTAGE aging after reset, intervals 2^18.
 ```
