@@ -263,8 +263,8 @@ module ras (
   //
   // THE BOTTOM (BP-138, D2). Empty is TOSR == BOS, and a commit moves
   // BOS to the committing block's post-op TOSR. Before BP-138 nothing
-  // moved TOSR with it, so a commit could leave TOSR on a slot the
-  // stack does not hold with TOSR != BOS. fd07: a call pushes X (link
+  // moved TOSR with it, so a commit could leave TOSR != BOS on a slot no
+  // push on the chain wrote (12.5 PO7). fd07: a call pushes X (link
   // to BOS), its return pops X back to BOS (empty), then the call
   // commits and BOS becomes X; TOSR, the old BOS, read non-empty, and
   // the next return popped that slot, the never-written sentinel, and
@@ -278,14 +278,16 @@ module ras (
   //     (the sequential block below).
   //   - a RETURN commit whose snapshot shows the stack empty after its
   //     block (snapshot TOSR == snapshot BOS) leaves BOS where it is
-  //     (BP-140, PROVISIONAL, c_bos). That snapshot TOSR is the BOS of
-  //     the cycle the return popped a bottom entry, an index the
-  //     commits of the older blocks have since moved BOS off, so the
-  //     allocation may have reused it (the sentinel skip protects only
-  //     the current BOS). Moving BOS back to it left BOS on a slot a
-  //     younger push held (tb_fe_top region after BP-140: TOSR 4 below
-  //     BOS 5, RS2). The current BOS is the entry that return popped,
-  //     committed by its call, so the stack it leaves is empty there.
+  //     (c_bos; ras_decisions.md 12.11 CO5). Built by BP-140; final by
+  //     Jeff's ruling, session-084 (TD#189 closed). That snapshot TOSR
+  //     is the BOS of the cycle the return popped a bottom entry, an
+  //     index the commits of the older blocks have since moved BOS off,
+  //     so the allocation may have reused it (the sentinel skip protects
+  //     only the current BOS). Moving BOS back to it puts BOS on a slot
+  //     a younger push holds, and TOSR == BOS then reads empty over that
+  //     entry (tb_ras TC-44; BP-143 Problem 5). The current BOS is the
+  //     entry that return popped, committed by its call, so the stack
+  //     it leaves is empty there.
   //   - an undo of an operation that began on an empty stack restores
   //     TOSR to BOS as it is at the undo (p3_pre_empty_q).
   // A push onto a non-empty stack links to TOSR as before. The entries
@@ -778,8 +780,8 @@ module ras (
   // (BP-138): the stack is empty at the BOS the commit replaces.
   logic [RAS_PTR_BITS-1:0]        scan_tosr;
   logic                           c_drag;
-  // The commit moves BOS (BP-140): a push does; a pop does unless its
-  // snapshot is an empty stack (THE BOTTOM).
+  // The commit moves BOS (CO5, BP-140, final session-084): a push does;
+  // a pop does unless its snapshot is an empty stack (THE BOTTOM).
   logic                           c_bos;
 
   always_comb begin : commit_arms

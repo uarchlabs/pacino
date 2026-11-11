@@ -9,7 +9,7 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-67. TC-01 .. TC-20 from BP-063; TC-21
+// Directed cases TC-01 .. TC-71. TC-01 .. TC-20 from BP-063; TC-21
 // (BP-064) pinned TD #78 (undo-pop did not reverse a recursion pop)
 // until BP-133 fixed it.
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
@@ -44,7 +44,13 @@
 // BOS is not a fault; see THE CHAIN below), runs TC-65 by default with
 // the rule's values, and added TC-66 (fd07: CO6 keeps TOSR off the old
 // BOS slot) and TC-67 (a chain entry below BOS reused before the
-// sentinel skip: the wrap, counted).
+// sentinel skip: the wrap, counted). BP-144 added the converse of IV1
+// to the model (THE CONVERSE below) and TC-68 .. TC-71, the rules
+// ras_decisions.md 12 checked in part until then: TC-68 the boundary
+// of the converse (TOSR == BOS on the entry BOS names), TC-69 the
+// repair rules at each slot and the count's ends, and IV2 in a repair
+// cycle, TC-70 SL2 on an empty stack whose BOS entry has a count,
+// TC-71 KP1 and KP2 at slot S1.
 // No case uses a seed, an LFSR or random stimulus.
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
@@ -348,6 +354,23 @@ module tb;
   // entry at BOS is the sentinel, never a chain entry (PO7).
   // Until BP-143 the model held TOSR only when TOSR was allocated after
   // BOS (seq[tosr] > seq[bos]), the meaning session-084 replaced.
+  //
+  // THE CONVERSE (IV1 "exactly when", PO7 "never the BOS sentinel";
+  // BP-144). The model also keeps bref, the allocation BOS names: the
+  // entry whose commit made it the boundary. A commit that moves BOS
+  // (CO5) takes the allocation its snapshot's TOSR named (m_sref, or
+  // for a snapshot the model never produced the allocation the index
+  // holds; none for a snapshot of an empty stack); a restore takes the
+  // bref the model recorded with that snapshot (m_sbref). TOSR == BOS
+  // while tref names a live chain entry other than bref, one whose
+  // index still holds it, fails: BOS moved onto a live entry, or TOSR
+  // was left on one, and the stack reads empty over it (BP-143 Problem
+  // 5, TC-44). Checked on the model's next state every cycle and at
+  // every pop (m_iv); a chain entry at BOS reused since is the wrap,
+  // counted in m_nbwrap. The DUT is checked against the same record:
+  // DUT TOSR == DUT BOS where the model's TOSR names a live chain entry
+  // at that index fails (m_dut_conv), so the fault shows as this rule,
+  // not only as a BOS mismatch.
   // =================================================================
   localparam int M_SEQ_W = 32;
   localparam logic [RAS_RCTR_WIDTH-1:0] M_RCTR_MAX =
@@ -366,6 +389,7 @@ module tb;
     logic   [RAS_SPEC_ENTRIES-1:0][M_SEQ_W-1:0]   seq;
     logic   [RAS_SPEC_ENTRIES-1:0][M_SEQ_W-1:0]   nref;  // BP-143
     logic   [M_SEQ_W-1:0]                         tref;  // BP-143
+    logic   [M_SEQ_W-1:0]                         bref;  // BP-144
     logic   [M_SEQ_W-1:0]                         gen;
     logic   [RAS_PTR_BITS-1:0]                    tosr;
     logic   [RAS_PTR_BITS-1:0]                    tosw;
@@ -422,6 +446,20 @@ module tb;
   // BP-143: the tref of each snapshot value the model produced (SL2),
   // read by a restore (RE1). Cleared at reset.
   logic [M_SEQ_W-1:0] m_sref [logic [$bits(bp_ras_snapshot_t)-1:0]];
+  // BP-144: the bref of each snapshot value the model produced, read by
+  // a restore; the converse failures (IV1) and wraps at BOS.
+  logic [M_SEQ_W-1:0] m_sbref [logic [$bits(bp_ras_snapshot_t)-1:0]];
+  int unsigned m_nconv;
+  int unsigned m_nbwrap;
+
+  // BP-144: the converse of IV1 at a working state. live 1: TOSR == BOS
+  // over a chain entry other than the one BOS names, still held at its
+  // index (a fault); live 0: the same over an index reused since (the
+  // wrap).
+  function automatic logic m_conv(input m_spec_t s, input logic live);
+    return (s.tosr == s.bos) && (s.tref != '0) && (s.tref != s.bref) &&
+           ((s.seq[s.tosr] == s.tref) == live);
+  endfunction
 
   function automatic logic m_empty(input m_spec_t s);
     return s.tosr == s.bos;                              // IV1, 3.2
@@ -557,6 +595,26 @@ module tb;
       $display("tosr %0d (bos %0d) names alloc %0d, reused by alloc %0d",
                w.tosr, w.bos, w.tref, w.seq[w.tosr]);
     end
+    m_ivc(w, s, where);
+  endtask
+
+  // BP-144: the converse of IV1 (THE CONVERSE above) on a working or
+  // next state.
+  task automatic m_ivc(input m_spec_t w, input int s, input string where);
+    if (m_conv(w, 1'b1)) begin
+      m_nconv++;
+      m_nmis++;
+      $display("MODEL FAIL cyc %0d t %0t slot %0d %s: IV1 converse", m_cyc,
+               $time, s, where);
+      $write("  tosr %0d == bos %0d reads empty over live alloc %0d; ",
+             w.tosr, w.bos, w.tref);
+      $display("bos names alloc %0d", w.bref);
+    end else if (m_conv(w, 1'b0)) begin
+      m_nbwrap++;
+      $write("MODEL WRAP cyc %0d t %0t slot %0d %s: ", m_cyc, $time, s, where);
+      $display("tosr %0d == bos names alloc %0d, reused by alloc %0d",
+               w.tosr, w.tref, w.seq[w.tosr]);
+    end
   endtask
 
   // -----------------------------------------------------------------
@@ -648,6 +706,7 @@ module tb;
       m_snap[s].rctr = m_empty(w) ? '0 : w.e[w.tosr].rctr;
       // BP-143: the allocation this snapshot's TOSR names.
       if (!m_empty(w)) m_sref[m_snap[s]] = w.tref;
+      m_sbref[m_snap[s]] = w.bref;                         // BP-144
     end
 
     // ---- next state ----
@@ -667,6 +726,13 @@ module tb;
         m_ns.tref = m_sref[restore_snap];
       else
         m_ns.tref = m_s.seq[restore_snap.tosr];
+      // BP-144: the allocation the snapshot's BOS named; for a snapshot
+      // the model never produced, the current one if BOS does not move,
+      // else the allocation the index holds now.
+      if (m_sbref.exists(restore_snap))
+        m_ns.bref = m_sbref[restore_snap];
+      else if (restore_snap.bos != m_s.bos)
+        m_ns.bref = m_s.seq[restore_snap.bos];
       if (restore_snap.tosr != restore_snap.bos)
         m_ns.e[restore_snap.tosr].rctr = restore_snap.rctr;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin       // RE3
@@ -704,9 +770,22 @@ module tb;
     // snapshot is an empty stack.
     cmove = cpush || (cpop && (commit_snap.tosr != commit_snap.bos));
     if (cmove && !restore_val) begin                       // CO11
-      if (m_ns.tosr == m_s.bos) m_ns.tosr = commit_snap.tosr;  // CO6
+      if (m_ns.tosr == m_s.bos) begin                      // CO6
+        m_ns.tosr = commit_snap.tosr;
+        m_ns.tref = '0;                     // BP-144: empty, names none
+      end
       m_ns.bos = commit_snap.tosr;
+      // BP-144: BOS names the allocation the snapshot's TOSR named.
+      if (commit_snap.tosr == commit_snap.bos)
+        m_ns.bref = '0;
+      else if (m_sref.exists(commit_snap))
+        m_ns.bref = m_sref[commit_snap];
+      else
+        m_ns.bref = m_s.seq[commit_snap.tosr];
     end
+    // BP-144: the converse of IV1 on the next state, before tref is
+    // cleared below.
+    m_ivc(m_ns, 0, "next state");
     // IV1: TOSR == BOS is the empty stack; the entry at BOS is the
     // sentinel, not a chain entry (BP-143).
     if (m_ns.tosr == m_ns.bos) m_ns.tref = '0;
@@ -766,10 +845,27 @@ module tb;
     end
   endtask
 
+  // BP-144: the converse of IV1 on the DUT, against the model's record.
+  // The DUT reads empty (TOSR == BOS) at an index where the model's
+  // TOSR names a live chain entry, one whose index still holds it.
+  task automatic m_dut_conv();
+    if ((dut.tosr == dut.bos) && (dut.tosr == m_s.tosr) && m_chain(m_s) &&
+        !m_reused(m_s)) begin
+      m_nconv++;
+      m_nmis++;
+      $display("MODEL FAIL cyc %0d t %0t dut state: IV1 converse", m_cyc,
+               $time);
+      $write("  dut tosr %0d == dut bos %0d reads empty over live alloc ",
+             dut.tosr, dut.bos);
+      $display("%0d (model bos %0d)", m_s.tref, m_s.bos);
+    end
+  endtask
+
   always @(negedge clk) begin
     if (rstn && m_live) begin
       m_eval();
       m_iv(m_s, 0, "state", 1'b0);                         // IV1
+      m_dut_conv();                                        // BP-144
       m_compare();
     end
   end
@@ -781,6 +877,7 @@ module tb;
       m_live <= 1'b1;
       m_cyc  <= 0;
       m_sref.delete();                                     // BP-143
+      m_sbref.delete();                                    // BP-144
       for (int s = 0; s < NUM_PRED_SLOTS; s++) m_q[s] <= '0;
     end else if (m_live) begin
       m_s   <= m_ns;
@@ -798,6 +895,7 @@ module tb;
   localparam logic [VA_WIDTH-1:0] ADDR_C = VA_WIDTH'('h00_0000_3000);
   localparam logic [VA_WIDTH-1:0] ADDR_X = VA_WIDTH'('h00_0000_9000);
   localparam logic [VA_WIDTH-1:0] ADDR_R = VA_WIDTH'('h00_000A_0000);
+  localparam logic [VA_WIDTH-1:0] ADDR_Y68 = VA_WIDTH'('h00_0000_6800);
 
   logic [VA_WIDTH-1:0] fill_addr [0:15];
 
@@ -2141,9 +2239,14 @@ module tb;
     // old BOS slot, which the sentinel skip no longer protects. Then
     // the return commits. Before BP-140 it moved BOS back to 0, B's
     // slot: TOSR == BOS read empty and the pop took the commit stack
-    // (empty after the return committed) instead of B (tb_fe_top
-    // region: RS2, TOSR 4 below BOS 5). Now BOS stays 1 and the pop
-    // returns B.
+    // (empty after the return committed) instead of B. Now BOS stays 1
+    // and the pop returns B (CO5, final by Jeff's ruling, session-084).
+    // BP-140 was prompted by a tb_fe_top region RS2 failure (TOSR 4
+    // below BOS 5) judged by the old meaning of held; BP-143 found that
+    // region does not fail without the exception, and this case is the
+    // one that does. Since BP-144 the fault also fails the converse of
+    // IV1 in the model and ras_assert RS4: TOSR == BOS over B, a live
+    // chain entry BOS does not name.
     // =============================================================
     do_reset();
     push_one(ADDR_A);                       // idx1 (sentinel skip)
@@ -3348,6 +3451,279 @@ module tb;
             ptr_is(0, 2, 2));
     end
 
+    // =============================================================
+    // TC-68 IV1 (both directions), PO5, PO7, CO5, IV2 (BP-144 Problem
+    // 3): the boundary the converse of IV1 allows. TOSR == BOS on the
+    // entry BOS names is the empty stack, not a stack read empty over a
+    // live entry.
+    //   X pushed (idx1, PU2 skip, bottom), Y pushed (idx2, nos 1, PU1).
+    //   X's call commits with snapshot TOSR 1: BOS 0 -> 1 (CO5); the
+    //   scan's TOSR 2 is not BOS 0, so TOSR stays 2 (CO6). BOS now names
+    //   X's allocation. Y's return pops Y (PO2): TOSR = nos = 1 == BOS:
+    //   empty (IV1), and the allocation TOSR names is the one BOS names,
+    //   so the converse does not fail. The next pop is the commit top
+    //   X, valid (PO5), and moves nothing.
+    //   (b) two slots: the same, with both returns in one cycle: slot 0
+    //   pops Y, slot 1 finds TOSR == BOS and takes the fallback X,
+    //   valid (IV2: a fallback pop is valid while the commit stack holds
+    //   an entry; SL1).
+    // =============================================================
+    for (int v = 0; v < 2; v++) begin
+      int unsigned c0;
+      if ((v == 1) && (NUM_PRED_SLOTS < 2)) begin
+        $display("SKIP TC-68b two returns in one cycle: needs two slots");
+        continue;
+      end
+      do_reset();
+      push_one(ADDR_X);
+      push_one(ADDR_Y68);
+      commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+      check("TC-68 CO5 CO6 X's call commit: tosr 2, tosw 3, bos 1",
+            ptr_is(2, 3, 1) && m_chain(m_s));
+      c0 = m_nconv;
+      if (v == 0) begin
+        pop_chk("TC-68a PO2 Y's return pops Y", 0, 1'b1, ADDR_Y68);
+        check("TC-68a IV1 tosr 1 == bos 1, empty, BOS names the entry",
+              ptr_is(1, 3, 1) && !m_chain(m_s) && (m_nconv == c0));
+        pop_chk("TC-68a PO5 PO7 the next pop is the commit top X", 0, 1'b1,
+                ADDR_X);
+        check("TC-68a PO5 the fallback moves nothing", ptr_is(1, 3, 1));
+      end else begin
+        drive(1'b1, RETURN, '0, 1'b1, RETURN, '0);
+        #1;
+        check("TC-68b SL1 slot 0 pops Y",
+              pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_Y68));
+        check("TC-68b IV2 PO5 slot 1 at tosr == bos: the commit top X, valid",
+              pop_valid_p2[S1] && (pop_addr_p2[S1] == ADDR_X));
+        tick();
+        check("TC-68b IV1 tosr 1 == bos 1, no converse failure",
+              ptr_is(1, 3, 1) && (m_nconv == c0));
+      end
+    end
+
+    // =============================================================
+    // TC-69 RP2, RP3, RP4, RP5, RP8, RP9 at each slot, RP2 at both ends
+    // of the count, and IV2 in a repair cycle (BP-144 Problem 3). Each
+    // makes the p2 operation at slot sl, then gives p3 a view that
+    // differs at sl (force_p3; every other slot made no operation and is
+    // given none, which agrees).
+    //   a RP2 at count 0: A (idx1, count 0); a p2 push of A raises it to
+    //     1 (PU5); the undo-push lowers it to 0, TOSR 1 (RP2).
+    //   b RP2 at the top count: A pushed 15 times (count 14); the p2
+    //     push raises it to 15 (PU5, below saturation); the undo lowers
+    //     it to 14.
+    //   c RP3: count 15; the p2 push meets saturation and changes
+    //     nothing (PU6); its undo changes nothing: 15.
+    //   d RP4: A twice (count 1); the p2 pop decrements it (PO1, TOSR
+    //     held); the undo-pop puts the count back to 1 and TOSR to 1.
+    //     Two pops then return A, A (PO1, PO3).
+    //   e RP5: R committed; X (idx1) pushed and popped (empty at 0). A p2
+    //     pop on the empty stack (fallback R) in the cycle X's call
+    //     commits (BOS 0 -> 1, the scan's TOSR 0 == BOS 0, so TOSR -> 1,
+    //     CO6). Its undo sets TOSR to BOS as it is at the undo, 1, not
+    //     the registered 0 (RP5): empty, and the next pop is the commit
+    //     top X (PO5).
+    //   f RP8: A (1), X (2); a p2 RETURN_CALL with fall-through B pops X
+    //     (TOSR 1) and pushes B at idx3 (nos 1). Its undo returns TOSR to
+    //     2 (X), no count changed; B stays written (RP1: nothing is
+    //     cleared), TOSW 4. The pops then return X, then A.
+    //   g RP9: A (1); a p2 cycle with no RAS operation and fall-through
+    //     B; p3 says RETURN_CALL: a missed pop of A (bottom: TOSR 0, PO3)
+    //     then a missed push of B on the empty stack at TOSW 2 (no skip,
+    //     TOSW != BOS): idx2 {B,0,0,1} (RP7, PU1), TOSR 2, TOSW 3.
+    //   i RP6, IV2, PO7: TC-66's state (X pushed, popped, its call
+    //     committed: TOSR 1 == BOS 1, empty, CO6). A missed pop at slot
+    //     sl finds the stack empty: PO1 to PO3 do not apply, nothing
+    //     moves. Without CO6 TOSR stays on idx0, which no push on the
+    //     chain wrote, and the missed pop would pop it (RS2
+    //     a_rep_pop_held).
+    //   h IV2, RP11 in a repair cycle, two slots: R committed; A (idx1);
+    //     a p2 push of B at slot 0 (idx2). Next cycle p3 undoes B (TOSR 1)
+    //     while slot 0 pops A (bottom: empty) and slot 1 pops at TOSR ==
+    //     BOS: the commit top R, valid.
+    // =============================================================
+    for (int sl = 0; sl < NUM_PRED_SLOTS; sl = sl + S1 + (S1 == 0 ? 1 : 0))
+    begin
+      // a, b, c
+      for (int c = 0; c < 3; c++) begin
+        int base;
+        base = (c == 0) ? 0 : ((c == 1) ? int'(M_RCTR_MAX) - 1
+                                        : int'(M_RCTR_MAX));
+        do_reset();
+        for (int i = 0; i <= base; i++) push_one(ADDR_A);
+        drv(sl, 1'b1, DIRECT_CALL, ADDR_A);
+        tick();
+        check($sformatf("TC-69%s slot %0d PU5 PU6 the p2 push: count %0d",
+                        (c == 0) ? "a" : ((c == 1) ? "b" : "c"), sl,
+                        (c == 2) ? base : base + 1),
+              ent_is(1, ADDR_A, RAS_RCTR_WIDTH'((c == 2) ? base : base + 1),
+                     0, 1) && ptr_is(1, 2, 0));
+        drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+        force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+        tick();
+        check($sformatf("TC-69%s slot %0d %s the undo-push: count %0d",
+                        (c == 0) ? "a" : ((c == 1) ? "b" : "c"), sl,
+                        (c == 2) ? "RP3" : "RP2", base),
+              ent_is(1, ADDR_A, RAS_RCTR_WIDTH'(base), 0, 1) &&
+              ptr_is(1, 2, 0));
+      end
+      // d
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_A);
+      drv(sl, 1'b1, RETURN, '0);
+      tick();
+      check($sformatf("TC-69d slot %0d PO1 the p2 pop: count 0, tosr 1", sl),
+            ent_is(1, ADDR_A, 0, 0, 1) && ptr_is(1, 2, 0));
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+      tick();
+      check($sformatf("TC-69d slot %0d RP4 the undo-pop: count 1, tosr 1", sl),
+            ent_is(1, ADDR_A, 1, 0, 1) && ptr_is(1, 2, 0));
+      pop_chk("TC-69d PO1 the first pop returns A", sl, 1'b1, ADDR_A);
+      pop_chk("TC-69d PO3 the second pop returns A", sl, 1'b1, ADDR_A);
+      check("TC-69d then empty", ptr_is(0, 2, 0));
+      // e
+      do_reset();
+      commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+      push_one(ADDR_X);
+      pop_chk("TC-69e pop X, empty at 0", 0, 1'b1, ADDR_X);
+      drv(sl, 1'b1, RETURN, '0);
+      commit_val = 1'b1; commit_br_type = DIRECT_CALL; commit_ret_addr = ADDR_X;
+      commit_snap = '{4'd1, 4'd2, 4'd0, 4'd0};
+      #1;
+      check($sformatf("TC-69e slot %0d PO5 the p2 pop on empty: fallback R",
+                      sl), pop_valid_p2[sl] && (pop_addr_p2[sl] == ADDR_R));
+      tick();
+      commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
+      check($sformatf("TC-69e slot %0d CO5 CO6 bos 1, tosr dragged to 1", sl),
+            ptr_is(1, 2, 1));
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+      tick();
+      check($sformatf("TC-69e slot %0d RP5 the undo-pop: tosr = bos 1", sl),
+            ptr_is(1, 2, 1));
+      pop_chk("TC-69e PO5 the next pop is the commit top X", sl, 1'b1, ADDR_X);
+      // f
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_X);
+      drv(sl, 1'b1, RETURN_CALL, ADDR_B);
+      #1;
+      check($sformatf("TC-69f slot %0d RC1 the RETURN_CALL pops X", sl),
+            pop_valid_p2[sl] && (pop_addr_p2[sl] == ADDR_X));
+      tick();
+      check($sformatf("TC-69f slot %0d RC2 B at idx3, nos 1", sl),
+            ptr_is(3, 4, 0) && ent_is(3, ADDR_B, 0, 1, 0));
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+      tick();
+      check($sformatf("TC-69f slot %0d RP8 the undo: tosr 2 (X), tosw 4, %s",
+                      sl, "B kept"), ptr_is(2, 4, 0) && ent_is(3, ADDR_B, 0, 1, 0) &&
+            ent_is(2, ADDR_X, 0, 1, 0));
+      pop_chk("TC-69f PO2 the pop returns X", sl, 1'b1, ADDR_X);
+      pop_chk("TC-69f PO3 the pop returns A", sl, 1'b1, ADDR_A);
+      // g
+      do_reset();
+      push_one(ADDR_A);
+      drv(sl, 1'b0, NO_BRANCH, ADDR_B);
+      tick();
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(sl == 0, RETURN_CALL, sl != 0, RETURN_CALL);
+      tick();
+      check($sformatf("TC-69g slot %0d RP9 missed pop of A, missed push of B",
+                      sl), ptr_is(2, 3, 0) && ent_is(2, ADDR_B, 0, 0, 1) &&
+            ent_is(1, ADDR_A, 0, 0, 1));
+      // i
+      do_reset();
+      push_one(ADDR_X);
+      pop_chk("TC-69i X's return pops X to empty", 0, 1'b1, ADDR_X);
+      commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+      check("TC-69i CO5 CO6 X's call commit: tosr 1 == bos 1, empty",
+            ptr_is(1, 2, 1));
+      drv(sl, 1'b0, NO_BRANCH, '0);
+      tick();
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(sl == 0, RETURN, sl != 0, RETURN);
+      tick();
+      check($sformatf("TC-69i slot %0d RP6 IV2 a missed pop on the empty %s",
+                      sl, "stack moves nothing"), ptr_is(1, 2, 1));
+    end
+    // h
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    push_one(ADDR_A);
+    drv(0, 1'b1, DIRECT_CALL, ADDR_B);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b1, RETURN, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    #1;
+    check("TC-69h RP1 RP11 slot 0 pops A after the undo of B",
+          pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_A));
+    if (NUM_PRED_SLOTS > 1)
+      check("TC-69h IV2 slot 1 in the repair cycle: the commit top R, valid",
+            pop_valid_p2[S1] && (pop_addr_p2[S1] == ADDR_R));
+    tick();
+    check("TC-69h the stack is empty, B kept at idx2",
+          ptr_is(0, 3, 0) && ent_is(2, ADDR_B, 0, 1, 0));
+
+    // =============================================================
+    // TC-70 SL2, P02 (BP-144 Problem 3): the snapshot's count on an
+    // empty stack whose BOS entry has a count. A pushed three times
+    // (idx1, count 2). A's call commits with snapshot TOSR 1: BOS 0 -> 1
+    // (CO5); the scan's TOSR 1 is not BOS 0, so no drag; TOSR 1 == BOS
+    // 1: empty. The snapshot is {1, 2, 1, 0}: rctr 0 because TOSR ==
+    // BOS (SL2, 4.1), though rctr[1] is 2. The p0 read is the commit
+    // top A (P02), and a pop takes the fallback A (PO5).
+    // =============================================================
+    do_reset();
+    for (int i = 0; i < 3; i++) push_one(ADDR_A);
+    commit_op(DIRECT_CALL, ADDR_A, 4'd1);
+    drv(0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-70 SL2 empty with rctr[BOS] 2: snapshot {1,2,1,0}",
+          (snap_p2[0] == {4'd1, 4'd2, 4'd1, 4'd0}) &&
+          (snap_p2[S1] == {4'd1, 4'd2, 4'd1, 4'd0}) &&
+          (dut.spec_rctr[1] == 4'd2));
+    check("TC-70 P02 the p0 read is the commit top A",
+          tos_valid_p0[0] && (tos_addr_p0[0] == ADDR_A));
+    tick();
+    pop_chk("TC-70 PO5 the pop is the fallback A", 0, 1'b1, ADDR_A);
+
+    // =============================================================
+    // TC-71 KP1, KP2 at slot S1 (BP-144 Problem 3). (a) KP2: X (idx1);
+    // slot S1 pushes C with ras_p2_keep low and no repair: nothing moves,
+    // and C is registered as none (the next cycle, p3 none, repairs
+    // nothing). (b) KP1: X; slot 0 pushes B (idx2); next cycle p3 undoes
+    // B while slot S1 pushes C with keep low: only the repair applies,
+    // TOSR 1 (X), C not written (idx3 stays 0).
+    // =============================================================
+    do_reset();
+    push_one(ADDR_X);
+    drv(S1, 1'b1, DIRECT_CALL, ADDR_C);
+    p2_keep = 1'b0;
+    tick();
+    p2_keep = 1'b1;
+    check("TC-71a KP2 slot S1 push with keep low: nothing moves",
+          ptr_is(1, 2, 0) && (dut.spec_ret_addr[2] == '0));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-71a KP1 registered as none: no repair the next cycle",
+          ptr_is(1, 2, 0));
+    do_reset();
+    push_one(ADDR_X);
+    drv(0, 1'b1, DIRECT_CALL, ADDR_B);
+    tick();
+    drv(S1, 1'b1, DIRECT_CALL, ADDR_C);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    p2_keep = 1'b0;
+    tick();
+    p2_keep = 1'b1;
+    check("TC-71b KP1 the repair applies, slot S1's push is dropped",
+          ptr_is(1, 3, 0) && (dut.spec_ret_addr[3] == '0) &&
+          ent_is(2, ADDR_B, 0, 1, 0));
+
     // -------------------------------------------------------------
     // The reference model (Problem 2): it ran in every case above,
     // from each case's reset. One check stands for all its comparisons.
@@ -3358,6 +3734,8 @@ module tb;
     foreach (m_wcase[c])
       $display("tb_ras: MODEL wraps %s %0d", c, m_wcase[c]);
     $display("tb_ras: MODEL wraps total %0d", m_nwrap);
+    $display("tb_ras: MODEL IV1 converse failures %0d, wraps at BOS %0d",
+             m_nconv, m_nbwrap);
     check($sformatf("MODEL %0d comparisons, no mismatch", m_ncmp),
           (m_nmis == 0) && (m_ncmp > 0));
     $display("=================================================");

@@ -5866,12 +5866,14 @@ module tb;
     end
 
     // -- CB2-RP4. The undo of a pop over a recursion pop (RP4 over PO1),
-    //    reached through CB2's p3 view: the rule tb_fe_top rec_undo was
-    //    written for, which that program cannot reach by construction
-    //    (BP-142 Problem 5). A direct call block C (call at pos 2, its
-    //    return address pc_c + 8) is requested twice: an allocation, then
-    //    a recursion push (PU5), so rctr[1] = 1. A return block R holds a
-    //    conditional at pos 1 and a RETURN at pos 4 (the jump behind
+    //    reached through CB2's p3 view. tb_fe_top program rec_undo
+    //    (BP-134) was written for this rule but could not reach it by
+    //    construction (BP-142 Problem 5); BP-143 removed it, and this
+    //    case is where the rule is checked. A direct call block C (call
+    //    at pos 2, its return address pc_c + 8) is requested twice: an
+    //    allocation, then a recursion push (PU5), so rctr[1] = 1. A
+    //    return block R holds a conditional at pos 1 and a RETURN at
+    //    pos 4 (the jump behind
     //    br0, which only a second slot carries: chk2). TAGE says not
     //    taken (tage_bim_fill 00) and SC strongly taken (sc_fill 011111):
     //    at p2 the conditional is not taken, the RETURN reachable, and

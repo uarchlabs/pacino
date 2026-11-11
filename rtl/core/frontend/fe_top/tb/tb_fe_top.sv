@@ -323,49 +323,10 @@ module tb;
       n_rest_rep <= n_rest_rep + 1;
   end
 
-  // BP-134: p3 undos of a pop that decremented a recursion count
-  // (TD#78), and whether each put the count back. An event is a slot
-  // whose registered p2 op (ras.sv p3_op_q) pops over a pop that held
-  // TOSR (p3_pop_dec_q), whose p3 view has no pop, in a cycle with no
-  // RAS restore (which drops the repair). The expected count is taken
-  // from the array before the undo's edge, plus one; it is compared
-  // after the edge. Only an undo in a cycle whose p2 pass is dropped
-  // (ras_p2_keep low, the p3 redirect the reversal makes) is compared,
-  // so no p2 write can touch the entry in the same edge.
-  int                        n_undo_rdec;
-  int                        n_undo_ok;
-  int                        n_undo_bad;
-  logic                      ud_pend [0:NUM_PRED_SLOTS-1];
-  logic [RAS_PTR_BITS-1:0]   ud_idx  [0:NUM_PRED_SLOTS-1];
-  logic [RAS_RCTR_WIDTH-1:0] ud_exp  [0:NUM_PRED_SLOTS-1];
-  always @(posedge clk) begin : undo_rdec_log
-`ifndef BASE_RTL
-    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      if (rstn && ud_pend[s]) begin
-        if (dut.u_bpu.u_ras.spec_rctr[ud_idx[s]] == ud_exp[s])
-          n_undo_ok <= n_undo_ok + 1;
-        else
-          n_undo_bad <= n_undo_bad + 1;
-      end
-      ud_pend[s] <= 1'b0;
-      if (meas && dut.u_bpu.u_ras.ras_rst_done &&
-          !dut.u_bpu.u_ras.ras_restore_val &&
-          dut.u_bpu.u_ras.p3_op_q[s][1] && dut.u_bpu.u_ras.p3_pop_dec_q[s] &&
-          !(dut.u_bpu.u_ras.ras_pred_val_p3[s] &&
-            (dut.u_bpu.u_ras.ras_br_type_p3[s] inside {RETURN, RETURN_CALL})))
-      begin
-        n_undo_rdec <= n_undo_rdec + 1;
-        if (!dut.u_bpu.u_ras.ras_p2_keep) begin
-          ud_pend[s] <= 1'b1;
-          ud_idx[s]  <= dut.u_bpu.u_ras.p3_pre_tosr_q[s];
-          ud_exp[s]  <= dut.u_bpu.u_ras.spec_rctr[
-                          dut.u_bpu.u_ras.p3_pre_tosr_q[s]]
-                        + RAS_RCTR_WIDTH'(1);
-        end
-      end
-    end
-`endif
-  end
+  // BP-144: the BP-134 undo_rdec_log monitor (n_undo_rdec, n_undo_ok,
+  // n_undo_bad) is removed. Only program rec_undo read it, and BP-143
+  // removed that program. tb_bp_cluster CB2-RP4 checks the undo of a
+  // pop over a recursion pop (RP4) directly.
 
   // BP-142: the check of program misp_call (TD#162). An event is a
   // backend mispredict redirect (bkend_ftq_redir_val, cause
@@ -1200,10 +1161,6 @@ module tb;
     n_ras_sq     = 0;
     n_p3_no_p2   = 0;
     n_p3_rep     = 0;
-    n_undo_rdec  = 0;
-    n_undo_ok    = 0;
-    n_undo_bad   = 0;
-    for (int s = 0; s < NUM_PRED_SLOTS; s++) ud_pend[s] = 1'b0;
     mc_on        = 1'b0;                      // BP-142, misp_call
     mc_pend      = 1'b0;
     mc_nt_pc     = '0;
