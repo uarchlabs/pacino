@@ -115,15 +115,12 @@
 // path, that no uncached line is written into the L1I, and that an
 // uncached instruction is delivered alone.
 //
-// BP-134. Program rec_undo: a recursion whose return blocks put a
-// conditional before the ret, so SC reversing it at p3 undoes a pop
-// that decremented a recursion count (TD#78). It counts those undos
-// and checks each put the count back. BP-142: its outcomes are written
-// out (no LFSR, no +RU_SEED); SC's reversal is not reached by
-// construction, so the count is reported and not required above zero
-// (tb_bp_cluster CB2-RP4 checks the rule). misp_call likewise has no
-// LFSR, and checks that the call's block is the first fetched after
-// each backend mispredict of its conditional.
+// BP-134 added program rec_undo (an undo of a pop that decremented a
+// recursion count, TD#78); BP-143 removed it: SC's reversal at p3, which
+// its case needs, is not reached by construction (BP-142), so its check
+// could not fail. tb_bp_cluster CB2-RP4 checks the rule. BP-142:
+// misp_call has no LFSR, and checks that the call's block is the first
+// fetched after each backend mispredict of its conditional.
 //
 // BP-135. Program t0_uaon: T0 chosen as the TAGE provider by
 // use_alt_on_na over a tagged primary, and then updated (CTR rows
@@ -2144,78 +2141,6 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
-  // rec_undo (BP-134): an undo of a pop that decremented a recursion
-  // count (TD#78, BP-133 Problem 2). f calls itself six deep from one
-  // call site (as recur), so the return address f+14 is pushed once and
-  // its recursion count raised five times; each return but the
-  // outermost pops by decrementing it, TOSR held. Every return of f is
-  // in the block [bne][ret] at f+14 (two slots of one FTB entry). When
-  // p2 predicts the bne not taken (the ret reachable, popped) and p3
-  // predicts it taken, the ret is not reachable at p3 and the p3 pass
-  // undoes the pop. When that pop decremented the count, the undo must
-  // put it back, or the stack is one level short.
-  //
-  // BP-142 (Problem 5): THE CASE IS NOT REACHED BY CONSTRUCTION, so the
-  // program no longer checks that it occurs. An undo-pop needs the p3
-  // view of the ret to differ from its p2 operation, and the only input
-  // that changes a direction between p2 and p3 is SC: ras_pred_val_p3 =
-  // r_val_p3 & r_brv_p3 & w_reach_p3, with the p3 reachability from the
-  // SC direction (BP-121 D10, ras_decisions.md 12.14 CB2). Whether SC
-  // reverses the bne at p3 depends on its table counters, its threshold
-  // and the TAGE confidence, which the program's outcomes do not set by
-  // construction; a written-out outcome sequence can make the bne hard
-  // to predict but cannot make SC reverse it on a given execution. The
-  // rule (RP4 over PO1, the undo of a recursion pop) is checked
-  // directly by tb_bp_cluster CB2-RP4 (group CB), which forces the SC
-  // direction with sc_fill. Until BP-142 the bne's outcome was two
-  // W.lfsr_bit()s (seed 16'hace1, +RU_SEED), and the case count was
-  // checked above zero.
-  // What the program still does: every outcome is written out. The bne
-  // of return k (innermost first, k = 0..RU_DEPTH) of iteration it is
-  // taken when (it + k) % 4 == 3, one return in four, the proportion
-  // the LFSR version used (at 1/2 wrong-path pops wear the count down).
-  // Every undo over a recursion pop that does occur is compared (the
-  // count is put back); their number is reported, not checked.
-  // -----------------------------------------------------------------
-  localparam int RU_ITERS = 48;
-  localparam int RU_WARM  = 8;
-  localparam int RU_DEPTH = 6;
-
-  task automatic p_rec_undo();
-    logic [VA_WIDTH-1:0] top;
-    logic [VA_WIDTH-1:0] f;
-    logic [VA_WIDTH-1:0] l;
-    begin_prog("rec_undo");
-    f = RESET_VECTOR + VA_WIDTH'('h800);
-    W.mixed(3);
-    top = W.wp;
-    for (int it = 0; it < RU_ITERS; it++) begin
-      if (it == RU_WARM) warm_e = W.ne;
-      W.wp = top;
-      W.mixed(2);
-      l = W.wp + VA_WIDTH'(4);
-      W.rc_tk.delete();
-      for (int k = 0; k <= RU_DEPTH; k++)
-        W.rc_tk.push_back(((it + k) % 4) == 3);
-      W.jal(5'd1, f);
-      W.emit_rcx(f, RU_DEPTH, l);
-      W.mixed(1);
-      W.bcc(it != RU_ITERS - 1, top);
-    end
-    W.mixed(3);
-    end_prog(120000);
-    $display("   UNDO %s undo-pops over a recursion pop %0d, compared %0d,",
-             tname, n_undo_rdec, n_undo_ok + n_undo_bad);
-    $display("   UNDO %s count put back %0d, not put back %0d", tname,
-             n_undo_ok, n_undo_bad);
-`ifndef BASE_RTL
-    chk($sformatf({"rec_undo: each undo put the recursion count back ",
-                   "(%0d ok, %0d not)"}, n_undo_ok, n_undo_bad),
-        n_undo_bad == 0);
-`endif
-  endtask
-
-  // -----------------------------------------------------------------
   // t0_uaon (BP-135): T0 as the TAGE provider through use_alt_on_na,
   // then updated (CTR rows 19.1-19.8, BP-133). One block per
   // iteration: mixed(2), a conditional B taken with probability 1/8
@@ -3682,7 +3607,6 @@ module tb;
       "ftbonly":    p_ftbonly();
       "nest":       p_nest();
       "recur":      p_recur();
-      "rec_undo":   p_rec_undo();
       "t0_uaon":    p_t0_uaon();
       "deep":       p_deep();
       "indir":      p_indir();
@@ -3717,9 +3641,9 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:38] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:37] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
-                              "recur", "rec_undo", "t0_uaon", "deep",
+                              "recur", "t0_uaon", "deep",
                               "indir", "region",
                               "multistart", "cross", "rvc", "misp_call",
                               "jals", "fencei", "cboinval", "uc_nc",

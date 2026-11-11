@@ -9,7 +9,7 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-65. TC-01 .. TC-20 from BP-063; TC-21
+// Directed cases TC-01 .. TC-67. TC-01 .. TC-20 from BP-063; TC-21
 // (BP-064) pinned TD #78 (undo-pop did not reverse a recursion pop)
 // until BP-133 fixed it.
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
@@ -39,9 +39,12 @@
 // ras_decisions.md 12, compared with the DUT every cycle of every case
 // (see REFERENCE MODEL below), and (Problem 3) TC-46 .. TC-65, directed
 // cases for the rules of ras_decisions.md 12.1 to 12.13 with their
-// boundaries; each check name carries the rule IDs it checks. TC-65
-// (IV1/PO7, the tb_fe_top rec_undo RS2 failure) is OPEN, behind
-// +OPEN_IV1: the rules RE1, CO5 and CO6 reach a state IV1 forbids.
+// boundaries; each check name carries the rule IDs it checks. BP-143
+// changed the model's chain test to the session-084 ruling (TOSR below
+// BOS is not a fault; see THE CHAIN below), runs TC-65 by default with
+// the rule's values, and added TC-66 (fd07: CO6 keeps TOSR off the old
+// BOS slot) and TC-67 (a chain entry below BOS reused before the
+// sentinel skip: the wrap, counted).
 // No case uses a seed, an LFSR or random stimulus.
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
@@ -140,8 +143,25 @@ module tb;
   // -----------------------------------------------------------------
   int pass_cnt;
   int fail_cnt;
+  int unsigned m_wpend;            // BP-143, see tc_of
+  int unsigned m_wcase [string];
+
+  // BP-143: the case a check belongs to, its name up to the first space
+  // (TC-65, MODEL, ...). Wraps the model counted since the last check
+  // are given to it (m_wpend, the REFERENCE MODEL below).
+  function automatic string tc_of(input string nm);
+    for (int i = 0; i < nm.len(); i++)
+      if (nm.getc(i) == " ") return nm.substr(0, i - 1);
+    return nm;
+  endfunction
 
   task automatic check(input string nm, input logic cond);
+    string tc;
+    if (m_wpend != 0) begin
+      tc          = tc_of(nm);
+      m_wcase[tc] = m_wcase[tc] + m_wpend;
+      m_wpend     = 0;
+    end
     if (cond) begin
       pass_cnt++;
       $display("PASS: %s", nm);
@@ -307,10 +327,27 @@ module tb;
   // next state becomes the state (m_step). Reset (RT1) is applied at a
   // posedge with rstn low, as the DUT's synchronous reset is.
   //
-  // "Held" (IV1). Each speculative index carries the sequence number
-  // of its last allocation (PU1, PU2, RP7 allocate; nothing else does).
-  // The stack holds TOSR when TOSR was allocated after BOS, as
-  // ras_assert.sv RS2 decides it, independent of TOSR == BOS.
+  // THE CHAIN (IV1, PO7; BP-143, ruled session-084). Each speculative
+  // index carries the sequence number of its last allocation (seq; PU1,
+  // PU2, RP7 allocate, nothing else does). Beside the pointers the model
+  // keeps which allocation they refer to: tref, the allocation TOSR
+  // names, and per entry nref, the allocation its link names (0, none,
+  // for a bottom entry, whose pop goes to BOS). A push sets tref to the
+  // new allocation and records the old tref as the new entry's nref; a
+  // pop that follows the link takes tref from nref; an undo takes the
+  // tref registered with the operation; a restore takes the tref the
+  // model recorded when it produced that snapshot (m_sref), or, for a
+  // snapshot the model never produced, the allocation the index holds.
+  // A chain entry is a TOSR with tref != 0, above or below BOS. With
+  // TOSR != BOS and tref == 0 the state fails IV1 (every cycle) and PO7
+  // (every pop of every slot, repair cycles included: IV2). A chain
+  // entry whose index was reallocated since (seq[tosr] != tref) is the
+  // wrap (PO7, PU3, RE7): counted, not failed. The model decides this
+  // from its own state; it reads the DUT only to compare with it.
+  // TOSR == BOS is the empty stack (IV1): tref is none there, and the
+  // entry at BOS is the sentinel, never a chain entry (PO7).
+  // Until BP-143 the model held TOSR only when TOSR was allocated after
+  // BOS (seq[tosr] > seq[bos]), the meaning session-084 replaced.
   // =================================================================
   localparam int M_SEQ_W = 32;
   localparam logic [RAS_RCTR_WIDTH-1:0] M_RCTR_MAX =
@@ -327,6 +364,8 @@ module tb;
   typedef struct packed {
     m_ent_t [RAS_SPEC_ENTRIES-1:0]                e;
     logic   [RAS_SPEC_ENTRIES-1:0][M_SEQ_W-1:0]   seq;
+    logic   [RAS_SPEC_ENTRIES-1:0][M_SEQ_W-1:0]   nref;  // BP-143
+    logic   [M_SEQ_W-1:0]                         tref;  // BP-143
     logic   [M_SEQ_W-1:0]                         gen;
     logic   [RAS_PTR_BITS-1:0]                    tosr;
     logic   [RAS_PTR_BITS-1:0]                    tosw;
@@ -350,6 +389,7 @@ module tb;
     logic                    push;
     logic [VA_WIDTH-1:0]     ft;         // RP7
     logic [RAS_PTR_BITS-1:0] pre_tosr;   // RP4, RP8
+    logic [M_SEQ_W-1:0]      pre_tref;   // the allocation pre_tosr names
     logic                    pre_empty;  // RP5
     logic                    pop_dec;    // RP4, RP8
     logic [1:0]              push_kind;  // RP1 to RP3, RP8
@@ -375,13 +415,41 @@ module tb;
   int unsigned m_nmis;      // mismatches
   int unsigned m_niv;       // IV1 / IV2 (PO7) violations
   int unsigned m_cyc;       // cycles since the last reset
+  // BP-143: pops of a reused chain entry (the wrap, PO7), in total, not
+  // yet given to a case, and per case (the TC name of the next check).
+  // m_wpend and m_wcase are declared with the scoreboard.
+  int unsigned m_nwrap;
+  // BP-143: the tref of each snapshot value the model produced (SL2),
+  // read by a restore (RE1). Cleared at reset.
+  logic [M_SEQ_W-1:0] m_sref [logic [$bits(bp_ras_snapshot_t)-1:0]];
 
   function automatic logic m_empty(input m_spec_t s);
     return s.tosr == s.bos;                              // IV1, 3.2
   endfunction
 
-  function automatic logic m_held(input m_spec_t s);
-    return s.seq[s.tosr] > s.seq[s.bos];                 // IV1
+  // A chain entry at TOSR (IV1, PO7): the model's tref names one.
+  function automatic logic m_chain(input m_spec_t s);
+    return !m_empty(s) && (s.tref != '0);
+  endfunction
+
+  // A chain entry whose index was reallocated since: the wrap (PO7).
+  function automatic logic m_reused(input m_spec_t s);
+    return m_chain(s) && (s.seq[s.tosr] != s.tref);
+  endfunction
+
+  // Remove the top by its link (PO2, PO3, RP1): TOSR to nos, or to BOS
+  // as it is then for a bottom entry; tref follows (BP-143).
+  function automatic m_spec_t m_unlink(input m_spec_t s);
+    m_spec_t r;
+    r = s;
+    if (r.e[r.tosr].bot) begin                           // PO3
+      r.tref = '0;
+      r.tosr = r.bos;
+    end else begin                                       // PO2
+      r.tref = r.nref[r.tosr];
+      r.tosr = r.e[r.tosr].nos;
+    end
+    return r;
   endfunction
 
   // A pop of the speculative stack, PO1 to PO4. The caller has
@@ -394,10 +462,8 @@ module tb;
     if (r.e[r.tosr].rctr != '0) begin                    // PO1
       r.e[r.tosr].rctr = r.e[r.tosr].rctr - 1'b1;
       dec = 1'b1;
-    end else if (r.e[r.tosr].bot) begin                  // PO3
-      r.tosr = r.bos;
-    end else begin                                       // PO2
-      r.tosr = r.e[r.tosr].nos;
+    end else begin
+      r = m_unlink(r);                                   // PO2, PO3
     end
     return r;
   endfunction
@@ -429,8 +495,12 @@ module tb;
       r.e[al].rctr = '0;
       r.e[al].nos  = skip ? r.bos : r.tosr;
       r.e[al].bot  = skip | m_empty(r);
+      // BP-143: the link names the allocation TOSR named; none for a
+      // bottom entry.
+      r.nref[al]   = (skip | m_empty(r)) ? '0 : r.tref;
       r.gen        = r.gen + 1;
       r.seq[al]    = r.gen;
+      r.tref       = r.gen;
       r.tosr       = al;
       r.tosw       = al + 1'b1;
     end
@@ -466,15 +536,26 @@ module tb;
     return v && ((t == RETURN) || (t == RETURN_CALL));   // CL2
   endfunction
 
-  // A PO7 / IV2 check on a working state, at a pop.
-  task automatic m_iv(input m_spec_t w, input int s, input string where);
-    if (m_empty(w) == m_held(w)) begin
+  // The IV1 / PO7 check on a working state (BP-143): with TOSR != BOS,
+  // TOSR names a chain entry. At a pop (wrap 1) a reused chain entry is
+  // counted as the wrap; the pop then returns the reusing push's
+  // address, which m_compare checks against the DUT.
+  task automatic m_iv(input m_spec_t w, input int s, input string where,
+                      input logic wrap);
+    if (!m_empty(w) && !m_chain(w)) begin
       m_niv++;
       m_nmis++;
       $display("MODEL FAIL cyc %0d t %0t slot %0d %s: IV1/PO7", m_cyc, $time,
                s, where);
-      $display("  tosr %0d bos %0d empty %0d held %0d", w.tosr, w.bos,
-               m_empty(w), m_held(w));
+      $write("  tosr %0d != bos %0d names no chain entry: ", w.tosr, w.bos);
+      $display("expected allocation none (empty); idx %0d holds alloc %0d",
+               w.tosr, w.seq[w.tosr]);
+    end else if (wrap && m_reused(w)) begin
+      m_nwrap++;
+      m_wpend++;
+      $write("MODEL WRAP cyc %0d t %0t slot %0d %s: ", m_cyc, $time, s, where);
+      $display("tosr %0d (bos %0d) names alloc %0d, reused by alloc %0d",
+               w.tosr, w.bos, w.tref, w.seq[w.tosr]);
     end
   endtask
 
@@ -502,6 +583,7 @@ module tb;
       if (m_q[s].pop && m_q[s].push && !vpop && !vpush) begin
         // RP8 the undo of a whole RETURN_CALL, RP5.
         w.tosr = m_q[s].pre_empty ? w.bos : m_q[s].pre_tosr;
+        w.tref = m_q[s].pre_empty ? '0 : m_q[s].pre_tref;
         if (m_q[s].pop_dec && (m_q[s].push_kind == M_PK_INC)) begin
           // the pop and the push changed one count: they cancel
         end else if (m_q[s].pop_dec) begin
@@ -515,13 +597,15 @@ module tb;
           if (m_q[s].push_kind == M_PK_INC)                // RP2
             w = m_adj(w, w.tosr, 1'b0);
           else if ((m_q[s].push_kind == M_PK_ALLOC) && !m_empty(w))
-            w.tosr = w.e[w.tosr].bot ? w.bos : w.e[w.tosr].nos;  // RP1
+            w = m_unlink(w);                               // RP1
           // RP3: a saturated push changed nothing; nor does its undo
         end
         if (m_q[s].pop && !vpop) begin                     // RP4, RP5
           w.tosr = m_q[s].pre_empty ? w.bos : m_q[s].pre_tosr;
+          w.tref = m_q[s].pre_empty ? '0 : m_q[s].pre_tref;
           if (m_q[s].pop_dec) w = m_adj(w, m_q[s].pre_tosr, 1'b1);
         end else if (!m_q[s].pop && vpop) begin            // RP6
+          m_iv(w, s, "p3 missed pop", 1'b1);               // IV2, PO7
           if (!m_empty(w)) w = m_pop_spec(w, d);
         end
         if (!m_q[s].push && vpush)                         // RP7
@@ -539,9 +623,10 @@ module tb;
       m_nq[s].push      = m_is_push(pred_val_p2[s], br_type_p2[s]);
       m_nq[s].ft        = fall_p2[s];
       m_nq[s].pre_tosr  = w.tosr;
+      m_nq[s].pre_tref  = w.tref;
       m_nq[s].pre_empty = m_empty(w);
       if (m_nq[s].pop) begin                               // CL4: pop first
-        m_iv(w, s, "p2 pop");                              // IV2, PO7
+        m_iv(w, s, "p2 pop", 1'b1);                        // IV2, PO7
         if (!m_empty(w)) begin
           m_pop_valid[s] = 1'b1;                           // PO1 to PO3
           m_pop_addr[s]  = w.e[w.tosr].ret;
@@ -561,6 +646,8 @@ module tb;
       m_snap[s].tosw = w.tosw;
       m_snap[s].bos  = w.bos;
       m_snap[s].rctr = m_empty(w) ? '0 : w.e[w.tosr].rctr;
+      // BP-143: the allocation this snapshot's TOSR names.
+      if (!m_empty(w)) m_sref[m_snap[s]] = w.tref;
     end
 
     // ---- next state ----
@@ -571,6 +658,15 @@ module tb;
       m_ns.tosr = restore_snap.tosr;
       m_ns.tosw = restore_snap.tosw;
       m_ns.bos  = restore_snap.bos;
+      // BP-143: the allocation the snapshot's TOSR named when the model
+      // produced it; for a snapshot it never produced, the allocation
+      // the index holds now.
+      if (restore_snap.tosr == restore_snap.bos)
+        m_ns.tref = '0;
+      else if (m_sref.exists(restore_snap))
+        m_ns.tref = m_sref[restore_snap];
+      else
+        m_ns.tref = m_s.seq[restore_snap.tosr];
       if (restore_snap.tosr != restore_snap.bos)
         m_ns.e[restore_snap.tosr].rctr = restore_snap.rctr;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin       // RE3
@@ -611,6 +707,9 @@ module tb;
       if (m_ns.tosr == m_s.bos) m_ns.tosr = commit_snap.tosr;  // CO6
       m_ns.bos = commit_snap.tosr;
     end
+    // IV1: TOSR == BOS is the empty stack; the entry at BOS is the
+    // sentinel, not a chain entry (BP-143).
+    if (m_ns.tosr == m_ns.bos) m_ns.tref = '0;
   endtask
 
   // -----------------------------------------------------------------
@@ -670,7 +769,7 @@ module tb;
   always @(negedge clk) begin
     if (rstn && m_live) begin
       m_eval();
-      m_iv(m_s, 0, "state");                               // IV1
+      m_iv(m_s, 0, "state", 1'b0);                         // IV1
       m_compare();
     end
   end
@@ -681,6 +780,7 @@ module tb;
       m_c    <= '0;
       m_live <= 1'b1;
       m_cyc  <= 0;
+      m_sref.delete();                                     // BP-143
       for (int s = 0; s < NUM_PRED_SLOTS; s++) m_q[s] <= '0;
     end else if (m_live) begin
       m_s   <= m_ns;
@@ -3087,27 +3187,32 @@ module tb;
           ($bits(bp_ras_snapshot_t) == 16));
 
     // =============================================================
-    // TC-65 IV1, IV2 (BP-142 Problem 4, the tb_fe_top rec_undo RS2
-    // failure at seeds 7777 and 1234). OPEN: behind +OPEN_IV1.
-    //   A pushed (idx1), B pushed (idx2), B again (rctr[2] 1). Block E
-    //   (no RAS operation) takes snapshot S = {2,3,0,1}. The three
-    //   calls commit: BOS 0 -> 1 -> 2 -> 2 (CO5); at the second TOSR 2
-    //   != BOS 1, so no drag; TOSR 2 == BOS 2: empty, every entry
-    //   committed (IV1 holds). E is redirected: the restore loads S
-    //   (RE1): TOSR 2, TOSW 3, BOS 0 -- BOS back below the two
-    //   committed entries -- and rctr[2] 1 (RE6). The correct path
-    //   returns twice: R1 decrements rctr[2] (PO1), R2 pops B to A
-    //   (PO2, TOSR 1). R1 commits with its snapshot {2,3,0}: BOS 0 -> 2
-    //   (CO5); the scan's TOSR 1 != BOS 0, so TOSR stays 1 (CO6). Now
-    //   TOSR 1 != BOS 2 reads non-empty, while A (idx1) was allocated
-    //   before BOS's entry (idx2): the stack does not hold it (IV1).
-    //   The next pop returns A from the speculative stack: PO7 is
-    //   broken, and ras_assert RS2 fires (the commit top is B).
-    // RE1, CO5 and CO6 give this state; IV1 forbids it. The model,
-    // written from the rules, reaches the same state as ras.sv (no
-    // mismatch on any pointer) and reports the IV1/PO7 failure.
+    // TC-65 IV1, IV2, PO7: TOSR below BOS names a chain entry (BP-142
+    // Problem 4, the tb_fe_top RS2 failure at seeds 7777 and 1234 of
+    // program rec_undo, which BP-143 removed; ruled session-084,
+    // ras_decisions.md 3.2 TOSR BELOW BOS IS NOT A FAULT; BP-143 runs it
+    // by default with the rule's values).
+    //   A pushed (idx1, PU2: TOSW 0 == BOS 0, skip to 1, bottom), B
+    //   pushed (idx2, PU1: nos 1), B again (PU5: rctr[2] 1). Block E
+    //   (no RAS operation) takes snapshot S = {2,3,0,1} (SL2). The
+    //   three calls commit: BOS 0 -> 1 -> 2 -> 2 (CO5); TOSR 2 is not
+    //   BOS at the first two, and at the third TOSR 2 == BOS 2 already,
+    //   so no drag (CO6): empty. E is redirected: the restore loads S
+    //   (RE1): TOSR 2, TOSW 3, BOS 0, and rctr[2] 1 (RE6). TOSR names B,
+    //   the allocation it named when S was taken. The correct path
+    //   returns twice: R1 returns B and decrements rctr[2] (PO1), R2
+    //   returns B and follows its link to A (PO2, TOSR 1, the
+    //   allocation B's link names). R1 commits with its snapshot
+    //   {2,3,0}: BOS 0 -> 2 (CO5); the scan's TOSR 1 is not BOS 0, so
+    //   TOSR stays 1 (CO6). Now TOSR 1 is below BOS 2 and names A, a
+    //   chain entry: the push of A wrote it, B's link reaches it, and no
+    //   allocation has reused idx1 since (TOSW 3 has not come round).
+    //   By PO7 the next pop returns A, valid (not the commit top B),
+    //   and by PO3 (A is a bottom entry) TOSR then goes to BOS 2: empty.
+    // Until BP-143 this case ran only with +OPEN_IV1 and expected the
+    // commit top B, the old meaning of held (allocated after BOS).
     // =============================================================
-    if ($test$plusargs("OPEN_IV1")) begin
+    begin
       bp_ras_snapshot_t s65;
       do_reset();
       push_one(ADDR_A);
@@ -3135,18 +3240,112 @@ module tb;
       commit_snap = '{4'd2, 4'd3, 4'd0, 4'd0};
       tick();
       commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
-      check("TC-65 CO5 CO6 R1's commit: tosr 1, bos 2", ptr_is(1, 3, 2));
-      check("TC-65 IV1 tosr != bos only when the stack holds tosr",
-            (dut.tosr == dut.bos) || (m_held(m_s)));
-      // PO7: a valid pop is either a held entry or the commit top B.
+      check("TC-65 CO5 CO6 R1's commit: tosr 1 below bos 2", ptr_is(1, 3, 2));
+      check("TC-65 IV1 tosr 1 names a chain entry, A's allocation, not reused",
+            m_chain(m_s) && !m_reused(m_s) && (m_s.tref == m_s.seq[1]));
       drv(0, 1'b1, RETURN, '0);
       #1;
-      check("TC-65 PO7 the pop returns no entry the stack does not hold",
-            pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_B));
+      check("TC-65 PO7 the pop returns the chain entry A, valid",
+            pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_A));
       tick();
-    end else begin
-      $display("%s", {"OPEN: TC-65 IV1/PO7 (RE1 restores a BOS older than ",
-                      "the commits since the snapshot; +OPEN_IV1 runs it)"});
+      check("TC-65 PO3 A is a bottom entry: tosr to bos 2, empty",
+            ptr_is(2, 3, 2));
+    end
+
+    // =============================================================
+    // TC-66 IV1, PO7, CO6 (BP-143 Problem 3a, fd07 of BP-138): a commit
+    // that moves BOS while TOSR == BOS moves TOSR with it, so TOSR never
+    // names the old BOS slot, which no push on the chain wrote.
+    //   X pushed: TOSW 0 == BOS 0, so the skip allocates idx1 with nos
+    //   0, bottom (PU2). X's return pops it: bottom, TOSR = BOS 0, empty
+    //   (PO3). X's call commits with its snapshot TOSR 1: BOS 0 -> 1
+    //   (CO5), and the scan's TOSR 0 == BOS 0, so TOSR -> 1 (CO6).
+    //   TOSR 1 == BOS 1: empty, and the next pop is the commit top X,
+    //   valid (PO5). Without CO6 TOSR stays 0 != BOS 1, on idx0, the
+    //   never-written sentinel: the model fails IV1 (no chain entry) and
+    //   the pop returns 0x0 from the speculative stack, which RS2
+    //   reports.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_X);
+    pop_chk("TC-66 X's return pops X to empty", 0, 1'b1, ADDR_X);
+    commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+    check("TC-66 CO5 CO6 X's call commit: tosr 1 == bos 1, empty",
+          ptr_is(1, 2, 1) && !m_chain(m_s));
+    pop_chk("TC-66 PO5 PO7 the next pop is the commit top X, valid",
+            0, 1'b1, ADDR_X);
+    check("TC-66 PO5 the fallback moves nothing", ptr_is(1, 2, 1));
+
+    // =============================================================
+    // TC-67 PO7, PU2, PU4 (BP-143 Problem 4): a chain entry below BOS
+    // reused before the sentinel skip, and the pop that reaches it.
+    //   TC-65's state: TOSR 1 (A, a chain entry below BOS), TOSW 3, BOS
+    //   2. Pushes P1..P15 (fill_addr[1..15]) follow. P1 allocates idx3
+    //   (TOSW 3 != BOS 2, no skip; the stack is not empty, so bot 0, and
+    //   its link names A at idx1, PU1). P2..P13 allocate idx4..idx15 and
+    //   P14 idx0, each linked to the one before. TOSW is then 1 and TOSW
+    //   + 1 == BOS 2: full (PU4, 14 allocations since BOS moved). P15
+    //   finds TOSW 1 != BOS 2, so no skip (PU2 guards only BOS): it
+    //   allocates idx1, A's index, and reuses A, linked to P14 (idx0);
+    //   TOSW 2 == BOS. So the reusing push is P15, the 15th.
+    //   The pops: P15 (idx1, the entry P15 wrote, not a wrap), then
+    //   P14..P1 (idx0, idx15..idx3), each by its link (PO2). P1's pop
+    //   follows its link to idx1, which names A's allocation; idx1 now
+    //   holds P15. By PO7 the next pop returns the reusing push's
+    //   address, P15, valid, and it is the wrap: counted by the model
+    //   and by RS2, not failed. TOSR then follows P15's link to idx0.
+    // =============================================================
+    begin
+      bp_ras_snapshot_t s67;
+      int unsigned      w0;
+      int unsigned      r0;
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      push_one(ADDR_B);
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      s67 = snap_p2[NUM_PRED_SLOTS-1];
+      tick();
+      commit_op(DIRECT_CALL, ADDR_A, 4'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
+      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s67;
+      tick();
+      restore_val = 1'b0; restore_snap = '0;
+      pop_chk("TC-67 R1 pops B (count 1 -> 0)", 0, 1'b1, ADDR_B);
+      pop_chk("TC-67 R2 pops B to A", 0, 1'b1, ADDR_B);
+      drv(0, 1'b0, NO_BRANCH, '0);
+      commit_val = 1'b1; commit_br_type = RETURN;
+      commit_snap = '{4'd2, 4'd3, 4'd0, 4'd0};
+      tick();
+      commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
+      check("TC-67 TC-65's state: tosr 1 below bos 2, tosw 3, A at idx1",
+            ptr_is(1, 3, 2) && m_chain(m_s) &&
+            (dut.spec_ret_addr[1] == ADDR_A));
+      for (int k = 1; k <= 14; k++) push_one(fill_addr[k]);
+      check("TC-67 PU4 14 allocations: tosw 1, tosw + 1 == bos 2, full",
+            ptr_is(0, 1, 2) && (dut.spec_ret_addr[0] == fill_addr[14]) &&
+            (dut.spec_nos[3] == 4'd1) && !dut.spec_bot[3]);
+      push_one(fill_addr[15]);
+      check("TC-67 PU2 P15 allocates idx1 (A's), no skip: tosw 2 == bos",
+            ptr_is(1, 2, 2) && ent_is(1, fill_addr[15], 0, 0, 0));
+      pop_chk("TC-67 the pop of P15 at idx1 returns P15", 0, 1'b1,
+              fill_addr[15]);
+      for (int k = 14; k >= 1; k--)
+        pop_chk($sformatf("TC-67 the pop of P%0d returns P%0d", k, k), 0,
+                1'b1, fill_addr[k]);
+      check("TC-67 P1's link names A's allocation at idx1, reused by P15",
+            ptr_is(1, 2, 2) && m_reused(m_s));
+      w0 = m_nwrap;
+      r0 = dut.u_assert.r_nreuse;
+      pop_chk("TC-67 PO7 the pop reaching A returns P15, valid (the wrap)",
+              0, 1'b1, fill_addr[15]);
+      check("TC-67 PO7 the wrap is counted once by the model and by RS2",
+            (m_nwrap == w0 + 1) && (dut.u_assert.r_nreuse == r0 + 1));
+      check("TC-67 PO2 TOSR then follows P15's link to idx0",
+            ptr_is(0, 2, 2));
     end
 
     // -------------------------------------------------------------
@@ -3154,6 +3353,11 @@ module tb;
     // from each case's reset. One check stands for all its comparisons.
     $display("tb_ras: MODEL comparisons %0d, mismatches %0d (IV1/PO7 %0d)",
              m_ncmp, m_nmis, m_niv);
+    // BP-143: the wrap (PO7), per case and in total.
+    if (m_wpend != 0) m_wcase["(after the last check)"] = m_wpend;
+    foreach (m_wcase[c])
+      $display("tb_ras: MODEL wraps %s %0d", c, m_wcase[c]);
+    $display("tb_ras: MODEL wraps total %0d", m_nwrap);
     check($sformatf("MODEL %0d comparisons, no mismatch", m_ncmp),
           (m_nmis == 0) && (m_ncmp > 0));
     $display("=================================================");

@@ -565,51 +565,8 @@
       end
       ret(link);
     endtask
-    // BP-134, rec_undo: f calls itself n deep from one call site, and
-    // every return of f is in a block with a conditional before it,
-    // whose outcome tk[] gives per return, innermost first:
-    //   f+0   mixed(2)        6 bytes
-    //   f+6   beq -> f+14     taken at the bottom of the recursion
-    //   f+10  jal x1, f       link f+14
-    //   f+14  bne -> f+64     the conditional of the return block
-    //   f+18  ret             not-taken path
-    //   f+64  c.addi          taken path, in another 32-byte region
-    //   f+66  ret
-    // The path a return does not take is written dry.
-    logic rc_tk [$];
-    task emit_rcx(input logic [VA_WIDTH-1:0] f, input int n,
-                  input logic [VA_WIDTH-1:0] link);
-      logic d;
-      logic t;
-      wp = f;
-      mixed(2);
-      bcc(n == 0, f + VA_WIDTH'(14));
-      if (n > 0) begin
-        jal(5'd1, f);
-        emit_rcx(f, n - 1, f + VA_WIDTH'(14));
-      end
-      t = rc_tk.pop_front();
-      bcc(t, f + VA_WIDTH'(64));
-      d   = dry;
-      dry = 1'b1;
-      if (t) begin
-        wp = f + VA_WIDTH'(18);
-        ret(link);
-        wp = f + VA_WIDTH'(64);
-        dry = d;
-        i16();
-        ret(link);
-      end else begin
-        dry = d;
-        ret(link);
-        dry = 1'b1;
-        wp  = f + VA_WIDTH'(64);
-        i16();
-        ret(link);
-        dry = d;
-        wp  = link;
-      end
-    endtask
+    // BP-143 removed rc_tk and emit_rcx, the writer of the removed
+    // tb_fe_top program rec_undo (BP-134), which nothing else called.
     // A loop exit: a conditional, taken on the last pass, over a JAL
     // back to top. The JAL is written dry on the last pass.
     task exit_or_jal(input logic last,

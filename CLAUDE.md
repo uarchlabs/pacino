@@ -88,19 +88,11 @@ production-quality outputs.
   no shell variables, $(...) or backticks, loops, or xargs. Run
   tools/regress.sh and tools/regress_demo.sh in the foreground and take
   the summary from their output.
-
-## Combinatorial Logic Style
-
-- Prefer always_comb blocks over cascaded continuous
-  assign statements when signals form a dependency
-  chain (A depends on B depends on C). Verilator v5.048
-  evaluates assign statements using an internal
-  dependency DAG and may read stale values when a
-  chain is evaluated out of order. always_comb blocks
-  evaluate statements in textual order, eliminating
-  the ambiguity.
-- Single assign statements with no internal
-  dependencies are acceptable.
+- rtl/core/frontend/bpu/tb/tb_ras.sv is too large to Read whole (up to
+  20k tokens per read). Search it, or Read only the line range you need
+  with offset/limit.
+- RTL rules (combinatorial style, package imports, Verilator work
+  arounds, Makefile conventions) live in rtl/CLAUDE.md.
 
 ## Experiment File Rules
 - Only read or write files explicitly listed in the
@@ -162,28 +154,6 @@ production-quality outputs.
   describes. The IA does not write them while working the task.
 - Model reporting applies to both automated and manual
   task sessions.
-
-## Package imports
-Import at file scope, before the module declaration. Do not place
-import statements inside the module header between the module name
-and the port list.
-
-  Correct:
-    import bp_defines_pkg::*;
-    import bp_structs_pkg::*;
-    module foo (
-
-  Incorrect (Verilator accepts but project rejects):
-    module foo
-      import bp_defines_pkg::*;
-      import bp_structs_pkg::*;
-    (
-
-For package imports the order of bp_defines_pkg and bp_structs_pkg are
-important. It must be defines first then structs
-
-    import bp_defines_pkg::*;
-    import bp_structs_pkg::*;
 
 ---
 
@@ -264,52 +234,6 @@ important. It must be defines first then structs
   ftq_ifu properties of this kind.
 - A property whose antecedent or consequent is driven only by the
   testbench checks the stimulus, not the RTL. Say so or move it.
-
----
-
-## Project Structure
-
-- clusters: frontend, midcore, backend, memory_system
-- units:    each cluster contains units e.g. fetch, decoder,
-            branch_predictor
-- modules:  each unit contains one or more modules
-- each module has: rtl/, tb/, verilator/, tests/, Makefile, README.md
-
----
-
-## Verilator work arounds
-
-- stl_sequent rule: always_comb blocks that must re-evaluate after FF
-  updates must read at least one FF output. Pure module-input-only
-  always_comb blocks are classified stl_sequent and will not see
-  signal changes after simulation start. Gate prediction scan blocks
-  on a registered valid signal to force nba_sequent.
-
-## Verilator Makefile Conventions
-
-- Always include -Wno-DECLFILENAME in sim targets. The project naming
-  convention (module tb in file tb_<dut>.sv) triggers this warning by
-  design. It is not a defect -- suppress it project-wide.
-- Use -Wall for all other warnings. Sim and lint targets must both
-  exit zero with zero warnings after -Wno-DECLFILENAME and any
-  session-specific suppressions noted in the experiment constraints.
-- Session-specific suppressions (e.g. -Wno-UNUSED for package-only
-  sessions) are listed in the experiment Constraints section and
-  must not be added to CLAUDE.md.
-- Always include -Wno-IMPORTSTAR in VER_FLAGS. The project
-  mandates file-scope wildcard import (import bp_defines_pkg::*;
-  then import bp_structs_pkg::*; before the module declaration).
-  Verilator v5.048 warns on wildcard imports in $unit scope. This
-  is structural and suppressed project-wide.
-- -Wno-VARHIDDEN: add to individual sim or lint targets only when
-  a module parameter intentionally shadows a package parameter
-  (e.g. NUM_PRED_SLOTS). Do not add to VER_FLAGS.
-- Always include -Wno-UNUSED in VER_FLAGS. Package-only
-  files and structs not yet consumed by any module will
-  trigger unused warnings. This is structural and
-  suppressed project-wide.
-- add --timing to VER_FLAGS in Makefiles (required by Verilator
-  v5.048 for @(posedge clk))
 
 ---
 
