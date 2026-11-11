@@ -20,7 +20,7 @@
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual          [ ] interactive
-Status: [ ] in-progress [ ] complete        [ ] abandoned
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Task Overview
 The first performance task. It builds nothing for the gasket. It
