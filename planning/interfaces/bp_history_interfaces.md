@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -406,9 +406,11 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
 ### Semantics
 
-  folded is a bp_folded_hist_t packed struct. All fields are
-  GHR-derived. PHR does not contribute to any fold in the current
-  implementation (deferred -- see Known Gaps).
+  folded is a bp_folded_hist_t packed struct. Every fold is
+  GHR-derived. tage_phr is the PHR in age order, bit 0 the newest
+  path bit, and is read by SC only (ST4, bits 9:0; BP-141). This
+  read "All fields are GHR-derived. PHR does not contribute to any
+  fold"; see Known Gaps, HI2.
 
   TAGE folds (one set of three per tagged table T1-T4):
     tage_t<N>_idx_fh  -- index fold for T<N>
@@ -434,16 +436,17 @@ only advance, rollback by index, FTQ visibility vs ownership).
     indexed on PC alone.
 
   SC folds (one index fold per table with history, ST1-ST3):
-    sc_t1_idx_fh  -- width = SC_TBL_FH[1] = 4b
-    sc_t2_idx_fh  -- width = SC_TBL_FH[2] = 16b
-    sc_t3_idx_fh  -- width = SC_TBL_FH[3] = 64b
+    sc_t1_idx_fh  -- width = SC_TBL_FH[1] = 9b, H = SC_TBL_HIST[1] = 4
+    sc_t2_idx_fh  -- width = SC_TBL_FH[2] = 9b, H = SC_TBL_HIST[2] = 16
+    sc_t3_idx_fh  -- width = SC_TBL_FH[3] = 9b, H = SC_TBL_HIST[3] = 64
 
-    These read SC_T2_HIST = 10b and SC_T3_HIST = 16b. Neither
-    parameter exists; bp_defines_pkg.sv has
-    SC_TBL_FH[0:4] = '{0, 4, 16, 64, 0}, which bp_cluster.md
-    Folded Histories and bp_history_decisions.md 6.4/6.5 both
-    match. Corrected session-070. ST1 read SC_T1_HIST, which does
-    not exist either; session-072.
+    Each folds SC_TBL_HIST[n] bits of history into the index width,
+    SC_TBL_FH[n] = SC_TBL_IDX[n] = 9 (BP-141, ruled session-084).
+    Until BP-141 SC_TBL_FH equalled SC_TBL_HIST, '{0, 4, 16, 64, 0},
+    so the folds were 4, 16 and 64 bits and the index took their low
+    9. Earlier still these read SC_T2_HIST = 10b and SC_T3_HIST =
+    16b, neither of which exists (corrected session-070), and ST1
+    read SC_T1_HIST (session-072).
     ST0 (hist=0) and ST4 (BrIMLI) have no folds.
 
     bp_cluster stages the three SC index folds from p0 to p2
@@ -589,4 +592,8 @@ and the module-owned pointer decision.
               correction is at most two bits (ruled session-078).
               Checkpoint: the stored bundle size ckpt_nb, there since
               BP-121, recorded; it read "pointer only". HI7 closed.
+
+  2026-11-11  session-084, after BP-141. Semantics: tage_phr is the
+              PHR in age order, read by SC ST4. SC folds: 9 bits
+              each, H 4, 16 and 64 (they were 4, 16 and 64 wide).
 ```

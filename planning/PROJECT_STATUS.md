@@ -16,6 +16,61 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-084, continued: BP-141 and BP-142.
+
+BP-141 (PA review): the PHR fold, the SC folds (H into W 9) and the
+  loop predictor's age are fixed and the FTB fast path is built, each
+  with a directed case shown failing before; the slot-0 target is
+  unreachable; decode cannot gate en_zvfhmin (DCD-37). regress.sh 274
+  targets, 0 new failures. TD#195 closed.
+JEFF'S ASSESSMENT OF BP-141: the RAS tests tested only what static
+  seeds expose, against the methodology (the PA describes the
+  features to test, the IA writes those tests); a flaw in the PA's
+  prompt. The RAS tests are rewritten without the LFSR.
+RULED (Jeff): TD#194 option A, the snapshot carries its TOSR entry's
+  count and a restore writes it back (16 bits).
+BP-142: option A built (TD#194 closed); a reference model in tb_ras
+  written from ras_decisions.md 12 and compared every cycle, 0
+  mismatches; a directed case for every rule (TC-46 to TC-65,
+  tb_bp_cluster group CB). Two ras.sv departures fixed: a push or pop
+  in the first cycle after reset was dropped (CL1, the ras_rst_done
+  gate), and RP11 read a stale count. misp_call has no LFSR. One
+  failure held open: TC-65 (+OPEN_IV1), the seed 7777 and 1234 RS2.
+  regress.sh 274 targets, 0 new failures. Closed by Jeff; the open
+  failure goes to a new task.
+JEFF'S ASSESSMENT OF BP-142: the PA was to make a self-consistent set
+  of rules from the RTL and the planning documents, and failed: IV1
+  and PO7 conflicted with RE1, CO5 and CO6. The PA read attached
+  files incompletely, and worked from stale copies.
+RULED (Jeff): TOSR BELOW BOS IS NOT A FAULT (ras_decisions.md 3.2,
+  12.5 PO7, 12.12 IV1). Speculation runs ahead of commit; a held
+  entry is one a push wrote on the current chain and no allocation
+  has reused, above or below BOS. ras.sv, the restore, CO5 and CO6
+  unchanged. In the BP-142 trace the "illegal" pop returns the
+  correct address.
+RULED (Jeff): rec_undo is removed. It cannot reach its case by
+  construction, so its check cannot fail, against the rule that a
+  test is shown to fail before it joins the suite; tb_bp_cluster
+  CB2-RP4 checks its rule (RP4 over PO1).
+PLANNING TEXT of BP-141 and BP-142 applied (PA): bp_history,
+  sc, loop_pred, ftb and ftq_ifu documents, dcd_decisions.md DCD-37;
+  ras_decisions.md and ras_interfaces.md: option A built, full at 14
+  allocations (this read 15), the scan not gated.
+NEXT: BP-143. ras_assert RS2 and RS3 to the new meaning of held;
+  TC-65 reversed and its plusarg removed; a case for a reused entry,
+  at the wrap and below BOS; TD#189's provisional rule rechecked;
+  rec_undo out of FE_PROGS.
+PENDING: CLAUDE.md stl_sequent note (Jeff): "Gate prediction scan
+  blocks on a registered valid signal" describes the gate that caused
+  BP-142's CL1 failure. pacino_features.md describes 79df3ad (fe-1.0.0,
+  DOC-016) and is not updated for BP-141 or BP-142.
+  misc/ras_theory_of_operation.md: the snapshot is 16 bits.
+  examples/fe_demo regenerated before the next tag.
+
+Next free: BP-143, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
+
+---
 ## Session-084, continued: PERF-001 and DOC-016 assessed.
 
 PERF-001 ASSESSED (PA): complete. All 105 traces equal the reference
@@ -7137,7 +7192,10 @@ numbers are issued from one sequence across both tables.
 |     |          | with a non-empty snapshot can in principle reach a       |
 |     |          | reused slot the same way after a full TOSW wrap (15      |
 |     |          | allocations between the snapshot and the commit); not    |
-|     |          | seen, not fixed. Opened session-081 (Jeff).              |
+|     |          | seen, not fixed. Opened session-081 (Jeff). The RS2 that |
+|     |          | justified it judged held as above BOS; RULED session-084 |
+|     |          | (Jeff): TOSR below BOS is not a fault (ras_decisions.md  |
+|     |          | 3.2). BP-143 rechecks the provisional rule.              |
 | 190 | bpu      | OPEN, PERFORMANCE. TRACK EVERY BRANCH VS TAKEN-ONLY      |
 |     |          | INSERTION. Jeff reopens (2026-10-19) the BP-140 binding  |
 |     |          | decision "Track every branch, taken or not               |
@@ -7184,7 +7242,8 @@ numbers are issued from one sequence across both tables.
 |     |          | these as uBTB misses; they are hits with the allocation  |
 |     |          | end. Separate from TD#191, the uBTB organisation. Opened |
 |     |          | session-081 (Jeff).                                      |
-| 194 | bpu      | OPEN, PERFORMANCE. A WRONG-PATH RECURSION COUNT IS NOT   |
+| 194 | bpu      | CLOSED by BP-142 (session-084), option A. A WRONG-PATH   |
+|     |          | RECURSION COUNT IS NOT                                   |
 |     |          | RESTORED. A redirect restores the RAS pointers from the  |
 |     |          | snapshot; a recursion count incremented or decremented   |
 |     |          | in place on the wrong path is array data and keeps its   |
@@ -7194,7 +7253,8 @@ numbers are issued from one sequence across both tables.
 |     |          | 154-159), not traced. Needs a tb_ras case, then a ruling |
 |     |          | on a fix. For the next BP task that edits ras.sv. Found  |
 |     |          | by DOC-011; opened session-082 (Jeff).                   |
-| 195 | bpu      | OPEN, CLEANUP. STALE RAS COMMENTS IN THE RTL, none       |
+| 195 | bpu      | CLOSED by BP-141 (session-084). STALE RAS COMMENTS IN    |
+|     |          | THE RTL, none                                            |
 |     |          | functional (DOC-011): ras.sv:23 "planning docs use       |
 |     |          | equivalent s-stage"; ras.sv:80 "RAS-3 OPEN" (closed,     |
 |     |          | ras_decisions.md 4.4); ras.sv:264 "Three rules" before   |

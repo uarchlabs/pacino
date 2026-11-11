@@ -349,8 +349,9 @@ which restores the top entry exactly. A count below the top that the
 wrong path changed keeps the wrong path's value; to change one the
 wrong path must pop past the top and then push a matching address.
 Not taken: option B, a per-FTQ-entry log of every in-place count
-change, undone on restore, exact, 64 x 16 x 4 bits. To be built by
-BP-142. This read "is not restored ... No tb_ras case covers it
+change, undone on restore, exact, 64 x 16 x 4 bits. Option A BUILT
+by BP-142 (tb_ras TC-45, TC-58). This read "is not restored ...
+No tb_ras case covers it
 (TD#194, DOC-011)". The p3
 repair follows the link (undo-pop restores the pre-op TOSR; missed
 pop follows nos).
@@ -450,9 +451,11 @@ Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
 so that empty (TOSR == BOS) is never aliased by a full stack.
 
-Full condition: TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES). 15
+Full condition: TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES). 14
 slots allocated beyond BOS since BOS last moved, one push
-remaining. A pop does not retreat TOSW, so fewer entries may be
+remaining: it leaves TOSW == BOS, and the push after it takes the
+sentinel skip (BP-142, tb_ras TC-50; this read 15). A pop does not
+retreat TOSW, so fewer entries may be
 live (tb_ras TC-44; DOC-011; this read "15 entries live").
 Overflow (wrap) condition:
 the next push finds TOSW == BOS and takes the sentinel skip.
@@ -546,8 +549,9 @@ RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = $clog2(16) = 4b.
 Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16b per
 FTQ entry.
 
-rctr is TD#194 OPTION A, RULED session-084 (Jeff), to be built by
-BP-142; until then the package holds the three pointers, 12b.
+rctr is TD#194 OPTION A, RULED session-084 (Jeff), BUILT by BP-142
+(tb_ras TC-45, TC-58); before it the package held the three pointers,
+12b.
 ras_snapshot_p2[s].rctr is the count at the slot's post-op TOSR (4.2).
 A restore writes it back (4.3). The commit snapshot carries the field
 and the commit does not read it.
@@ -1048,8 +1052,11 @@ the unit rules (12.1 to 12.13) against a reference model written
 from this section; tb_bp_cluster checks the cluster rules (12.14).
 Every unit rule holds at NUM_PRED_SLOTS 1 and 2. Where a rule rests
 on the built behaviour rather than on a sentence above, it names the
-ras.sv function or block. Checked against ras.sv as of BP-141; it
-agrees with every rule except RE6, which BP-142 builds.
+ras.sv function or block. BP-142 checked every rule against a
+reference model in tb_ras and directed cases (tb_ras TC-01 to TC-65,
+tb_bp_cluster group CB). It built RE6 and fixed two departures in
+ras.sv: CL1 and CL2 in the first cycle after reset (TC-47c), and RP11
+after a repair changed a count below the top (TC-62).
 RI = ras_interfaces.md.
 
 ### 12.1 Gating (2; RAS-DS1; RI IC-RAS-01, IC-RAS-02)
@@ -1089,7 +1096,7 @@ PU2  The sentinel skip: a push that finds TOSW == BOS allocates at
 PU3  The wrap's effect: the entry the skip allocates is the only
      reachable one. Its pop leaves the stack empty, and the next pop
      takes the commit fallback. The older entries stay resident.
-PU4  Full is TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES): 15 allocations
+PU4  Full is TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES): 14 allocations
      since BOS last moved, counting allocations, not live entries (a
      pop does not move TOSW back). No error signal is raised.
 PU5  Recursion match: ras_fall_through_p2[s] == ret_addr[TOSR] with
@@ -1421,4 +1428,8 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               CO5 and CO6 unchanged. ras_assert.sv RS2 and RS3, which
               test the old meaning, are corrected by BP-143, which also
               rechecks the BP-140 fourth rule.
+  2026-11-11  session-084, after BP-142. 3.2, 4.1: TD#194 option A
+              built. 3.2, 12.4 PU4: full is 14 allocations beyond BOS
+              (this read 15; tb_ras TC-50). 12 intro: the rules
+              tested by BP-142; CL1 and RP11 fixed in ras.sv.
 ```

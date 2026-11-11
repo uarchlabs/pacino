@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -657,6 +657,19 @@ DCD-35 THE Zimop COMMENTS are corrected: Zicfiss, an RVA23
        extension this design implements redefines them; Zicfiss, an
        RVA23 option not implemented, redefines some".
 
+DCD-37 ZVFHMIN IS NOT GATED IN DECODE (BP-141). vfwcvt.f.f.v and
+       vfncvt.f.f.w at SEW = 16 share their encodings with V's
+       conversions at SEW = 32 (OPFVV funct6 0x12, vs1 0x0c and
+       0x14) and differ only by vtype.vsew, which the stateless
+       decoder does not hold (it marks needs_vtype). So decode
+       cannot apply en_zvfhmin. The illegal-instruction check is
+       where vtype is resolved for the instruction, at rename or
+       dispatch or the vector unit's issue check: VOP_VFWCVT_FF or
+       VOP_VFNCVT_FF at e16 with en_zvfhmin clear is illegal. The
+       same point makes the other SEW = 16 FP vector forms illegal,
+       since Zvfh is not implemented. Until it exists, clearing
+       en_zvfhmin has no effect.
+
 ---
 
 ## 11. Open
@@ -746,4 +759,7 @@ MMU-23    FAULT_GPA_WIDTH, DCD-16.
               corrected from bits 30:25 to 29:25 (PA error). DCD-34:
               the sweep's totals. DCD-16 and TD#148: the removal
               built, 192 -> 190 bits.
+
+  2026-11-11  session-084, after BP-141. DCD-37: decode cannot gate
+              Zvfhmin; the check is at vtype resolution.
 ```

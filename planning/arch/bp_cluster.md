@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 ---
@@ -449,9 +449,10 @@ One set of three folds per ITTAGE table (IT1-IT5):
   it_t<N>_tag_fh2   -- tag fold 2, width = FH2 for IT<N>
 
 One index fold per SC table with history (ST1-ST3):
-  sc_t1_idx_fh  -- width = SC_TBL_HIST[1] = 4b
-  sc_t2_idx_fh  -- width = SC_TBL_HIST[2] = 16b
-  sc_t3_idx_fh  -- width = SC_TBL_HIST[3] = 64b
+  sc_t1_idx_fh  -- width = SC_TBL_FH[1] = 9b, H = SC_TBL_HIST[1] = 4
+  sc_t2_idx_fh  -- width = SC_TBL_FH[2] = 9b, H = SC_TBL_HIST[2] = 16
+  sc_t3_idx_fh  -- width = SC_TBL_FH[3] = 9b, H = SC_TBL_HIST[3] = 64
+  (BP-141; the widths were SC_TBL_HIST[n], 4, 16 and 64 bits)
 
 Incremental fold update rule for fold of width W, history H:
   bit_out  = ghr_mem[(ghist_ptr + H) % GHR_WIDTH]
@@ -769,3 +770,7 @@ Raw observations to be captured in docs/observations/ during BP work.
               Dual Prediction Mode: p1 slots in position order
               (D12). History Module: first taken slot (D16) and the
               correction on rollback (D14).
+
+
+  2026-11-11  session-084, after BP-141. Folded Histories: the SC
+              folds are 9 bits (SC_TBL_FH), H 4, 16 and 64.

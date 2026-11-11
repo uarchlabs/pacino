@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -196,8 +196,16 @@ bp_history_interfaces.md Producer obligations,
 ftq_bpu_interfaces.md 9 and BP-092a, which
 have carried the branch-PC reading since session-064.
 
-PHR does not currently contribute to any fold; all folds are
-GHR-derived (HI2, deferred -- section 9).
+No TAGE or ITTAGE fold uses the PHR (HI2, open -- section 9).
+folded.tage_phr is the PHR in age order: bit 0 the newest path bit,
+bit k the path bit k branches older. It steps with the folds and is
+recomputed with them on rollback, and SC ST4 reads its bits 9:0
+(BP-141, ruled session-084). The PHR is a 32-entry circular buffer
+and a rollback restores only its pointer, so after a wrong path of W
+branches the ages from 32 - W up hold wrong-path bits, as phr_buf
+does; the ten bits SC reads are intact while W < 23. This read "PHR
+does not currently contribute to any fold; all folds are
+GHR-derived".
 
 ### 3.3  Combined fold: ordering is load-bearing
 
@@ -539,9 +547,11 @@ This section defines the mapping, not the values.
 
       recompute(history) == incremental(history)
 
-  for every history and every (H, W) in use -- including H = W (no
-  compression; SC ST1-ST3) and H > W (compression; the TAGE/ITTAGE
-  tag folds fh1/fh2). bp_history uses the incremental form on the
+  for every history and every (H, W) in use -- including H < W (SC
+  ST1, H 4 into W 9), H = W (no compression) and H > W (compression;
+  SC ST2 and ST3, H 16 and 64 into W 9, since BP-141, and the
+  TAGE/ITTAGE tag folds fh1/fh2). Before BP-141 SC ST1-ST3 were
+  H = W. bp_history uses the incremental form on the
   prediction path and the full recompute on rollback (section 2.2);
   this invariant is what makes the two paths interchangeable. For
   a dual-slot bundle the incremental form is applied twice, slot 0
@@ -575,9 +585,10 @@ This section defines the mapping, not the values.
 
   So bp_history.folded.tage_t1_idx_fh == 0xE5 for this history,
   matching tb_bp_history TC14. The ITTAGE IT1 anchor (0x9, H=W=4,
-  sub-window) and the SC ST3 anchor (0xC000_0000_0000_0000,
-  H=W=64, wrapped) in TC15/TC16 follow the same definition at
-  their (H, W).
+  sub-window) and the SC ST3 anchor (0x180, H = 64 into W = 9,
+  ages 0 and 62 at positions 8 and 7) in TC15/TC16 follow the same
+  definition at their (H, W). The ST3 anchor read
+  0xC000_0000_0000_0000 at H = W = 64 before BP-141.
 
 ### 6.6  Origin
 
@@ -683,7 +694,9 @@ not a hashed fold) have no folds.
        "must not fire" obligation withdrawn; decoupled from G15.
 
   HI2: OPEN. PHR contribution to fold index/tag hashing. All folds
-       are GHR-derived today. It was deferred to the TAGE/ITTAGE
+       are GHR-derived today. SC ST4 reads the PHR itself, in age
+       order, through folded.tage_phr (3.2, BP-141); that is not a
+       fold. It was deferred to the TAGE/ITTAGE
        hashing work; that work is done, both units are Complete, and
        the question was not answered there. It has no scheduled
        home (bp_cluster.md History Module, fe_decisions.md FE-U4).
@@ -951,3 +964,9 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               3.6 done (BP-129). 7: ckpt_nb recorded. 9: HI7 and the
               3.6 item closed. 6.6: the external implementation
               citation and its placeholders removed (Jeff, TD#83).
+
+
+  2026-11-11  session-084, after BP-141 (rulings 1, 2 of BP-141,
+              Jeff). 3.2: folded.tage_phr, the PHR in age order, read
+              by SC ST4. 6.4, 6.5: the SC folds are H into W 9, the
+              ST3 anchor 0x180. 9: HI2 notes tage_phr.

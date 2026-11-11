@@ -6,7 +6,7 @@
  FILE:    sc_table_hash_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -34,7 +34,9 @@ VA_WIDTH         = 41        (bp_defines_pkg.sv; fe_decisions.md FE-19,
                               TD#122. This read 40. Session-071)
 SC_TBL_IDX[0:4]  = {9,9,9,9,10}  (bp_defines_pkg.sv)
 SC_MAX_IDX_WIDTH = 10        (bp_defines_pkg.sv)
-SC_MAX_FH        = 64        (bp_defines_pkg.sv)
+SC_MAX_FH        = 9         (bp_defines_pkg.sv; 64 before
+                              BP-141, when SC_TBL_FH equalled
+                              SC_TBL_HIST)
 ```
 
 The SC does not use PC_HASH_SHIFT (PD-17, BP-127). This list gave

@@ -6,7 +6,7 @@
  FILE:    planning/arch/ftb_confidence_override_rules.md
  SOURCE:  session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -145,7 +145,7 @@ LP (trusted) > SC > TAGE > FTB on direction.
 THE LOOP PREDICTOR TERM, since BP-122 (ruled session-076,
 fe_decisions.md 3.3). A trusted p2 loop direction is the slot's
 direction at p2, over TAGE, and SC does not override it at p3. As
-BP-122 reports the build, the trusted LP direction is the slot's
+built (BP-122, BP-141), the trusted LP direction is the slot's
 direction at p2 without qualification, so it also stands over an FTB
 fast-path direction for that branch.
 
@@ -273,12 +273,15 @@ Tests must cover:
 
 ## 10. Open Items
 
-  - Fast-path interaction with the TAGE update/meta path, and the
-    obligation to keep TAGE/SC predict+update alive under fast-path
-    (section 6): flagged, resolve at bp_cluster integration
-    (ftb_decisions.md FTB-2).
-  - ftb_fastpath_en source: CSR, static tie, or runtime signal. TBD at
-    bp_cluster integration.
+  - CLOSED, BUILT by BP-141: fast-path interaction with the TAGE
+    update/meta path, and the obligation to keep TAGE/SC
+    predict+update alive under fast-path (section 6). The cluster
+    reads ftb_fastpath_p2 per slot (bit s = slot s) and gates neither
+    the TAGE/SC request nor their training. This read "flagged,
+    resolve at bp_cluster integration (ftb_decisions.md FTB-2)".
+  - CLOSED: ftb_fastpath_en is CSR 0x7C0 bit 1 (csr_decisions.md),
+    reset 0. This read "CSR, static tie, or runtime signal. TBD at
+    bp_cluster integration".
   - TD #80: conf hysteresis sweep. FTB_CONF_WIDTH is the knob if the
     3-bit bimodal hysteresis proves wrong under SPEC; widen, or disable
     the fast-path via ftb_fastpath_en. Width/policy sweep, not a
@@ -325,3 +328,8 @@ Tests must cover:
   2026-10-09  session-076, recording BP-122. 4.3 and 8: a trusted
               loop prediction outranks SC, TAGE and FTB, including
               the fast path as built (ruled; fe_decisions.md 3.3).
+
+
+  2026-11-11  session-084, after BP-141. 4.3: as built by BP-122 and
+              BP-141. 10: the fast-path interaction built, the
+              enable's source CSR 0x7C0 bit 1.

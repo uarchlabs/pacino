@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -132,8 +132,10 @@ fields of the one indexed entry, not two slots.
                            ftb_br0_valid_p2 & conf_br0[MSB]. 1 = taken.
   output logic [FTB_CONF_WIDTH-1:0] ftb_br0_conf_p2
                         -- br0 bimodal direction counter value (MSB =
-                           direction). Exposed for the cluster and for
-                           observability.
+                           direction). Not read by the cluster; the
+                           FTB forms ftb_fastpath_p2 from it (BP-141).
+                           Observability. This read "Exposed for the
+                           cluster and for observability".
   output logic [VA_WIDTH-1:0]   ftb_br0_target_p2
                         -- br0 taken target, reconstructed full width
                            by ftb_cntrl from the stored displacement
@@ -846,3 +848,5 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
               IC-FTB-16. ftb_upd_br_idx_u0 is no longer read and is
               kept reserved (Jeff).
 
+  2026-11-11  session-084, after BP-141. 2.3: ftb_brI_conf_p2 is
+              not read by the cluster.

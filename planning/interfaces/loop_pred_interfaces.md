@@ -7,7 +7,7 @@
  FILE:    loop_pred_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -243,8 +243,14 @@ Evaluated on every lookup, in priority order:
 
   1. lowest-indexed invalid way
   2. lowest-indexed valid way with age == 0
-  3. the lowest-numbered way among 1, 2, 3 whose age is less than
-     way 0's age; way 0 if none qualifies
+  3. the lowest-numbered way above 0 whose age is less than way
+     0's age; way 0 if none qualifies (this read "among 1, 2, 3")
+
+An allocation whose victim is valid with age above 0 does not
+allocate: it decrements that way's age by one. The victim is
+replaced only when it is invalid or at age 0 (BP-141, ruled
+session-084, as in Seznec's loop predictor; tb_loop_pred TC28,
+TC11c, TC11d).
 
 ### Consumer obligations
 
@@ -536,3 +542,9 @@ redirect, and does not communicate miss reason externally.
               List: the BP-122 ports. Read before write: built, with
               the count, checkpoint, restore option A (ruled) and
               the update rules. LI4 closed.
+
+
+  2026-11-11  session-084, after BP-141. Victim selection: an
+              allocation over a valid victim with age above 0 ages it
+              instead of replacing it; rule 3 stated for any way
+              count.

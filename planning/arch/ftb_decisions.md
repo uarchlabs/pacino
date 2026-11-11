@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -35,8 +35,12 @@ Pipeline stage: p2 output. p0 send, p1 registered, p2 valid.
 
 Override, by quantity. ON DIRECTION there is a ranking: SC > TAGE >
 FTB, with a trusted loop prediction above all three since BP-122
-(fe_decisions.md 3.3), suspended per branch when the fast path fires
-(ftb_confidence_override_rules.md 4.3, 4.2). ON TARGET there is not:
+(fe_decisions.md 3.3). When the fast path fires for a branch the SC
+and TAGE terms are skipped and the FTB direction stands, still below
+a trusted loop prediction (ftb_confidence_override_rules.md 4.2,
+4.3; built by BP-141). This read "suspended per branch when the fast
+path fires", which left open whether the loop term was suspended
+too; it is not. ON TARGET there is not:
 RAS supplies it for a return, ITTAGE for an indirect with the FTB
 target standing on an ITTAGE miss, FTB otherwise -- selected by
 branch type and by hit, not ranked. The FTB supersedes the uBTB by
@@ -1488,4 +1492,7 @@ bits hold.
               5.4a, 5.5: the field mapping and the end under the
               split. 8: parameters. 9: FTB-6. Provisional choices
               accepted (Jeff).
+  2026-11-11  session-084, after BP-141. 1: the fast path skips the
+              SC and TAGE terms and stays below a trusted loop
+              prediction; the sentence was ambiguous.
 ```

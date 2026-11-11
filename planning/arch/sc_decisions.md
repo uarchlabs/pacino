@@ -6,7 +6,7 @@
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -246,8 +246,9 @@ this info is provided to assist the discussion. The two spellings here read
 ```
 SC_TBL_BANKS[n]  : this parameter is not currently used.
 SC_TBL_ENTRIES[n]: table N entry count, e.g. rows
-SC_TBL_FH[n]     : table N history length
-SC_TBL_HIST[n]   : table N history length, duplicate of SC_TBL_FH
+SC_TBL_FH[n]     : table N index fold width, the index width
+                   SC_TBL_IDX[n] (BP-141; it equalled SC_TBL_HIST)
+SC_TBL_HIST[n]   : table N history length, folded into SC_TBL_FH[n]
 SC_TBL_TAG[n]    : table N tag width, SC table entries do not have tags
 SC_TBL_CTR[n]    : table N confidence counter width
 SC_TBL_USE[n]    : table N useful field width, SC entries do not have USE field
@@ -842,3 +843,7 @@ the number of index bits or number of entries in this table instance.
   2026-10-12  session-079, recording BP-133. 12: branch_range and
               backwards_branch are formed by ftq_upd_conv, not the FTB
               (TD#89, TD#90 closed).
+
+  2026-11-11  session-084, after BP-141. Parameter meaning:
+              SC_TBL_FH is the fold width, the index width (9);
+              SC_TBL_HIST the history folded into it. SC_MAX_FH 9.

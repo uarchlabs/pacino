@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -489,7 +489,9 @@ On `ifu_ftq_mis_val`, the FTQ:
 ```
   W1  rewrites the named slot: slot_valid, br_type and taken from
       the predecode info, target from ifu_ftq_target when predecode
-      computed one. pred_src becomes PRED_NONE -- no predictor
+      computed one. Predecode computes one for every mis_val with a
+      control transfer: a JALR never raises mis_val, so the other arm
+      is not reached (BP-141). pred_src becomes PRED_NONE -- no predictor
       supplied this, and the field is diagnostic (TD-FE-4).
 
       FOR A CONDITIONAL BRANCH taken keeps the entry's prediction;
@@ -819,4 +821,7 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 
   2026-10-10  session-077, after BP-125. 7 W1: the conditional
               paragraph built, TD#174 closed.
+
+  2026-11-11  session-084, after BP-141. 7 W1: the target arm is
+              always taken; a JALR never raises mis_val.
 ```

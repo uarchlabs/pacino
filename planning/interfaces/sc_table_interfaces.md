@@ -6,7 +6,7 @@
  FILE:    sc_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -150,7 +150,9 @@ SC_TBL_BANKS[0:4]   : int  not currently used.
 SC_TBL_ENTRIES[0:4] : int  entries per bw_ram instance.
 SC_TBL_FH[0:4]      : int  index fold width. ST0=0 (no fold).
                            ST4 unused (BrIMLI index).
-SC_TBL_HIST[0:4]    : int  history bit count. Duplicate of SC_TBL_FH.
+SC_TBL_HIST[0:4]    : int  history bit count, folded into
+                           SC_TBL_FH (BP-141; it duplicated
+                           SC_TBL_FH before).
 SC_TBL_TAG[0:4]     : int  tag width. 0 for all SC tables.
 SC_TBL_CTR[0:4]     : int  counter width.
 SC_TBL_USE[0:4]     : int  USE width. 0 for all SC tables.

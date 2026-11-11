@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-10
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -227,7 +227,7 @@ Packed struct, 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH wide:
 
 With RAS_PTR_BITS=4 and RAS_RCTR_WIDTH=4: total 16b per snapshot.
 rctr is TD#194 option A, ruled session-084 (ras_decisions.md 4.1),
-to be built by BP-142; the snapshot was 12b, the three pointers.
+built by BP-142; the snapshot was 12b, the three pointers.
 Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos,
 entry.ras.rctr
 
@@ -366,8 +366,9 @@ single-push rule above is unaffected. Session-070.
 ### IC-RAS-06: Speculative stack overflow
 
 TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES) is the FULL condition:
-15 slots allocated beyond BOS since BOS last moved, one push
-remaining. A pop does not retreat TOSW, so fewer entries may be
+14 slots allocated beyond BOS since BOS last moved, one push
+remaining (BP-142, tb_ras TC-50; this read 15). A pop does not
+retreat TOSW, so fewer entries may be
 live (tb_ras TC-44). The next push finds
 TOSW == BOS, takes the sentinel skip, and wraps. No error
 signal is asserted.
@@ -600,10 +601,12 @@ The following signals are combinational in p2:
   post-slot-0 state  ->  ras_snapshot_p2[0]
   post-slot-1 state  ->  ras_snapshot_p2[1]
 
-Verilator stl_sequent note: always_comb blocks that must
-re-evaluate after FF updates must read at least one FF
-output. Gate the scan on a registered valid signal to
-force nba_sequent classification. See CLAUDE.md.
+Verilator stl_sequent note: the scan reads the pointer and
+array flops, which makes it nba_sequent. It is not gated on
+ras_rst_done since BP-142: a push or pop in the first cycle
+after reset is made (12.1 CL1, CL2 of ras_decisions.md; tb_ras
+TC-47c). The ras_rst_done flop stays, read by tb_fe_top and
+examples/fe_demo. See CLAUDE.md.
 
 ---
 
@@ -766,3 +769,9 @@ While rstn is low (active low, synchronous):
               IC-RAS-10: a RETURN commit on an empty commit stack
               does nothing, as ras_decisions.md 3.3 has it. 10: reset
               acts while rstn is low; this read "on rstn deassert".
+
+
+  2026-11-11  session-084, after BP-142. 5: the count built.
+              IC-RAS-06: full is 14 allocations (this read 15).
+              9.2: the scan is not gated on ras_rst_done; this read
+              "Gate the scan on a registered valid signal".
