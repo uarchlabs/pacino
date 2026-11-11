@@ -1444,11 +1444,13 @@ module tb;
     mdl_blk_pft  = I_PFT0;
     mdl_blk_ras.tosr = RAS_PTR_BITS'(3);
     mdl_blk_ras.tosw = RAS_PTR_BITS'(4);
+    mdl_blk_ras.rctr = RAS_RCTR_WIDTH'(6);           // BP-142, TD#194
     tick();
     mdl_tkn_en = 1'b0;
     repeat (4) tick();
     chk("I3 entry 0 records the p2 RAS snapshot",
-        dut.u_entry.r_arr[0].ras.tosw == RAS_PTR_BITS'(4));
+        (dut.u_entry.r_arr[0].ras.tosw == RAS_PTR_BITS'(4)) &&
+        (dut.u_entry.r_arr[0].ras.rctr == RAS_RCTR_WIDTH'(6)));
 
     bkend_ftq_rsv_val                 = NUM_RESOLVE_PORTS'(2'b01);
     bkend_ftq_rsv[0]                  = '0;
@@ -1489,7 +1491,8 @@ module tb;
     chk_va("I3 with the p2 fall-through as the return address",
            ras_commit_ret_addr, I_PFT0);
     chk   ("I3 and the p2 snapshot",
-           ras_commit_snapshot.tosw == RAS_PTR_BITS'(4));
+           (ras_commit_snapshot.tosw == RAS_PTR_BITS'(4)) &&
+           (ras_commit_snapshot.rctr == RAS_RCTR_WIDTH'(6)));
     tick();
     bkend_ftq_commit_val = 1'b0;
 

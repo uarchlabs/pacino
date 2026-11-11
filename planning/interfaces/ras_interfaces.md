@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-29
+ UPDATED: 2026-11-10
  CONTACT: Jeff Nye
 ```
 
@@ -218,13 +218,18 @@ IC-RAS-10. Session-070.
 
 ### bp_ras_snapshot_t
 
-Packed struct, 3 * RAS_PTR_BITS wide:
-  tosr : RAS_PTR_BITS  -- speculative TOS read pointer
-  tosw : RAS_PTR_BITS  -- speculative TOS write pointer
-  bos  : RAS_PTR_BITS  -- committed boundary pointer
+Packed struct, 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH wide:
+  tosr : RAS_PTR_BITS   -- speculative TOS read pointer
+  tosw : RAS_PTR_BITS   -- speculative TOS write pointer
+  bos  : RAS_PTR_BITS   -- committed boundary pointer
+  rctr : RAS_RCTR_WIDTH -- recursion count of the entry at tosr,
+                           0 when tosr == bos
 
-With RAS_PTR_BITS=4: total 12b per snapshot.
-Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos
+With RAS_PTR_BITS=4 and RAS_RCTR_WIDTH=4: total 16b per snapshot.
+rctr is TD#194 option A, ruled session-084 (ras_decisions.md 4.1),
+to be built by BP-142; the snapshot was 12b, the three pointers.
+Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos,
+entry.ras.rctr
 
 ---
 
@@ -395,8 +400,10 @@ a speculative entry the stack does not hold.
 
 ### IC-RAS-08: Snapshot timing
 
-ras_snapshot_p2[s] reflects post-operation pointer state
-combinationally in p2. It is not registered before output.
+ras_snapshot_p2[s] reflects post-operation pointer state, and the
+count of the entry at the post-operation TOSR (0 when TOSR == BOS,
+ras_decisions.md 4.1), combinationally in p2. It is not registered
+before output.
 
 Slot 0 snapshot reflects the state after slot 0's operation
 only. Slot 1 snapshot reflects the state after both slot 0
@@ -414,8 +421,11 @@ the same cycle. When ras_restore_val is asserted, pointer
 state is loaded from ras_restore_snapshot and no p2
 push/pop is applied.
 
-Only pointer state is restored. Circular buffer data is
-not cleared. See ras_decisions.md section 4.3.
+Pointer state is restored, and the count of the entry at the
+snapshot's TOSR: with ras_restore_snapshot.tosr != .bos the restore
+writes .rctr into that entry's count, the only array write of the
+cycle (TD#194 option A, ruled session-084, BP-142). Circular buffer
+data is not cleared. See ras_decisions.md sections 4.3 and 12.
 
 The p3 repair of that cycle is dropped as well: no array write and
 no pointer move. The p2 operation is registered as none for p3
@@ -432,7 +442,8 @@ On ras_commit_val with DIRECT_CALL or INDIRECT_CALL:
   - BOS in speculative stack updated from ras_commit_snapshot.
 
 On ras_commit_val with RETURN:
-  - CSP decrements.
+  - CSP decrements; on an empty commit stack nothing happens
+    (ras_decisions.md 3.3).
   - BOS updated from ras_commit_snapshot, unless the snapshot is an
     empty stack (tosr == bos), when BOS stays (ras_decisions.md 3.2,
     BP-140).
@@ -598,7 +609,7 @@ force nba_sequent classification. See CLAUDE.md.
 
 ## 10. Reset Behavior
 
-On rstn deassert (active low, synchronous):
+While rstn is low (active low, synchronous):
   - TOSR, TOSW, BOS all reset to 0.
   - CSP and the commit-stack occupancy count reset to 0
     (ras_decisions.md 3.3; the count since BP-126).
@@ -747,3 +758,11 @@ On rstn deassert (active low, synchronous):
               full condition counts allocations. IC-RAS-09: the repair
               is dropped in a restore cycle. 10: nos, bot and the
               repair registers reset.
+
+  2026-11-10  session-084, TD#194 option A ruled (Jeff). 5: the
+              snapshot gains rctr, the count of its TOSR entry, 16b.
+              IC-RAS-08: the snapshot carries it. IC-RAS-09: a
+              restore writes it back. To be built by BP-142.
+              IC-RAS-10: a RETURN commit on an empty commit stack
+              does nothing, as ras_decisions.md 3.3 has it. 10: reset
+              acts while rstn is low; this read "on rstn deassert".

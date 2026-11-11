@@ -13,8 +13,9 @@
 // credit arbiter. Two register-file stacks:
 //   - Speculative stack: RAS_SPEC_ENTRIES, circular buffer with a
 //     next-on-stack link (nos) per entry (ras_decisions.md 3.2, ruled
-//     session-075, TD#159). Pointers TOSR/TOSW/BOS, snapshotted into
-//     the FTQ for O(1) pointer-only mispredict recovery.
+//     session-075, TD#159). Pointers TOSR/TOSW/BOS and the top entry's
+//     recursion count, snapshotted into the FTQ for O(1) mispredict
+//     recovery (the count since BP-142, TD#194 option A).
 //   - Commit stack: RAS_COMMIT_ENTRIES, conventional circular stack.
 //     Pointer CSP and an occupancy count, so a full stack is not read
 //     as empty (BP-126, TD#121). Updated at retire. Empty fallback for
@@ -119,7 +120,7 @@ module ras (
   // Next on stack: the index of the entry below this one (3.2, ruled
   // session-075, BP-120). Written by the push that allocates the
   // entry, read by the pop that removes it. Internal; the snapshot
-  // stays three pointers (4.1).
+  // carries the three pointers and the top entry's count (4.1).
   logic [RAS_PTR_BITS-1:0]   spec_nos      [0:RAS_SPEC_ENTRIES-1];
   // Bottom (BP-138): the entry was pushed onto an empty stack, or by
   // the sentinel skip, so nothing speculative lies below it. A pop
@@ -141,9 +142,13 @@ module ras (
   localparam int RAS_COMMIT_CNT_BITS = RAS_COMMIT_PTR_BITS + 1;
   logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt;
 
-  // Registered "reset complete" valid. Reading this FF in the scan
-  // always_comb forces nba_sequent classification (see CLAUDE.md
-  // stl_sequent note) and gates spurious post-reset activity.
+  // Registered "reset complete": low in the first cycle after reset,
+  // high after. Read by observers only (tb_fe_top, examples/fe_demo).
+  // Until BP-142 it gated every p2 operation and repair, which dropped
+  // a push or pop made in the first cycle after reset; CL1 and CL2
+  // (ras_decisions.md 12.1) do not except that cycle (tb_ras TC-47c).
+  // The scan reads flops (tosr, tosw, bos, the arrays), so it stays
+  // nba_sequent without it (CLAUDE.md stl_sequent note).
   logic ras_rst_done;
 
   // p2 -> p3 pipeline registers: actual p2 op and the fallthrough
@@ -303,6 +308,15 @@ module ras (
     logic [RAS_RCTR_WIDTH-1:0] wdata_r;
     logic [RAS_PTR_BITS-1:0]   wdata_n;
     logic                      wdata_b;
+    // The recursion counts this scan has written so far, by index
+    // (BP-142, RP11). The array holds them only after the edge, so a
+    // later step of the same scan that reloads an entry reads them
+    // here. Before BP-142 the undo of a whole RETURN_CALL decremented
+    // the count of the entry below the restored top, and a p2 pop in
+    // the same cycle that followed the link to that entry read the old
+    // count from the array (tb_ras TC-62).
+    logic [RAS_SPEC_ENTRIES-1:0]                     cw_v;
+    logic [RAS_SPEC_ENTRIES-1:0][RAS_RCTR_WIDTH-1:0] cw_r;
   } ras_ws_t;
 
   localparam logic [RAS_PTR_BITS-1:0]   PTR_ONE  = RAS_PTR_BITS'(1);
@@ -315,7 +329,7 @@ module ras (
     r = w;
     if (r.tosr != bos) begin
       r.top_addr = spec_ret_addr[r.tosr];
-      r.top_rctr = spec_rctr[r.tosr];
+      r.top_rctr = r.cw_v[r.tosr] ? r.cw_r[r.tosr] : spec_rctr[r.tosr];
       r.top_nos  = spec_nos[r.tosr];
       r.top_bot  = spec_bot[r.tosr];
       r.valid    = 1'b1;
@@ -325,6 +339,18 @@ module ras (
       r.top_nos  = '0;
       r.top_bot  = 1'b0;
       r.valid    = 1'b0;
+    end
+    return r;
+  endfunction
+
+  // Note the count of the array write the last primitive made, so a
+  // later reload in the same scan sees it (cw_v / cw_r, BP-142).
+  function automatic ras_ws_t st_note(input ras_ws_t w);
+    ras_ws_t r;
+    r = w;
+    if (r.we) begin
+      r.cw_v[r.waddr] = 1'b1;
+      r.cw_r[r.waddr] = r.wdata_r;
     end
     return r;
   endfunction
@@ -351,6 +377,7 @@ module ras (
         r      = st_load(r);
       end
     end
+    r = st_note(r);
     return r;
   endfunction
 
@@ -376,7 +403,8 @@ module ras (
   // down, with one array write. The undo of a count the p2 operation
   // changed (BP-133, TD #78). The working top is used when ptr is the
   // working TOSR, so a count the same pass changed is seen; any other
-  // entry is read from the array. No step past 0 or RCTR_MAX.
+  // entry is read from the array, or from cw_r when this scan already
+  // wrote its count (BP-142). No step past 0 or RCTR_MAX.
   function automatic ras_ws_t st_rctr_adj(
       input ras_ws_t w, input logic [RAS_PTR_BITS-1:0] ptr,
       input logic inc);
@@ -390,7 +418,7 @@ module ras (
       r.wdata_n = r.top_nos;
       r.wdata_b = r.top_bot;
     end else begin
-      c         = spec_rctr[ptr];
+      c         = r.cw_v[ptr] ? r.cw_r[ptr] : spec_rctr[ptr];
       r.wdata_a = spec_ret_addr[ptr];
       r.wdata_n = spec_nos[ptr];
       r.wdata_b = spec_bot[ptr];
@@ -402,6 +430,7 @@ module ras (
       if (r.valid && (ptr == r.tosr))
         r.top_rctr = r.wdata_r;
     end
+    r = st_note(r);
     return r;
   endfunction
 
@@ -452,6 +481,7 @@ module ras (
       r.top_bot  = r.wdata_b;
       r.valid    = 1'b1;
     end
+    r = st_note(r);
     return r;
   endfunction
 
@@ -574,7 +604,7 @@ module ras (
       q_push  = (p3_op_q[s] == OP_PUSH) | (p3_op_q[s] == OP_POPPUSH);
       n       = 0;
 
-      if (ras_rst_done & q_pop & q_push & ~s3_pop & ~s3_push) begin
+      if (q_pop & q_push & ~s3_pop & ~s3_push) begin
         w.tosr = p3_pre_empty_q[s] ? bos : p3_pre_tosr_q[s];
         w      = st_load(w);
         if (p3_pop_dec_q[s] != p3_push_inc_q[s]) begin
@@ -590,7 +620,7 @@ module ras (
             sp_wdata_b[pi] = w.wdata_b;
           end
         end
-      end else if (ras_rst_done) begin
+      end else begin
         // Undo a push the p3 type does not have. Skipped when the push
         // met a saturated count and changed nothing: st_retract would
         // decrement a count the push did not raise (BP-134).
@@ -657,10 +687,10 @@ module ras (
 
     // -------- p2 pass (this cycle's prediction) --------------------
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      is_pop  = ras_rst_done & ras_pred_val_p2[s] &
+      is_pop  = ras_pred_val_p2[s] &
                 ((ras_br_type_p2[s] == RETURN) |
                  (ras_br_type_p2[s] == RETURN_CALL));
-      is_push = ras_rst_done & ras_pred_val_p2[s] &
+      is_push = ras_pred_val_p2[s] &
                 ((ras_br_type_p2[s] == DIRECT_CALL)   |
                  (ras_br_type_p2[s] == INDIRECT_CALL) |
                  (ras_br_type_p2[s] == RETURN_CALL));
@@ -714,10 +744,14 @@ module ras (
         sp_wdata_b[pi] = w.wdata_b;
       end
 
-      // Post-op snapshot for this slot (BOS unchanged across p2).
+      // Post-op snapshot for this slot (BOS unchanged across p2), with
+      // the count of the entry at its TOSR, 0 when the stack is empty
+      // (TD#194 option A, ras_decisions.md 4.1; BP-142). A restore
+      // writes the count back.
       ras_snapshot_p2[s].tosr = w.tosr;
       ras_snapshot_p2[s].tosw = w.tosw;
       ras_snapshot_p2[s].bos  = bos;
+      ras_snapshot_p2[s].rctr = w.valid ? w.top_rctr : '0;
     end
 
     nxt_tosr = w.tosr;
@@ -808,9 +842,16 @@ module ras (
 
       // ---- speculative pointers and array writes -----------------
       if (ras_restore_val) begin
-        // Pointer-only restore; circular data is not cleared.
+        // Pointer restore; circular data is not cleared. The one array
+        // write is the count of the snapshot's top entry, when the
+        // snapshot is not an empty stack (TD#194 option A, ruled
+        // session-084, ras_decisions.md 4.3, 12.9 RE6; BP-142). Before
+        // BP-142 a count changed in place on the wrong path kept the
+        // wrong path's value (tb_ras TC-45). No other count changes.
         tosr <= ras_restore_snapshot.tosr;
         tosw <= ras_restore_snapshot.tosw;
+        if (ras_restore_snapshot.tosr != ras_restore_snapshot.bos)
+          spec_rctr[ras_restore_snapshot.tosr] <= ras_restore_snapshot.rctr;
       end else begin
         // A commit that moves BOS while the stack is empty moves TOSR
         // with it, so the stack stays empty as TOSR == BOS (BP-138).

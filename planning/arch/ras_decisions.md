@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-29
+ UPDATED: 2026-11-10
  CONTACT: Jeff Nye
 ```
 
@@ -291,8 +291,9 @@ Structure: circular buffer with a next-on-stack link per entry
 Purpose:   Covers in-flight call depth between fetch and commit.
 
 Snapshot for mispredict recovery: three pointers (TOSR, TOSW,
-BOS) saved per FTQ entry. On mispredict, restore all three from
-the FTQ snapshot of THE ENTRY THE REDIRECT NAMES by its index
+BOS), with the count of the TOSR entry (4.1, TD#194), saved per FTQ
+entry. On mispredict, restore them from the FTQ snapshot of THE
+ENTRY THE REDIRECT NAMES by its index
 (ftq_backend_interfaces.md 5 D2), including when _self marks that
 entry squashed. This read "the last known-good entry"; 4.3 said
 "the mispredicted entry" and 4.4 "the youngest valid entry before
@@ -300,6 +301,9 @@ the flush point". One rule, three phrasings; D2 is the reference.
 Session-070. Full speculative
 history is preserved in the circular buffer -- no replay of
 individual operations needed provided the buffer has not wrapped.
+
+SUPERSEDED session-075 by the ruling below, which adds the link.
+Kept as the record of the session-050 choice:
 
 DECIDED session-050: simple circular buffer chosen over the
 Xiangshan Kunminghu linked circular array. Academic literature
@@ -336,9 +340,18 @@ nos. TOSW, BOS, the sentinel, the three-pointer snapshot and the
 restore of 4.3 are unchanged, and restore stays exact while the
 buffer has not wrapped, since TOSW only advances and a wrong-path
 push never overwrites a live entry. Exact for the pointers and the
-stored addresses and links: a recursion count changed in place on the
-wrong path is array data and is not restored (ras.sv:335-343,
-413-421). No tb_ras case covers it (TD#194, DOC-011). The p3
+stored addresses and links. A recursion count changed in place on the
+wrong path is array data, which a pointer restore does not touch;
+BP-141 showed it in both directions (tb_ras TC-45, TD#194). RULED
+session-084 (Jeff), TD#194 OPTION A: the snapshot carries the count
+of the entry at its TOSR and a restore writes it back (4.1, 4.3),
+which restores the top entry exactly. A count below the top that the
+wrong path changed keeps the wrong path's value; to change one the
+wrong path must pop past the top and then push a matching address.
+Not taken: option B, a per-FTQ-entry log of every in-place count
+change, undone on restore, exact, 64 x 16 x 4 bits. To be built by
+BP-142. This read "is not restored ... No tb_ras case covers it
+(TD#194, DOC-011)". The p3
 repair follows the link (undo-pop restores the pre-op TOSR; missed
 pop follows nos).
 Rejected: pushing at TOSR+1 and dropping TOSW, which matches the
@@ -500,15 +513,25 @@ stands on its own. Session-077.
 ### 4.1  Snapshot contents
 
 bp_ras_snapshot_t is a packed struct stored in bp_ftq_entry_t.
-Fields (from bp_structs_pkg.sv):
-  tosr  : RAS_PTR_BITS  -- speculative TOS read pointer
-  tosw  : RAS_PTR_BITS  -- speculative TOS write pointer
-  bos   : RAS_PTR_BITS  -- committed boundary pointer
+Fields (bp_structs_pkg.sv; rctr added by BP-142):
+  tosr  : RAS_PTR_BITS   -- speculative TOS read pointer
+  tosw  : RAS_PTR_BITS   -- speculative TOS write pointer
+  bos   : RAS_PTR_BITS   -- committed boundary pointer
+  rctr  : RAS_RCTR_WIDTH -- recursion count of the entry at tosr,
+                            0 when tosr == bos
 
 RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = $clog2(16) = 4b.
-Total snapshot width = 3 * RAS_PTR_BITS = 12b per FTQ entry.
+Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16b per
+FTQ entry.
 
-FTQ access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos
+rctr is TD#194 OPTION A, RULED session-084 (Jeff), to be built by
+BP-142; until then the package holds the three pointers, 12b.
+ras_snapshot_p2[s].rctr is the count at the slot's post-op TOSR (4.2).
+A restore writes it back (4.3). The commit snapshot carries the field
+and the commit does not read it.
+
+FTQ access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos,
+entry.ras.rctr
 
 ### 4.2  Snapshot write timing
 
@@ -541,7 +564,12 @@ the same entry: ftq_decisions.md 3.2 used the entry BEFORE it when
 _self is set and this note recorded the divergence; session-071
 ruled the named entry for both. The
 circular buffer data is not cleared -- restoration is pointer-
-only. Subsequent pushes and pops write into slots above the
+only, apart from one count: when the snapshot is not an empty stack
+(tosr != bos) the restore writes snapshot.rctr into the count of the
+entry at snapshot.tosr, the only array write of a restore cycle
+(TD#194 option A, ruled session-084, BP-142; 12.9 RE6). The count is
+the p2 value, as the pointers are: a p3 repair does not rewrite the
+snapshot (4.2, TD#149). Subsequent pushes and pops write into slots above the
 restored TOSR, which may overwrite stale speculative data from
 the wrong path. This is correct behavior.
 
@@ -907,8 +935,10 @@ bp_structs_pkg.sv, which holds types only
 (PROJECT_STATUS.md, package split). Session-072):
   RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = 4b
 
-bp_ras_snapshot_t uses RAS_PTR_BITS for tosr, tosw, bos.
-Total snapshot width = 3 * RAS_PTR_BITS = 12b per FTQ entry.
+bp_ras_snapshot_t uses RAS_PTR_BITS for tosr, tosw, bos, and
+RAS_RCTR_WIDTH for rctr (4.1, TD#194 option A, BP-142).
+Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16b per
+FTQ entry; 12b before session-084.
 
 Commit stack pointer width:
   RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES) = 5b
@@ -983,7 +1013,246 @@ Commit stack pointer width:
 
 ---
 
-## 12. Document History
+## 12. Rules
+
+THE RAS RULES, ONE CHECKABLE STATEMENT EACH. Added session-084 after
+BP-141 (Jeff). The sections above hold every rule, but spread across
+decisions, corrections and history, and the RAS tests reached only
+what their stimulus happened to reach. This section states each rule
+once, with an ID and the section that decides it. It decides nothing
+new except RE6 (TD#194 option A, ruled session-084). tb_ras checks
+the unit rules (12.1 to 12.13) against a reference model written
+from this section; tb_bp_cluster checks the cluster rules (12.14).
+Every unit rule holds at NUM_PRED_SLOTS 1 and 2. Where a rule rests
+on the built behaviour rather than on a sentence above, it names the
+ras.sv function or block. Checked against ras.sv as of BP-141; it
+agrees with every rule except RE6, which BP-142 builds.
+RI = ras_interfaces.md.
+
+### 12.1 Gating (2; RAS-DS1; RI IC-RAS-01, IC-RAS-02)
+CL1  A push happens if and only if ras_pred_val_p2[s] = 1 and
+     ras_br_type_p2[s] is DIRECT_CALL, INDIRECT_CALL or RETURN_CALL.
+CL2  A pop happens if and only if ras_pred_val_p2[s] = 1 and the
+     type is RETURN or RETURN_CALL.
+CL3  Any other type, or ras_pred_val_p2[s] = 0, changes no pointer,
+     no array entry and no recursion count.
+CL4  RETURN_CALL is one operation: the pop first, which supplies the
+     target, then the push, applied to the state the pop leaves.
+
+### 12.2 Reset (RI 10)
+RT1  After reset: TOSR = TOSW = BOS = 0, CSP = 0, the commit count 0,
+     and every rctr, ret_addr (both stacks), nos and bot 0, and the
+     p2-to-p3 repair registers 0. Reset is synchronous and acts while
+     rstn is low.
+RT2  ras_tos_valid_p0 and ras_pop_valid_p2 are low in the first cycle
+     after reset.
+
+### 12.3 The p0 read (1; RI 4, 6, IC-RAS-07)
+P01  With TOSR != BOS: ras_tos_addr_p0 = ret_addr[TOSR], valid 1.
+P02  With TOSR == BOS and the commit count above 0: the commit top,
+     the CSP-1 entry, valid 1.
+P03  With both stacks empty: valid 0.
+P04  The read is combinational from the current state. p0 makes no
+     push and no pop.
+P05  Every slot presents the same value (ras.sv g_p0_tos).
+
+### 12.4 Push (3.2, 5, 8; RI IC-RAS-05, IC-RAS-06, 9.1)
+PU1  A push with no recursion match writes the TOSW slot with
+     ret_addr = ras_fall_through_p2[s], rctr = 0, nos = TOSR, and
+     bot = 1 when the stack is empty (TOSR == BOS), else 0. TOSR
+     becomes that slot and TOSW advances by one.
+PU2  The sentinel skip: a push that finds TOSW == BOS allocates at
+     BOS+1 with nos = BOS and bot = 1, and TOSW advances past it.
+PU3  The wrap's effect: the entry the skip allocates is the only
+     reachable one. Its pop leaves the stack empty, and the next pop
+     takes the commit fallback. The older entries stay resident.
+PU4  Full is TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES): 15 allocations
+     since BOS last moved, counting allocations, not live entries (a
+     pop does not move TOSW back). No error signal is raised.
+PU5  Recursion match: ras_fall_through_p2[s] == ret_addr[TOSR] with
+     TOSR != BOS increments rctr[TOSR]. Nothing is allocated, rctr
+     is the only field written, and TOSR and TOSW do not move.
+PU6  A match at rctr[TOSR] = 2^RAS_RCTR_WIDTH - 1 changes nothing.
+PU7  On an empty stack there is no match, even when the address
+     equals the stale ret_addr[TOSR]: the push allocates.
+PU8  The RAS writes the address it is given; it computes no +2 or
+     +4.
+
+### 12.5 Pop (3.2, 5; RI IC-RAS-05, IC-RAS-07)
+PO1  With TOSR != BOS and rctr[TOSR] > 0: the pop returns
+     ret_addr[TOSR], valid 1, decrements rctr[TOSR], and TOSR does
+     not move.
+PO2  With rctr[TOSR] = 0 and bot[TOSR] = 0: it returns
+     ret_addr[TOSR] and sets TOSR = nos[TOSR].
+PO3  With rctr[TOSR] = 0 and bot[TOSR] = 1: it returns
+     ret_addr[TOSR] and sets TOSR = BOS as it is then.
+PO4  A pop writes no ret_addr, nos or bot, and does not move TOSW or
+     BOS. PO1's count is its only array write.
+PO5  With TOSR == BOS and the commit count above 0: it returns the
+     commit top (CSP-1), valid 1. The commit entry is not consumed
+     and no pointer moves.
+PO6  With both stacks empty: ras_pop_valid_p2 = 0. ras_pop_addr_p2
+     is not checked when valid is 0.
+PO7  A valid pop never returns a speculative entry the stack does not
+     hold, and a held top is always popped valid.
+PO8  The order follows the link: f calls g, g returns, f calls h, h
+     returns, and f's return is predicted to f's return address
+     (TD#159).
+PO9  A slot that does not pop drives ras_pop_valid_p2 = 0.
+
+### 12.6 RETURN_CALL at p2 (RAS-DS1; RI IC-RAS-02)
+RC1  The target is the pop's result by 12.5, the commit fallback
+     included.
+RC2  The push follows on the state the pop left, by PU1 to PU7: the
+     match against the new top, the skip and saturation.
+
+### 12.7 Slots and the snapshot (4.2, 6; RI IC-RAS-03, -04, -08)
+SL1  Slot 0 is processed before slot 1, and slot 1 sees the state
+     slot 0 left; a slot 1 pop reads the top a slot 0 push left.
+SL2  ras_snapshot_p2[s] = {TOSR, TOSW, BOS, rctr} after slot s's
+     operation, rctr the count at that TOSR, 0 when TOSR == BOS (4.1).
+     Slot 0's is after slot 0 alone, slot 1's after both. It is
+     combinational and present every cycle, pred_val or not.
+SL3  With both slots valid and one of them a RAS type, the other
+     changes nothing.
+SL4  The superseded two-operation combinations (6.2 to 6.4) work at
+     module level and are tested at the unit: each slot applies its
+     operation to the state the slot before it left. bp_cluster does
+     not reach them.
+
+### 12.8 p2 keep (4.3; RI 4)
+KP1  ras_p2_keep = 0: the p2 operation writes no pointer and no
+     array entry, and is registered as none for p3. The p3 repair of
+     the older block still applies.
+KP2  With keep low, no restore and no repair, no pointer moves.
+
+### 12.9 Restore (3.2, 4.3, 4.4; RI IC-RAS-09)
+RE1  ras_restore_val loads TOSR, TOSW and BOS from
+     ras_restore_snapshot, in effect the next cycle.
+RE2  No array data is cleared. RE6's count is the only array write a
+     restore makes.
+RE3  A restore beats that cycle's p2 operation: it is not applied,
+     and is registered as none for p3.
+RE4  A restore drops that cycle's p3 repair: no array write and no
+     pointer move, so a missed push that cycle is not made.
+RE5  Exactness: wrong-path pushes and pops with no wrap, then a
+     restore to the snapshot taken before them, leave a stack whose
+     every following pop matches the correct path, in pointers,
+     addresses, links and the top entry's count.
+RE6  With snapshot tosr != bos, the restore writes snapshot.rctr into
+     rctr[snapshot.tosr]. With tosr == bos it writes no count. No
+     other entry's count changes: a count below the top changed on
+     the wrong path keeps the wrong path's value (3.2). TD#194
+     option A, ruled session-084, built by BP-142.
+RE7  A restore across a wrong-path wrap is not exact; only the bound
+     is specified: pops fall to the commit stack and BOS moves on
+     commits.
+RE8  ras_flush_val and ras_flush_snapshot are unread: driving them
+     changes nothing.
+
+### 12.10 p3 repair (1; RI IC-RAS-11)
+RP0  A repair runs if and only if a slot's p3 view differs from its
+     registered p2 operation. The view, from ras_pred_val_p3[s] and
+     ras_br_type_p3[s]: push for a call, pop for a return, both for
+     RETURN_CALL, none otherwise.
+RP1  Undo-push (p2 push, p3 none) of an allocating push: TOSR follows
+     the pushed entry's link, back to its pre-op value, or to BOS as
+     it is at the undo for a bottom entry. Nothing is cleared and
+     TOSW does not move.
+RP2  Undo-push of a recursion increment: rctr[TOSR] is decremented;
+     TOSR does not move.
+RP3  Undo-push of a push that met a saturated count: nothing changes.
+RP4  Undo-pop (p2 pop, p3 none): TOSR returns to its pre-op value,
+     and a count the pop decremented is incremented back. No address
+     is written; TOSW does not move.
+RP5  The undo of an operation begun on an empty stack sets TOSR to
+     BOS as it is at the undo: undo-pop and the undo of a whole
+     RETURN_CALL.
+RP6  Missed pop (p2 none, p3 pop): a pop by PO1 to PO3.
+RP7  Missed push (p2 none, p3 push): the registered fall-through is
+     allocated at the frontier and TOSW advances, with the sentinel
+     skip and never the recursion match (ras.sv st_push, recursion
+     off). It is the only repair that allocates.
+RP8  Undo of a whole RETURN_CALL: one operation. TOSR returns to its
+     pre-op value, the counts the pop and the push changed are put
+     back, and RP5 applies.
+RP9  Missed RETURN_CALL: a missed pop, then a missed push.
+RP10 The repair acts on the speculative stack only, and does not
+     rewrite the FTQ snapshot (4.2, TD#149 open: tested as built).
+RP11 In one cycle the repair of the older block is applied first and
+     the p2 operation starts from the state it leaves; with keep low
+     only the repair applies (ras.sv scan).
+RP12 The four mixed pairings, RETURN_CALL against a plain push or pop
+     (section 1), are unreachable by construction (TD#165). They are
+     not rules; tb_ras pins them as built.
+
+### 12.11 Commit (3.3, 4.5; RI IC-RAS-10)
+CO1  A commit takes effect the cycle after ras_commit_val.
+CO2  A call commit writes ras_commit_ret_addr at CSP and CSP advances;
+     the count increments, holding at RAS_COMMIT_ENTRIES. A call on a
+     full stack overwrites the oldest entry.
+CO3  A return commit decrements CSP and the count. On an empty commit
+     stack it does nothing.
+CO4  A RETURN_CALL commit: the return arm, then the call arm on the
+     state the return arm leaves.
+CO5  BOS = ras_commit_snapshot.tosr, once per commit, except a RETURN
+     whose snapshot is an empty stack (tosr == bos), which leaves BOS
+     (BP-140, provisional). A RETURN_CALL always moves BOS.
+CO6  If TOSR == BOS when a commit moves BOS, TOSR moves to the new
+     BOS: the TOSR the same cycle's scan leaves.
+CO7  A commit never writes the speculative array or TOSW.
+CO8  ras_commit_val with any other type changes nothing.
+CO9  The commit stack has no recursion count: recursive calls commit
+     as repeated entries, and the fallback reads them at depth.
+CO10 A full commit stack reads non-empty, and RAS_COMMIT_ENTRIES
+     returns empty it.
+CO11 A restore and a commit in one cycle: the restore sets TOSR, TOSW
+     and BOS (restore > commit > hold), so CO6 does not apply, and the
+     commit stack still updates.
+
+### 12.12 The empty test (3.2; RI IC-RAS-07)
+IV1  TOSR == BOS holds exactly when the speculative stack is empty,
+     across commits, the wrap, restores and repairs. "Held" is
+     decided from the order of allocation, as ras_assert.sv RS2 and
+     RS3 decide it, not from TOSR == BOS.
+IV2  PO7 holds for every slot, in repair cycles too, and a fallback
+     pop is valid whenever the commit stack holds an entry.
+
+### 12.13 Parameters (9; RI 2)
+PM1  No literal depths or widths. The boundaries are derived from
+     RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES and RAS_RCTR_WIDTH: 15
+     usable entries, saturation at 2^RAS_RCTR_WIDTH - 1, a commit
+     count to RAS_COMMIT_ENTRIES.
+PM2  The snapshot is 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16 bits
+     (4.1).
+
+### 12.14 Cluster obligations (2, 4.2, 4.3, 8; RI IC-RAS-12, 8)
+CB1  ras_pred_val_p2 is gated on a valid FTB result, and
+     ras_br_type_p2 comes from the FTB, not predecode or decode.
+CB2  ras_br_type_p3 is the registered ras_br_type_p2, and
+     ras_pred_val_p3 = r_val_p3 & r_brv_p3 & w_reach_p3.
+CB3  ras_p2_keep is low for a block a redirect squashes.
+CB4  ras_snapshot_p2[NUM_PRED_SLOTS-1] is written to the FTQ entry
+     for every valid p2 block, all four fields.
+CB5  The restore is one cycle, with the snapshot of the entry the
+     redirect names, and is not raised for the cluster's own p2 or p3
+     redirect.
+CB6  ras_commit_val is raised for an entry that holds a call or a
+     return.
+CB7  pred_src = PRED_RAS only when the RAS supplies a RETURN or
+     RETURN_CALL target, and the RAS target is used for those types
+     only.
+CB8  ras_fall_through_p2 is the call PC plus 2 when the jump's rvc
+     bit is set, else plus 4, with no straddle correction.
+CB9  Classification follows the JALR hint table and the compressed
+     mapping (2): C.JALR is never a pop-only return, and C.JALR with
+     rs1 = x5 is a RETURN_CALL.
+CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
+     slot.
+
+---
+
+## 13. Document History
 
 ```
   2026-06-23  session-050. Initial draft.
@@ -1102,4 +1371,11 @@ Commit stack pointer width:
               a wrong-path recursion count is not restored (TD#194).
               6.2, 6.3: the bypass confirmed in the RTL, unreachable
               from bp_cluster.
+  2026-11-10  session-084, after BP-141 (Jeff). 3.2, 4.1, 4.3, 9:
+              TD#194 ruled, option A: the snapshot carries the count
+              of its TOSR entry and a restore writes it back; 16b;
+              to be built by BP-142. 3.2: the session-050 simple-
+              buffer paragraph marked superseded. 12 new: the rules,
+              one checkable statement each, which BP-142 tests.
+              Document History renumbered 13.
 ```

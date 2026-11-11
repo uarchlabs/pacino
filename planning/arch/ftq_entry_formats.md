@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-11-10
  CONTACT: Jeff Nye
 ```
 
@@ -36,10 +36,10 @@ update. The two are separated so the every-cycle read does not carry
 the width of the update-only metadata.
 
 ```
-  fast path   bp_ftq_entry_t   228b   x 64 entries        14,592b
+  fast path   bp_ftq_entry_t   232b   x 64 entries        14,848b
   slow path   bp_ftq_meta_t    425b   x 2 slots x 64      54,400b
                                                           -------
-                                                          68,992b
+                                                          69,248b
 ```
 
 The slow-path figure is the unpacked layout. Section 3.1 defines an
@@ -84,7 +84,9 @@ Block scalar fields, one per entry:
 pc            41     prediction block start PC, VA_WIDTH
 pft_addr      41     block fall-through address, VA_WIDTH
 branch_id      6     FTQ entry index, FTQ_IDX_BITS
-ras                  bp_ras_snapshot_t: TOSR, TOSW, BOS, 4 bits each
+ras           16     bp_ras_snapshot_t: TOSR, TOSW, BOS and the
+                     TOSR entry's recursion count, 4 bits each
+                     (the count: TD#194 option A, BP-142)
 ghist_ptr      8     GHR circular buffer pointer snapshot
 phist_ptr      5     PHR circular buffer pointer snapshot
 valid          1     entry valid
@@ -385,7 +387,7 @@ are NOT members of `bp_ftq_entry_t` and not members of
   reallocated.
 
 The entry totals of section 1 are therefore unchanged. Fast path
-228b, slow path 425b per slot, 68,992b together; these 192 bits sit
+232b, slow path 425b per slot, 69,248b together; these 192 bits sit
 outside both. This read 421b and 68,480b, the figures before BP-111
 (TD#132); section 1 already carried the current ones. Session-075.
 
@@ -637,4 +639,11 @@ path touches none of those.
   2026-10-19  session-081, after BP-139. Section 2: an occupied
               placement is written only as 3.1 says. 3.1: item C
               and the placed-slot write (provisional).
+
+  2026-11-10  session-084, TD#194 option A ruled (Jeff;
+              ras_decisions.md 4.1). Section 2: the RAS snapshot
+              gains the TOSR entry's recursion count, 4b. Block
+              scalars 114 -> 118, bp_ftq_entry_t 228 -> 232 at two
+              slots, fast-path array 14,592 -> 14,848, total 68,992
+              -> 69,248 (also 4.1). To be built by BP-142.
 ```

@@ -259,6 +259,7 @@ module tb;
     alloc_wr_ras.tosr  = RAS_PTR_BITS'(idx);
     alloc_wr_ras.tosw  = RAS_PTR_BITS'(idx + 1);
     alloc_wr_ras.bos   = RAS_PTR_BITS'(idx + 2);
+    alloc_wr_ras.rctr  = RAS_RCTR_WIDTH'(idx + 3);   // BP-142, TD#194
     alloc_wr_ghist_ptr = GHIST_PTR_BITS'(idx);
     alloc_wr_phist_ptr = PHIST_PTR_BITS'(idx);
     alloc_wr_slot[0]   = mk_slot(1'b1,
@@ -303,7 +304,8 @@ module tb;
     chk   ("A8 RAS snapshot landed",
            fetch_rd_entry.ras.tosr == RAS_PTR_BITS'(7) &&
            fetch_rd_entry.ras.tosw == RAS_PTR_BITS'(8) &&
-           fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(9));
+           fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(9) &&
+           fetch_rd_entry.ras.rctr == RAS_RCTR_WIDTH'(10));
     chk_va("A9 slot 0 target landed", fetch_rd_entry.slot[0].target,
            VA_WIDTH'(VA_WIDTH'('h00_9000_0000) + 7 * 64));
     if (NUM_PRED_SLOTS > 1)
@@ -370,7 +372,8 @@ module tb;
     // The restore snapshot is the redirect port's entry, which is
     // what D2 of backend_interfaces 5 requires.
     chk("B7 restore snapshot is the redirect entry's",
-        restore_snapshot.tosr == RAS_PTR_BITS'(2));
+        (restore_snapshot.tosr == RAS_PTR_BITS'(2)) &&
+        (restore_snapshot.rctr == RAS_RCTR_WIDTH'(5)));
 
     // TWO RESOLUTION PORTS NAMING ONE ENTRY agree. Both branches of
     // one block resolving together is ordinary traffic.
@@ -579,7 +582,8 @@ module tb;
            ras_commit_br_type == DIRECT_CALL);
     chk   ("E4 the snapshot is the entry's",
            ras_commit_snapshot.tosr == RAS_PTR_BITS'(30) &&
-           ras_commit_snapshot.bos  == RAS_PTR_BITS'(32));
+           ras_commit_snapshot.bos  == RAS_PTR_BITS'(32) &&
+           ras_commit_snapshot.rctr == RAS_RCTR_WIDTH'(33));
     chk_va("E5 the return address is the block fall-through",
            ras_commit_ret_addr,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0020) + 30 * 32));
@@ -686,6 +690,7 @@ module tb;
     blk_wr_ras.tosr = RAS_PTR_BITS'(5);
     blk_wr_ras.tosw = RAS_PTR_BITS'(6);
     blk_wr_ras.bos  = RAS_PTR_BITS'(7);
+    blk_wr_ras.rctr = RAS_RCTR_WIDTH'(11);           // BP-142, TD#194
     tick();
     blk_wr_val = 1'b0;
 
@@ -696,7 +701,8 @@ module tb;
     chk("G2 ras took the p2 snapshot",
         (fetch_rd_entry.ras.tosr == RAS_PTR_BITS'(5)) &&
         (fetch_rd_entry.ras.tosw == RAS_PTR_BITS'(6)) &&
-        (fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(7)));
+        (fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(7)) &&
+        (fetch_rd_entry.ras.rctr == RAS_RCTR_WIDTH'(11)));
     chk("G3 the slots and the block start did not move",
         (fetch_rd_entry.pc ==
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 41 * 32)) &&

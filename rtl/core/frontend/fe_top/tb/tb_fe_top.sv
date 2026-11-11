@@ -118,7 +118,12 @@
 // BP-134. Program rec_undo: a recursion whose return blocks put a
 // conditional before the ret, so SC reversing it at p3 undoes a pop
 // that decremented a recursion count (TD#78). It counts those undos
-// and checks each put the count back.
+// and checks each put the count back. BP-142: its outcomes are written
+// out (no LFSR, no +RU_SEED); SC's reversal is not reached by
+// construction, so the count is reported and not required above zero
+// (tb_bp_cluster CB2-RP4 checks the rule). misp_call likewise has no
+// LFSR, and checks that the call's block is the first fetched after
+// each backend mispredict of its conditional.
 //
 // BP-135. Program t0_uaon: T0 chosen as the TAGE provider by
 // use_alt_on_na over a tagged primary, and then updated (CTR rows
@@ -363,6 +368,49 @@ module tb;
       end
     end
 `endif
+  end
+
+  // BP-142: the check of program misp_call (TD#162). An event is a
+  // backend mispredict redirect (bkend_ftq_redir_val, cause
+  // RC_MISPREDICT) to either successor of misp_call's conditional: its
+  // not-taken PC (mc_nt_pc) or its target, the call (mc_call_pc). The
+  // first fetch request the FTQ sends after it must start at the
+  // redirect PC and hold the call in its FTB_BLOCK_BYTES block: the
+  // call's block is the first block fetched. Another backend redirect
+  // before that fetch supersedes the event (counted as dropped).
+  logic                mc_on;
+  logic                mc_pend;
+  logic [VA_WIDTH-1:0] mc_nt_pc;
+  logic [VA_WIDTH-1:0] mc_call_pc;
+  logic [VA_WIDTH-1:0] mc_tgt;
+  int                  n_mc_ev;
+  int                  n_mc_ok;
+  int                  n_mc_bad;
+  int                  n_mc_drop;
+  always @(posedge clk) begin : misp_call_log
+    logic ours;
+    ours = dut.bkend_ftq_redir_val &&
+           (dut.bkend_ftq_redir_cause == RC_MISPREDICT) &&
+           ((dut.bkend_ftq_redir_pc == mc_nt_pc) ||
+            (dut.bkend_ftq_redir_pc == mc_call_pc));
+    if (rstn && mc_on) begin
+      if (mc_pend && dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy) begin
+        if ((dut.ftq_ifu_start_pc == mc_tgt) &&
+            (mc_call_pc >= dut.ftq_ifu_start_pc) &&
+            (mc_call_pc < dut.ftq_ifu_start_pc + VA_WIDTH'(FTB_BLOCK_BYTES)))
+          n_mc_ok <= n_mc_ok + 1;
+        else
+          n_mc_bad <= n_mc_bad + 1;
+        mc_pend <= 1'b0;
+      end
+      if (dut.bkend_ftq_redir_val) begin
+        if (mc_pend && !(dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy))
+          n_mc_drop <= n_mc_drop + 1;
+        mc_pend <= ours;
+        mc_tgt  <= dut.bkend_ftq_redir_pc;
+        if (ours) n_mc_ev <= n_mc_ev + 1;
+      end
+    end
   end
 
   // BP-135: TAGE updates of T0 as the provider through use_alt_on_na
@@ -1159,6 +1207,15 @@ module tb;
     n_undo_ok    = 0;
     n_undo_bad   = 0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) ud_pend[s] = 1'b0;
+    mc_on        = 1'b0;                      // BP-142, misp_call
+    mc_pend      = 1'b0;
+    mc_nt_pc     = '0;
+    mc_call_pc   = '0;
+    mc_tgt       = '0;
+    n_mc_ev      = 0;
+    n_mc_ok      = 0;
+    n_mc_bad     = 0;
+    n_mc_drop    = 0;
     n_t0u_pred   = 0;
     n_t0u_upd    = 0;
     n_t0u_ok     = 0;
@@ -2092,13 +2149,33 @@ module tb;
   // call site (as recur), so the return address f+14 is pushed once and
   // its recursion count raised five times; each return but the
   // outermost pops by decrementing it, TOSR held. Every return of f is
-  // in the block [bne][ret] at f+14 (two slots of one FTB entry), and
-  // the bne's outcome is pseudo-random, so TAGE stays weak and SC can
-  // reverse it at p3: when p2 predicted not taken (the ret reachable,
-  // popped) and p3 predicts taken, the ret is not reachable at p3 and
-  // the p3 pass undoes the pop. When that pop decremented the count,
-  // the undo must put it back, or the stack is one level short and a
-  // later return of the recursion pops to the caller's address.
+  // in the block [bne][ret] at f+14 (two slots of one FTB entry). When
+  // p2 predicts the bne not taken (the ret reachable, popped) and p3
+  // predicts it taken, the ret is not reachable at p3 and the p3 pass
+  // undoes the pop. When that pop decremented the count, the undo must
+  // put it back, or the stack is one level short.
+  //
+  // BP-142 (Problem 5): THE CASE IS NOT REACHED BY CONSTRUCTION, so the
+  // program no longer checks that it occurs. An undo-pop needs the p3
+  // view of the ret to differ from its p2 operation, and the only input
+  // that changes a direction between p2 and p3 is SC: ras_pred_val_p3 =
+  // r_val_p3 & r_brv_p3 & w_reach_p3, with the p3 reachability from the
+  // SC direction (BP-121 D10, ras_decisions.md 12.14 CB2). Whether SC
+  // reverses the bne at p3 depends on its table counters, its threshold
+  // and the TAGE confidence, which the program's outcomes do not set by
+  // construction; a written-out outcome sequence can make the bne hard
+  // to predict but cannot make SC reverse it on a given execution. The
+  // rule (RP4 over PO1, the undo of a recursion pop) is checked
+  // directly by tb_bp_cluster CB2-RP4 (group CB), which forces the SC
+  // direction with sc_fill. Until BP-142 the bne's outcome was two
+  // W.lfsr_bit()s (seed 16'hace1, +RU_SEED), and the case count was
+  // checked above zero.
+  // What the program still does: every outcome is written out. The bne
+  // of return k (innermost first, k = 0..RU_DEPTH) of iteration it is
+  // taken when (it + k) % 4 == 3, one return in four, the proportion
+  // the LFSR version used (at 1/2 wrong-path pops wear the count down).
+  // Every undo over a recursion pop that does occur is compared (the
+  // count is put back); their number is reported, not checked.
   // -----------------------------------------------------------------
   localparam int RU_ITERS = 48;
   localparam int RU_WARM  = 8;
@@ -2109,24 +2186,6 @@ module tb;
     logic [VA_WIDTH-1:0] f;
     logic [VA_WIDTH-1:0] l;
     begin_prog("rec_undo");
-    // Seed chosen from a sweep of eight, each of which reached the case
-    // at two slots (2 to 10 times in 48 iterations); this one 10.
-    // BP-139: re-chosen. With item C the first execution of f's bne
-    // (placed in the slot predecode gave the jal) no longer trains TAGE,
-    // and 16'h3039 reached the case 0 times. Of 16 seeds swept on the
-    // BP-139 tree 12 reach it (1 to 5 times); this one 5.
-    // BP-141: re-chosen. With the SC folds into the index width and the
-    // PHR fold written, 16'hacef reached the case 0 times. Of 16 seeds
-    // swept on the BP-141 tree at two slots 12 reach it (1 to 10
-    // times), 2 do not (acef, 8888) and 2 (1234, 7777) stop on the RAS
-    // assertion RS2 a_pop_only_held (7777 does on the pre-BP-141 RTL
-    // too; reported in BP-141). This one reaches it 10 times.
-    W.lfsr = 16'hace1;
-    // BP-141: +RU_SEED=<hex> overrides the seed, for a seed sweep.
-    begin
-      logic [15:0] sd;
-      if ($value$plusargs("RU_SEED=%h", sd)) W.lfsr = sd;
-    end
     f = RESET_VECTOR + VA_WIDTH'('h800);
     W.mixed(3);
     top = W.wp;
@@ -2135,13 +2194,9 @@ module tb;
       W.wp = top;
       W.mixed(2);
       l = W.wp + VA_WIDTH'(4);
-      // The return blocks' bne, innermost return first: taken with
-      // probability 1/4 (two LFSR bits both set). At 1/2 the backend
-      // mispredicts it so often that wrong-path pops wear the recursion
-      // count down and the undos land on link pops instead.
       W.rc_tk.delete();
       for (int k = 0; k <= RU_DEPTH; k++)
-        W.rc_tk.push_back(W.lfsr_bit() & W.lfsr_bit());
+        W.rc_tk.push_back(((it + k) % 4) == 3);
       W.jal(5'd1, f);
       W.emit_rcx(f, RU_DEPTH, l);
       W.mixed(1);
@@ -2154,13 +2209,6 @@ module tb;
     $display("   UNDO %s count put back %0d, not put back %0d", tname,
              n_undo_ok, n_undo_bad);
 `ifndef BASE_RTL
-    // The case is the program's purpose at two slots. At one slot an FTB
-    // entry has one slot, so no return shares a block with a branch
-    // before it, p3 reachability is constant, and the case does not
-    // arise; the count is reported, not checked.
-    if (NUM_PRED_SLOTS > 1)
-      chk($sformatf("rec_undo: an undo-pop over a recursion pop ran (%0d)",
-                    n_undo_rdec), n_undo_ok + n_undo_bad > 0);
     chk($sformatf({"rec_undo: each undo put the recursion count back ",
                    "(%0d ok, %0d not)"}, n_undo_ok, n_undo_bad),
         n_undo_bad == 0);
@@ -2495,34 +2543,63 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
-  // misp_call: a conditional the predictors cannot learn (pseudo-
-  // random), then a call and its return (TD#162). After each backend
-  // mispredict of the conditional the call's block is the first block
-  // fetched.
+  // misp_call: a conditional, then a call and its return (TD#162).
+  // After each backend mispredict of the conditional the call's block
+  // is the first block fetched (misp_call_log).
+  // BP-142 (Problem 5): every outcome is written out; there is no LFSR
+  // (before BP-142 the conditional's outcome was W.lfsr_bit(), seed
+  // 16'hACE1). The case is reached BY CONSTRUCTION on the first
+  // iteration: the conditional is taken, and it is new to every
+  // predictor -- no FTB entry, so its block carries no branch and the
+  // prediction is the fall-through (predecode redirects only jumps) --
+  // so the backend resolves it against the prediction and redirects to
+  // its target, the call. The later outcomes, taken on every third
+  // iteration (it % 3 == 0), give both directions after training; each
+  // mispredict of them is checked too. The program fails if no event
+  // occurs or if any event's first fetch is not the call's block.
   // -----------------------------------------------------------------
+  localparam int MC_ITERS = 32;
+
   task automatic p_misp_call();
     logic [VA_WIDTH-1:0] top;
     logic [VA_WIDTH-1:0] fn;
     logic [VA_WIDTH-1:0] l;
     begin_prog("misp_call");
-    W.lfsr = 16'hACE1;
     fn   = RESET_VECTOR + VA_WIDTH'('h400);
     W.mixed(3);
     top = W.wp;
-    for (int it = 0; it < 32; it++) begin
+    for (int it = 0; it < MC_ITERS; it++) begin
       if (it == 8) warm_e = W.ne;
       W.wp = top;
       W.mixed(1);
-      W.cskip(W.lfsr_bit(), 1);
+      // cskip(tk, 1): the conditional at b, its not-taken successor b+4
+      // (one 16-bit instruction, skipped when taken), its target b+6,
+      // where the call is. The code is at the same addresses on every
+      // iteration (wp = top).
+      mc_nt_pc   = W.wp + VA_WIDTH'(4);
+      mc_call_pc = W.wp + VA_WIDTH'(6);
+      W.cskip((it % 3) == 0, 1);
       l = W.wp + VA_WIDTH'(4);
       W.jal(5'd1, fn);
       W.mixed(2);
       W.ret(l);
       W.mixed(1);
-      W.bcc(it != 31, top);
+      W.bcc(it != MC_ITERS - 1, top);
     end
     W.mixed(3);
+    mc_on = 1'b1;
     end_prog(80000);
+    mc_on = 1'b0;
+    $display("%s", $sformatf({"   MISPCALL %s conditional mispredicts %0d,",
+             " the call's block first %0d, not %0d, superseded %0d"}, tname,
+             n_mc_ev, n_mc_ok, n_mc_bad, n_mc_drop));
+`ifndef BASE_RTL
+    chk($sformatf("misp_call: a mispredict of the conditional occurred (%0d)",
+                  n_mc_ev), n_mc_ev > 0);
+    chk($sformatf({"misp_call: the call's block was the first fetched after",
+                   " each (%0d ok, %0d not)"}, n_mc_ok, n_mc_bad),
+        (n_mc_bad == 0) && (n_mc_ok > 0));
+`endif
   endtask
 
   // -----------------------------------------------------------------

@@ -34,9 +34,12 @@ module tb;
                               1 + FTB_BR_POS_BITS +
                               $bits(bp_pred_src_e) +
                               FTQ_CONF_BITS;
-  // Two VA_WIDTH terms: pc and pft_addr, the block fall-through.
+  // Two VA_WIDTH terms: pc and pft_addr, the block fall-through. The RAS
+  // snapshot is three pointers and the TOSR entry's count (BP-142,
+  // TD#194 option A): 232 bits at two slots, 228 before.
   localparam int ENTRY_BITS = VA_WIDTH + VA_WIDTH + FTQ_IDX_BITS +
-                              (3 * RAS_PTR_BITS) + GHIST_PTR_BITS +
+                              (3 * RAS_PTR_BITS) + RAS_RCTR_WIDTH +
+                              GHIST_PTR_BITS +
                               PHIST_PTR_BITS + 1 +
                               (NUM_PRED_SLOTS * SLOT_BITS);
 
@@ -166,6 +169,21 @@ module tb;
     if ($bits(entry_a.ras.bos) !== RAS_PTR_BITS) begin
       $fatal(1, "FAIL ras.bos: got %0d, want %0d",
              $bits(entry_a.ras.bos), RAS_PTR_BITS);
+    end
+    pass_count++;
+
+    // BP-142 (TD#194 option A, ras_decisions.md 4.1): the count of the
+    // snapshot's top entry, RAS_RCTR_WIDTH wide, and the snapshot
+    // 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH wide (12.13 PM2).
+    if ($bits(entry_a.ras.rctr) !== RAS_RCTR_WIDTH) begin
+      $fatal(1, "FAIL ras.rctr: got %0d, want %0d",
+             $bits(entry_a.ras.rctr), RAS_RCTR_WIDTH);
+    end
+    pass_count++;
+
+    if ($bits(bp_ras_snapshot_t) !== 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH) begin
+      $fatal(1, "FAIL bp_ras_snapshot_t: got %0d, want %0d",
+             $bits(bp_ras_snapshot_t), 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH);
     end
     pass_count++;
 
@@ -320,6 +338,7 @@ module tb;
     entry_a.ras.tosr     = RAS_PTR_BITS'('h5);
     entry_a.ras.tosw     = RAS_PTR_BITS'('hA);
     entry_a.ras.bos      = RAS_PTR_BITS'('h1);
+    entry_a.ras.rctr     = RAS_RCTR_WIDTH'('h9);
     entry_a.ghist_ptr    = {GHIST_PTR_BITS{1'b1}};
     entry_a.phist_ptr    = {PHIST_PTR_BITS{1'b1}};
     entry_a.valid        = 1'b1;

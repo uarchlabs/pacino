@@ -163,18 +163,24 @@ package bp_structs_pkg;
   // Sub-structs
   // ----------------------------------------------------------------
 
-  // RAS speculative pointer snapshot stored in FTQ fast path.
+  // RAS speculative snapshot stored in FTQ fast path.
   // Restored on mispredict flush to recover speculative stack
   // state. The entries are linked (nos, BP-120, ras_decisions.md
-  // 3.2) and the data is not cleared, so restoring these three
-  // pointers is sufficient. No push/pop replay needed. It read
-  // "Simple circular buffer" until BP-141 (TD#195).
-  // RAS_PTR_BITS = $clog2(16) = 4b. Total snapshot = 12b.
+  // 3.2) and the data is not cleared, so restoring the three
+  // pointers restores the stack, apart from a recursion count the
+  // wrong path changed in place. rctr is the count of the entry at
+  // tosr, 0 when tosr == bos; a restore writes it back into that
+  // entry (TD#194 option A, ruled session-084, BP-142; 4.1, 4.3).
+  // A count below the top is not carried. No push/pop replay needed.
+  // It read "Simple circular buffer" until BP-141 (TD#195).
+  // RAS_PTR_BITS = $clog2(16) = 4b, RAS_RCTR_WIDTH = 4b.
+  // Total snapshot = 3 * 4 + 4 = 16b (12b before BP-142).
   // See planning/arch/ras_decisions.md section 4.
   typedef struct packed {
-    logic [RAS_PTR_BITS-1:0] tosr; // top-of-stack read pointer
-    logic [RAS_PTR_BITS-1:0] tosw; // top-of-stack write pointer
-    logic [RAS_PTR_BITS-1:0] bos;  // bottom-of-stack pointer
+    logic [RAS_PTR_BITS-1:0]   tosr; // top-of-stack read pointer
+    logic [RAS_PTR_BITS-1:0]   tosw; // top-of-stack write pointer
+    logic [RAS_PTR_BITS-1:0]   bos;  // bottom-of-stack pointer
+    logic [RAS_RCTR_WIDTH-1:0] rctr; // count of the entry at tosr
   } bp_ras_snapshot_t;
 
 //  // SC (Statistical Corrector) predictor metadata.

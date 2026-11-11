@@ -179,6 +179,8 @@
 # Updated after PERF-001 and DOC-016, session-084 (PROJECT_STATUS.md,
 # perf_decisions.md, pacino_features.md), and for the move of
 # scan_traces.py to tools/ (PROJECT_CORE.md, perf_decisions.md).
+# Updated after BP-141, session-084, for TD#194 option A and the RAS
+# rules (ras_decisions.md, ras_interfaces.md, ftq_entry_formats.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -235,7 +237,7 @@ ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   cc3722d8f782
 ARCH  ftb_decisions.md            816c0461bf7d
 ARCH  ftq_decisions.md            1e4af7d2487e
-ARCH  ftq_entry_formats.md        49182a82e3c6
+ARCH  ftq_entry_formats.md        953b2a75281b
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
 ARCH  icache_decisions.md               29d94d35d776
 ARCH  ifu_decisions.md            23b78769459f
@@ -243,7 +245,7 @@ ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  1edb8b57f003
-ARCH  ras_decisions.md                  95ffb6dd75f9
+ARCH  ras_decisions.md                  67abd3e8b026
 ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
 ARCH  sram_init.md                      d6cefefe7fc5
@@ -286,7 +288,7 @@ INTF  ptw_mem_interfaces.md       053eb7faf457
 INTF  ittage_interfaces.md        9217c9322080
 INTF  l1i_ifu_interfaces.md       3fb484b495e3
 INTF  loop_pred_interfaces.md     f1eb16c7ce58
-INTF  ras_interfaces.md           04d09778d761
+INTF  ras_interfaces.md           9df50b9ea31c
 INTF  sc_interfaces.md            7936cbf21f43
 INTF  sc_table_interfaces.md      b442b10dab0f
 INTF  tage_interfaces.md          80e89e517207

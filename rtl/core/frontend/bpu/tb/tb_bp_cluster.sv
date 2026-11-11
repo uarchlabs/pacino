@@ -1101,6 +1101,9 @@ module tb;
         bpu_pred_ras_p1.tosw === '0);
     chk("A3 RAS snapshot bos resets to zero",
         bpu_pred_ras_p1.bos === '0);
+    // BP-142 (TD#194 option A): the count of an empty stack's top is 0.
+    chk("A3 RAS snapshot rctr resets to zero",
+        bpu_pred_ras_p1.rctr === '0);
 
     // p2 and p3 groups
     chk("A3 bpu_meta_val_p2 resets low", bpu_meta_val_p2 === 1'b0);
@@ -2715,6 +2718,12 @@ module tb;
                 snap_p1_prev.tosw === dut.u_ras.tosw);
           chk_q("E4 FE-11 p1 snapshot bos is that block's p2 start",
                 snap_p1_prev.bos  === dut.u_ras.bos);
+          // BP-142 (TD#194 option A, ras_decisions.md 4.1): the count
+          // of the entry at that TOSR, 0 for an empty stack.
+          chk_q("E4 FE-11 p1 snapshot rctr is that block's p2 start",
+                snap_p1_prev.rctr ===
+                ((dut.u_ras.tosr != dut.u_ras.bos)
+                   ? dut.u_ras.spec_rctr[dut.u_ras.tosr] : '0));
         end
 
         if (bpu_pred_val_p1 === 1'b1) begin
@@ -5594,6 +5603,338 @@ module tb;
   endtask
 
   // =================================================================
+  // GROUP CB -- the cluster's RAS obligations, ras_decisions.md 12.14
+  // (BP-142, Problem 6). Each case is directed and starts from reset;
+  // the FTB, uBTB and loop-predictor entries it reads are written by it.
+  // CB2, CB6, CB8 and CB10 are checked by the existing cases N1, N2,
+  // M1 (CB2), G7, L6, M2 (CB6), P1, M1 (CB8) and B4, M3, M6 (CB10); this
+  // group adds the cases for CB1, CB3, CB4, CB5, CB7 and CB9.
+  // =================================================================
+  task automatic group_cb();
+    logic [VA_WIDTH-1:0]     pc;
+    logic [VA_WIDTH-1:0]     base;
+    ubtb_entry_t             e;
+    bp_ras_snapshot_t        s;
+    logic                    any;
+    logic [RAS_PTR_BITS-1:0] r0;
+    logic [RAS_PTR_BITS-1:0] w0;
+
+    $display("---- GROUP CB: RAS cluster obligations, BP-142 ----");
+
+    // -- CB1a. ras_pred_val_p2 is gated on a valid FTB result: a block
+    //    with no FTB entry (the FTB is empty after reset) presents no
+    //    RAS operation at any slot, and the RAS does not move.
+    j_reset();
+    pc = VA_WIDTH'('h00_0A10_0000);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h01);
+    tick();
+    norq();
+    tick();
+    any = 1'b0;
+    for (int sl = 0; sl < NUM_PRED_SLOTS; sl++)
+      any = any | dut.w_ras_pred_val_p2[sl];
+    chk("CB1a no FTB result: ras_pred_val_p2 low at every slot", !any);
+    tick();
+    chk("CB1a no FTB result: the RAS did not move",
+        (dut.u_ras.tosr === '0) && (dut.u_ras.tosw === '0));
+
+    // -- CB1b. ras_br_type_p2 comes from the FTB, not from the uBTB or
+    //    predecode: the uBTB entry calls the jump a RETURN, the FTB
+    //    entry a DIRECT_CALL. At p2 the RAS sees DIRECT_CALL and pushes
+    //    (tosr 1, tosw 2 from the empty stack, PU2 skip).
+    j_reset();
+    pc   = VA_WIDTH'('h00_0A20_0000);
+    base = blk_base(pc);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd2, 1'b1, 1'b0,
+                  1'b0, pc + VA_WIDTH'(8), 1'b0);
+    e       = '0;
+    e.jmp   = mk_jmp(1'b1, 4'd2, base + VA_WIDTH'('h600), base,
+                     1'b0, 1'b1, 1'b1);
+    e.pft   = ub_pft_field(pc + VA_WIDTH'(8), base);
+    ubtb_install(pc, e);
+    lp_clear_both(pc);
+    req(pc, 6'h02);
+    tick();
+    norq();
+    chk("CB1b the uBTB reports RETURN at p1",
+        dut.r_ubtb_pred_p1[0].br_type === RETURN);
+    tick();
+    chk("CB1b the RAS type at p2 is the FTB's DIRECT_CALL",
+        (dut.w_ras_br_type_p2[0] === DIRECT_CALL) &&
+        (dut.w_ras_pred_val_p2[0] === 1'b1));
+    tick();
+    chk("CB1b the RAS pushed (tosr 1, tosw 2), it did not pop",
+        (dut.u_ras.tosr === RAS_PTR_BITS'(1)) &&
+        (dut.u_ras.tosw === RAS_PTR_BITS'(2)));
+
+    // -- CB3 and CB5. A direct call block at pos 2 whose p1 prediction
+    //    is the fall-through (uBTB cleared) and whose FTB entry is the
+    //    taken call: a p2 redirect of the cluster's own. In that p2
+    //    cycle the FTQ rollback and a RAS restore with snapshot S =
+    //    {5, 6, 4, 3} are driven.
+    //    (a) the rollback names the block itself (own p2 redirect): the
+    //        block survives (ras_p2_keep high), its push stands, and the
+    //        restore is NOT raised to the RAS (CB5): tosr 1, tosw 2.
+    //    (b) the rollback names another entry: the p2 block is squashed
+    //        (ras_p2_keep low, CB3), its push is dropped, and the restore
+    //        is applied for one cycle (CB5): tosr 5, tosw 6, bos 4 and
+    //        rctr[5] = 3 (RE6) the next cycle.
+    for (int k = 0; k < 2; k++) begin
+      j_reset();
+      pc   = VA_WIDTH'('h00_0A30_0000);
+      base = blk_base(pc);
+      ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h640), 4'd2, 1'b1, 1'b0,
+                    1'b0, pc + VA_WIDTH'(8), 1'b0);
+      ubtb_clear_set(pc);
+      lp_clear_both(pc);
+      req(pc, 6'h05);
+      tick();
+      norq();
+      tick();
+      chk($sformatf("CB3/5%s the call is at p2 with a p2 redirect",
+                    (k == 0) ? "a" : "b"),
+          (dut.w_br_type_p2[0] === DIRECT_CALL) &&
+          (dut.w_any_redir_p2 === 1'b1));
+      s      = '0;
+      s.tosr = RAS_PTR_BITS'(5);
+      s.tosw = RAS_PTR_BITS'(6);
+      s.bos  = RAS_PTR_BITS'(4);
+      s.rctr = RAS_RCTR_WIDTH'(3);
+      ftq_rollback_val     = 1'b1;
+      ftq_rollback_idx     = (k == 0) ? 6'h05 : 6'h11;
+      ras_restore_val      = 1'b1;
+      ras_restore_snapshot = s;
+      #1;
+      if (k == 0) begin
+        chk("CB3a own p2 redirect: ras_p2_keep high",
+            dut.u_ras.ras_p2_keep === 1'b1);
+        chk("CB5a own p2 redirect: the restore is not raised to the RAS",
+            dut.u_ras.ras_restore_val === 1'b0);
+      end else begin
+        chk("CB3b a redirect squashes the p2 block: ras_p2_keep low",
+            dut.u_ras.ras_p2_keep === 1'b0);
+        chk("CB5b another entry's redirect: the restore reaches the RAS",
+            (dut.u_ras.ras_restore_val === 1'b1) &&
+            (dut.u_ras.ras_restore_snapshot === s));
+      end
+      tick();
+      ftq_rollback_val     = 1'b0;
+      ftq_rollback_idx     = '0;
+      ras_restore_val      = 1'b0;
+      ras_restore_snapshot = '0;
+      #1;
+      if (k == 0)
+        chk("CB3a CB5a the push stands: tosr 1, tosw 2, bos 0",
+            (dut.u_ras.tosr === RAS_PTR_BITS'(1)) &&
+            (dut.u_ras.tosw === RAS_PTR_BITS'(2)) &&
+            (dut.u_ras.bos === RAS_PTR_BITS'(0)));
+      else
+        chk("CB3b CB5b the push is dropped, S restored with its count",
+            (dut.u_ras.tosr === RAS_PTR_BITS'(5)) &&
+            (dut.u_ras.tosw === RAS_PTR_BITS'(6)) &&
+            (dut.u_ras.bos === RAS_PTR_BITS'(4)) &&
+            (dut.u_ras.spec_rctr[5] === RAS_RCTR_WIDTH'(3)) &&
+            (dut.u_ras.spec_ret_addr[1] === '0));
+      tick();
+      chk($sformatf("CB5%s the restore is one cycle: nothing moves after",
+                    (k == 0) ? "a" : "b"),
+          (dut.u_ras.ras_restore_val === 1'b0) &&
+          (dut.u_ras.tosr === ((k == 0) ? RAS_PTR_BITS'(1)
+                                        : RAS_PTR_BITS'(5))));
+    end
+
+    // -- CB4. ras_snapshot_p2[NUM_PRED_SLOTS-1] reaches the FTQ for every
+    //    valid p2 block, all four fields. The same call block twice: the
+    //    second push matches the top (PU5), so its block snapshot is
+    //    {1, 2, 0, rctr 1}; the RAS holds that count after the edge. A
+    //    third block with no FTB entry still publishes the current
+    //    state, rctr included.
+    j_reset();
+    pc   = VA_WIDTH'('h00_0A40_0000);
+    base = blk_base(pc);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h680), 4'd2, 1'b1, 1'b0,
+                  1'b0, pc + VA_WIDTH'(8), 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    ubtb_clear_set(VA_WIDTH'('h00_0A48_0000));
+    lp_clear_both(VA_WIDTH'('h00_0A48_0000));
+    // One request per cycle: block n is at p2 two edges after its
+    // request.
+    req(pc, 6'h06);
+    tick();
+    req(pc, 6'h07);
+    tick();                                   // block 1 at p2
+    chk("CB4 block 1 (a valid p2 block): snapshot {1,2,0,0}",
+        (bpu_blk_val_p2 === 1'b1) &&
+        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd0}));
+    req(VA_WIDTH'('h00_0A48_0000), 6'h08);
+    tick();                                   // block 2 at p2
+    norq();
+    chk("CB4 block 2, the recursion push: snapshot {1,2,0,1}",
+        (bpu_blk_val_p2 === 1'b1) &&
+        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1}));
+    tick();                                   // block 3 at p2
+    chk("CB4 the RAS holds the count the snapshot carried",
+        dut.u_ras.spec_rctr[1] === RAS_RCTR_WIDTH'(1));
+    chk("CB4 block 3, no FTB entry: the current state, rctr 1",
+        (bpu_blk_val_p2 === 1'b1) &&
+        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1}));
+
+    // -- CB7. pred_src = PRED_RAS only when the RAS supplies a RETURN or
+    //    RETURN_CALL target, and the RAS target is used for those types
+    //    only. (a) a direct call at p2 with a non-empty RAS: its target
+    //    is the FTB jump target and its source is not PRED_RAS. (b) a
+    //    RETURN with an empty RAS (pop invalid): the FTB jump target,
+    //    not PRED_RAS. (c) a RETURN with the commit stack holding R: R,
+    //    PRED_RAS.
+    j_reset();
+    ras_push_commit(VA_WIDTH'('h00_0A5F_0010));
+    pc   = VA_WIDTH'('h00_0A50_0000);
+    base = blk_base(pc);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h6C0), 4'd2, 1'b1, 1'b0,
+                  1'b0, pc + VA_WIDTH'(8), 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h09);
+    tick();
+    norq();
+    tick();
+    chk("CB7a a direct call: the FTB target, not PRED_RAS",
+        (dut.w_br_type_p2[0] === DIRECT_CALL) &&
+        (dut.w_tkn_tgt_p2[0] === base + VA_WIDTH'('h6C0)) &&
+        (dut.w_pred_src_p2[0] !== PRED_RAS));
+    for (int k = 0; k < 2; k++) begin
+      j_reset();
+      if (k == 1) ras_push_commit(VA_WIDTH'('h00_0A6F_0020));
+      pc   = VA_WIDTH'('h00_0A60_0000);
+      base = blk_base(pc);
+      ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h700), 4'd2, 1'b0, 1'b1,
+                    1'b1, pc + VA_WIDTH'(8), 1'b0);
+      ubtb_clear_set(pc);
+      lp_clear_both(pc);
+      req(pc, 6'h0A);
+      tick();
+      norq();
+      tick();
+      if (k == 0)
+        chk("CB7b an empty RAS: the RETURN takes the FTB target, not PRED_RAS",
+            (dut.w_br_type_p2[0] === RETURN) &&
+            (dut.w_ras_pop_valid_p2[0] === 1'b0) &&
+            (dut.w_tkn_tgt_p2[0] === base + VA_WIDTH'('h700)) &&
+            (dut.w_pred_src_p2[0] !== PRED_RAS));
+      else
+        chk("CB7c the RAS supplies the RETURN target: R, PRED_RAS",
+            (dut.w_br_type_p2[0] === RETURN) &&
+            (dut.w_tkn_tgt_p2[0] === VA_WIDTH'('h00_0A6F_0020)) &&
+            (dut.w_pred_src_p2[0] === PRED_RAS));
+    end
+
+    // -- CB9. The classification of the FTB jump field, from is_call,
+    //    is_ret and is_jalr (ras_decisions.md 2: the JALR hint table and
+    //    the compressed mapping). call and ret: RETURN_CALL (JALR with rd
+    //    and rs1 both link and unequal; C.JALR rs1 = x5); ret alone:
+    //    RETURN; call and jalr: INDIRECT_CALL; call alone: DIRECT_CALL;
+    //    jalr alone: INDIRECT_NONRET; none: DIRECT_UNC. C.JALR always
+    //    has a link rd (is_call), so no C.JALR encoding is a pop-only
+    //    RETURN: every is_call combination maps to a push type.
+    for (int c = 0; c < 8; c++) begin
+      logic        ic, ir, ij;
+      bp_br_type_e want;
+      ic = c[2]; ir = c[1]; ij = c[0];
+      want = (ic && ir) ? RETURN_CALL :
+             ir         ? RETURN :
+             (ic && ij) ? INDIRECT_CALL :
+             ic         ? DIRECT_CALL :
+             ij         ? INDIRECT_NONRET : DIRECT_UNC;
+      j_reset();
+      pc   = VA_WIDTH'('h00_0A70_0000) + VA_WIDTH'(c * 'h1000);
+      base = blk_base(pc);
+      ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h740), 4'd2, ic, ir, ij,
+                    pc + VA_WIDTH'(8), 1'b0);
+      ubtb_clear_set(pc);
+      lp_clear_both(pc);
+      req(pc, 6'h0B);
+      tick();
+      norq();
+      tick();
+      chk($sformatf("CB9 call %0d ret %0d jalr %0d -> %s", ic, ir, ij,
+                    want.name()),
+          (dut.w_br_type_p2[0] === want) &&
+          (!ic || (want != RETURN)));
+    end
+
+    // -- CB2-RP4. The undo of a pop over a recursion pop (RP4 over PO1),
+    //    reached through CB2's p3 view: the rule tb_fe_top rec_undo was
+    //    written for, which that program cannot reach by construction
+    //    (BP-142 Problem 5). A direct call block C (call at pos 2, its
+    //    return address pc_c + 8) is requested twice: an allocation, then
+    //    a recursion push (PU5), so rctr[1] = 1. A return block R holds a
+    //    conditional at pos 1 and a RETURN at pos 4 (the jump behind
+    //    br0, which only a second slot carries: chk2). TAGE says not
+    //    taken (tage_bim_fill 00) and SC strongly taken (sc_fill 011111):
+    //    at p2 the conditional is not taken, the RETURN reachable, and
+    //    the pop decrements rctr[1] 1 -> 0 holding TOSR (PO1); at p3 SC
+    //    reverses it, the RETURN is off the p3 path (CB2), and the undo-
+    //    pop puts the count back to 1 (RP4), TOSR unchanged.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);
+    sc_fill(6'b011111);
+    cfg_sc_enable(1'b1);
+    pc   = VA_WIDTH'('h00_0A80_0000);
+    base = blk_base(pc);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd2, 1'b1, 1'b0,
+                  1'b0, pc + VA_WIDTH'(8), 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    for (int k = 0; k < 2; k++) begin
+      req(pc, 6'h0C + 6'(k));
+      tick();
+      norq();
+      repeat (3) tick();
+    end
+    chk("CB2-RP4 C twice: one entry, rctr 1",
+        (dut.u_ras.tosr === RAS_PTR_BITS'(1)) &&
+        (dut.u_ras.spec_rctr[1] === RAS_RCTR_WIDTH'(1)) &&
+        (dut.u_ras.spec_ret_addr[1] === pc + VA_WIDTH'(8)));
+    pc   = VA_WIDTH'('h00_0A90_0000);
+    base = blk_base(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1,
+                   base + VA_WIDTH'('d12), 1'b0);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h500), 4'd4, 1'b0, 1'b1,
+                  1'b1, base + VA_WIDTH'('d12), 1'b1);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h0E);
+    tick();
+    norq();
+    tick();                                   // R at p2
+    chk("CB2-RP4 p2: the conditional is not taken", dut.w_taken_p2[0] === 1'b0);
+    chk2("CB2-RP4 p2: the RETURN is on the path and pops",
+         (dut.w_br_type_p2[S1] === RETURN) &&
+         (dut.w_ras_pred_val_p2[S1] === 1'b1));
+    tick();                                   // R at p3
+    chk2("CB2-RP4 the p2 pop decremented rctr[1] 1 -> 0, TOSR held",
+         (dut.u_ras.spec_rctr[1] === RAS_RCTR_WIDTH'(0)) &&
+         (dut.u_ras.tosr === RAS_PTR_BITS'(1)));
+    chk("CB2-RP4 p3: SC reverses the conditional", dut.w_taken_p3[0] === 1'b1);
+    chk2("CB2-RP4 p3: the RETURN is off the p3 path",
+         dut.w_ras_pred_val_p3[S1] === 1'b0);
+    tick();
+    chk2("CB2-RP4 RP4 the undo-pop put the count back: rctr[1] 1, tosr 1",
+         (dut.u_ras.spec_rctr[1] === RAS_RCTR_WIDTH'(1)) &&
+         (dut.u_ras.tosr === RAS_PTR_BITS'(1)));
+    cfg_sc_enable(1'b0);
+    clr_upd_chans();
+
+    repeat (2) tick();
+    $display("---- GROUP CB done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
   // GROUP M -- RETURN_CALL (TD#152) and the uBTB jump slot (TD#154),
   // BP-119
   // =================================================================
@@ -6269,6 +6610,7 @@ module tb;
     group_q();
     group_s();
     group_t();
+    group_cb();    // BP-142: ras_decisions.md 12.14
 
     mon_report();
     $display("INFO: %0d resets", n_resets);

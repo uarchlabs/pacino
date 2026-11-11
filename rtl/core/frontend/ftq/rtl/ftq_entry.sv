@@ -6,8 +6,9 @@
 // FTQ fast-path entry array (BP-107).
 //
 // Owns bp_ftq_entry_t x FTQ_DEPTH, ftq_entry_formats.md 1 and 2.
-// 228 bits per entry, 64 entries, 14,592 bits ($bits(bp_ftq_entry_t)
-// at two slots; BP-141, it read 224 and 14,336). It is the storage
+// 232 bits per entry, 64 entries, 14,848 bits ($bits(bp_ftq_entry_t)
+// at two slots; BP-142, the RAS snapshot's recursion count, 4 bits,
+// TD#194; BP-141 it read 228 and 14,592). It is the storage
 // class read EVERY CYCLE, which is why it is its own module and not
 // merged with ftq_status (ftq_decisions.md 7.4).
 //
