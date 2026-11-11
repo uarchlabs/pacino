@@ -180,7 +180,8 @@
 # perf_decisions.md, pacino_features.md), and for the move of
 # scan_traces.py to tools/ (PROJECT_CORE.md, perf_decisions.md).
 # Updated after BP-141, session-084, for TD#194 option A and the RAS
-# rules (ras_decisions.md, ras_interfaces.md, ftq_entry_formats.md).
+# rules (ras_decisions.md, ras_interfaces.md, ftq_entry_formats.md);
+# after BP-142 for the held-entry rule (ras_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -245,7 +246,7 @@ ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  1edb8b57f003
-ARCH  ras_decisions.md                  67abd3e8b026
+ARCH  ras_decisions.md                  d51b67bc8e0e
 ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
 ARCH  sram_init.md                      d6cefefe7fc5

@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-10
+ UPDATED: 2026-11-11
  CONTACT: Jeff Nye
 ```
 
@@ -403,7 +403,9 @@ to commit stack top as prediction result. Commit stack entry
 is not consumed (read-only fallback).
 
 TOSR == BOS HOLDS EXACTLY WHEN THE STACK IS EMPTY, across commits
-(BP-138, D2). A commit moves BOS; four rules keep the test exact:
+(BP-138, D2). With TOSR != BOS, TOSR names an entry on the chain,
+which may lie below BOS (TOSR BELOW BOS, below). A commit moves BOS;
+four rules keep the test exact:
   - the pop that removes a bottom entry sets TOSR to BOS as it is
     then, not to nos;
   - a commit that moves BOS while TOSR == BOS moves TOSR with it
@@ -423,6 +425,26 @@ A bottom entry's nos still names the BOS of its push. Cost 16 bits
 of bot, plus one register bit per slot for the undo. Rejected:
 empty = TOSR older than BOS in TOSW allocation order, which a
 sentinel skip breaks (BP-138).
+
+TOSR BELOW BOS IS NOT A FAULT. RULED session-084 (Jeff), after
+BP-142 (tb_ras TC-65; tb_fe_top rec_undo seeds 7777 and 1234).
+Speculation runs ahead of commit: a younger block's pop can take TOSR
+below the BOS that the commits of older blocks leave, before their
+returns commit, and a restore to an older snapshot can do the same.
+The entry at TOSR is then below BOS but still on the chain, and its
+pop returns the address it was pushed with; in BP-142's trace that
+is the correct return, where the commit-stack fallback would give the
+wrong one. A held entry is therefore one a push wrote on the current
+chain and no allocation has reused since (12.5 PO7, 12.12 IV1), not
+one above BOS in allocation order, which is what ras_assert.sv RS2
+and RS3 test (w_seq[tosr] > w_seq[bos]); BP-143 corrects them. The
+restore (4.3), CO5 and CO6 are unchanged. An entry below BOS is
+reused before the sentinel skip, which guards only BOS: once the
+allocator has gone round the buffer since its push, its pop returns
+the reusing push's address, the bounded effect of the wrap (Overflow
+effect, below). The fourth rule above (BP-140, TD#189) was justified
+by an RS2 failure with TOSR below BOS, judged by the old meaning of
+held; BP-143 rechecks it.
 
 Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
@@ -1020,7 +1042,8 @@ BP-141 (Jeff). The sections above hold every rule, but spread across
 decisions, corrections and history, and the RAS tests reached only
 what their stimulus happened to reach. This section states each rule
 once, with an ID and the section that decides it. It decides nothing
-new except RE6 (TD#194 option A, ruled session-084). tb_ras checks
+new except RE6 (TD#194 option A) and the meaning of a held entry in
+PO7 and IV1 (3.2, TOSR BELOW BOS), both ruled session-084. tb_ras checks
 the unit rules (12.1 to 12.13) against a reference model written
 from this section; tb_bp_cluster checks the cluster rules (12.14).
 Every unit rule holds at NUM_PRED_SLOTS 1 and 2. Where a rule rests
@@ -1093,8 +1116,14 @@ PO5  With TOSR == BOS and the commit count above 0: it returns the
      and no pointer moves.
 PO6  With both stacks empty: ras_pop_valid_p2 = 0. ras_pop_addr_p2
      is not checked when valid is 0.
-PO7  A valid pop never returns a speculative entry the stack does not
-     hold, and a held top is always popped valid.
+PO7  A valid pop returns a chain entry (IV1): never the BOS sentinel
+     and never a slot no push on the chain wrote (fd07, TD#189). A
+     chain entry at TOSR always pops valid. The one exception is the
+     wrap: once the allocator has gone round the buffer since an
+     entry's push, the entry may have been reused, and its pop returns
+     the reusing push's address, the bounded effect of PU3 and RE7.
+     An entry below BOS is reused before the sentinel skip, which
+     guards only BOS (3.2).
 PO8  The order follows the link: f calls g, g returns, f calls h, h
      returns, and f's return is predicted to f's return address
      (TD#159).
@@ -1212,9 +1241,16 @@ CO11 A restore and a commit in one cycle: the restore sets TOSR, TOSW
 
 ### 12.12 The empty test (3.2; RI IC-RAS-07)
 IV1  TOSR == BOS holds exactly when the speculative stack is empty,
-     across commits, the wrap, restores and repairs. "Held" is
-     decided from the order of allocation, as ras_assert.sv RS2 and
-     RS3 decide it, not from TOSR == BOS.
+     across commits, the wrap, restores and repairs. With TOSR != BOS,
+     TOSR names a chain entry: an entry a push wrote, at TOSR or
+     reached from it by the links (nos, or BOS for a bottom entry),
+     above BOS in allocation order or below it. TOSR below BOS is not
+     a fault: a younger block's pop can take TOSR below the BOS the
+     older blocks' commits leave, and a restore to an older snapshot
+     can do the same (3.2, TOSR BELOW BOS; BP-142 TC-65). The model
+     decides a chain entry from each index's allocation sequence, not
+     from the order of TOSR and BOS, and reports a reused index as
+     the wrap (PO7).
 IV2  PO7 holds for every slot, in repair cycles too, and a fallback
      pop is valid whenever the commit stack holds an entry.
 
@@ -1378,4 +1414,11 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               buffer paragraph marked superseded. 12 new: the rules,
               one checkable statement each, which BP-142 tests.
               Document History renumbered 13.
+  2026-11-11  session-084, after BP-142 (Jeff). 3.2, 12 intro, 12.5
+              PO7, 12.12 IV1: TOSR below BOS is not a fault; a held
+              entry is one a push wrote on the current chain and no
+              allocation has reused, above or below BOS. The restore,
+              CO5 and CO6 unchanged. ras_assert.sv RS2 and RS3, which
+              test the old meaning, are corrected by BP-143, which also
+              rechecks the BP-140 fourth rule.
 ```
