@@ -27,8 +27,9 @@
 // (IT-16), not VPN_WIDTH. With V=1, vsatp.MODE=Bare and hgatp in
 // Sv39x4 the lookup address is a 41-bit guest physical address and
 // all 29 bits are significant (FE-19). itlb_l2t_vpn is built at the
-// same width for the same reason; itlb_l2tlb_interfaces.md 2 declares
-// it [VPN_WIDTH-1:0], which drops GPA bits 40:39. Reported.
+// same width for the same reason, as itlb_l2tlb_interfaces.md 2
+// declares it, [VA_WIDTH-13:0] (IL-1a). That document read
+// [VPN_WIDTH-1:0] until session-075; this note reported it.
 //
 // REGIMES (fe_decisions.md FE-19, ITLB-17). Read from the CSR input
 // group every cycle; the ITLB holds no CSR.

@@ -344,7 +344,7 @@ package bp_defines_pkg;
 
   // uBTB position slot size, same derivation as POS_OFFSET_BITS.
   localparam int UBTB_POS_OFFSET_BITS =
-                             UBTB_OFFSET_BITS - UBTB_BR_POS_BITS; // 2
+                             UBTB_OFFSET_BITS - UBTB_BR_POS_BITS; // 1
 
   // Target displacement widths. Same ISA reach as the FTB
   // (ftb_decisions.md 4.2). TAR_STAT_BITS is shared.
@@ -446,7 +446,12 @@ package bp_defines_pkg;
   //                                      ST0   ST1  ST2  ST3  ST4
   parameter int SC_TBL_BANKS[0:4]      = '{  2,   2,   2,   2,   2 };
   parameter int SC_TBL_ENTRIES[0:4]    = '{512, 512, 512, 512,1024 };
-  parameter int SC_TBL_FH[0:4]         = '{  0,   4,  16,  64,   0 };
+  // SC_TBL_FH: the FOLD WIDTH of ST1-ST3, the index width SC_TBL_IDX
+  // (BP-141, ruled by Jeff). SC_TBL_HIST: the history length folded
+  // into it. Until BP-141 SC_TBL_FH equalled SC_TBL_HIST, so each fold
+  // was as wide as its history and the 9-bit index cast kept history
+  // offsets 1-9 of ST2 and ST3 alike.
+  parameter int SC_TBL_FH[0:4]         = '{  0,   9,   9,   9,   0 };
   parameter int SC_TBL_HIST[0:4]       = '{  0,   4,  16,  64,   0 };
   parameter int SC_TBL_TAG[0:4]        = '{  0,   0,   0,   0,   0 };
   parameter int SC_TBL_CTR[0:4]        = '{  6,   6,   6,   6,   6 };
@@ -460,7 +465,7 @@ package bp_defines_pkg;
   localparam int SC_MAX_USE_WIDTH =  0;
   localparam int SC_MAX_CTR_WIDTH =  6;
   localparam int SC_MAX_VAL_WIDTH =  0;
-  localparam int SC_MAX_FH        = 64;
+  localparam int SC_MAX_FH        =  9; // max of SC_TBL_FH (BP-141; 64)
   localparam int SC_MAX_FH1       =  0;
   localparam int SC_MAX_FH2       =  0;
 
@@ -550,7 +555,10 @@ package bp_defines_pkg;
   // :RAS parameters:
   // ============================================================
   // Dual-stack RAS. Static partition: 16 speculative entries,
-  // 32 commit entries. Simple circular buffer. No linked list.
+  // 32 commit entries. The speculative stack is circular with a
+  // next-on-stack link per entry (BP-120, TD#159, ras_decisions.md
+  // 3.2); the commit stack is a plain circular stack. It read "Simple
+  // circular buffer. No linked list" until BP-141 (TD#195).
   // See planning/arch/ras_decisions.md section 3.
   parameter int RAS_SPEC_ENTRIES    = 16;
   parameter int RAS_COMMIT_ENTRIES  = 32;

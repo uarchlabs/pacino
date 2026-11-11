@@ -371,6 +371,13 @@ module bp_cluster (
   // of its conditional slot at p2 and is not overridden by SC at p3.
   lp_pred_t                        w_lp_pred_p2    [0:NUM_PRED_SLOTS-1];
   logic                            w_lp_use_p2     [0:NUM_PRED_SLOTS-1];
+  // BP-141: the FTB fast path of the conditional in slot s (slot 0 br0,
+  // slot 1 br1, as w_ftb_br_valid_p2), and whether it decides that
+  // slot's direction: a saturated conf with ftb_fastpath_en, and no
+  // trusted loop prediction over it (ftb_confidence_override_rules.md
+  // 4.2, 4.3, 8).
+  logic                            w_ftb_fp_p2     [0:NUM_PRED_SLOTS-1];
+  logic                            w_fp_use_p2     [0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0]       w_lp_spec_val_p2;
   logic [NUM_PRED_SLOTS-1:0]       w_lp_spec_tkn_p2;
   logic                            w_lp_rst_val;
@@ -510,6 +517,9 @@ module bp_cluster (
   // The slot's p2 direction came from a trusted loop predictor
   // (BP-122): SC does not override it at p3 (ruled by Jeff).
   logic                    r_lp_use_p3  [0:NUM_PRED_SLOTS-1];
+  // The slot's p2 direction came from the FTB fast path (BP-141): SC
+  // does not override it at p3 (ftb_confidence_override_rules.md 4.2).
+  logic                    r_fp_use_p3  [0:NUM_PRED_SLOTS-1];
   // The FTB answered this block at p2 (BP-121, TD#161). The p3 slot
   // group is the p2 group with the SC direction applied, so it exists
   // only when the p2 group did.
@@ -682,6 +692,7 @@ module bp_cluster (
         r_tkn_tgt_p3[s]      <= '0;
         r_slot_p3[s]         <= '0;
         r_lp_use_p3[s]       <= 1'b0;
+        r_fp_use_p3[s]       <= 1'b0;
       end
     end else begin
       // -- p0 -> p1. The uBTB results are combinational from the p0 PC
@@ -746,6 +757,7 @@ module bp_cluster (
         r_tkn_tgt_p3[s] <= w_tkn_tgt_p2[s];
         r_slot_p3[s]    <= w_slot_p2[s];
         r_lp_use_p3[s]  <= w_lp_use_p2[s];
+        r_fp_use_p3[s]  <= w_fp_use_p2[s];
       end
     end
   end
@@ -1016,6 +1028,7 @@ module bp_cluster (
       w_tage_hit_p2[s] = w_tage_pred_rdy_p2[s]
                        & (w_tage_pred_meta_p2[s].branch_id == r_idx_p2);
       w_lp_use_p2[s]   = 1'b0;
+      w_fp_use_p2[s]   = 1'b0;
 
       if (blk_val && w_ftb_br_valid_p2[s]) begin
         // Conditional branch. A trusted loop predictor supplies the
@@ -1025,13 +1038,22 @@ module bp_cluster (
         // (fe_decisions.md 3.3). Bank s of the loop predictor
         // describes the conditional in slot s of the entry, which is
         // this FTB slot.
+        // THE FAST PATH (BP-141; ftb_confidence_override_rules.md 4,
+        // ftb_decisions.md 7). With ftb_fastpath_en and the branch's
+        // conf saturated, ftb_fastpath_p2 is set for it and its FTB
+        // direction (the conf MSB) stands at p2: TAGE does not override
+        // it here and SC does not at p3 (r_fp_use_p3). A trusted loop
+        // prediction still stands over it (4.3, 8). TAGE and SC are
+        // still requested and trained (6): nothing here gates either.
+        // Before BP-141 ftb_fastpath_p2 was connected and not read.
         w_br_type_p2[s] = COND;
         w_br_val_p2[s]  = 1'b1;
         w_pos_p2[s]     = w_ftb_br_pos_p2[s];
         w_lp_use_p2[s]  = w_lp_pred_p2[s].lp_pred_is_loop;
+        w_fp_use_p2[s]  = ~w_lp_use_p2[s] & w_ftb_fp_p2[s];
         w_taken_p2[s]   = w_lp_use_p2[s]
                             ? w_lp_pred_p2[s].lp_pred_taken
-                            : (w_tage_hit_p2[s]
+                            : ((w_tage_hit_p2[s] & ~w_fp_use_p2[s])
                                ? w_tage_pred_meta_p2[s].tage_pred_tkn
                                : w_ftb_br_taken_p2[s]);
       end else if (blk_val && w_ftb_jmp_valid_p2 && !jmp_placed) begin
@@ -1159,6 +1181,7 @@ module bp_cluster (
         COND: begin
           w_tkn_tgt_p2[s]  = w_ftb_br_target_p2[s];
           w_pred_src_p2[s] = w_lp_use_p2[s]   ? PRED_LOOP
+                           : w_fp_use_p2[s]   ? PRED_FTB
                            : w_tage_hit_p2[s] ? PRED_TAGE : PRED_FTB;
         end
         RETURN, RETURN_CALL: begin
@@ -1297,9 +1320,10 @@ module bp_cluster (
                      & (w_sc_pred_meta_p3[s].branch_id == r_idx_p3);
 
       // SC does not override a direction the loop predictor supplied
-      // at p2 (BP-122, ruled by Jeff).
+      // at p2 (BP-122, ruled by Jeff), nor one the FTB fast path
+      // committed at p2 (BP-141, ftb_confidence_override_rules.md 4.2).
       w_taken_p3[s]  = ((r_br_type_p3[s] == COND) & w_sc_hit_p3[s]
-                        & ~r_lp_use_p3[s])
+                        & ~r_lp_use_p3[s] & ~r_fp_use_p3[s])
                          ? w_sc_pred_meta_p3[s].sc_pred_tkn
                          : r_taken_p3[s];
     end
@@ -1343,7 +1367,7 @@ module bp_cluster (
 
       if (r_val_p3 & r_slot_p3[s].slot_valid
           & (r_slot_p3[s].br_type == COND) & w_sc_hit_p3[s]
-          & ~r_lp_use_p3[s]) begin
+          & ~r_lp_use_p3[s] & ~r_fp_use_p3[s]) begin
         w_slot_p3[s].taken = w_sc_pred_meta_p3[s].sc_pred_tkn;
         if (w_sc_pred_meta_p3[s].sc_pred_tkn != r_slot_p3[s].taken)
           w_slot_p3[s].pred_src = PRED_SC;
@@ -1687,6 +1711,11 @@ module bp_cluster (
                                                 : w_ftb_br1_taken_p2;
       assign w_ftb_br_target_p2[gs] = (gs == 0) ? w_ftb_br0_target_p2
                                                 : w_ftb_br1_target_p2;
+      // The fast path of the same field (BP-141): bit 0 br0, bit 1 br1
+      // (ftb_interfaces.md 2.4). At one slot bit 1 has no slot; br1 is
+      // then cut (w_cut_p2) and is not predicted in this block.
+      assign w_ftb_fp_p2[gs]        = (gs == 0) ? w_ftb_fastpath_p2[0]
+                                                : w_ftb_fastpath_p2[1];
 
       // -- w_slot_pc_p1[gs] is not driven here. It reads the formed
       //    slot (w_slot_p1[gs].pos, .slot_valid), which p1_form_comb

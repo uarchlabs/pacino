@@ -18,8 +18,11 @@
 // Fold geometry is the Xiangshan FoldedHistory convention (BP-071):
 // newest bit at the high end of the W-wide register; leaving bit
 // removed at (H-1) % W; one fold definition shared by the
-// incremental update and the rollback recompute. Helpers are 64b so
-// the SC ST3 fold (H = W = 64) is representable.
+// incremental update and the rollback recompute. Helpers are 64b, wider
+// than any fold (BP-141: the SC folds are 9 bits, SC_TBL_FH).
+// folded.tage_phr is the PHR in age order (BP-141, ruled by Jeff): bit 0
+// the newest path bit, bit k the path bit k branches older. It is not a
+// fold; it advances and is recomputed on rollback with the folds.
 // ===================================================================
 
 import bp_defines_pkg::*;
@@ -118,8 +121,10 @@ module bp_history
   //   - The bit leaving the H-deep window is removed at posmap(H) =
   //     (H - 1) % W.
   //
-  // Helpers are 64b wide so the SC ST3 fold (H = W = 64) is fully
-  // representable; callers cast the result down to the field width.
+  // Helpers are 64b wide, wider than any fold; callers cast the result
+  // down to the field width. A history shorter than its fold (SC ST1,
+  // H = 4 into W = 9) takes the same mapping: offset i of H lands at
+  // (i + W - 1) % W and positions H to W - 2 stay zero.
   // ----------------------------------------------------------------
 
   // ----------------------------------------------------------------
@@ -190,8 +195,27 @@ module bp_history
   endfunction
 
   // ----------------------------------------------------------------
+  // phr_age: the PHR in age order from the buffer, for the rollback
+  // recompute (BP-141). anchor is the address of the newest path bit,
+  // one below the live PHR pointer; bit k of the result is the path
+  // bit k branches older, phr_mem[anchor - k] modulo the buffer width.
+  // The whole buffer is the window, so the incremental step (a shift
+  // in at bit 0, fold_all_step) drops the bit the write overwrites.
+  // ----------------------------------------------------------------
+  function automatic logic [PHR_WIDTH-1:0] phr_age(
+    input logic [PHR_WIDTH-1:0] mem,
+    input int                   anchor
+  );
+    logic [PHR_WIDTH-1:0] r;
+    for (int k = 0; k < PHR_WIDTH; k++)
+      r[k] = mem[(anchor - k + PHR_WIDTH) % PHR_WIDTH];
+    return r;
+  endfunction
+
+  // ----------------------------------------------------------------
   // fold_all_step: one incremental step of every fold (TAGE T1-T4,
-  // ITTAGE IT1-IT5, SC ST1-ST3) for one history bit. wr_addr is the
+  // ITTAGE IT1-IT5, SC ST1-ST3) for one history bit, and of the PHR
+  // age view for its path bit (new_pbit, BP-141). wr_addr is the
   // GHR address the bit is written at; the bit leaving each H-deep
   // window is read at mem[wr_addr - H]. mem is the buffer as it was
   // before this cycle's writes, so a second bit of the same cycle
@@ -201,6 +225,7 @@ module bp_history
   function automatic bp_folded_hist_t fold_all_step(
     input bp_folded_hist_t      f_in,
     input logic                 new_bit,
+    input logic                 new_pbit,
     input logic [GHR_WIDTH-1:0] mem,
     input int                   wr_addr
   );
@@ -289,16 +314,22 @@ module bp_history
     f.it_t5_tag_fh2   = IT_MAX_FH2'(fold_step(64'(f.it_t5_tag_fh2),
       new_bit, leave_bit(mem, wr_addr, IT_TBL_HIST[5]),
       IT_TBL_HIST[5], IT_TBL_FH2[5]));
-    // SC ST1-ST3 (H = W = SC_TBL_HIST)
+    // SC ST1-ST3: H = SC_TBL_HIST, folded into W = SC_TBL_FH, the
+    // index width (BP-141). Until BP-141 W was H, and the 9-bit index
+    // cast kept offsets 1-9 of ST2 and ST3 alike.
     f.sc_t1_idx_fh    = SC_MAX_FH'(fold_step(64'(f.sc_t1_idx_fh),
       new_bit, leave_bit(mem, wr_addr, SC_TBL_HIST[1]),
-      SC_TBL_HIST[1], SC_TBL_HIST[1]));
+      SC_TBL_HIST[1], SC_TBL_FH[1]));
     f.sc_t2_idx_fh    = SC_MAX_FH'(fold_step(64'(f.sc_t2_idx_fh),
       new_bit, leave_bit(mem, wr_addr, SC_TBL_HIST[2]),
-      SC_TBL_HIST[2], SC_TBL_HIST[2]));
+      SC_TBL_HIST[2], SC_TBL_FH[2]));
     f.sc_t3_idx_fh    = SC_MAX_FH'(fold_step(64'(f.sc_t3_idx_fh),
       new_bit, leave_bit(mem, wr_addr, SC_TBL_HIST[3]),
-      SC_TBL_HIST[3], SC_TBL_HIST[3]));
+      SC_TBL_HIST[3], SC_TBL_FH[3]));
+    // PHR age view: the new path bit enters at bit 0 and every older
+    // bit moves up one; bit PHR_WIDTH-1 leaves, the bit the buffer
+    // write overwrites.
+    f.tage_phr        = {f.tage_phr[PHR_WIDTH-2:0], new_pbit};
     return f;
   endfunction
 
@@ -439,13 +470,17 @@ module bp_history
         rb_anchor, IT_TBL_HIST[5], IT_TBL_FH1[5]));
       fh_r.it_t5_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[5], IT_TBL_FH2[5]));
-      // SC ST1-ST3 (H = W = SC_TBL_HIST)
+      // SC ST1-ST3: H = SC_TBL_HIST into W = SC_TBL_FH (BP-141)
       fh_r.sc_t1_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
-        rb_anchor, SC_TBL_HIST[1], SC_TBL_HIST[1]));
+        rb_anchor, SC_TBL_HIST[1], SC_TBL_FH[1]));
       fh_r.sc_t2_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
-        rb_anchor, SC_TBL_HIST[2], SC_TBL_HIST[2]));
+        rb_anchor, SC_TBL_HIST[2], SC_TBL_FH[2]));
       fh_r.sc_t3_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
-        rb_anchor, SC_TBL_HIST[3], SC_TBL_HIST[3]));
+        rb_anchor, SC_TBL_HIST[3], SC_TBL_FH[3]));
+      // PHR age view (BP-141), from the PHR at the restored pointer:
+      // the newest path bit is one below it, as for the GHR folds.
+      fh_r.tage_phr        <= phr_age(rb_phr,
+        (int'(rb_pptr) - 1 + PHR_WIDTH) % PHR_WIDTH);
 
     end else begin : nrm
       // -- Advance the module-owned pointer by num_branches this
@@ -480,8 +515,8 @@ module bp_history
             ((b == 0) || (int'(num_branches) <= NUM_PRED_SLOTS))) begin
           ghr_mem[(int'(ghist_ptr_r) + b) % GHR_WIDTH] <= pred_taken[b];
           phr_mem[(int'(phist_ptr_r) + b) % PHR_WIDTH] <= path_bit[b];
-          fh_nxt = fold_all_step(fh_nxt, pred_taken[b], ghr_mem,
-                                 int'(ghist_ptr_r) + b);
+          fh_nxt = fold_all_step(fh_nxt, pred_taken[b], path_bit[b],
+                                 ghr_mem, int'(ghist_ptr_r) + b);
         end
       end
       fh_r <= fh_nxt;

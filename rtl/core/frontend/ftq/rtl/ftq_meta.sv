@@ -93,7 +93,7 @@ module ftq_meta (
   //
   // No reset. The array is read only at resolution and a resolution
   // can only name an entry a prediction wrote, so there is no path
-  // that reads an unwritten location. Clearing 53,888 bits at reset
+  // that reads an unwritten location. Clearing 54,400 bits at reset
   // would model a structure no SRAM provides.
   always_ff @(posedge clk) begin : writes
     if (p2_wr_val) begin

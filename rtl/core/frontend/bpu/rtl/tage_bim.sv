@@ -70,7 +70,9 @@ module tage_bim #(
 
   // RAM depth: 2^THIS_INDEX_BITS entries total across both banks.
   localparam int RAM_DEPTH   = 1 << THIS_INDEX_BITS;
-  localparam int NUM_BANKS   = 2;
+  // TAGE_TBL_BANKS (2), the package's bank count (BP-141; it read the
+  // literal 2). The index MSB selects the bank, so it holds only at 2.
+  localparam int NUM_BANKS   = TAGE_TBL_BANKS[THIS_TABLE];
   // RAM rows per bank: index MSB selects bank, lower bits select row.
   localparam int RAM_ENTRIES = RAM_DEPTH / NUM_BANKS;
 

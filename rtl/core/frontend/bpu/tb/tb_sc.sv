@@ -451,9 +451,10 @@ module tb;
     // BP-128: slot 1 only at two slots (loop: no constant index).
     for (int s = 1; s < P_SLOTS; s++)
       inp_pc_p2[s]  = (VA_WIDTH-1)'('h0000_0088);   // PC[9:1] = 0x088
-    sc_t1_idx_fh_p2 = 64'd5;
-    sc_t2_idx_fh_p2 = 64'd10;
-    sc_t3_idx_fh_p2 = 64'd3;
+    // BP-141: the folds are SC_MAX_FH (9) bits; the values are unchanged.
+    sc_t1_idx_fh_p2 = SC_MAX_FH'(5);
+    sc_t2_idx_fh_p2 = SC_MAX_FH'(10);
+    sc_t3_idx_fh_p2 = SC_MAX_FH'(3);
     sc_phr_p2       = 10'h055;
 
     // Derive indices and seed +3 at each consulted entry.

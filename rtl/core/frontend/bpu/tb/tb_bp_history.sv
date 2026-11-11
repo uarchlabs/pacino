@@ -349,13 +349,28 @@ module tb;
         {ctx, ".it_t5_fh1"});
     chk(64'(folded.it_t5_tag_fh2), IT_TBL_HIST[5], IT_TBL_FH2[5],
         {ctx, ".it_t5_fh2"});
-    // SC ST1-ST3 (idx only, H = W)
-    chk(64'(folded.sc_t1_idx_fh), SC_TBL_HIST[1], SC_TBL_HIST[1],
+    // SC ST1-ST3 (idx only). BP-141, ruled by Jeff: H = SC_TBL_HIST
+    // folded into W = SC_TBL_FH = 9, the index width. W was H until
+    // BP-141, so the expected value of each SC fold changes here: the
+    // golden is the same fold definition at the new W.
+    chk(64'(folded.sc_t1_idx_fh), SC_TBL_HIST[1], SC_TBL_FH[1],
         {ctx, ".sc_t1_idx"});
-    chk(64'(folded.sc_t2_idx_fh), SC_TBL_HIST[2], SC_TBL_HIST[2],
+    chk(64'(folded.sc_t2_idx_fh), SC_TBL_HIST[2], SC_TBL_FH[2],
         {ctx, ".sc_t2_idx"});
-    chk(64'(folded.sc_t3_idx_fh), SC_TBL_HIST[3], SC_TBL_HIST[3],
+    chk(64'(folded.sc_t3_idx_fh), SC_TBL_HIST[3], SC_TBL_FH[3],
         {ctx, ".sc_t3_idx"});
+    // BP-141: the PHR age view against the buffer the DUT reports, bit k
+    // = phr_buf[phist_ptr - 1 - k]. A consistency check at every case;
+    // TC18 checks it against the test's own PHR model.
+    for (int k = 0; k < PHR_WIDTH; k++) begin
+      fold_checks++;
+      if (folded.tage_phr[k] !==
+          phr_buf[(int'(phist_ptr) - 1 - k + 2 * PHR_WIDTH) % PHR_WIDTH])
+        $fatal(1, "%s.tage_phr FAIL: bit %0d got %b, phr_buf age %0d %b",
+               ctx, k, folded.tage_phr[k], k,
+               phr_buf[(int'(phist_ptr) - 1 - k + 2 * PHR_WIDTH)
+                       % PHR_WIDTH]);
+    end
   endtask
 
   // Drive one prediction bundle (no checkpoint, no rollback).
@@ -389,6 +404,99 @@ module tb;
     lfsr = {lfsr[30:0], b};
     return b;
   endfunction
+
+  // ----------------------------------------------------------------
+  // BP-141 PHR model (TC18). The test's own PHR_WIDTH-entry circular
+  // path history and pointer, written from bp_history_decisions.md
+  // 3.2 (the path bit is pred_pc[2] ^ pred_pc[3], one per branch in
+  // branch order) and 3.5 (a rollback restores the pointer from the
+  // checkpoint; a corrected rollback writes rollback_pbit from the
+  // bundle's first bit and rewrites the checkpoint). It never reads
+  // the DUT. The expected tage_phr (Jeff, session-084) is the model in
+  // age order: bit k is the path bit k branches older than the newest.
+  // ----------------------------------------------------------------
+  logic [PHR_WIDTH-1:0] m_phr;
+  int                   m_pp;
+  int                   m_ck_pp [FTQ_DEPTH];
+  int                   m_ck_nb [FTQ_DEPTH];
+
+  task automatic m_phr_reset;
+    m_phr = '0;
+    m_pp  = 0;
+    for (int i = 0; i < FTQ_DEPTH; i++) begin
+      m_ck_pp[i] = 0;
+      m_ck_nb[i] = 0;
+    end
+  endtask
+
+  // One full bundle, NUM_PRED_SLOTS branches, random directions and
+  // random pc[3:2], on the DUT and the model; ck writes checkpoint ci.
+  task automatic phr_bundle(input bit ck, input int ci);
+    logic [VA_WIDTH-1:0] pc;
+    pred_taken = '0;
+    for (int b = 0; b < NUM_PRED_SLOTS; b++) begin
+      pc            = VA_WIDTH'({nextbit(), nextbit(), 2'b00});
+      pred_pc[b]    = pc;
+      pred_taken[b] = nextbit();
+      m_phr[m_pp]   = pc[2] ^ pc[3];
+      m_pp          = (m_pp + 1) % PHR_WIDTH;
+    end
+    num_branches = PRED_CNT_BITS'(NUM_PRED_SLOTS);
+    ckpt_wr_en   = ck;
+    ckpt_wr_idx  = FTQ_IDX_BITS'(ci);
+    if (ck) begin
+      m_ck_pp[ci] = m_pp;          // the post-advance pointer
+      m_ck_nb[ci] = NUM_PRED_SLOTS;
+    end
+    tick();
+    drive_idle();
+  endtask
+
+  // A rollback to checkpoint ci, plain (n = 0) or corrected with n
+  // path bits pb, on the DUT and the model.
+  task automatic phr_rollback(input int ci, input int n,
+                              input logic [RB_CORR_BITS-1:0] pb);
+    int base;
+    rollback_valid    = 1'b1;
+    rollback_ckpt_idx = FTQ_IDX_BITS'(ci);
+    rollback_corr     = (n != 0);
+    rollback_n        = RB_CNT_BITS'(n);
+    rollback_tkn      = '0;
+    rollback_pbit     = pb;
+    if (n == 0) begin
+      m_pp = m_ck_pp[ci];
+    end else begin
+      base = (m_ck_pp[ci] - m_ck_nb[ci] + PHR_WIDTH) % PHR_WIDTH;
+      for (int k = 0; k < n; k++) m_phr[(base + k) % PHR_WIDTH] = pb[k];
+      m_pp        = (base + n) % PHR_WIDTH;
+      m_ck_pp[ci] = m_pp;
+      m_ck_nb[ci] = n;
+    end
+    tick();
+    drive_idle();
+    tick();
+  endtask
+
+  // tage_phr bit by bit against the model's age order.
+  task automatic phr_check(input string ctx);
+    logic e;
+    if (int'(phist_ptr) != m_pp)
+      $fatal(1, "%s FAIL: phist_ptr %0d, model %0d", ctx, phist_ptr, m_pp);
+    for (int k = 0; k < PHR_WIDTH; k++) begin
+      e = m_phr[(m_pp - 1 - k + 2 * PHR_WIDTH) % PHR_WIDTH];
+      fold_checks++;
+      if (folded.tage_phr[k] !== e)
+        $fatal(1, "%s FAIL: tage_phr[%0d] got %b exp %b (age %0d)", ctx,
+               k, folded.tage_phr[k], e, k);
+    end
+  endtask
+
+  // BP-141 TC19: drive a known age-indexed history kh of length L,
+  // oldest first, from reset, one branch per bundle.
+  task automatic push_ages(input logic [GHR_WIDTH-1:0] kh, input int L);
+    do_reset();
+    for (int j = 0; j < L; j++) upd(1, kh[L - 1 - j], 1'b0, '0, '0);
+  endtask
 
   // ----------------------------------------------------------------
   // Test body
@@ -824,38 +932,41 @@ module tb;
     $display("TC15 pass (BP-073 anchor: ITTAGE IT1 idx, short 2b = 0x9)");
 
     // ---- TC16: SC ST3 idx, FULL + WRAPPED 64-bit window ----------
-    // (req 2 SC ST3 boundary, req 3 full/wrapped). H = W = 64, the
-    // case that forced the 64b helpers and cannot be held at 32b.
+    // (req 2 SC ST3 boundary, req 3 full/wrapped). H = 64 folded into
+    // W = SC_TBL_FH[3] = 9 (BP-141; until BP-141 W was 64 and the
+    // window's two set bits, ages 0 and 63, landed at 63 and 62 for
+    // 0xC000_0000_0000_0000). At W = 9 ages 0 and 63 both land at 8 and
+    // cancel, so BP-141 drives 61 zero pushes, not 62, putting the
+    // oldest set bit at age 62 instead.
     // Advance the pointer to 250 with zero pushes (GHR stays zero),
-    // then drive a 64-bit window that wraps 255->0: first push = 1
-    // (lands at pos 250, becomes age63), 62 zero pushes, last push = 1
-    // (pos 57, age0). Final ghist_ptr = (250+64) % 256 = 58.
-    // Age history: age0=1, age63=1, rest 0. posmap(i)=(i+63)%64:
-    //   age0 ->(63)%64=63, age63->(126)%64=62 -> fold bits {63,62}
-    //   = 0xC000_0000_0000_0000 (the literal cannot fit in 32b).
+    // then drive a 63-bit window that wraps 255->0: first push = 1
+    // (lands at pos 250, becomes age62), 61 zero pushes, last push = 1
+    // (pos 56, age0). Final ghist_ptr = (250+63) % 256 = 57.
+    // Age history: age0=1, age62=1, rest 0. posmap(i)=(i+8)%9:
+    //   age0 ->8%9=8, age62->70%9=7 -> fold bits {8,7} = 0x180.
     do_reset();
     begin
       int                   k;
       logic [GHR_WIDTH-1:0] kh;
       for (k = 0; k < 250; k++) upd(1, 1'b0, 1'b0, '0, '0);
       upd(1, 1'b1, 1'b0, '0, '0);                 // pos 250 = 1
-      for (k = 0; k < 62; k++) upd(1, 1'b0, 1'b0, '0, '0);
-      upd(1, 1'b1, 1'b0, '0, '0);                 // pos 57  = 1
-      if (ghist_ptr !== 8'd58)
-        $fatal(1, "TC16 FAIL: ghist_ptr=%0d exp 58", ghist_ptr);
-      if (ghr_buf[250] !== 1'b1 || ghr_buf[57] !== 1'b1)
+      for (k = 0; k < 61; k++) upd(1, 1'b0, 1'b0, '0, '0);
+      upd(1, 1'b1, 1'b0, '0, '0);                 // pos 56  = 1
+      if (ghist_ptr !== 8'd57)
+        $fatal(1, "TC16 FAIL: ghist_ptr=%0d exp 57", ghist_ptr);
+      if (ghr_buf[250] !== 1'b1 || ghr_buf[56] !== 1'b1)
         $fatal(1, "TC16 FAIL: wrapped window endpoints not set");
       if ($countones(ghr_buf) !== 2)
         $fatal(1, "TC16 FAIL: ghr has %0d ones exp 2",
                $countones(ghr_buf));
       kh = '0;
-      kh[0] = 1'b1; kh[63] = 1'b1;
+      kh[0] = 1'b1; kh[62] = 1'b1;
       chk_anchor(64'(folded.sc_t3_idx_fh), kh,
-                 SC_TBL_HIST[3], SC_TBL_HIST[3],
-                 64'hC000_0000_0000_0000, "TC16.sc_t3_idx_WRAP64");
+                 SC_TBL_HIST[3], SC_TBL_FH[3],
+                 64'h0000_0000_0000_0180, "TC16.sc_t3_idx_WRAP64");
     end
     pass_count++;
-    $display("TC16 pass (BP-073 anchor: SC ST3 idx, wrap 64b = 0xC..0)");
+    $display("TC16 pass (BP-073 anchor: SC ST3 idx, wrap 64 into 9 = 0x180)");
 
     // ---- TC17 (BP-121): the corrected rollback ----------------------
     // bp_history_decisions.md 3.5, reopened and ruled by Jeff: correct
@@ -926,6 +1037,100 @@ module tb;
     pass_count++;
     $display("TC17 pass (BP-121 corrected rollback)");
 
+    // ---- TC18 (BP-141): the PHR age view, folded.tage_phr ----------
+    // Jeff, session-084: tage_phr is the PHR in age order, bit 0 the
+    // newest path bit, bit k the path bit k branches older, with the
+    // stage, rollback and checkpoint behavior of the folds. Full
+    // bundles of NUM_PRED_SLOTS branches with random pc[3:2] (both
+    // slot counts), past one PHR wrap, then a checkpoint, a wrong path,
+    // a plain rollback, a corrected rollback of two path bits, and a
+    // plain rollback to the rewritten checkpoint. After every step
+    // tage_phr is checked bit by bit against the test's own model
+    // (m_phr, above). Before BP-141 nothing wrote tage_phr: it read 0.
+    do_reset();
+    m_phr_reset();
+    begin
+      int k;
+      for (k = 0; k < 20; k++) begin
+        phr_bundle(1'b0, 0);
+        phr_check($sformatf("TC18 fill %0d", k));
+      end
+      if (m_phr == '0)
+        $fatal(1, "TC18 FAIL: the stimulus left the PHR model zero");
+      phr_bundle(1'b1, 11);                    // checkpoint 11
+      phr_check("TC18 checkpoint");
+      for (k = 0; k < 5; k++) begin
+        phr_bundle(1'b0, 0);                   // the wrong path
+        phr_check($sformatf("TC18 wrong path %0d", k));
+      end
+      phr_rollback(11, 0, '0);                 // plain rollback
+      phr_check("TC18 rollback");
+      for (k = 0; k < 3; k++) phr_bundle(1'b0, 0);
+      phr_check("TC18 after rollback");
+      phr_rollback(11, 2, RB_CORR_BITS'(2'b01)); // corrected: 1 then 0
+      phr_check("TC18 corrected rollback");
+      for (k = 0; k < 2; k++) phr_bundle(1'b0, 0);
+      phr_rollback(11, 0, '0);                 // the rewritten checkpoint
+      phr_check("TC18 rollback to the rewritten checkpoint");
+      check_all_folds("TC18");
+    end
+    pass_count++;
+    $display("TC18 pass (BP-141 PHR age view, %0d slot(s))", NUM_PRED_SLOTS);
+
+    // ---- TC19 (BP-141): SC ST2 and ST3 fold into the index width ----
+    // Jeff, session-084: ST1-ST3 fold H = 4, 16, 64 into W = 9, the
+    // index width. Before BP-141 each fold was H wide and the index
+    // kept its bits 8:0, history offsets 1-9 for ST2 and ST3 alike, so
+    // two histories that differ only at offset 10 or above indexed both
+    // tables alike. Three histories, each 41 branches from reset, the
+    // same at offsets 0-9:
+    //   A: ages {0, 3}
+    //   B: A and age 12   (inside ST2's 16 and ST3's 64)
+    //   C: A and age 40   (inside ST3's 64 only)
+    // posmap(i) = (i + 8) % 9: age0 -> 8, age3 -> 2, age12 -> 2,
+    // age40 -> 3. ST2 (H 16): A {8,2} 0x104, B {8} 0x100, C 0x104.
+    // ST3 (H 64): A 0x104, B 0x100, C {8,3,2} 0x10C.
+    // So A and B differ in both, A and C in ST3 only. Each fold is
+    // checked, in the index-width bits, against xs_fold_ref and the
+    // literal (chk_anchor); then the differences are checked.
+    begin
+      logic [GHR_WIDTH-1:0] ka, kb, kc;
+      logic [63:0]          a2, a3, b2, b3, c2, c3;
+      ka = '0; ka[0] = 1'b1; ka[3] = 1'b1;
+      kb = ka; kb[12] = 1'b1;
+      kc = ka; kc[40] = 1'b1;
+      push_ages(ka, 41);
+      chk_anchor(64'(folded.sc_t2_idx_fh), ka, SC_TBL_HIST[2],
+                 SC_TBL_IDX[2], 64'h104, "TC19.A.sc_t2");
+      chk_anchor(64'(folded.sc_t3_idx_fh), ka, SC_TBL_HIST[3],
+                 SC_TBL_IDX[3], 64'h104, "TC19.A.sc_t3");
+      a2 = 64'(folded.sc_t2_idx_fh); a3 = 64'(folded.sc_t3_idx_fh);
+      push_ages(kb, 41);
+      chk_anchor(64'(folded.sc_t2_idx_fh), kb, SC_TBL_HIST[2],
+                 SC_TBL_IDX[2], 64'h100, "TC19.B.sc_t2");
+      chk_anchor(64'(folded.sc_t3_idx_fh), kb, SC_TBL_HIST[3],
+                 SC_TBL_IDX[3], 64'h100, "TC19.B.sc_t3");
+      b2 = 64'(folded.sc_t2_idx_fh); b3 = 64'(folded.sc_t3_idx_fh);
+      push_ages(kc, 41);
+      chk_anchor(64'(folded.sc_t2_idx_fh), kc, SC_TBL_HIST[2],
+                 SC_TBL_IDX[2], 64'h104, "TC19.C.sc_t2");
+      chk_anchor(64'(folded.sc_t3_idx_fh), kc, SC_TBL_HIST[3],
+                 SC_TBL_IDX[3], 64'h10C, "TC19.C.sc_t3");
+      c2 = 64'(folded.sc_t2_idx_fh); c3 = 64'(folded.sc_t3_idx_fh);
+      check_all_folds("TC19");
+      if ((a2 == b2) || (a3 == b3))
+        $fatal(1, "TC19 FAIL: an offset-12 difference left ST2 or ST3 equal");
+      if ((a2 != c2) || (a3 == c3))
+        $fatal(1, "TC19 FAIL: an offset-40 difference: ST2 %0h/%0h ST3 %0h/%0h",
+               a2, c2, a3, c3);
+      for (int t = 1; t <= 3; t++)
+        if (SC_TBL_FH[t] != SC_TBL_IDX[t])
+          $fatal(1, "TC19 FAIL: SC_TBL_FH[%0d] %0d is not the index width %0d",
+                 t, SC_TBL_FH[t], SC_TBL_IDX[t]);
+    end
+    pass_count++;
+    $display("TC19 pass (BP-141 SC ST2/ST3 folds see offsets 10 and up)");
+
     $display("----------------------------------------------------");
     $display("BP-072: %0d directed test cases passed", pass_count);
     $display("BP-072: %0d golden fold comparisons passed", fold_checks);
@@ -934,6 +1139,7 @@ module tb;
              skip_count, NUM_PRED_SLOTS);
     $display("BP-072: ALL TESTS PASSED");
     $display("BP-073: ALL EXTERNAL ANCHORS MATCH (TAGE T1, IT1, SC ST3)");
+    $display("BP-141: PHR age view and SC index-width folds checked");
     $finish;
   end
 

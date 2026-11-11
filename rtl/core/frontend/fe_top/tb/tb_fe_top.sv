@@ -2115,7 +2115,18 @@ module tb;
     // (placed in the slot predecode gave the jal) no longer trains TAGE,
     // and 16'h3039 reached the case 0 times. Of 16 seeds swept on the
     // BP-139 tree 12 reach it (1 to 5 times); this one 5.
-    W.lfsr = 16'hacef;
+    // BP-141: re-chosen. With the SC folds into the index width and the
+    // PHR fold written, 16'hacef reached the case 0 times. Of 16 seeds
+    // swept on the BP-141 tree at two slots 12 reach it (1 to 10
+    // times), 2 do not (acef, 8888) and 2 (1234, 7777) stop on the RAS
+    // assertion RS2 a_pop_only_held (7777 does on the pre-BP-141 RTL
+    // too; reported in BP-141). This one reaches it 10 times.
+    W.lfsr = 16'hace1;
+    // BP-141: +RU_SEED=<hex> overrides the seed, for a seed sweep.
+    begin
+      logic [15:0] sd;
+      if ($value$plusargs("RU_SEED=%h", sd)) W.lfsr = sd;
+    end
     f = RESET_VECTOR + VA_WIDTH'('h800);
     W.mixed(3);
     top = W.wp;
@@ -2174,6 +2185,11 @@ module tb;
   // iterations at both slot counts: at 256 every seed but two reached
   // the case at two slots and six of eight at one; this seed gave the
   // most at one slot.
+  // BP-141: re-chosen. On the BP-141 tree 16'hACE1 reached the case 0
+  // times at two slots (5 predictions, none updated). Of 16 seeds swept
+  // at two slots 12 reach it, and of the 13 of those swept at one slot
+  // 12 reach it; 16'h5a5a reaches it 27 times at two slots and 21 at
+  // one, the largest lower count of the two.
   // -----------------------------------------------------------------
   localparam int TU_ITERS = 256;
   localparam int TU_WARM  = 8;
@@ -2182,7 +2198,12 @@ module tb;
     logic [VA_WIDTH-1:0] top;
     logic                tk;
     begin_prog("t0_uaon");
-    W.lfsr = 16'hACE1;
+    W.lfsr = 16'h5a5a;
+    // BP-141: +TU_SEED=<hex> overrides the seed, for a seed sweep.
+    begin
+      logic [15:0] sd;
+      if ($value$plusargs("TU_SEED=%h", sd)) W.lfsr = sd;
+    end
     W.mixed(3);
     top = W.wp;
     for (int it = 0; it < TU_ITERS; it++) begin

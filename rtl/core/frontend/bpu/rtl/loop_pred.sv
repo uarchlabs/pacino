@@ -148,6 +148,40 @@ module loop_pred #(
     return {itr_v, (itr == ITR_MAX) ? itr : itr + LP_ITR_BITS'(1)};
   endfunction
 
+  // Victim of one set (loop_pred_interfaces.md, victim selection), in
+  // priority order:
+  //   1. the lowest-indexed invalid way
+  //   2. the lowest-indexed valid way with age 0
+  //   3. the lowest-numbered way above 0 whose age is less than way
+  //      0's; way 0 if none
+  // Written for any LP_TBL_WAYS (BP-141; rule 3 named ways 1 to 3 by
+  // literal). Each scan runs high to low so the lowest way wins.
+  function automatic logic [LP_WAY_BITS-1:0]
+      victim_of(input lp_entry_t set_in [LP_TBL_WAYS]);
+    logic                   any_inv, any_z;
+    logic [LP_WAY_BITS-1:0] v_inv, v_z, v_lt;
+    any_inv = 1'b0;
+    any_z   = 1'b0;
+    v_inv   = '0;
+    v_z     = '0;
+    v_lt    = '0;
+    for (int w = LP_TBL_WAYS - 1; w >= 0; w--) begin
+      if (!set_in[w].v) begin
+        any_inv = 1'b1;
+        v_inv   = w[LP_WAY_BITS-1:0];
+      end else if (set_in[w].age == '0) begin
+        any_z = 1'b1;
+        v_z   = w[LP_WAY_BITS-1:0];
+      end
+    end
+    for (int w = LP_TBL_WAYS - 1; w >= 1; w--) begin
+      if (set_in[w].age < set_in[0].age) v_lt = w[LP_WAY_BITS-1:0];
+    end
+    if (any_inv)    return v_inv;
+    else if (any_z) return v_z;
+    else            return v_lt;
+  endfunction
+
   // ----------------------------------------------------------------
   // Per-slot bank and per-slot logic.
   // One generate for loop over the slot index, one level only. The
@@ -170,8 +204,6 @@ module loop_pred #(
       // Prediction pipeline signals (p0 comb -> p1 registered)
       logic [LP_IDX_BITS-1:0] req_idx;
       logic [LP_TAG_BITS-1:0] req_tag;
-      logic [LP_TBL_WAYS-1:0] inv_mask;
-      logic [LP_TBL_WAYS-1:0] z_age_mask;
       logic                   any_hit;
       logic [LP_WAY_BITS-1:0] hit_way;
       lp_entry_t              hit_entry;
@@ -201,6 +233,10 @@ module loop_pred #(
       logic [LP_WAY_BITS-1:0] u_victim;
       lp_entry_t              u_new;
       logic                   u_alloc;
+      // BP-141: an allocation whose victim is valid with a non-zero age
+      // is blocked: it decrements that age by one and writes nothing
+      // else. Only a victim that is invalid or at age 0 is replaced.
+      logic                   u_blocked;
 
       // ------------------------------------------------------------
       // Combinational prediction logic
@@ -208,13 +244,6 @@ module loop_pred #(
       always_comb begin
         req_idx = idx_of(pred_pc_p0[s]);
         req_tag = tag_of(pred_pc_p0[s]);
-
-        // Compute invalid and zero-age masks for victim selection.
-        for (int w = 0; w < LP_TBL_WAYS; w++) begin
-          inv_mask[w]   = ~mem[req_idx][w].v;
-          z_age_mask[w] = mem[req_idx][w].v &
-                          (mem[req_idx][w].age == '0);
-        end
 
         // Hit detection. Scan high->low so the lowest-indexed
         // matching way wins via last-write-wins assignment.
@@ -230,32 +259,9 @@ module loop_pred #(
           end
         end
 
-        // Victim selection
-        if (|inv_mask) begin
-          // Priority 1: lowest-indexed invalid way.
-          victim_way = '0;
-          for (int w = LP_TBL_WAYS - 1; w >= 0; w--) begin
-            if (inv_mask[w]) victim_way = w[LP_WAY_BITS-1:0];
-          end
-        end else if (|z_age_mask) begin
-          // Priority 2: lowest-indexed valid zero-age way.
-          victim_way = '0;
-          for (int w = LP_TBL_WAYS - 1; w >= 0; w--) begin
-            if (z_age_mask[w]) victim_way = w[LP_WAY_BITS-1:0];
-          end
-        end else begin
-          // Priority 3: way whose age < way[0].age.
-          // Check way 1 first (highest priority), then 2, then 3.
-          // Default to way 0 if no qualifying way found.
-          if (mem[req_idx][1].age < mem[req_idx][0].age)
-            victim_way = LP_WAY_BITS'(1);
-          else if (mem[req_idx][2].age < mem[req_idx][0].age)
-            victim_way = LP_WAY_BITS'(2);
-          else if (mem[req_idx][3].age < mem[req_idx][0].age)
-            victim_way = LP_WAY_BITS'(3);
-          else
-            victim_way = '0;
-        end
+        // Victim selection (victim_of: invalid, then age 0, then the
+        // first way above 0 younger than way 0, else way 0).
+        victim_way = victim_of(mem[req_idx]);
 
         // Build combinational prediction output.
         // lp_pred_is_loop gated by pred_valid_p0[s]: when the slot
@@ -366,39 +372,21 @@ module loop_pred #(
           end
         end
 
-        // Victim, priority as at prediction.
-        u_victim = '0;
-        if (!mem[upd_p0[s].lp_idx][0].v ||
-            !mem[upd_p0[s].lp_idx][1].v ||
-            !mem[upd_p0[s].lp_idx][2].v ||
-            !mem[upd_p0[s].lp_idx][3].v) begin
-          for (int w = LP_TBL_WAYS - 1; w >= 0; w--) begin
-            if (!mem[upd_p0[s].lp_idx][w].v)
-              u_victim = w[LP_WAY_BITS-1:0];
-          end
-        end else begin
-          u_victim = '0;
-          for (int w = LP_TBL_WAYS - 1; w >= 0; w--) begin
-            if (mem[upd_p0[s].lp_idx][w].age == '0)
-              u_victim = w[LP_WAY_BITS-1:0];
-          end
-          if (mem[upd_p0[s].lp_idx][u_victim].age != '0) begin
-            if (mem[upd_p0[s].lp_idx][1].age <
-                mem[upd_p0[s].lp_idx][0].age)
-              u_victim = LP_WAY_BITS'(1);
-            else if (mem[upd_p0[s].lp_idx][2].age <
-                     mem[upd_p0[s].lp_idx][0].age)
-              u_victim = LP_WAY_BITS'(2);
-            else if (mem[upd_p0[s].lp_idx][3].age <
-                     mem[upd_p0[s].lp_idx][0].age)
-              u_victim = LP_WAY_BITS'(3);
-            else
-              u_victim = '0;
-          end
-        end
+        // Victim, priority as at prediction, from the set as it is now.
+        u_victim = victim_of(mem[upd_p0[s].lp_idx]);
 
-        u_alloc = !u_hit && upd_p0[s].actual_taken &&
-                  (upd_p0[s].target < upd_p0[s].pc);
+        // An allocation (a miss, taken, backward) replaces the victim
+        // only when it is invalid or at age 0. Otherwise it is blocked:
+        // the victim's age falls by one (BP-141, ruled by Jeff,
+        // session-084; Seznec's loop predictor). Before BP-141 nothing
+        // decremented age, so a full set at the maximum age always
+        // replaced way 0.
+        u_blocked = !u_hit && upd_p0[s].actual_taken &&
+                    (upd_p0[s].target < upd_p0[s].pc) &&
+                    mem[upd_p0[s].lp_idx][u_victim].v &&
+                    (mem[upd_p0[s].lp_idx][u_victim].age != '0);
+        u_alloc   = !u_hit && upd_p0[s].actual_taken &&
+                    (upd_p0[s].target < upd_p0[s].pc) && !u_blocked;
 
         u_new = u_entry;
         if (upd_p0[s].actual_taken) begin
@@ -467,6 +455,9 @@ module loop_pred #(
           end
           if (upd_valid_p0[s] && u_alloc) begin
             mem[upd_p0[s].lp_idx][u_victim] <= u_new;
+          end else if (upd_valid_p0[s] && u_blocked) begin
+            mem[upd_p0[s].lp_idx][u_victim].age <=
+              mem[upd_p0[s].lp_idx][u_victim].age - LP_AGE_BITS'(1);
           end else if (upd_valid_p0[s] && u_hit) begin
             mem[upd_p0[s].lp_idx][u_way].cnf      <= u_new.cnf;
             mem[upd_p0[s].lp_idx][u_way].age      <= u_new.age;

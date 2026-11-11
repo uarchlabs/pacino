@@ -20,7 +20,8 @@
 //     as empty (BP-126, TD#121). Updated at retire. Empty fallback for
 //     pops.
 //
-// Pipeline (p-stage names; planning docs use equivalent s-stage):
+// Pipeline (p-stage names, as the planning documents use since
+// session-072; older history entries there keep the s-stage labels):
 //   p0: combinational TOS read (initial prediction fallback).
 //   p2: FTB-confirmed push/pop, two slots, slot 0 before slot 1,
 //       with slot0=call / slot1=return same-cycle bypass. RETURN_CALL
@@ -77,7 +78,8 @@ module ras (
   input  logic [VA_WIDTH-1:0] ras_commit_ret_addr,
   input  bp_ras_snapshot_t    ras_commit_snapshot,
 
-  // ---- flush (reserved, RAS-3 OPEN) -------------------------------
+  // ---- flush (redundant, read by nothing; RAS-3 CLOSED: a flush is a
+  //      redirect and takes the pointer restore, ras_decisions.md 4.4)
   input  logic                ras_flush_val,
   input  bp_ras_snapshot_t    ras_flush_snapshot
 );
@@ -261,7 +263,7 @@ module ras (
   // to BOS), its return pops X back to BOS (empty), then the call
   // commits and BOS becomes X; TOSR, the old BOS, read non-empty, and
   // the next return popped that slot, the never-written sentinel, and
-  // predicted 0x0. Three rules keep TOSR == BOS exactly when the stack
+  // predicted 0x0. Four rules keep TOSR == BOS exactly when the stack
   // is empty:
   //   - a push onto an empty stack, or the sentinel skip, marks its
   //     entry bottom (spec_bot); the pop that removes a bottom entry

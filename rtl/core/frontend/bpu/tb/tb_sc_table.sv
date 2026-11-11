@@ -57,7 +57,7 @@ module tb;
   localparam int P_INDEX_BITS  = SC_TBL_IDX[1];      // 9
   localparam int P_CTR_WIDTH   = SC_TBL_CTR[1];      // 6
   localparam int P_ENTRIES     = SC_TBL_ENTRIES[1];  // 512
-  localparam int P_FH          = SC_TBL_FH[1];       // 4
+  localparam int P_FH          = SC_TBL_FH[1];       // 9 (BP-141; 4)
   localparam int P_NUM_SLOTS   = NUM_PRED_SLOTS;     // 1 or 2
 
   // Derived widths matching the sc_table localparams.
@@ -375,7 +375,7 @@ module tb;
     logic ihok, rdok;
     pc0   = (VA_WIDTH-1)'('h0000_0044);   // PC 0x88, PC[9:1]=0x044
     pc1   = (VA_WIDTH-1)'('h0000_0060);   // PC 0xC0, PC[9:1]=0x060
-    fh    = 64'h0000_0000_0000_0005;
+    fh    = SC_MAX_FH'('h005);   // BP-141: the fold is SC_MAX_FH (9) wide
     eidx0 = calc_idx(pc0, fh);
     eidx1 = calc_idx(pc1, fh);
     seed0 = 6'h2A;

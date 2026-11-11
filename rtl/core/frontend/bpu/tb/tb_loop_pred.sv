@@ -48,6 +48,10 @@
 //   TC26  a restore whose entry was replaced writes nothing
 //   TC27  a prediction in the same cycle as an update to its entry
 //         sees the old value
+// BP-141 (ruled by Jeff, session-084: Seznec's loop predictor):
+//   TC28  a full set: each allocation whose victim is valid at a
+//         non-zero age decrements that age by one and allocates
+//         nothing; the victim is replaced only at age 0
 //
 // Start state. Every test case begins with do_reset(), which drives
 // every input to its idle value and holds rstn low for two cycles.
@@ -307,6 +311,29 @@ module tb;
     if (sl == 0) dut.g_slot[0].mem[idx_of(pc)][way] = e;
     else         dut.g_slot[NUM_PRED_SLOTS-1].mem[idx_of(pc)][way] = e;
   endtask
+
+  // Read one entry of bank sl (BP-141). The bank index is a literal, as
+  // in seed().
+  function automatic lp_entry_t lp_ent_of(input int sl,
+                                          input logic [LP_IDX_BITS-1:0] i,
+                                          input int w);
+    if (sl == 0) return dut.g_slot[0].mem[i][w];
+    else         return dut.g_slot[NUM_PRED_SLOTS-1].mem[i][w];
+  endfunction
+
+  // Write one way's age directly (BP-141; a known driven state).
+  task automatic seed_age(input int sl, input logic [LP_IDX_BITS-1:0] i,
+                          input int w, input logic [LP_AGE_BITS-1:0] a);
+    if (sl == 0) dut.g_slot[0].mem[i][w].age = a;
+    else         dut.g_slot[NUM_PRED_SLOTS-1].mem[i][w].age = a;
+  endtask
+
+  function automatic logic [LP_AGE_BITS-1:0] lp_age_of(
+      input int sl, input logic [LP_IDX_BITS-1:0] i, input int w);
+    lp_entry_t e;
+    e = lp_ent_of(sl, i, w);
+    return e.age;
+  endfunction
 
   // One block through p0, p1 and p2 on slot sl: the p2 re-read is
   // returned, and at p2 the advance (val, tkn) and the checkpoint at
@@ -589,6 +616,12 @@ module tb;
   //       others at max. Predict PC_11 (miss) -> victim way 1, and an
   //       allocation of PC_11 lands in way 1 (the victim the update
   //       chooses, BP-122).
+  //       BP-141 (ruled by Jeff, session-084): a victim valid at a
+  //       non-zero age is not replaced; the allocation decrements its
+  //       age. The first allocation therefore takes way 1 from age 1 to
+  //       0 and allocates nothing (TC11c, which until BP-141 expected
+  //       way 1 replaced at once); way 1 is then the age-0 victim
+  //       (priority 2) and the second allocation lands in it (TC11d).
   // ================================================================
   task automatic tc11(input int sl);
     logic [VA_WIDTH-1:0]    pc11;
@@ -616,7 +649,8 @@ module tb;
       u.lp_tag          = LP_TAG_BITS'(w + 1);
       send_upd(sl, u);
     end
-    // Way 1's age lowered directly: no update lowers an age.
+    // Way 1's age lowered directly, to 1 (a known driven state; since
+    // BP-141 only a blocked allocation lowers an age, by one).
     if (sl == 0) dut.g_slot[0].mem[idx11][1].age = 8'h01;
     else         dut.g_slot[NUM_PRED_SLOTS-1].mem[idx11][1].age = 8'h01;
 
@@ -631,8 +665,14 @@ module tb;
     alloc_entry(sl, pc11, pc11 - VA_WIDTH'('d16), LP_WAY_BITS'(3));
     do_pred(sl, pc11);
     check($sformatf("TC11c.%s", sl_of(sl)),
+          !pred_p1[sl].lp_hit && (pred_p1[sl].lp_victim == LP_WAY_BITS'(1))
+          && (lp_age_of(sl, idx11, 1) == '0),
+          "TC11: blocked at way 1, age 1 -> 0, nothing allocated");
+    alloc_entry(sl, pc11, pc11 - VA_WIDTH'('d16), LP_WAY_BITS'(3));
+    do_pred(sl, pc11);
+    check($sformatf("TC11d.%s", sl_of(sl)),
           pred_p1[sl].lp_hit && (pred_p1[sl].lp_way == LP_WAY_BITS'(1)),
-          "TC11: the update allocates at its own victim, way 1");
+          "TC11: the update allocates at its own victim, way 1, at age 0");
     $display("TC11 slot %0d -- Victim selection: PASS", sl);
   endtask
 
@@ -1090,6 +1130,133 @@ module tb;
   endtask
 
   // ================================================================
+  // TC28: A BLOCKED ALLOCATION DECREMENTS THE VICTIM'S AGE (BP-141).
+  //
+  // Jeff, session-084: an allocation whose victim is valid with age
+  // above 0 decrements that age by one and does not allocate; the
+  // victim is replaced only at age 0. Victim selection is unchanged
+  // (loop_pred_interfaces.md: invalid, then age 0, then the first way
+  // above 0 younger than way 0, else way 0).
+  //
+  // The test keeps its own copy of the set (m_v, m_tag, m_age) and its
+  // own victim rule, from the interface document, and steps it with
+  // the rule above. Every way of the DUT's set is compared with the
+  // copy after every update.
+  //   Phase A. Four allocations fill the set through the update path,
+  //            tags of PCs pa[0..3], each age max (255). A fifth PC,
+  //            pb, of the same set and a fifth tag, allocates 256
+  //            times: the victim is way 0 (no way younger), its age
+  //            falls 255, 254, .., 1, 0, one per blocked allocation,
+  //            and pb does not hit; the 256th replaces way 0 (age 0)
+  //            with pb at age max.
+  //   Phase B. Way 2 seeded to age 3 (a known driven state): the
+  //            younger-than-way-0 rule picks way 2; three blocked
+  //            allocations of pc take it 3, 2, 1 to 0, and the fourth
+  //            replaces it.
+  // Before BP-141 the first allocation into the full set replaced
+  // way 0 at age 255.
+  // ================================================================
+  task automatic tc28(input int sl);
+    logic [LP_AGE_BITS-1:0] amax;
+    logic [VA_WIDTH-1:0]    pa [LP_TBL_WAYS];
+    logic [VA_WIDTH-1:0]    pb, pc;
+    logic [LP_IDX_BITS-1:0] i28;
+    logic                   m_v   [LP_TBL_WAYS];
+    logic [LP_TAG_BITS-1:0] m_tag [LP_TBL_WAYS];
+    logic [LP_AGE_BITS-1:0] m_age [LP_TBL_WAYS];
+    int                     vw, nblk, nrep;
+    lp_entry_t              e;
+
+    do_reset();
+    amax = {LP_AGE_BITS{1'b1}};
+    // PCs of one set with distinct tags: 0x10000 * k keeps PC[15:0] = 0,
+    // so the index is that of PC 0 (set 0), and the tag is
+    // (0x400 * k ^ 0x10 * k)[13:0]: 0x410, 0x820, 0xC30, 0x1040, 0x1450,
+    // 0x1860 for k = 1 to 6, all different (checked below).
+    for (int w = 0; w < LP_TBL_WAYS; w++)
+      pa[w] = VA_WIDTH'(w + 1) << 16;
+    pb  = VA_WIDTH'(LP_TBL_WAYS + 1) << 16;
+    pc  = VA_WIDTH'(LP_TBL_WAYS + 2) << 16;
+    i28 = idx_of(pb);
+    for (int w = 0; w < LP_TBL_WAYS; w++)
+      check($sformatf("TC28pre.%s", sl_of(sl)),
+            (idx_of(pa[w]) == i28) && (tag_of(pa[w]) != tag_of(pb)) &&
+            (tag_of(pa[w]) != tag_of(pc)),
+            "TC28: the PCs must share a set and differ in tag");
+    for (int w = 0; w < LP_TBL_WAYS; w++)
+      for (int x = w + 1; x < LP_TBL_WAYS; x++)
+        check($sformatf("TC28pre.%s", sl_of(sl)),
+              tag_of(pa[w]) != tag_of(pa[x]),
+              "TC28: the filler tags must differ");
+    for (int w = 0; w < LP_TBL_WAYS; w++) begin
+      m_v[w] = 1'b0; m_tag[w] = '0; m_age[w] = '0;
+    end
+
+    nblk = 0;
+    nrep = 0;
+    for (int n = 0; n < LP_TBL_WAYS + 256 + 4; n++) begin
+      logic [VA_WIDTH-1:0] p;
+      logic                any_inv, any_z;
+      // The PC of allocation n, and phase B's seed before it.
+      if (n < LP_TBL_WAYS)                p = pa[n];
+      else if (n < LP_TBL_WAYS + 256)     p = pb;
+      else                                p = pc;
+      if (n == LP_TBL_WAYS + 256) begin
+        seed_age(sl, i28, 2, LP_AGE_BITS'(3));
+        m_age[2] = LP_AGE_BITS'(3);
+      end
+      // The model victim, the interface document's rule.
+      any_inv = 1'b0; any_z = 1'b0; vw = 0;
+      for (int w = LP_TBL_WAYS - 1; w >= 0; w--)
+        if (!m_v[w]) begin any_inv = 1'b1; vw = w; end
+      if (!any_inv) begin
+        for (int w = LP_TBL_WAYS - 1; w >= 0; w--)
+          if (m_age[w] == '0) begin any_z = 1'b1; vw = w; end
+        if (!any_z) begin
+          vw = 0;
+          for (int w = LP_TBL_WAYS - 1; w >= 1; w--)
+            if (m_age[w] < m_age[0]) vw = w;
+        end
+      end
+      // The model step: replace at an invalid or age-0 victim, else
+      // decrement its age.
+      if (!m_v[vw] || (m_age[vw] == '0)) begin
+        m_v[vw] = 1'b1; m_tag[vw] = tag_of(p); m_age[vw] = amax;
+        if (n >= LP_TBL_WAYS) nrep++;
+      end else begin
+        m_age[vw] = m_age[vw] - LP_AGE_BITS'(1);
+        nblk++;
+      end
+      alloc_entry(sl, p, p - VA_WIDTH'('d64), LP_WAY_BITS'(0));
+      for (int w = 0; w < LP_TBL_WAYS; w++) begin
+        e = lp_ent_of(sl, i28, w);
+        check($sformatf("TC28.%0d.w%0d.%s", n, w, sl_of(sl)),
+              (e.v == m_v[w]) && (!m_v[w] ||
+               ((e.tag == m_tag[w]) && (e.age == m_age[w]))),
+              $sformatf({"allocation %0d way %0d: v%0b tag %0h age %0d,",
+                         " exp v%0b tag %0h age %0d"}, n, w, e.v, e.tag,
+                        e.age, m_v[w], m_tag[w], m_age[w]));
+      end
+    end
+    // The explicit expectations: way 0 fell one per blocked allocation
+    // to 0 and only then took pb; way 2 fell 3 to 0 and only then took
+    // pc. 255 + 3 blocked, 2 replacements after the fill.
+    check($sformatf("TC28end.%s", sl_of(sl)),
+          (nblk == 255 + 3) && (nrep == 2),
+          $sformatf("TC28: %0d blocked, %0d replaced, exp 258 and 2",
+                    nblk, nrep));
+    e = lp_ent_of(sl, i28, 0);
+    check($sformatf("TC28end0.%s", sl_of(sl)),
+          (e.tag == tag_of(pb)) && (e.age == amax),
+          "TC28: way 0 holds pb at age max after its age reached 0");
+    e = lp_ent_of(sl, i28, 2);
+    check($sformatf("TC28end2.%s", sl_of(sl)),
+          (e.tag == tag_of(pc)) && (e.age == amax),
+          "TC28: way 2 holds pc at age max after its age reached 0");
+    $display("TC28 slot %0d -- Blocked allocation decrements age: PASS", sl);
+  endtask
+
+  // ================================================================
   // TC14: SLOT INDEPENDENCE.
   //
   // For every ordered pair of distinct slots (a, b): drive an
@@ -1494,6 +1661,7 @@ module tb;
       tc25(sl);
       tc26(sl);
       tc27(sl);
+      tc28(sl);
     end
 
     // -- Slot retrofit set (TC14-TC17).

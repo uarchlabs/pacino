@@ -4901,6 +4901,227 @@ module tb;
   endtask
 
   // =================================================================
+  // GROUP T -- the FTB fast path (BP-141; ftb_confidence_override_
+  // rules.md 4-6 and 8, ftb_decisions.md 7)
+  // =================================================================
+  //
+  // With ftb_fastpath_en set and a conditional's conf saturated, the
+  // FTB raises ftb_fastpath_p2 for it and its direction (the conf MSB)
+  // stands: no TAGE direction override at p2, no SC override at p3. A
+  // trusted loop prediction still stands over it (4.3, 8). TAGE and SC
+  // are still requested and trained (6). Before BP-141 the cluster read
+  // no fast-path bit and TAGE and SC overrode the FTB as normal.
+  // T1 saturated taken (111), en set, TAGE not taken, SC not taken:
+  //    taken at p2 and p3, the FTB the source, no p3 redirect; TAGE
+  //    answered at p2 and SC at p3; a COND update still reaches both
+  // T2 saturated taken, en set, TAGE taken, SC not taken: SC does not
+  //    reverse it at p3
+  // T3 unsaturated (100), en set: TAGE overrides at p2 and SC at p3
+  // T4 saturated taken, en CLEAR: TAGE overrides at p2 (unchanged)
+  // T5 a trusted loop prediction over a fast-path slot
+  // T6 (two slots) br1 saturated taken in slot 1 behind a not-taken br0
+  // Every case starts from reset; the uBTB set and both loop banks of
+  // the PC are cleared; the FTB entry is written through its update
+  // port and the conf it reports is checked before it is relied on.
+  //
+  // t_sat_install: allocate br_idx at pos taken, then three taken
+  // updates of the same field (100 -> 101 -> 110 -> 111).
+  task automatic t_sat_install(input logic [VA_WIDTH-1:0] pc,
+                               input logic br_idx,
+                               input logic [FTB_BR_POS_BITS-1:0] pos,
+                               input logic hit0);
+    logic [VA_WIDTH-1:0] base;
+    base = blk_base(pc);
+    ftb_alloc_cond(pc, 2'd0, br_idx, 1'b1, base + VA_WIDTH'('h300), pos,
+                   base + VA_WIDTH'('d32), hit0);
+    for (int k = 0; k < 3; k++)
+      ftb_alloc_cond(pc, 2'd0, br_idx, 1'b1, base + VA_WIDTH'('h300), pos,
+                     base + VA_WIDTH'('d32), 1'b1);
+  endtask
+
+  // One request to p2 (returns at p2).
+  task automatic t_to_p2(input logic [VA_WIDTH-1:0] pc,
+                         input logic [FTQ_IDX_BITS-1:0] idx);
+    req(pc, idx);
+    tick();
+    norq();
+    tick();
+  endtask
+
+  task automatic group_t();
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] base;
+
+    $display("---- GROUP T: the FTB fast path, BP-141 ----");
+
+    // -- T1. Saturated taken over a not-taken TAGE and SC.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);            // TAGE not taken
+    sc_fill(6'b100000);              // SC strongly not taken
+    cfg_sc_enable(1'b1);
+    cfg_ftb_fastpath_en(1'b1);
+    pc = VA_WIDTH'('h00_0c10_0000);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    t_sat_install(pc, 1'b0, 4'd1, 1'b0);
+    t_to_p2(pc, 6'h21);
+    chk("T1 p2: br0 conf saturated taken (111)",
+        dut.w_ftb_br0_conf_p2 === 3'b111);
+    chk("T1 p2: the FTB raises the fast path for br0",
+        dut.w_ftb_fastpath_p2[0] === 1'b1);
+    chk("T1 p2: TAGE was requested and answered not taken",
+        dut.w_tage_hit_p2[0] && !dut.w_tage_pred_meta_p2[0].tage_pred_tkn);
+    chk("T1 p2: the FTB direction stands: taken",
+        dut.w_taken_p2[0] === 1'b1);
+    chk("T1 p2: the slot records the FTB as its source",
+        bpu_slot_p2[0].pred_src === PRED_FTB);
+    tick();                          // at p3
+    chk("T1 p3: SC was requested and answered not taken",
+        dut.w_sc_hit_p3[0] && !dut.w_sc_pred_meta_p3[0].sc_pred_tkn);
+    chk("T1 p3: SC does not override the fast path: taken",
+        dut.w_taken_p3[0] === 1'b1);
+    chk("T1 p3: no p3 redirect", dut.w_any_redir_p3 === 1'b0);
+    chk("T1 p3: the slot keeps the FTB as its source",
+        bpu_slot_p3[0].pred_src === PRED_FTB);
+    // Training (6): a resolved COND on slot 0 reaches TAGE and SC with
+    // the fast path enabled.
+    ubtb_upd_u0[0]  = mk_upd(COND, 1'b1, pc);
+    tage_upd_val_u0 = NUM_PRED_SLOTS'(1);
+    sc_upd_val_u0   = NUM_PRED_SLOTS'(1);
+    #1;
+    chk("T1 the COND update reaches TAGE with the fast path on",
+        dut.w_tage_upd_val_u0[0] === 1'b1);
+    chk("T1 the COND update reaches SC with the fast path on",
+        dut.w_sc_upd_val_u0[0] === 1'b1);
+    clr_upd_chans();
+    cfg_ftb_fastpath_en(1'b0);
+    cfg_sc_enable(1'b0);
+
+    // -- T2. TAGE agrees (taken), SC disagrees: the p3 term alone.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);            // TAGE taken
+    sc_fill(6'b100000);              // SC strongly not taken
+    cfg_sc_enable(1'b1);
+    cfg_ftb_fastpath_en(1'b1);
+    pc = VA_WIDTH'('h00_0c20_0000);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    t_sat_install(pc, 1'b0, 4'd1, 1'b0);
+    t_to_p2(pc, 6'h22);
+    chk("T2 p2: the fast path, taken",
+        dut.w_ftb_fastpath_p2[0] && (dut.w_taken_p2[0] === 1'b1));
+    tick();                          // at p3
+    chk("T2 p3: SC answered not taken",
+        dut.w_sc_hit_p3[0] && !dut.w_sc_pred_meta_p3[0].sc_pred_tkn);
+    chk("T2 p3: SC does not reverse a fast-path slot",
+        (dut.w_taken_p3[0] === 1'b1) && (dut.w_any_redir_p3 === 1'b0));
+    cfg_ftb_fastpath_en(1'b0);
+    cfg_sc_enable(1'b0);
+
+    // -- T3. Unsaturated (allocated only, 100), en set: overridden as
+    //    before. TAGE not taken at p2; SC strongly taken at p3.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);            // TAGE not taken
+    sc_fill(6'b011111);              // SC strongly taken
+    cfg_sc_enable(1'b1);
+    cfg_ftb_fastpath_en(1'b1);
+    pc   = VA_WIDTH'('h00_0c30_0000);
+    base = blk_base(pc);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1,
+                   base + VA_WIDTH'('d32), 1'b0);
+    t_to_p2(pc, 6'h23);
+    chk("T3 p2: br0 conf unsaturated (100), no fast path",
+        (dut.w_ftb_br0_conf_p2 === FTB_CONF_INIT_TKN)
+        && (dut.w_ftb_fastpath_p2[0] === 1'b0));
+    chk("T3 p2: TAGE overrides the FTB: not taken",
+        dut.w_tage_hit_p2[0] && (dut.w_taken_p2[0] === 1'b0));
+    chk("T3 p2: the slot records TAGE",
+        bpu_slot_p2[0].pred_src === PRED_TAGE);
+    tick();                          // at p3
+    chk("T3 p3: SC answered taken and overrides, a p3 redirect",
+        dut.w_sc_hit_p3[0] && dut.w_sc_pred_meta_p3[0].sc_pred_tkn
+        && (dut.w_taken_p3[0] === 1'b1) && dut.w_any_redir_p3);
+    chk("T3 p3: the slot records SC",
+        bpu_slot_p3[0].pred_src === PRED_SC);
+    cfg_ftb_fastpath_en(1'b0);
+    cfg_sc_enable(1'b0);
+
+    // -- T4. Saturated, en CLEAR: TAGE overrides as before BP-141.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);            // TAGE not taken
+    pc = VA_WIDTH'('h00_0c40_0000);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    t_sat_install(pc, 1'b0, 4'd1, 1'b0);
+    t_to_p2(pc, 6'h24);
+    chk("T4 p2: saturated, en clear: no fast path",
+        (dut.w_ftb_br0_conf_p2 === 3'b111)
+        && (dut.w_ftb_fastpath_p2[0] === 1'b0));
+    chk("T4 p2: TAGE overrides: not taken, TAGE the source",
+        (dut.w_taken_p2[0] === 1'b0)
+        && (bpu_slot_p2[0].pred_src === PRED_TAGE));
+
+    // -- T5. A trusted loop exit (not taken) over a fast-path taken.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);
+    cfg_ftb_fastpath_en(1'b1);
+    pc = VA_WIDTH'('h00_0c50_0000);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    t_sat_install(pc, 1'b0, 4'd1, 1'b0);
+    lp_install(0, pc, LP_CNF_BITS'(LP_CONF_LEVEL), 14'd4, 14'd4);
+    t_to_p2(pc, 6'h25);
+    chk("T5 p2: the fast path is raised",
+        dut.w_ftb_fastpath_p2[0] === 1'b1);
+    chk("T5 p2: the trusted LP exit stands over it: not taken",
+        dut.w_lp_use_p2[0] && (dut.w_taken_p2[0] === 1'b0)
+        && (bpu_slot_p2[0].pred_src === PRED_LOOP));
+    cfg_ftb_fastpath_en(1'b0);
+
+    // -- T6. Two slots: br1 (slot 1) saturated taken behind a not-taken
+    //    br0. TAGE not taken: slot 0 not taken by TAGE, slot 1 taken by
+    //    the fast path over TAGE.
+    if (NUM_PRED_SLOTS > 1) begin
+      do_reset();
+      clr_upd_chans();
+      tage_bim_fill(2'b00);
+      cfg_ftb_fastpath_en(1'b1);
+      pc   = VA_WIDTH'('h00_0c60_0000);
+      base = blk_base(pc);
+      ubtb_clear_set(pc);
+      lp_clear_both(pc);
+      ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h200), 4'd1,
+                     base + VA_WIDTH'('d32), 1'b0);
+      t_sat_install(pc, 1'b1, 4'd5, 1'b1);
+      t_to_p2(pc, 6'h26);
+      chk("T6 p2: br0 weak not taken, br1 saturated taken",
+          (dut.w_ftb_br0_conf_p2 === FTB_CONF_INIT_NTK)
+          && (dut.w_ftb_br1_conf_p2 === 3'b111)
+          && (dut.w_ftb_fastpath_p2 === 2'b10));
+      chk("T6 p2: slot 0 TAGE not taken",
+          (dut.w_taken_p2[0] === 1'b0)
+          && (bpu_slot_p2[0].pred_src === PRED_TAGE));
+      chk("T6 p2: slot 1 the fast path over TAGE: taken",
+          dut.w_tage_hit_p2[S1] && (dut.w_taken_p2[S1] === 1'b1)
+          && (bpu_slot_p2[S1].pred_src === PRED_FTB));
+      cfg_ftb_fastpath_en(1'b0);
+    end else skip("T6 br1 fast path in slot 1 (needs two slots)");
+
+    clr_upd_chans();
+    norq();
+    repeat (2) tick();
+    $display("---- GROUP T done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
   // GROUP P -- a jump no slot carries (BP-138, D1)
   // =================================================================
   //
@@ -5740,6 +5961,29 @@ module tb;
   int  mon_rb_first, mon_rbc_first;
   bit  mon_rb_pend, mon_rbc_pend, mon_in_g;
 
+  // BP-141: the path history, for SC ST4 (sc_table_hash_rules.md
+  // get_br_imli_idx, IDX_IMLI_PHR: the PHR when the IMLI count is 0).
+  // The monitor's own PHR_WIDTH-entry circular buffer and pointer
+  // (bp_history_decisions.md 3.2: path bit pred_pc[2] ^ pred_pc[3] per
+  // branch; 3.5: a rollback restores the pointer, a corrected one
+  // writes the corrected path bits from the bundle's first bit). Its
+  // ten newest bits, newest at bit 0 (Jeff, session-084), are staged
+  // p0 -> p2 with the request.
+  logic [PHR_WIDTH-1:0] m_phr;
+  int                   m_pp;
+  int                   m_ckp_pp [FTQ_DEPTH];
+  int                   m_ckp_nb [FTQ_DEPTH];
+  logic [9:0]           m_phr10_p1, m_phr10_p2;
+  int                   mon_cmp_st4, mon_st4_nz;
+
+  function automatic logic [9:0] m_phr10(input logic [PHR_WIDTH-1:0] p,
+                                         input int pp);
+    logic [9:0] r;
+    for (int k = 0; k < 10; k++)
+      r[k] = p[(pp - 1 - k + 2 * PHR_WIDTH) % PHR_WIDTH];
+    return r;
+  endfunction
+
   function automatic logic [63:0] m_fold(input logic [MH_W-1:0] h,
                                          input int H, input int W);
     logic [63:0] acc;
@@ -5786,23 +6030,58 @@ module tb;
   /* verilator lint_off BLKSEQ */
   always @(posedge clk) begin : mon_model
     logic [MH_W-1:0] pre;
+    int pbase;
     if (!rstn) begin
       m_h    = '0;
       m_v_p1 = 1'b0;
       m_v_p2 = 1'b0;
+      m_phr  = '0;
+      m_pp   = 0;
       for (int i = 0; i < FTQ_DEPTH; i++) begin
         m_ck_pre[i]  = '0;
         m_ck_post[i] = '0;
+        m_ckp_pp[i]  = 0;
+        m_ckp_nb[i]  = 0;
       end
     end else begin
       m_v_p2  = m_v_p1;
       m_pc_p2 = m_pc_p1;
       for (int t = 1; t <= 3; t++) m_scfh_p2[t] = m_scfh_p1[t];
+      m_phr10_p2 = m_phr10_p1;
       m_v_p1  = dut.w_req_val_p0;
       m_pc_p1 = ftq_pred_pc_p0;
+      m_phr10_p1 = m_phr10(m_phr, m_pp);
+      // The PHR model (BP-141), beside the GHR model below.
+      if (dut.w_rollback_valid) begin
+        if (dut.w_rb_corr) begin
+          pbase = (m_ckp_pp[dut.w_rollback_ckpt_idx]
+                   - m_ckp_nb[dut.w_rollback_ckpt_idx] + PHR_WIDTH)
+                  % PHR_WIDTH;
+          for (int k = 0; k < RB_CORR_BITS; k++)
+            if (k < int'(dut.w_rb_n))
+              m_phr[(pbase + k) % PHR_WIDTH] = dut.w_rb_pbit[k];
+          m_pp = (pbase + int'(dut.w_rb_n)) % PHR_WIDTH;
+          m_ckp_pp[dut.w_rollback_ckpt_idx] = m_pp;
+          m_ckp_nb[dut.w_rollback_ckpt_idx] = int'(dut.w_rb_n);
+        end else begin
+          m_pp = m_ckp_pp[dut.w_rollback_ckpt_idx];
+        end
+      end else begin
+        for (int b = 0; b < NUM_PRED_SLOTS; b++)
+          if (b < int'(dut.w_hist_num_branches)) begin
+            m_phr[m_pp] = dut.w_hist_pred_pc[b][2] ^ dut.w_hist_pred_pc[b][3];
+            m_pp        = (m_pp + 1) % PHR_WIDTH;
+          end
+        if (dut.w_ckpt_wr_en) begin
+          m_ckp_pp[dut.w_ckpt_wr_idx] = m_pp;
+          m_ckp_nb[dut.w_ckpt_wr_idx] = int'(dut.w_hist_num_branches);
+        end
+      end
+      // BP-141 (ruled by Jeff): ST1-ST3 fold H = SC_TBL_HIST into the
+      // index width W = SC_TBL_FH = 9. W read SC_TBL_HIST until BP-141.
       for (int t = 1; t <= 3; t++)
         m_scfh_p1[t] = SC_MAX_FH'(m_fold(m_h, SC_TBL_HIST[t],
-                                         SC_TBL_HIST[t]));
+                                         SC_TBL_FH[t]));
       if (dut.w_rollback_valid) begin
         if (dut.w_rb_corr) begin
           m_h = m_ck_pre[dut.w_rollback_ckpt_idx];
@@ -5901,6 +6180,20 @@ module tb;
           end
         end
         mon_cmp_sc++;
+        // ST4 (BP-141) when the IMLI count is 0: IDX_IMLI_PHR, the
+        // cluster's sc default, indexes with the PHR. bpc = PC[15:6],
+        // idx = bpc ^ phr10 ^ (bpc >> 4), the phr10 the monitor's own.
+        if (dut.u_sc.w_br_imli == 10'd0) begin
+          for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+            f0 = 64'(m_pc_p2[15:6]);
+            e  = f0 ^ 64'(m_phr10_p2) ^ (f0 >> 4);
+            g = 64'(dut.u_sc.w_idx_hash_p2[4][s]);
+            if (g !== e)
+              mon_fail($sformatf("sc ST4 s%0d idx (PHR)", s), g, e);
+          end
+          mon_cmp_st4++;
+          if (m_phr10_p2 != 10'd0) mon_st4_nz++;
+        end
       end
       if (cmp) begin
         if (mon_in_g)     mon_cmp_g++;
@@ -5921,10 +6214,14 @@ module tb;
              mon_rbc_first);
     $display("INFO: FOLD monitor: not presented at once TAGE %0d ITTAGE %0d",
              mon_tage_late, mon_it_late);
+    $display("INFO: FOLD monitor: SC ST4 PHR index %0d, non-zero PHR %0d",
+             mon_cmp_st4, mon_st4_nz);
     chk("FOLD every table's index and tag matches the model", mon_bad == 0);
     chk("FOLD TAGE, ITTAGE and SC predictions compared",
         (mon_cmp_tage > 0) && (mon_cmp_it > 0) && (mon_cmp_sc > 0));
     chk("FOLD the group G closed loop compared", mon_cmp_g > 0);
+    chk("FOLD SC ST4 indexed by a non-zero PHR at IMLI 0 (BP-141)",
+        mon_st4_nz > 0);
     chk("FOLD first prediction after a rollback compared",
         mon_rb_first > 0);
     chk("FOLD first prediction after a corrected rollback compared",
@@ -5971,6 +6268,7 @@ module tb;
     group_p();
     group_q();
     group_s();
+    group_t();
 
     mon_report();
     $display("INFO: %0d resets", n_resets);

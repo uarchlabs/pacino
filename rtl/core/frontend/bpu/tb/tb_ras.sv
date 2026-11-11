@@ -9,7 +9,7 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-43. TC-01 .. TC-20 from BP-063; TC-21
+// Directed cases TC-01 .. TC-45. TC-01 .. TC-20 from BP-063; TC-21
 // (BP-064) pinned TD #78 (undo-pop did not reverse a recursion pop)
 // until BP-133 fixed it.
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
@@ -32,7 +32,9 @@
 // TC-43 (a p3 undo of an operation that began on an empty stack after
 // a commit moved BOS). BP-140 added TC-44 (a RETURN commit whose
 // snapshot is an empty stack leaves BOS on the entry the return popped,
-// not on the reused slot its snapshot names).
+// not on the reused slot its snapshot names). BP-141 added TC-45
+// (TD#194: a recursion count changed on the wrong path, then a
+// redirect), DISABLED until Jeff rules on a fix; +TD194 runs it.
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -1614,6 +1616,103 @@ module tb;
     check("TC-44 the pop returns B from the speculative stack",
           (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_B));
     tick();
+
+    // =============================================================
+    // TC-45 (BP-141, TD#194): a recursion count changed in place on the
+    // wrong path, then a redirect. The restore takes TOSR, TOSW and BOS
+    // from the snapshot (ras_decisions.md 4.3); the count is a field of
+    // the entry, changed by a recursion push (st_push) or a recursion
+    // pop (st_retract) without moving TOSR, so the pointers alone do
+    // not put it back.
+    //   a  the correct path pushes A (idx 1, count 0); snapshot S. The
+    //      wrong path pushes A again: a recursion push, count 0 -> 1.
+    //      Restore S. The count before the wrong path was 0.
+    //   b  the correct path pushes A twice (count 1); snapshot S. The
+    //      wrong path returns: a recursion pop, count 1 -> 0. Restore
+    //      S. The count before the wrong path was 1.
+    // Each checks the pointers (restored) and the count against its
+    // value before the wrong path, then pops to show the stack the
+    // correct path sees.
+    // DISABLED (TD#194): the count is not restored, so the case fails;
+    // the fix waits for Jeff's ruling. Run it with +TD194.
+    // =============================================================
+    if ($test$plusargs("TD194")) begin
+      bp_ras_snapshot_t s45;
+      logic [RAS_RCTR_WIDTH-1:0] c45;
+
+      // -- a: a wrong-path recursion push.
+      do_reset();
+      push_one(ADDR_A);                       // idx1, count 0
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      tick();                                 // p3 of the push agrees
+      s45.tosr = dut.tosr; s45.tosw = dut.tosw; s45.bos = dut.bos;
+      c45      = dut.spec_rctr[1];
+      check("TC-45a the correct path: A at idx1, count 0",
+            (dut.tosr == 4'd1) && (c45 == 4'd0));
+      push_one(ADDR_A);                       // wrong path: recursion
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      tick();
+      check("TC-45a the wrong path raised the count 0 -> 1, TOSR held",
+            (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
+      restore_val  = 1'b1;
+      restore_snap = s45;
+      tick();
+      restore_val  = 1'b0;
+      restore_snap = '0;
+      check("TC-45a the restore put the pointers back",
+            (dut.tosr == s45.tosr) && (dut.tosw == s45.tosw)
+            && (dut.bos == s45.bos));
+      check({"TD#194 TC-45a the count is restored to its value before",
+             " the wrong path (0)"}, dut.spec_rctr[1] == c45);
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      check("TC-45a the first pop returns A",
+            (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+      tick();
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      check({"TD#194 TC-45a the second pop finds the stack empty (one A",
+             " was pushed)"},
+            !((pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A)));
+      tick();
+
+      // -- b: a wrong-path recursion pop.
+      do_reset();
+      push_one(ADDR_A);                       // idx1, count 0
+      push_one(ADDR_A);                       // recursion, count 1
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      tick();
+      s45.tosr = dut.tosr; s45.tosw = dut.tosw; s45.bos = dut.bos;
+      c45      = dut.spec_rctr[1];
+      check("TC-45b the correct path: A at idx1, count 1",
+            (dut.tosr == 4'd1) && (c45 == 4'd1));
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);  // wrong path
+      tick();
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      tick();
+      check("TC-45b the wrong path lowered the count 1 -> 0, TOSR held",
+            (dut.spec_rctr[1] == 4'd0) && (dut.tosr == 4'd1));
+      restore_val  = 1'b1;
+      restore_snap = s45;
+      tick();
+      restore_val  = 1'b0;
+      restore_snap = '0;
+      check("TC-45b the restore put the pointers back",
+            (dut.tosr == s45.tosr) && (dut.tosw == s45.tosw)
+            && (dut.bos == s45.bos));
+      check({"TD#194 TC-45b the count is restored to its value before",
+             " the wrong path (1)"}, dut.spec_rctr[1] == c45);
+      for (int i = 0; i < 2; i++) begin
+        drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+        #1;
+        check($sformatf("TD#194 TC-45b pop %0d returns A (two were pushed)",
+                        i + 1),
+              (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+        tick();
+      end
+    end else begin
+      $display("SKIP: TC-45 (TD#194, disabled until ruled; +TD194 runs it)");
+    end
 
     // -------------------------------------------------------------
     $display("=================================================");

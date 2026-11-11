@@ -95,17 +95,40 @@ package bp_structs_pkg;
     RETURN_CALL     = 3'b111  // JALR rd, rs1 both link, unequal
   } bp_br_type_e;
 
-  // Prediction source: which predictor supplied the final result.
-  // Recorded in bp_ftq_slot_t.pred_src at prediction commit time.
+  // Prediction source: the predictor that supplied the slot's
+  // direction or target, as the stage that last wrote the slot named
+  // it. bp_cluster sets it in each of its three slot groups, p1, p2
+  // and p3 (BP-141, DOC-016 2.2); the FTQ keeps the latest group
+  // written (p2 only on an FTB hit, p3 only after one). It read
+  // "recorded at prediction commit time". Diagnostic (TD-FE-4).
   typedef enum logic [2:0] {
-    PRED_UBTB   = 3'b000, // uBTB supplied prediction (p1)
-    PRED_LOOP   = 3'b001, // loop predictor overrode uBTB (p1)
-    PRED_FTB    = 3'b010, // FTB supplied prediction (p2)
-    PRED_TAGE   = 3'b011, // TAGE overrode FTB direction (p2)
-    PRED_SC     = 3'b100, // SC overrode TAGE direction (p3)
-    PRED_ITTAGE = 3'b101, // ITTAGE supplied indirect target
-    PRED_RAS    = 3'b110, // RAS supplied return target
-    PRED_NONE   = 3'b111  // no prediction (uBTB miss, loop absent)
+    // p1: a uBTB slot, its direction and target, no trusted loop
+    // prediction over it, and not a return taken from the RAS.
+    PRED_UBTB   = 3'b000,
+    // p1: a trusted loop prediction over a uBTB conditional (the
+    // target stays the uBTB's). p2: a trusted loop prediction (the
+    // p2 re-read) gives a conditional's direction, over the fast
+    // path, TAGE and the FTB; p3 keeps it (SC does not override).
+    PRED_LOOP   = 3'b001,
+    // p2: the FTB's own direction or target: a conditional on the
+    // fast path, or with no matching TAGE response; a direct jump; a
+    // return with no RAS pop; an indirect with no ITTAGE hit.
+    PRED_FTB    = 3'b010,
+    // p2: a conditional whose direction TAGE gives (its response
+    // matched the entry, no trusted loop, no fast path), whether or
+    // not it differs from the FTB's.
+    PRED_TAGE   = 3'b011,
+    // p3: a conditional whose direction SC changed (SC enabled and
+    // answered, no trusted loop, no fast path). Set only on a change.
+    PRED_SC     = 3'b100,
+    // p2: an indirect jump or call whose target ITTAGE gives.
+    PRED_ITTAGE = 3'b101,
+    // p1: a uBTB return with a valid RAS top. p2: a return with a
+    // valid RAS pop. RETURN_CALL too.
+    PRED_RAS    = 3'b110,
+    // A slot with no branch: p1 with no uBTB slot (or a trusted loop
+    // prediction with none), p2 a NO_BRANCH slot.
+    PRED_NONE   = 3'b111
   } bp_pred_src_e;
 
   // SC range based chooser:
@@ -142,8 +165,10 @@ package bp_structs_pkg;
 
   // RAS speculative pointer snapshot stored in FTQ fast path.
   // Restored on mispredict flush to recover speculative stack
-  // state. Simple circular buffer: restoring these three
-  // pointers is sufficient. No push/pop replay needed.
+  // state. The entries are linked (nos, BP-120, ras_decisions.md
+  // 3.2) and the data is not cleared, so restoring these three
+  // pointers is sufficient. No push/pop replay needed. It read
+  // "Simple circular buffer" until BP-141 (TD#195).
   // RAS_PTR_BITS = $clog2(16) = 4b. Total snapshot = 12b.
   // See planning/arch/ras_decisions.md section 4.
   typedef struct packed {

@@ -84,7 +84,9 @@ module sc_table #(
 );
 
   // Two banks per RAM; index MSB selects bank, lower bits the row.
-  localparam int NUM_BANKS   = 2;
+  // SC_TBL_BANKS (2), the package's bank count (BP-141; it read the
+  // literal 2). The index MSB selects the bank, so it holds only at 2.
+  localparam int NUM_BANKS   = SC_TBL_BANKS[THIS_TABLE];
   localparam int RAM_ENTRIES = THIS_ENTRIES / NUM_BANKS;
 
   // sc_pred_val_p2 is defined by the interface to enable the read.

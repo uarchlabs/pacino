@@ -189,8 +189,13 @@ module tage_cntrl #(
   // Prediction metadata at p1 (flopped -> tage_pred_meta_p2)
   tage_pred_meta_t meta_p1[0:NUM_PRED_SLOTS-1];
 
-  // UAON saturating counters: 4b, one per slot
-  logic [3:0] uaon[NUM_PRED_SLOTS-1:0];
+  // UAON saturating counters: TAGE_UAON_WIDTH (4) bits, one per slot.
+  // BP-141: the width and the threshold (TAGE_UAON_THRES, 8) are the
+  // package parameters; they were the literals [3:0] and the MSB test.
+  logic [TAGE_UAON_WIDTH-1:0] uaon[NUM_PRED_SLOTS-1:0];
+  // The use_alt_on_na select: the counter at or above the threshold.
+  // At 4 bits and 8 this is the MSB test it replaces.
+  logic uaon_sel[NUM_PRED_SLOTS-1:0];
 
   // Aging interval down counters: 32b, one per slot
   logic [31:0] lcl_aging_interval[NUM_PRED_SLOTS-1:0];
@@ -375,24 +380,27 @@ module tage_cntrl #(
       // non-weak (strong or medium) prediction takes no action. This
       // is the reconciled TD#87 form of the prior "not pred_strong"
       // gate (old strong meant NOT WEAK, so old !strong == weak).
-      // prm wrong && alt correct -> INC (saturate at 4'hF).
-      // prm correct && alt wrong -> DEC (saturate at 4'h0).
+      // prm wrong && alt correct -> INC (saturate at all ones).
+      // prm correct && alt wrong -> DEC (saturate at zero).
       always_ff @(posedge clk) begin : uaon_upd_ff
         if (!rstn) begin
-          uaon[s] <= 4'h0;
+          uaon[s] <= '0;
         end else if (tage_upd_val_u0[s] && u_prm_tagged[s]
                      && u_alt_tagged[s]) begin
           if (u_pred_weak[s]) begin
             if (!u_prm_crt[s] && u_alt_crt[s]) begin
-              uaon[s] <= (uaon[s] == 4'hF)
-                           ? 4'hF : uaon[s] + 4'h1;
+              uaon[s] <= (uaon[s] == '1)
+                           ? uaon[s] : uaon[s] + TAGE_UAON_WIDTH'(1);
             end else if (u_prm_crt[s] && !u_alt_crt[s]) begin
-              uaon[s] <= (uaon[s] == 4'h0)
-                           ? 4'h0 : uaon[s] - 4'h1;
+              uaon[s] <= (uaon[s] == '0)
+                           ? uaon[s] : uaon[s] - TAGE_UAON_WIDTH'(1);
             end
           end
         end
       end
+
+      assign uaon_sel[s] =
+        (uaon[s] >= TAGE_UAON_WIDTH'(TAGE_UAON_THRES));
 
       // -- Aging interval and epoch counters.
       // Decrement interval on pred_rdy_p2 when aging enabled.
@@ -532,11 +540,11 @@ module tage_cntrl #(
             (prm_ctr_p1[s] == 3'b100);
         end
 
-        // -- UAON mux: triggered and uaon MSB set -> use alt.
-        // uaon MSB set means uaon >= TAGE_UAON_THRES (8).
+        // -- UAON mux: triggered and uaon >= TAGE_UAON_THRES (8) ->
+        // use alt (uaon_sel; BP-141, it read the 4-bit MSB).
         // A T0 provider (comp 0) presents its 3b form (TD#182), as the
         // primary or as the alternate chosen by use_alt_on_na.
-        if (uaon_trig_p1[s] && uaon[s][3]) begin
+        if (uaon_trig_p1[s] && uaon_sel[s]) begin
           using_prm_p1[s]     = 1'b0;
           post_mux_ctr_p1[s]  = (alt_comp_p1[s] == '0)
                                   ? t0_cnf_ctr_p1[s] : alt_ctr_p1[s];
@@ -614,7 +622,7 @@ module tage_cntrl #(
 
         //HAND-FIX-002 set tage_use_alt_on_na when it had impact on source
         //             of prediction
-        meta_p1[s].tage_use_alt_on_na = uaon_trig_p1[s] & uaon[s][3];
+        meta_p1[s].tage_use_alt_on_na = uaon_trig_p1[s] & uaon_sel[s];
         meta_p1[s].tage_using_primary = using_prm_p1[s];
         meta_p1[s].tage_extd_ctr      = extd_ctr_p1[s];
         meta_p1[s].tage_pred_tkn      = pred_tkn_p1[s];
