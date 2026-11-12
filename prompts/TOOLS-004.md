@@ -128,7 +128,7 @@ schema version bump	0.12.0 → 0.13.0 with nothing forcing it, which churned six
 
 What TOOLS-005 has to cover: a pipelined bank control at one access per cycle, hit latency from read_latency_cycles, and multiple fills in flight on the memory side.
 
-ME: i meant my assessment was incomplete, not that the IA's work incomplete
+ME: i meant my assessment was incomplete, not that the IA's work was incomplete
 
 PA:
 Understood — "Incomplete" was your Assessment field left unfinished, not a verdict.
@@ -276,7 +276,7 @@ none at all.
 
    A SECOND LINK TYPE, not a change to pe_port. pe_port is carried
    by the lsu-to-l1d edge as well and that edge is unchanged. A link
-   cannot be parameterised per edge; nothing binds a port type to
+   cannot be parameterized per edge; nothing binds a port type to
    one link, so a second definition plus two `link` string changes
    is the whole of it.
 

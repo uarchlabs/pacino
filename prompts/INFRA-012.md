@@ -311,7 +311,7 @@ whether cachegen can express it, how, and if not what is missing.
       a notion of read-only, or does every cache carry the write
       machinery whether the configuration uses it or not? What
       does the emitter produce today for a node whose policy block
-      declares no write behaviour?
+      declares no write behavior?
 
   C2  INCLUSION AS A PROPERTY OF A PAIR. l1i declares nine and l2
       declares inclusive; those describe one relationship and are
@@ -324,7 +324,7 @@ whether cachegen can express it, how, and if not what is missing.
   C3  ONE LINK, TWO DIFFERENT EDGES. pe_port is declared once and
       used on both ifu-to-l1i and lsu-to-l1d. The I-side edge now
       needs 512 bits, eight outstanding and no write channel; the
-      D-side is unchanged. Can a link be parameterised per edge,
+      D-side is unchanged. Can a link be parameterized per edge,
       or must a second link type be declared? Report what the
       schema and the resolver support, and recommend which way to
       go.
@@ -351,7 +351,7 @@ whether cachegen can express it, how, and if not what is missing.
       from a count that is wrong.
 ```
 
-C6 GENERALISES. If any other field of the target is carried but
+C6 GENERALIZES. If any other field of the target is carried but
 unconsumed, report it here. A parameter that reaches no emitted RTL
 is worse than an absent one, because the configuration claims a
 capability the design does not have.
@@ -407,7 +407,7 @@ cannot represent is worth knowing about before it is taken.
   pa_bits at 36    L1I-U1. Can it be set today? Does anything
                    assume 32 other than by reading pa_bits -- a
                    hardcoded width, a 32-bit literal, an address
-                   type sized independently? A value parameterised
+                   type sized independently? A value parameterized
                    in one place and assumed in five is the finding
   an ITLB          L1I-U2. A TLB has no cache geometry: no line
                    size, no sets in the cache sense, fully

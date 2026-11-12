@@ -151,7 +151,7 @@ IA:
 ME:
 
 i don't care about how it happened. you violated an explicit rule, giving it a       
-metaphoircal shrug, 'oops' is not a valid response. I dont see how Anthropic avoids  
+metaphorical shrug, 'oops' is not a valid response. I don't see how Anthropic avoids  
 an eventual lawsuit when something more serious happens.   
 
 IA:
@@ -182,9 +182,9 @@ You're right. "Oops" doesn't answer anything. The rule was explicit, I broke it,
 ME:
 you are phrasing this as if it is related to git. You had an explicit instruction    
   not to do something. But you did anyway and used 'it's a habit' excuse. The          
-  difference between dont use git and done (sic) launch the missile is lost on you. "Oops I  
-  blew up Moscow. You told me not too, but I did out of habit. Do you want me to add   
-  it to Resuls Capture".                                                               
+  difference between don't use git and done (sic) launch the missile is lost on you. "Oops I  
+  blew up Moscow. You told me not to, but I did out of habit. Do you want me to add   
+  it to Results Capture".                                                               
 
 IA:
 ● You're right. Git has nothing to do with it. The failure is that you gave me an
@@ -366,7 +366,7 @@ BP-114, which added properties, and was taken across two tasks.
 
 ## Binding Previous Decisions
 - TD#114: name the missing properties; each is compiled into
-  simulation or shown to be a counting artefact.
+  simulation or shown to be a counting artifact.
 
 ## Specific Requirements
 

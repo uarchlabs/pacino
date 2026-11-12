@@ -121,7 +121,7 @@ Unfortunately the IA has resorted to jargon "but ittage_interfaces.md gates
 INDIRECT_CALL out of" 
 
 "gates INDIRECT_CALL out of" is not a precise or actionable engineering 
-phrase. And not even reasonable english.
+phrase. And not even reasonable English.
 
 
 ## Claude.ai Assessment

@@ -25,7 +25,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 RVA23 coverage gap analysis
 
-2026.05.30: This file was retrofit to conform to the current section
+2026.05.30: This file was retrofitted to conform to the current section
 marker syntax for automated processing.
 
 :: HEADER:END ::

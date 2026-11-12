@@ -55,8 +55,8 @@ session close.
 ## My Assessment
 
 This experiment is a failure. PA was unable to give meaningful instructions.
-PA hallucinated the /context solution, then then hallucinagted a suggestion
-that we just ask the IA what it's context is. Neither of these work. PA suggested
+PA hallucinated the /context solution, then hallucinated a suggestion
+that we just ask the IA what its context is. Neither of these work. PA suggested
 instructions based on made up solutions. It made up a fake environment variable
 CLAUDE_CONTEXT_WINDOW_USAGE that supposedly has context use information. And then
 gave an instruction to do this:

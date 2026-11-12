@@ -104,7 +104,7 @@ Module: Instruction Decoder
 Experiment: DECODE-008 - Vector memory instruction disambiguation
 (opcodes 0x07/0x27)
 
-## Hypothesi
+## Hypothesis
 Vector load and store instructions that currently share opcodes 0x07
 and 0x27 with scalar FP loads and stores can be correctly identified
 and routed as vector memory operations by inspecting bit [25] (mew)

@@ -26,7 +26,7 @@ Create three parameterized library primitives used by TAGE and
 other BP cluster components, plus a single extensible testbench.
 New top-level directory: components/
 
-This is second try, too much context and the ram input sync
+This is the second try, too much context and the ram input sync
 guidance is corrected in this version
 
 In the first try the saturating adder and lmod were completed so 

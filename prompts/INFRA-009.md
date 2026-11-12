@@ -82,7 +82,7 @@ design. Not a deep dive.
 
 ## My Assessment
 
-Files identified as needed clean up:
+Files identified as needing cleanup:
 
 F1 tage_interfaces.md (316)
 F2 tage_cntrl_decisions.md (186)
@@ -120,7 +120,7 @@ F1 is the one that actually matters for cluster design — tage_interfaces.md an
 My suggestion: one consolidated editable cleanup task, not nine separate ones. This is a mechanical correction pass against already-known-correct values, not exploratory work — bundling it respects "one experiment = one session" without being wasteful. Scope Context Loaded + Deliverables to exactly the 9 files already listed in your Other Planning File Updates checklist, and give the IA the precise fix per finding (not "go find and fix drift" — that's group-2's job, already done). Each Deliverable line should state old text → new text or the specific correction, sourced to the F-number and RTL/package citation from this Results Capture, so there's no re-interpretation risk on LOCKED/Complete-status docs.
 
 ## Follow-on Actions
-- [ ] Work with PA coordinate edits.
+- [ ] Work with PA to coordinate edits.
 
 ## CLAUDE.md Updates
 Nothing required

@@ -73,7 +73,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 TBD
 
-Also PA predicted 5m runtime, very close the actual 7m run time.
+Also PA predicted 5m runtime, very close to the actual 7m run time.
 
 ## Claude.ai Assessment
 

@@ -28,7 +28,7 @@ Not captured at time, this task is one of the first.
 2026-05-30: Manually adding overview: This task creates a predecode 
 module that takes advantage of the RISC-V ISA natural expansion of
 all compressed instructions to their 32b equivalent. There is some
-operand encoding matchins and opcode expansion. The purpose of this
+operand encoding matching and opcode expansion. The purpose of this
 module is to simplify downstream logic.
 
 Additionally this task file has been retro-fitted with the now standard

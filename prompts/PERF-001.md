@@ -111,7 +111,7 @@ PERF-001 is done: all six problems are accepted and ./tools/regress.sh passed (2
 The 41bit range issue is a problem. Traces contain 48 bit IA has suggested
 re-mapping the traces. 
 
-I asked the IA to look at the trace PC's.
+I asked the IA to look at the trace PCs.
 
 IA: 
 The PC field in a record is 8 bytes. The values in it look like Arm 48-bit virtual

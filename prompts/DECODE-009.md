@@ -25,7 +25,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 Vector segment ld/sts, whole-register move disambiguation
 
-2026-05-30: This task file has been retrofit with the 
+2026-05-30: This task file has been retrofitted with the 
 now standard section markers.
 
 :: HEADER:END ::

@@ -84,10 +84,10 @@ This question was poorly phrased by me, but the answer was:
   operation with tbl_ri_active deasserted before any prediction cycle begins.
 ```
 
-This is acceptable. (note another compaction occur while answering this
+This is acceptable. (note another compaction occurred while answering this
 question.
 
->  does the test bench execise both prediction slots ? 
+>  does the test bench exercise both prediction slots ? 
 
 No, not fully. Slot 1 is exercised in only two test cases:
 
@@ -101,7 +101,7 @@ You use the terms allocation and prediction
 ```
 
 do you exercise the update path, ittage_upd_val_u0 ? why did you specify 
-allocation and prediction i would expect update and prediction.
+allocation and prediction I would expect update and prediction.
 
 Response was:
 

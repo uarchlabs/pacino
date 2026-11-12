@@ -89,7 +89,7 @@ in segmentation. The decoder should not make architectural state decisions.
 ### What Claude got wrong or missed
 
 minor: Claude did not maintain the 80 column style limit specified in CLAUDE.md
-       re-wrote as a requirement not a suggestion
+       rewrote as a requirement not a suggestion
 
 
 ## Follow-on Actions

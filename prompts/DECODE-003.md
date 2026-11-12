@@ -28,7 +28,7 @@ DECODE-003 - Add Zcb
 
 2026.05.30: Zcb support was missing from the rvc expander implementation.
 This task rectifies the missing 13 instructions. This file was also 
-retrofit for section markers.
+retrofitted for section markers.
 
 :: HEADER:END ::
 =============================================================

@@ -251,7 +251,7 @@ recommendation; this task is where it stops being open.
 2. icache_decisions.md IS THE L1I SPECIFICATION. Sections 1 through
    9 are decided. Parts 2 and 3 must be consistent with them and
    must not restate them; the new document specifies PORTS, the
-   decisions document specifies BEHAVIOUR.
+   decisions document specifies BEHAVIOR.
 
    Load-bearing for parts 2 and 3:
 
