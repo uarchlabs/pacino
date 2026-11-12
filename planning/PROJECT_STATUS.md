@@ -16,6 +16,83 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085: record corrections (PA-direct).
+
+PA-DIRECT CORRECTION, session-085 (Jeff):
+  PROJECT_CORE.md: the repository is github.com/uarchlabs/pacino (it
+    read jeffnye-gh/pacino, which returns 401); the experiment file
+    structure no longer names the PROBLEMS form; the inventory checked
+    against Jeff's listing of planning/ on 2026-11-12, adding
+    status_decisions.md and new_user_decisions.md; fe_decisions.md
+    owns FE-1 to FE-21 (FE-20 and FE-21 were not listed).
+  Module Status: BP-141 to BP-144 recorded in the bp_defines_pkg.sv,
+    bp_structs_pkg.sv, bp_history.sv, loop_pred.sv, ras_decisions.md,
+    ras_interfaces.md, ras.sv, sc_table.sv, sc_brimli.sv,
+    bp_cluster.sv, ftq_entry.sv and frontend top rows; rows added for
+    perf_decisions.md, pacino_features.md, new_user_decisions.md and
+    status_decisions.md.
+  Performance / Verification Debt: the TD#189 row begins with its
+    closure.
+  CLAUDE.md Commands: tools/regress.sh runs once, at the end, in the
+    background, and is waited for (BP-142 929 s, BP-144 633 s; the
+    foreground limit is 600 s).
+FOR THE NEXT TASK (Jeff):
+  - check ras.sv c_bos and tb_ras TC-44 against ras_decisions.md 3.2
+    and 12.11 CO5 as now recorded (TD#189, closed by ruling).
+  - check where the bpu cov_* targets take verilator_coverage from,
+    rtl/Vars.mk VERILATOR_COVERAGE (NU-1) or PATH, and close or keep
+    TD#181 on the result.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md, CLAUDE.md.
+
+Next free: BP-145, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
+
+---
+## Session-084, continued: BP-143 and BP-144. The RAS checks complete.
+
+BP-143 (PA review, accepted): the tb_ras model and ras_assert RS2 and
+  RS3 test the chain-entry meaning of held (3.2, PO7, IV1); TC-65 runs
+  by default and passes; TC-66 (fd07: with c_drag removed the model
+  fails and RS2 fires) and TC-67 (a chain entry below BOS reused,
+  counted as the wrap) added. Problem 5: with c_bos's empty-snapshot
+  exception removed only tb_ras TC-44 fails; no program's cycles or
+  mispredicts move. rec_undo removed, its check could not fail: two
+  targets fewer. ras.sv unchanged. regress.sh 272 targets, 0 new
+  failures, 583 s, in the background.
+RULED (Jeff): c_bos is final (CO5). TD#189 closed.
+BP-144 (PA review, accepted): every rule of ras_decisions.md 12
+  checked in full. The converse of IV1 (TOSR == BOS over a live chain
+  entry) in the model and in ras_assert RS4; RS2 and RS3 at every
+  slot, repair cycles included, from ras_assert's own walk (five new
+  ports); a_rep_pop_held, a_state_chain, RS5 a_fallback_pop; TC-68 to
+  TC-71; 18 scratch faults shown failing. tb_fe_top's undo monitor
+  removed. No RTL fault found; ras.sv changed in comments only. tb_ras
+  598/0 (498/0 at one slot), tb_bp_cluster 2110/0 (1532/0), tb_fe_top
+  736/0 (734/0), assert_labels 168 (160). regress.sh 272 targets, 0
+  new failures, 633 s, in the background.
+  sim_bp_cluster 7 s -> 184 s at two slots, 128 s at one; ras_assert's
+    larger walk is the likely cost, not investigated.
+  Possible follow-on, not tasked (Jeff's call): RT, PU, RE and CO have
+    no assertion outside tb_ras; covering them makes ras_assert's walk
+    a full next-state model.
+PLANNING TEXT of BP-143 and BP-144 applied (PA): ras_decisions.md 1,
+  3.2, 12 intro, 12.11 CO5, 12.12 IV1 and IV2, 13. ras_interfaces.md
+  unchanged.
+PENDING: CLAUDE.md stl_sequent note (Jeff). pacino_features.md
+  describes 79df3ad (fe-1.0.0) and is not updated for BP-141 to
+  BP-144. misc/ras_theory_of_operation.md: the snapshot is 16 bits.
+  examples/fe_demo regenerated before the next tag.
+CLOSED: TD#189.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ras_decisions.md.
+
+Next free: BP-145, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
+
+---
 ## Session-084, continued: BP-141 and BP-142.
 
 BP-141 (PA review): the PHR fold, the SC folds (H into W 9) and the
@@ -4126,6 +4203,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | BP-129: PRED_CNT_BITS. BP-130:   |
 |                         |             |                   | RB_CORR_BITS = 2, RB_CNT_BITS =  |
 |                         |             |                   | 2.                               |
+|                         |             |                   | BP-141: SC_TBL_FH = {0, 9, 9, 9, |
+|                         |             |                   | 0}, the fold width equal to the  |
+|                         |             |                   | index width; SC_MAX_FH 9;        |
+|                         |             |                   | comments.                        |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -4175,6 +4256,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | BP-121: ftq_resolve_t.is_rvc and |
 |                         |             |                   | ftb_upd_t.jmp_rvc (TD#164); the  |
 |                         |             |                   | FTB update is 15 flat fields.    |
+|                         |             |                   | BP-141: the bp_pred_src_e        |
+|                         |             |                   | comments state what sets each    |
+|                         |             |                   | value; bp_folded_hist_t 458 ->   |
+|                         |             |                   | 293 bits. BP-142:                |
+|                         |             |                   | bp_ras_snapshot_t gains rctr, 12 |
+|                         |             |                   | -> 16 bits (TD#194 option A);    |
+|                         |             |                   | bp_ftq_entry_t 228 -> 232 bits.  |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected (BP-071);|
@@ -4224,6 +4312,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | either slot count. sim_history   |
 |                         |             |                   | 17 / 21450 / 3 at 2, 13 / 12330  |
 |                         |             |                   | / 3 at 1.                        |
+|                         |             |                   | BP-141: folded.tage_phr written, |
+|                         |             |                   | the PHR in age order, stepped    |
+|                         |             |                   | and recomputed on rollback with  |
+|                         |             |                   | the folds; SC ST1-ST3 folded     |
+|                         |             |                   | into 9 bits; TC18, TC19.         |
+|                         |             |                   | sim_history 45442/0, 26590/0 at  |
+|                         |             |                   | 1.                               |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -4334,6 +4429,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | closed.                          |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | BP-141: an allocation blocked by |
+|                         |             |                   | a victim with age above 0        |
+|                         |             |                   | decrements that age; the victim  |
+|                         |             |                   | is replaced only when invalid or |
+|                         |             |                   | at age 0; victim_of() for any    |
+|                         |             |                   | LP_TBL_WAYS; TC28. sim_loop_pred |
+|                         |             |                   | 11548/0, 5765/0 at 1.            |
 | loop_pred_interfaces.md | Draft       | --                | SESSION-064 BP-091: corrected to |
 |                         |             |                   | the delivered ports. 17 doc-vs-  |
 |                         |             |                   | RTL findings recorded before any |
@@ -4577,6 +4679,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | removed (TD#79 closed).          |
 |                         |             |                   | Session-081: TOSR == BOS kept    |
 |                         |             |                   | exact across commits (BP-138).   |
+|                         |             |                   | Session-084: section 12, the     |
+|                         |             |                   | rules, one checkable statement   |
+|                         |             |                   | each (BP-141); TD#194 option A;  |
+|                         |             |                   | TOSR below BOS not a fault;      |
+|                         |             |                   | c_bos final, TD#189 closed       |
+|                         |             |                   | (BP-142 to BP-144).              |
 | ras_interfaces.md       | Draft       | --                | Created session-050. Session-061:|
 |                         |             |                   | ras_pc_p2 documented (TD#101).   |
 |                         |             |                   | Session-079: IC-RAS-11, the undo |
@@ -4584,6 +4692,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (TD#78).                         |
 |                         |             |                   | Session-081: IC-RAS-07, 10, 11   |
 |                         |             |                   | (BP-138).                        |
+|                         |             |                   | Session-084: TD#194 option A,    |
+|                         |             |                   | full at 14 allocations, the scan |
+|                         |             |                   | not gated (BP-141, BP-142). No   |
+|                         |             |                   | change for BP-143 or BP-144.     |
 | ras_theory_of           | Draft       | --                | misc/. Added session-079         |
 | _operation.md           |             |                   | (BP-134). A descriptive          |
 |                         |             |                   | companion to the RAS records,    |
@@ -4638,6 +4750,21 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | undo of an empty-start operation |
 |                         |             |                   | to BOS. Properties RS2, RS3.     |
 |                         |             |                   | sim_ras 258/0, 233/0 at 1 slot.  |
+|                         |             |                   | BP-141: TD#195 comments. BP-142: |
+|                         |             |                   | TD#194 option A, the snapshot    |
+|                         |             |                   | rctr written back on a restore;  |
+|                         |             |                   | a push or pop in the first cycle |
+|                         |             |                   | after reset no longer dropped    |
+|                         |             |                   | (ras_rst_done gates nothing);    |
+|                         |             |                   | RP11 count forwarding; a         |
+|                         |             |                   | reference model in tb_ras.       |
+|                         |             |                   | BP-143: no change; RS2 and RS3   |
+|                         |             |                   | test the chain-entry meaning.    |
+|                         |             |                   | BP-144: comments only; c_bos     |
+|                         |             |                   | final (TD#189 closed); RS4, RS5, |
+|                         |             |                   | and RS2/RS3 at every slot and    |
+|                         |             |                   | repair cycle. sim_ras 598/0,     |
+|                         |             |                   | 498/0 at 1 slot.                 |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -4680,9 +4807,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 7/0.                             |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | BP-141: banks from SC_TBL_BANKS  |
+|                         |             |                   | (value 2).                       |
 | sc_brimli.sv            | Complete    | tb_sc_brimli      | ST4 BrIMLI. sim_sc_brimli 7/0.   |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | BP-141: banks from SC_TBL_BANKS  |
+|                         |             |                   | (value 2).                       |
 | sc_cntrl.sv             | Complete    | tb_sc_cntrl       | sim_sc_cntrl 98/0. SESSION-064:  |
 |                         |             |                   | READ and CONFIRMED (BP-094) that |
 |                         |             |                   | sc_pred_meta_p3.branch_id is     |
@@ -4803,6 +4934,17 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | option b, provisional,           |
 |                         |             |                   | accepted). sim_bp_cluster        |
 |                         |             |                   | 2011/0, 1432/0 at 1 slot.        |
+|                         |             |                   | BP-141: the FTB fast path read   |
+|                         |             |                   | at p2 and p3, below a trusted    |
+|                         |             |                   | loop prediction (group T); the   |
+|                         |             |                   | ST4 PHR index in the FOLD        |
+|                         |             |                   | monitor. BP-142: group CB, every |
+|                         |             |                   | cluster rule of ras_decisions.md |
+|                         |             |                   | 12.14; no RTL change.            |
+|                         |             |                   | sim_bp_cluster 2110/0, 1532/0 at |
+|                         |             |                   | 1 slot; 184 s since BP-144       |
+|                         |             |                   | (ras_assert's walk, not          |
+|                         |             |                   | investigated).                   |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
 |                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
@@ -5099,6 +5241,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | taken jump (D3). sim_ftq_entry   |
 |                         |             |                   | 72/0. No property added for      |
 |                         |             |                   | these (TD#170).                  |
+|                         |             |                   | BP-142: 232b x 64 = 14,848b (the |
+|                         |             |                   | snapshot rctr).                  |
 | ftq_meta.sv             | Complete    | tb_ftq_meta       | BP-107. Slow path, 421b x 2 slots|
 |                         |             |                   | x 64, UNPACKED; TD-FE-2 still    |
 |                         |             |                   | deferred. Two disjoint write     |
@@ -5456,6 +5600,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | request, I2 no update, before the |
 |                         |             |                   | init readies). sim_fe_top 754/751 |
 |                         |             |                   | unchanged.                        |
+|                         |             |                   | BP-141: rec_undo and t0_uaon      |
+|                         |             |                   | re-seeded. BP-142: misp_call and  |
+|                         |             |                   | rec_undo without the LFSR.        |
+|                         |             |                   | BP-143: rec_undo removed, 37      |
+|                         |             |                   | programs. BP-144: the undo        |
+|                         |             |                   | monitor removed. sim_fe_top       |
+|                         |             |                   | 736/0, 734/0 at 1 slot;           |
+|                         |             |                   | assert_labels 168, 160.           |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -5497,6 +5649,26 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | SR-UN.                            |
 |                         |             |                   | Release tags, one state on the    |
 |                         |             |                   | site, waveform staleness.         |
+| perf_decisions.md       | Draft       | --                | Created session-084,              |
+|                         |             |                   | planning/perf. Owns PF-N, PF-UN.  |
+|                         |             |                   | Performance analysis on the       |
+|                         |             |                   | CBP2025 traces: sources, harness, |
+|                         |             |                   | configurations, metrics.          |
+| pacino_features.md      | Draft       | --                | Created session-084,              |
+|                         |             |                   | planning/arch. What pacino is as  |
+|                         |             |                   | built; decides nothing, owns no   |
+|                         |             |                   | registry. Describes 79df3ad       |
+|                         |             |                   | (fe-1.0.0, DOC-016).              |
+| new_user_decisions.md   | Draft       | --                | Created 2026-10-27, branch        |
+|                         |             |                   | install_scripts, planning/observ. |
+|                         |             |                   | Owns NU-N, NU-UN. The tools,      |
+|                         |             |                   | pins, check and build scripts and |
+|                         |             |                   | the pre-push hook.                |
+| status_decisions.md     | Draft       | --                | Added by Jeff, session-083,       |
+|                         |             |                   | planning/arch. Owns ST-N, ST-UN.  |
+|                         |             |                   | FUTURE: design and verification   |
+|                         |             |                   | stages per block, read by nothing |
+|                         |             |                   | yet.                              |
 
 THE NINE ROWS MARKED "ADDED 2026-09-17" carry a status DERIVED
 from statements already in this file, not from a fresh
@@ -7183,14 +7355,19 @@ numbers are issued from one sequence across both tables.
 |     |          | upd_plru_next, plru_rd_plru). n_ftb_bub already counts   |
 |     |          | H4. fe_demo_tb_decisions.md FDT-10b, drafted by the PA.  |
 |     |          | Opened session-080 (Jeff).                               |
-| 189 | bpu      | OPEN, CORRECTNESS RISK. RAS BOS ON A POP COMMIT. BP-140  |
-|     |          | Problem 4: a RETURN commit whose snapshot is an empty    |
-|     |          | stack moved BOS onto a slot the allocator had reused     |
-|     |          | (RS2 in tb_fe_top region on the BP-140 tree). Fixed      |
-|     |          | PROVISIONAL in ras.sv (c_bos: such a commit leaves BOS), |
-|     |          | accepted (Jeff); tb_ras TC-44. Still open: a pop commit  |
-|     |          | with a non-empty snapshot can in principle reach a       |
-|     |          | reused slot the same way after a full TOSW wrap (15      |
+| 189 | bpu      | CLOSED by ruling, session-084 (Jeff): c_bos is final     |
+|     |          | (ras_decisions.md 12.11 CO5). BP-143 showed the          |
+|     |          | exception guards a real fault (tb_ras TC-44: BOS moved   |
+|     |          | back onto a reused slot reads empty over a live entry);  |
+|     |          | BP-144 checks the converse of IV1 that fault breaks      |
+|     |          | (RS4). Was: OPEN, CORRECTNESS RISK. RAS BOS ON A POP     |
+|     |          | COMMIT. BP-140 Problem 4: a RETURN commit whose snapshot |
+|     |          | is an empty stack moved BOS onto a slot the allocator    |
+|     |          | had reused (RS2 in tb_fe_top region on the BP-140 tree). |
+|     |          | Fixed PROVISIONAL in ras.sv (c_bos: such a commit leaves |
+|     |          | BOS), accepted (Jeff); tb_ras TC-44. Still open: a pop   |
+|     |          | commit with a non-empty snapshot can in principle reach  |
+|     |          | a reused slot the same way after a full TOSW wrap (15    |
 |     |          | allocations between the snapshot and the commit); not    |
 |     |          | seen, not fixed. Opened session-081 (Jeff). The RS2 that |
 |     |          | justified it judged held as above BOS; RULED session-084 |

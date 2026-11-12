@@ -183,6 +183,9 @@
 # rules (ras_decisions.md, ras_interfaces.md, ftq_entry_formats.md);
 # after BP-142 for the held-entry rule (ras_decisions.md); and for
 # the planning text of BP-141 and BP-142 (session-084, 2026-11-11).
+# Updated in session-085 for BP-143 and BP-144 (PROJECT_STATUS.md,
+# ras_decisions.md) and the record corrections (PROJECT_STATUS.md,
+# PROJECT_CORE.md, CLAUDE.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -225,10 +228,10 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   11e9e43d6380
-PLAN  PROJECT_STATUS.md                 7239b6531ac8
+PLAN  PROJECT_CORE.md                   7d73bf2ed514
+PLAN  PROJECT_STATUS.md                 82aa8c5b4d9a
 
-UNKN  CLAUDE.md                         6057733920a6
+UNKN  CLAUDE.md                         a11aec16af33
 
 ARCH  bp_arb_spec.md                    e948ad56ba7e
 ARCH  bp_cluster.md                     3654c007321b
@@ -247,7 +250,7 @@ ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  1edb8b57f003
-ARCH  ras_decisions.md                  c2bdd8be9daf
+ARCH  ras_decisions.md                  e4f731c6e444
 ARCH  sc_decisions.md                   667f9510517a
 ARCH  sc_table_hash_rules.md            790d17443665
 ARCH  sram_init.md                      d6cefefe7fc5

@@ -85,9 +85,12 @@ production-quality outputs.
 - Construct commands that minimize triggering a permissions request
 - Read, search and list files with the Read, Grep and Glob tools, not
   with shell commands. A Bash command names its files by literal paths:
-  no shell variables, $(...) or backticks, loops, or xargs. Run
-  tools/regress.sh and tools/regress_demo.sh in the foreground and take
-  the summary from their output.
+  no shell variables, $(...) or backticks, loops, or xargs.
+- Run tools/regress.sh once, at the end, in the background, and wait
+  for it to finish before writing Results Capture; no file changes
+  while it runs. Its run is longer than the 600 s foreground limit.
+  Take its summary whole from its output, sha line included, not cut
+  by a pipe. Run tools/regress_demo.sh in the foreground.
 - rtl/core/frontend/bpu/tb/tb_ras.sv is too large to Read whole (up to
   20k tokens per read). Search it, or Read only the line range you need
   with offset/limit.

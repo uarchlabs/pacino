@@ -104,10 +104,13 @@ Undo-pop over a recursion-decrement pop (BP-133, TD #78 closed
 session-079): the pop held TOSR and decremented the count; the undo
 restores the pre-op TOSR and increments the count back. tb_ras TC-21
 (BP-064 pinned the non-reversing behavior until BP-133) and TC-38;
-tb_fe_top rec_undo (BP-134) reaches it end to end at two slots. At
-one slot it cannot occur: the p3 view of slot 0 always equals its p2
-operation (BP-134). This paragraph read "Limitation (TD #78):
-undo-pop re-expose does NOT reverse a recursion-decrement pop".
+tb_fe_top rec_undo (BP-134) was written to reach it end to end; it
+needs SC to reverse a direction at p3, which a program does not set by
+construction (BP-142), and BP-143 removed it. tb_bp_cluster CB2-RP4
+checks it, forcing SC. At one slot it cannot occur: the p3 view of
+slot 0 always equals its p2 operation (BP-134). This paragraph read
+"Limitation (TD #78): undo-pop re-expose does NOT reverse a
+recursion-decrement pop".
 
 RAS does not generate a redirect signal in the same sense as
 TAGE or SC. Its p0 TOS read is an input to the p1 prediction, which
@@ -414,21 +417,24 @@ four rules keep the test exact:
   - a p3 undo of an operation that began on an empty stack restores
     TOSR to BOS as it is at the undo (section 1).
   - a RETURN commit whose snapshot is an empty stack (snapshot
-    TOSR == snapshot BOS) does not move BOS (BP-140, PROVISIONAL).
+    TOSR == snapshot BOS) does not move BOS (BP-140; final, Jeff,
+    session-084, TD#189 closed).
     That snapshot TOSR is the BOS of the cycle the return popped a
     bottom entry; the commits of the older blocks have since moved
     BOS off it, and the sentinel skip protects only the current BOS,
-    so the slot may hold a younger push. Moving BOS to it made
-    TOSR != BOS read a slot the stack did not hold, or TOSR == BOS
-    read empty over a held one (tb_ras TC-44; tb_fe_top region after
-    BP-140, RS2).
+    so the slot may hold a younger push. Moving BOS to it makes
+    TOSR == BOS read empty over that entry (tb_ras TC-44; BP-143
+    Problem 5). BP-140 was prompted by a tb_fe_top region RS2
+    failure judged by the old meaning of held; under the chain-entry
+    meaning region does not fail without the rule (BP-143).
 A bottom entry's nos still names the BOS of its push. Cost 16 bits
 of bot, plus one register bit per slot for the undo. Rejected:
 empty = TOSR older than BOS in TOSW allocation order, which a
 sentinel skip breaks (BP-138).
 
 TOSR BELOW BOS IS NOT A FAULT. RULED session-084 (Jeff), after
-BP-142 (tb_ras TC-65; tb_fe_top rec_undo seeds 7777 and 1234).
+BP-142 (tb_ras TC-65; tb_fe_top rec_undo seeds 7777 and 1234, a
+program BP-143 removed).
 Speculation runs ahead of commit: a younger block's pop can take TOSR
 below the BOS that the commits of older blocks leave, before their
 returns commit, and a restore to an older snapshot can do the same.
@@ -437,15 +443,20 @@ pop returns the address it was pushed with; in BP-142's trace that
 is the correct return, where the commit-stack fallback would give the
 wrong one. A held entry is therefore one a push wrote on the current
 chain and no allocation has reused since (12.5 PO7, 12.12 IV1), not
-one above BOS in allocation order, which is what ras_assert.sv RS2
-and RS3 test (w_seq[tosr] > w_seq[bos]); BP-143 corrects them. The
-restore (4.3), CO5 and CO6 are unchanged. An entry below BOS is
-reused before the sentinel skip, which guards only BOS: once the
-allocator has gone round the buffer since its push, its pop returns
-the reusing push's address, the bounded effect of the wrap (Overflow
-effect, below). The fourth rule above (BP-140, TD#189) was justified
-by an RS2 failure with TOSR below BOS, judged by the old meaning of
-held; BP-143 rechecks it.
+one above BOS in allocation order. BP-143 changed ras_assert.sv RS2
+and RS3 and the tb_ras reference model to this meaning (tb_ras TC-65
+by default, TC-66, TC-67); until then they tested allocation after
+BOS (w_seq[tosr] > w_seq[bos]). The restore (4.3), CO5 and CO6 are
+unchanged. An entry below BOS is reused before the sentinel skip,
+which guards only BOS: once the allocator has gone round the buffer
+since its push, its pop returns the reusing push's address, the
+bounded effect of the wrap (Overflow effect, below; tb_ras TC-67).
+The fourth rule above was rechecked by BP-143: with every RETURN
+commit moving BOS, no tb_bp_cluster or tb_fe_top check fails and no
+cycle count or mispredict moves, and tb_ras TC-44 fails (BOS back on
+the slot B reused, B read empty). Ruled final, session-084 (Jeff);
+TD#189 closed. BP-144 checks the converse of IV1, which that fault
+breaks (12.12).
 
 Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
@@ -1053,10 +1064,15 @@ from this section; tb_bp_cluster checks the cluster rules (12.14).
 Every unit rule holds at NUM_PRED_SLOTS 1 and 2. Where a rule rests
 on the built behaviour rather than on a sentence above, it names the
 ras.sv function or block. BP-142 checked every rule against a
-reference model in tb_ras and directed cases (tb_ras TC-01 to TC-65,
+reference model in tb_ras and directed cases (tb_ras TC-01 to TC-71,
 tb_bp_cluster group CB). It built RE6 and fixed two departures in
 ras.sv: CL1 and CL2 in the first cycle after reset (TC-47c), and RP11
 after a repair changed a count below the top (TC-62).
+BP-144 checked every rule in full: the converse of IV1 (12.12), RS2
+and RS3 at every slot in repair cycles too, and TC-68 to TC-71 for the
+rules checked in part (the repair rules at each slot and at the
+count's ends, SL2 with a count at BOS, KP1 and KP2 at slot 1). No RTL
+fault was found.
 RI = ras_interfaces.md.
 
 ### 12.1 Gating (2; RAS-DS1; RI IC-RAS-01, IC-RAS-02)
@@ -1233,7 +1249,8 @@ CO4  A RETURN_CALL commit: the return arm, then the call arm on the
      state the return arm leaves.
 CO5  BOS = ras_commit_snapshot.tosr, once per commit, except a RETURN
      whose snapshot is an empty stack (tosr == bos), which leaves BOS
-     (BP-140, provisional). A RETURN_CALL always moves BOS.
+     (BP-140; final, session-084, TD#189 closed). A RETURN_CALL always
+     moves BOS.
 CO6  If TOSR == BOS when a commit moves BOS, TOSR moves to the new
      BOS: the TOSR the same cycle's scan leaves.
 CO7  A commit never writes the speculative array or TOSW.
@@ -1258,8 +1275,22 @@ IV1  TOSR == BOS holds exactly when the speculative stack is empty,
      decides a chain entry from each index's allocation sequence, not
      from the order of TOSR and BOS, and reports a reused index as
      the wrap (PO7).
+     Both directions are checked. TOSR != BOS without a chain entry:
+     the tb_ras model every cycle and at every pop of every slot, and
+     ras_assert.sv RS2 (a_state_chain every cycle, a_pop_only_held and
+     a_rep_pop_held at every pop) and RS3. TOSR == BOS over a live
+     chain entry other than the one BOS names (the entry whose commit
+     made it the boundary): the model on its own state and against the
+     DUT, and ras_assert.sv RS4 (BP-144; tb_ras TC-44, TC-68). Each
+     keeps its own record of which allocation TOSR, BOS and each link
+     name. A stack restored from a snapshot no push built (a testbench
+     snapshot) is not judged by a_state_chain until it is next empty.
 IV2  PO7 holds for every slot, in repair cycles too, and a fallback
      pop is valid whenever the commit stack holds an entry.
+     Checked by the tb_ras model and, since BP-144, by ras_assert.sv
+     RS2 and RS3 at every pop of every slot, repair cycles included
+     (its own walk of the repair and p2 passes), and RS5 for the
+     fallback (tb_ras TC-68b, TC-69h, TC-69i).
 
 ### 12.13 Parameters (9; RI 2)
 PM1  No literal depths or widths. The boundaries are derived from
@@ -1432,4 +1463,13 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               built. 3.2, 12.4 PU4: full is 14 allocations beyond BOS
               (this read 15; tb_ras TC-50). 12 intro: the rules
               tested by BP-142; CL1 and RP11 fixed in ras.sv.
+  2026-11-11  after BP-143. 3.2, 12.12: the tb_ras model and RS2/RS3
+              test the chain-entry meaning; TC-65 runs by default,
+              TC-66 and TC-67 added; the wrap is counted, not failed.
+              1: tb_fe_top rec_undo removed.
+  2026-11-11  session-084, after BP-144 (Jeff). 3.2, 12.11 CO5: the
+              BP-140 empty-snapshot RETURN rule is final; TD#189
+              closed. 12.12: the converse of IV1 checked (model, RS4);
+              RS2/RS3 at every slot and in repair cycles; RS5 the
+              fallback. 12 intro: TC-68 to TC-71; no RTL fault.
 ```

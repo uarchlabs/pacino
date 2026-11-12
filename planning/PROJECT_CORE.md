@@ -29,7 +29,7 @@ capture, and experiment discipline are themselves contributions
 worth documenting for an audience of experienced hardware
 architects evaluating AI-assisted design flows.
 
-Repo:  https://github.com/jeffnye-gh/pacino
+Repo:  https://github.com/uarchlabs/pacino
 Local: ~/Development/jeffnye-gh/pacino
 
 ---
@@ -185,7 +185,7 @@ Prompt section structure:
 - Background
 - Binding Previous Decisions
 - Specific Requirements (step-by-step, read-before-write
-  enforced) OR Problems (see Prompt form below)
+  enforced)
 - Constraints
 - Deliverables (includes instruction to write Results Capture
   section, names exact file path)
@@ -476,7 +476,7 @@ have gone stale in any case.
 ### Current inventory
 Navigational only. PROJECT_STATUS.md Module Status is the
 authoritative list and carries each document's status.
-Checked against disk 2026-10-17.
+Checked against disk 2026-11-12 (Jeff's listing of planning/).
 
 ```
 planning/
@@ -497,10 +497,10 @@ planning/
     bp_arb_spec.md
     bp_history_decisions.md
     fe_decisions.md          front-end theory of operation.
-                             Owns FE-1..FE-19, TD-FE-1..8,
-                             FE-U1..FE-U11 (was FE-1..18 and
-                             FE-U1..U10; FE-19 and FE-U11 added
-                             session-070). The registries are
+                             Owns FE-1..FE-21, TD-FE-1..8,
+                             FE-U1..FE-U11 (FE-19 and FE-U11
+                             added session-070, FE-20 and FE-21
+                             session-075). The registries are
                              FRONT END WIDE, not BPU/FTQ only
     ftq_decisions.md         FTQ-owned behaviour
     ftq_entry_formats.md     sole prose home for
@@ -554,6 +554,9 @@ planning/
                              the cachegen output tree. Not a
                              decision record and not maintained;
                              do not cite it
+    status_decisions.md      FUTURE: the design and verification
+                             stages of a block, read by nothing
+                             yet. Owns ST-N, ST-UN
   interfaces/
     bpu_port_inventory.md    per-module port inventory read from
                              the RTL (INFRA-011)
@@ -597,6 +600,9 @@ planning/
   observ/
     fe_trace_decisions.md    trace events, operation identity and
                              the text format. Owns TR-N, TR-UN
+    new_user_decisions.md    new-user setup: the tools and their
+                             pins, the check and build scripts,
+                             the pre-push hook. Owns NU-N, NU-UN
   docs/                      empty
   perf/
     perf_decisions.md        performance analysis on the CBP traces.
