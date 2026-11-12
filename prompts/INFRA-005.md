@@ -72,14 +72,6 @@ CU-08/CU-09 conflicts (aging) — TC-44 and TC-45 are marked covered in the plan
 CU-11 conflict (slot 1 RAM writes) — plan marks covered but zero slot 1 tage_table RAM writes occurred. This is a testbench gap, not an RTL bug.
 CA-08 (Rule 2 starvation) — confirmed gap, already tracked as debt #39.
 
-Key findings to digest:
-The most important discoveries in priority order:
-
-CE-10 (allocation never fired) — this is the critical one. The full allocation path was never exercised end-to-end despite all entries being initialized with USEFUL=0. The suspected root cause (provider was always T4, making no higher table available for allocation) needs investigation before writing the closure testbench. A closure test that doesn't understand why allocation never fired will likely fail.
-CU-08/CU-09 conflicts (aging) — TC-44 and TC-45 are marked covered in the plan but tage_enable_aging was never driven high. This means the age=1/age=2 paths were exercised via a different code path than expected, or the plan is wrong about those tests covering aging. Needs investigation.
-CU-11 conflict (slot 1 RAM writes) — plan marks covered but zero slot 1 tage_table RAM writes occurred. This is a testbench gap, not an RTL bug.
-CA-08 (Rule 2 starvation) — confirmed gap, already tracked as debt #39.
-
 ## Follow-on Actions
 None
 ## CLAUDE.md Updates

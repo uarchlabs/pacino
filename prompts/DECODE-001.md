@@ -23,11 +23,11 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Task Overview
 
-Not captured at time, this task is one of the first.
+Not captured at the time; this task is one of the first.
 
 2026-05-30: Manually adding overview: This task creates a predecode 
-module that takes advantage of the RISC-V ISA natural expansion of
-all compressed instructions to their 32b equivalent. There is some
+module that takes advantage of the RISC-V ISA's natural expansion of
+all compressed instructions to their 32b equivalents. There is some
 operand encoding matching and opcode expansion. The purpose of this
 module is to simplify downstream logic.
 

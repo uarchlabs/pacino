@@ -27,8 +27,8 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 Planning document audit, group 1 of 3 (ftb). Verify the FTB planning
 documents are consistent with the current state of the associated
 RTL, packages, testbenches, Makefile, and any library components
-actually used by FTB. Read-only sanity check ahead of bp_cluster top
-level design. Not a deep dive.
+actually used by FTB. Read-only sanity check ahead of bp_cluster
+top-level design. Not a deep dive.
 
 :: HEADER:END ::
 

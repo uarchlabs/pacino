@@ -81,7 +81,7 @@ TOOLS-004 is complete. Everything green.
   - runs: ifu 3→4, lsu 3, l1i 14→39, l1d 15, l2 15, mem 4, pacino 22 — all 0
     failed
 
-  All five behaviours the prompt named are proved in the emitted testbench
+  All five behaviors the prompt named are proved in the emitted testbench
   (T6–T10): sixteen accepted before any response, an out-of-order return, a
   merged pair answered separately from one fill, a fifth target refused, and the
   prefetch reserve.
@@ -96,7 +96,7 @@ TOOLS-004 is complete. Everything green.
      qualifier declaration. Whether it belongs there or on the node beside mshrs
      is a PA call — Results Capture states both arguments.
   3. The memory side is still one fill at a time. The core port is 16
-     outstanding; the TileLink master is blocking, so sixteen misses serialise
+     outstanding; the TileLink master is blocking, so sixteen misses serialize
      two at a time across the two banks. Nothing in the spec asks for more, but
      it's the miss throughput the IFU would be built against.
 
@@ -118,7 +118,7 @@ The MSHR file accepts sixteen requests and returns them out of order. The banks 
 
 This is my error, not the IA's. Problem 4's acceptance list was the port protocol — every line cites an IF rule, and every IF rule is a port rule. Throughput, latency and fill parallelism live in icache_decisions.md and I put them under Binding Decision 1 ("the specification is fixed") without listing them as conditions. The IA delivered what was asked.
 
-One contradiction in the report. Deferred Work says sixteen misses are "serialised at the TileLink master, two at a time across the two banks." There is one mem interface. Serialised at the master means one at a time, not two. Worth confirming which.
+One contradiction in the report. Deferred Work says sixteen misses are "serialized at the TileLink master, two at a time across the two banks." There is one mem interface. Serialized at the master means one at a time, not two. Worth confirming which.
 
 Two items needing your ruling.
 
@@ -128,7 +128,7 @@ schema version bump	0.12.0 → 0.13.0 with nothing forcing it, which churned six
 
 What TOOLS-005 has to cover: a pipelined bank control at one access per cycle, hit latency from read_latency_cycles, and multiple fills in flight on the memory side.
 
-ME: i meant my assessment was incomplete, not that the IA's work was incomplete
+ME: I meant my assessment was incomplete, not that the IA's work was incomplete
 
 PA:
 Understood — "Incomplete" was your Assessment field left unfinished, not a verdict.
@@ -152,7 +152,7 @@ tl_l1i_l2.source_bits 3→4, required because a_source now names one of sixteen 
 
 test_nonblocking.cpp asserts the blocking node didn't get the treatment — the branch proved to be a branch, not just taken.
 
-The system testbench handles agents of different widths, and the ifu write test replaced rather than deleted, with lsu keeping its write so the branch stays covered.
+The system testbench handles agents of different widths, and the ifu write test was replaced rather than deleted, with lsu keeping its write so the branch stays covered.
 
 Two rulings for you. S9's reserve placement — link or node. And the 0.12.0→0.13.0 bump, which nothing forced and which touched six fixture files.
 

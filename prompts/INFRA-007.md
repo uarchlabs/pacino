@@ -57,7 +57,7 @@ session close.
 This experiment is a failure. PA was unable to give meaningful instructions.
 PA hallucinated the /context solution, then hallucinated a suggestion
 that we just ask the IA what its context is. Neither of these work. PA suggested
-instructions based on made up solutions. It made up a fake environment variable
+instructions based on made-up solutions. It made up a fake environment variable
 CLAUDE_CONTEXT_WINDOW_USAGE that supposedly has context use information. And then
 gave an instruction to do this:
 
@@ -101,7 +101,7 @@ CLAUDE_CONTEXT_WINDOW_USAGE — fabricated environment variable
 The ~/.claude/projects/... path — invented
 The statusline file persistence approach — another rat hole given the known statusline bug
 
-However there is one thing in the results that is not a failure. Claude Code did correctly populate:  (NOTE: partially true, see below)
+However, there is one thing in the results that is not a failure. Claude Code did correctly populate:  (NOTE: partially true, see below)
 
 Model: claude-sonnet-4-6 normal — from its own runtime knowledge
 Ctx %: 19% — it found the value somehow despite /context being unavailable

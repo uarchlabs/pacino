@@ -25,7 +25,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 Ext enable/disable and coverage. Adding an extension enable disable
 feature to support bring up. This is not required by RVA23S64.
 
-2026-05-30: This task file has been retro-fitted with the 
+2026-05-30: This task file has been retrofitted with the 
 now standard section markers.
 :: HEADER:END ::
 =============================================================

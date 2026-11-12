@@ -29,8 +29,8 @@ ITTAGE and RAS planning documents are consistent with the current
 state of the associated RTL, packages, testbenches, Makefile, and
 any library components actually used. Also verify the ITTAGE/RAS/FTB
 three-way JALR role split is consistently described across their
-respective documents. Read-only sanity check ahead of bp_cluster top
-level design. Not a deep dive.
+respective documents. Read-only sanity check ahead of bp_cluster
+top-level design. Not a deep dive.
 
 :: HEADER:END ::
 

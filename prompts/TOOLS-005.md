@@ -79,7 +79,7 @@ TOOLS-005 is done. Everything green, nothing regressed.
 
   1. The l2 is the bottleneck end. Its up_i_slv is a four-state machine holding
      one A at a time. It keys d_source correctly, so nothing is broken, but the
-     l1i's sixteen fills serialise there. Closing it needs a schema field saying
+     l1i's sixteen fills serialize there. Closing it needs a schema field saying
      how many transactions a TileLink slave accepts (nonblocking() returns
      false for TL links today) plus the l2 getting this pipelined control. Both
      outside an l1i-scoped task. The l2 is untouched, 15/15.
@@ -121,7 +121,7 @@ T11–T16 each confirmed to fail against the pre-task emitter by reverting rtl_c
 
 Three things needing your attention
 
-The l2 is now the bottleneck. l2_up_i_slv holds one A at a time. Sixteen fills are real at the l1i boundary and serialise at the l2, so end-to-end miss throughput is one. The IA flags this correctly under RVA23 risks: the front end sustaining 8 instructions/cycle depends on the l2 number, not the l1i number.
+The l2 is now the bottleneck. l2_up_i_slv holds one A at a time. Sixteen fills are real at the l1i boundary and serialize at the l2, so end-to-end miss throughput is one. The IA flags this correctly under RVA23 risks: the front end sustaining 8 instructions/cycle depends on the l2 number, not the l1i number.
 
 L1I-23 says "sixteen fills may be in flight." It's satisfied at the boundary it names and not achieved in the system. That's a specification question — whether L1I-23 is an L1I property or a system property.
 

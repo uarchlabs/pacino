@@ -24,7 +24,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 # Task Overview
 Vector integer ALU decode disambiguation (funct6 decode)
 
-2026-05-30: This task file has been retro-fitted with the 
+2026-05-30: This task file has been retrofitted with the 
 now standard section markers.
 :: HEADER:END ::
 =============================================================
@@ -80,7 +80,7 @@ Nothing required
 The funct6=0x17 vmerge/vmv.v.* disambiguation via inst[25] is a spec subtlety.
 
 Claude caught it, resolved it correctly, and deferred the vmadc/vmsbc
-mask-bit distinction to rename appropriately. This shows good judgement
+mask-bit distinction to rename appropriately. This shows good judgment
 in segmentation. The decoder should not make architectural state decisions.
 ```
 

@@ -61,8 +61,8 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 ## My Assessment
 
-IA(c.code) seems to have gone off script, it wrote coverage to:
-rtl/core/frontend/bpu/lib/ this needs PA(c.ai) to confirm the source of the problem was IA and not prompt
+IA(c.code) seems to have gone off script; it wrote coverage to:
+rtl/core/frontend/bpu/lib/ this needs PA(c.ai) to confirm the source of the problem was the IA and not the prompt
 
 
 > The results show all HTML at `coverage/*/html/index.html`

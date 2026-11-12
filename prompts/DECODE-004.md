@@ -25,7 +25,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 Experiment: DECODE-004 - Vector decode foundation, decode_pkg.sv and
 opcode handler
 
-2026-05-30: This task file has been retro-fitted with the 
+2026-05-30: This task file has been retrofitted with the 
 now standard section markers.
 :: HEADER:END ::
 =============================================================
@@ -114,7 +114,7 @@ Claude collapsed the config instructions (vsetvl/vsetvli/vsetivli) into DECODE-0
 
 What Claude got wrong or missed
 
-Not wrong but a shift in focus by adding vsetvl to this experiment, 
+Not wrong, but a shift in focus by adding vsetvl to this experiment, 
 and collapsing DECODE-005 into 004.
 
 ## Follow-on Actions

@@ -21,8 +21,8 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Task Overview
 Implement sram_init.sv, a parameterized SRAM initialization
-component. On de-assertion of rstn it optionally waits a
-start delay then walks all SRAM entries writing a fixed init
+component. On deassertion of rstn, it optionally waits a
+start delay, then walks all SRAM entries writing a fixed init
 value, then asserts ready and holds until reset.
 :: HEADER:END ::
 =============================================================

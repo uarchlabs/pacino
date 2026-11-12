@@ -90,7 +90,7 @@ TOOLS-006 is complete. ./tools/regress.sh, run from the repo root with no
     /usr/local/bin), not the project's 5.048 in tools/bin. I left this alone
     because the task forbids changing existing recipes; it's a candidate TD.
   - Top-level Makefile: the ftq omission in rtl/Makefile is either a candidate
-    TD or a reason to retire those targets in favour of regress.sh.
+    TD or a reason to retire those targets in favor of regress.sh.
   - Files to create or install: create tools/known_failures.txt from the
     proposed file, and install the hook with ln -s ../../tools/hooks/pre-push 
     .git/hooks/pre-push.

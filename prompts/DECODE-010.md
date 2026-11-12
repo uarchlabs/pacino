@@ -24,7 +24,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 # Task Overview
 Vector pre-decode module (vtype annotation)
 
-2026-05-30: This task file has been retro-fitted with the 
+2026-05-30: This task file has been retrofitted with the 
 now standard section markers.
 :: HEADER:END ::
 =============================================================

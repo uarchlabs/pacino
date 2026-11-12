@@ -29,7 +29,7 @@ New top-level directory: components/
 This is the second try, too much context and the ram input sync
 guidance is corrected in this version
 
-In the first try the saturating adder and lmod were completed so 
+In the first try the saturating adder and lmod were completed, so 
 context use is not complete.
 
 :: HEADER:END ::

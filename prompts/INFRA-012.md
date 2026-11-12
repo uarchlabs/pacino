@@ -63,7 +63,7 @@ proposal, written into Results Capture.
   - Section 1.2's arithmetic is correct, and matches geometry.cpp exactly — bank
     select at PA[6], setidx PA[12:7], 64 sets per bank. The check the prompt
     aimed at that section comes back clean.
-  - C3 costs nothing. A link cannot be parameterised per edge (schema and
+  - C3 costs nothing. A link cannot be parameterized per edge (schema and
     resolver both forbid it), but nothing binds a port type to one link — so a
     second link type is two JSON edits and no tool change. That was the item I
     expected to be expensive.
@@ -114,7 +114,7 @@ Cachegen is a finished geometry stage in front of a blocking-cache emitter. Thir
 
 The consequence for planning: icache_decisions.md sections 5 through 8 are specifications for hardware cachegen cannot currently emit at all, and no amount of configuration reaches them.
 
-C3 was the item I expected to be expensive and it costs nothing. A link can't be parameterised per edge, but nothing binds a port type to one link, so a second link type is two JSON edits. I'd flagged that as needing a ruling; it doesn't.
+C3 was the item I expected to be expensive and it costs nothing. A link can't be parameterized per edge, but nothing binds a port type to one link, so a second link type is two JSON edits. I'd flagged that as needing a ruling; it doesn't.
 
 Zicbom is the hard one. No node emits an invalidate port of any kind, all four maintenance fields inert. RVA23 mandates it, so this is external and not a preference. E7 should probably sit higher than the IA's ordering puts it.
 

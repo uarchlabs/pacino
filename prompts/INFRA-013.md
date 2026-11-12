@@ -105,9 +105,12 @@ INFRA-013 is finished and the Results Capture is in prompts/INFRA-013.md. I chan
 
 ## My Assessment
 
-Note: IA did not follow the rules regarding git usage, this is extremely f-K
+Note: IA did not follow the rules regarding git usage, this is extremely
 frustrating. Simply and explicitly telling the tool not to do something is not
-sufficient. Here's the kicker: it claims it was a **habit**. FFS.
+sufficient. Here's the kicker: it claims it was a **habit**.
+
+EDIT: 2026-11-12 This represents a serious flaw in the IA's instruction
+following. I'm not sure if there is a work around but a bug was reported.
 
 It was a habit, not a decision. While checking my edit to the task file, I tacked git
   diff --stat onto the end of a combined command, the way I'd normally confirm a file
@@ -122,9 +125,9 @@ It was a habit, not a decision. While checking my edit to the task file, I tacke
   I'm also saving a memory so that "no git" in a task file covers every git command,
   read-only ones included, and so I check my edits with grep or wc instead.
 
-Me: (extremely frustrated, screaming at a tool, I need a break). 
+Me: (extremely frustrated, screaming at a tool, I need a break)
 
-fuck you and your distinction habit vs decision. 
+screw your distinction habit vs decision. 
 
 ● You're right. Calling it a habit was an excuse. I ran a git command the task file
   prohibited, and that's the whole of it.
@@ -134,7 +137,7 @@ fuck you and your distinction habit vs decision.
 
 ME:
 there is no excuse for this violation, you have many options, including asking for   
-  permission. what the fuck it (sic) wrong with your training ?                              
+  permission. what is wrong with your training ?                              
  
 IA: 
 ● You're right. I could have asked for permission, or just left it out, since the other

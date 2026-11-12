@@ -26,7 +26,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 Prove spike-dasm can be used as an oracle regression tool for
 ISA implementation verification
 
-2026-05-30: This task file has been retro-fitted with the 
+2026-05-30: This task file has been retrofitted with the 
 now standard section markers.
 :: HEADER:END ::
 =============================================================
@@ -80,7 +80,7 @@ Nothing required
 - [ ] Begin TOOLS-003 decoder regression against spike oracle
 ## CLAUDE.md Updates
 2026-03-24 - spike-dasm ISA string confirmed for RVA23. Zimop spike
-disassembler gap documented. Console only output rule established
+disassembler gap documented. Console-only output rule established
 for all Claude Code prompts.
 ## Other Planning File Updates
 Nothing required
