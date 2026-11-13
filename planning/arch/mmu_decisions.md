@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-13
  CONTACT: Jeff Nye
 ```
 
@@ -155,8 +155,9 @@ MMU-20 THE MODE SET. `satp` and `vsatp` support Bare, Sv39, Sv48
        document names it. With `V=1` and `vsatp.MODE=Bare` the
        incoming address is the fetch PC itself, which is why VA_WIDTH
        equals GPA_WIDTH (fe_decisions.md FE-19). BUILT by BP-145.
-       Until MMU-32 is built, the walker bounds every GPA by the
-       Sv39x4 width (SV39X4_GPA_WIDTH).
+       The walker bounds a GPA by the hgatp mode's width,
+       SV39X4_GPA_WIDTH, SV48X4_GPA_WIDTH or SV57X4_GPA_WIDTH
+       (bp_defines_pkg.sv); BUILT by BP-146.
 
 MMU-21 The walk is NESTED, not sequential. Every address the
        VS-stage walk produces is a guest physical address and
@@ -187,8 +188,27 @@ MMU-32 THE WALK FOLLOWS THE MODE. LEVELS is 3 for Sv39 and Sv39x4,
        independently. The VS-stage follows vsatp.MODE and the
        G-stage hgatp.MODE, both sampled when the walk starts
        (MMU-24a). Any pair is legal, for example a Sv39 guest under a
-       Sv57x4 G-stage. RULED session-085 (Jeff) with MMU-20. NOT YET
-       BUILT: ptw.sv walks every non-zero MODE as Sv39.
+       Sv57x4 G-stage. RULED session-085 (Jeff) with MMU-20. BUILT in
+       the walker by BP-146: each stage's root level is sampled with
+       the CSR group. The ITLB's sizes 3'b100 and 3'b101 and its
+       per-mode address check are the next task's.
+
+MMU-33 AN UNSUPPORTED MODE IS WALKED AS SV39. The CSR-5 write rules
+       keep an unsupported value out of satp, vsatp and hgatp, so in
+       normal operation the walker never sees one. For bring-up,
+       debug_support.allow_all_satp_writes and
+       allow_all_vsatp_writes (csr_decisions.md CSR-8) let satp and
+       vsatp hold any MODE value. A stage whose MODE holds an
+       unsupported value is walked as Sv39, or as Sv39x4 at the
+       G-stage, which is what ptw.sv does. W13 in ptw_assert.sv
+       allows such a value only while the matching debug_support bit
+       is set. RULED session-085 (Jeff). The walk is BUILT by BP-146;
+       the W13 qualification is NOT YET BUILT (TD#198). The privileged
+       specification defines no such exception: this is a Pacino
+       extension, off at reset.
+       PROPOSED, PA: the ITLB's address check (itlb_decisions.md
+       ITLB-18) treats the value as Sv39 too, so the fetch and the
+       walk agree.
 
 MMU-21 is the reason the outstanding walk count matters more than
 it did. A single two-stage walk occupies the walker for far longer
@@ -321,9 +341,10 @@ MMU-24b THE ROOT POINTERS ALWAYS FIT. The CSR file implements
         one. A full 44-bit vsatp.PPN names a GPA of up to 56 bits,
         which Sv39x4 and Sv48x4 reject. That is a guest-page fault,
         cause 20, kind implicit read (MMU-28, MMU-29). Session-085,
-        with MMU-20. BUILT by BP-145 for Sv39x4: the walker checks
-        every G-stage GPA, the vsatp root included, against
-        SV39X4_GPA_WIDTH before the first G-stage read.
+        with MMU-20. BUILT by BP-145 for Sv39x4 and by BP-146 for
+        every x4 mode: the walker checks every G-stage GPA, the vsatp
+        root included, against the hgatp mode's width before the
+        first G-stage read.
 
 MMU-27 THE SIZE OF A TWO-STAGE TRANSLATION is the SMALLER of the
        VS-stage leaf size and the G-stage leaf size for the final
@@ -788,7 +809,10 @@ MMU-28  A PPN IS NEVER TRUNCATED. The supervisor chapter states that
             stage, or G-stage): a bit set at or above PPN_WIDTH names an
             address outside every PMA region, so the access made
             with it -- the next PTE read, or the fetch -- is an
-            access fault, cause 1;
+            access fault, cause 1. For a leaf the page checked is the
+            translated page, the PPN with the VPN bits the leaf's
+            size takes from the address: a 512 GiB or 256 TiB leaf
+            takes VPN bits at and above PPN_WIDTH (BP-146);
           - a PTE whose PPN is a GUEST physical page (VS-stage): a
             guest physical address with a bit set at or above the
             hgatp mode's width is a guest-page fault, cause 20
@@ -796,7 +820,7 @@ MMU-28  A PPN IS NEVER TRUNCATED. The supervisor chapter states that
             50 for Sv48x4; no 56-bit address exceeds Sv57x4's 59. The
             vsatp root is checked the same way (MMU-24b), and so is
             the fetch PC of a G-stage-only translation (MMU-20).
-            BUILT for Sv39x4 by BP-145.
+            BUILT for Sv39x4 by BP-145, for every x4 mode by BP-146.
         The checks fall where the algorithm's steps put them, so a
         page fault found earlier in the walk is reported first. The
         ITLB is never filled with a truncated PPN. Ruled
@@ -1133,4 +1157,10 @@ TD#118    No longer bounds the walker, which has its own port
               entry above said GPA_WIDTH - 12, wider than the 44-bit
               field (BP-145's finding). GPA_WIDTH is stated once, in
               MMU-20; the derived widths are stated as formulas.
+
+  2026-11-13  session-085, after BP-146. MMU-20, MMU-24b, MMU-28,
+              MMU-32: the walker built in every mode; MMU-28, a leaf
+              is checked by its translated page. MMU-33 new (Jeff):
+              an unsupported MODE, held under debug_support, is
+              walked as Sv39.
 ```

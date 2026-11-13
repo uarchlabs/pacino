@@ -16,6 +16,44 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-146 recorded; debug_support ruled.
+
+BP-146 COMPLETE (84bfff9). regress.sh 273 targets, RESULT: PASS. The
+  walker walks every mode of MMU-20 at both stages, all nine stage
+  pairs, with the x4 root and the per-mode GPA bound
+  (SV48X4_GPA_WIDTH and SV57X4_GPA_WIDTH added). csr_pkg and
+  csr_tb_pkg accept MODE 9 and 10; hgatp.PPN[1:0] reads 0 in every x4
+  mode. pt_build_pkg (new) maps a page in any mode into its own image;
+  a testbench drains it into its memory model. W13 new: a walk starts
+  only under a supported MODE. sim_ptw 841 -> 1523, sim_csr_tb_pkg
+  150 -> 200, ptw assert_labels 12 -> 13, lint_pt_build_pkg new.
+  fe_top assert_labels 168 -> 169 and _1slot 160 -> 161: fe_top's
+  ASSERT_SRCS includes ptw_assert.sv, so the +1 is W13 (PA, checked
+  in the fe_top Makefile).
+FINDING, fixed (case j): the single-stage and VS-only final check
+  tested the leaf PTE's PPN, not the translated page, so a 512 GiB or
+  256 TiB leaf could answer hit for a page beyond PPN_WIDTH.
+RULED (Jeff): debug_support, a Pacino custom CSR at 0x7C2. Bit 31
+  allow_all_satp_writes and bit 30 allow_all_vsatp_writes let a satp
+  or vsatp write with an unsupported MODE be written, for bring-up;
+  hgatp has no override; reset 0 (csr_decisions.md section 2, CSR-5,
+  CSR-7, CSR-8). A stage whose MODE holds an unsupported value is
+  walked as Sv39, as ptw.sv does (mmu_decisions.md MMU-33). W13 allows
+  the value only while the matching bit is set. PROPOSED, PA: the
+  bits reach W13 through ptw_csr_t (CSR-6), and the ITLB's address
+  check treats the value as Sv39 too (MMU-33).
+OPENED: TD#198, build debug_support.
+PLANNING (PA, from BP-146): mmu_decisions.md MMU-20, MMU-24b, MMU-28,
+  MMU-32 built; csr_decisions.md 3 built; itlb_l2tlb_interfaces.md
+  IL-7, the walker returns 3'b100 and 3'b101.
+NEXT TASK: the ITLB's sizes and per-mode address check (ITLB-3,
+  ITLB-18), tb_fe_top on pt_build_pkg, the translated regression tests
+  under Sv57, the weekly all-modes regression. Not yet written.
+
+Next free: BP-147, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#199.
+
+---
 ## Session-085, continued: BP-146 written.
 
 BP-146 WRITTEN: the walker in every mode (mmu_decisions.md MMU-32,
@@ -5724,6 +5762,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | widths from the package. Walks    |
 |                         |             |                   | Sv39 and Sv39x4 only. sim_ptw     |
 |                         |             |                   | 841.                              |
+|                         |             |                   | BP-146: every mode, Sv39, Sv48,   |
+|                         |             |                   | Sv57 and their x4 modes at both   |
+|                         |             |                   | stages, the x4 root and the       |
+|                         |             |                   | per-mode GPA bound; 512 GiB and   |
+|                         |             |                   | 256 TiB sizes; W13. pt_build_pkg  |
+|                         |             |                   | (tb) maps a page in any mode.     |
+|                         |             |                   | sim_ptw 1523, 13 properties.      |
 | csr (unit)              | Working     | tb_csr_tb_pkg     | Built SYS-001, rtl/core/csr:      |
 |                         |             |                   | csr_pkg.sv, tb/csr_tb_pkg.sv.     |
 |                         |             |                   | lint_csr_pkg, lint_csr_tb_pkg,    |
@@ -5734,6 +5779,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | min(GPA_WIDTH - 12, 44), 44 bits  |
 |                         |             |                   | at 59. MODE 9 and 10 still        |
 |                         |             |                   | unsupported.                      |
+|                         |             |                   | BP-146: MODE 9 and 10 accepted in |
+|                         |             |                   | satp, vsatp, hgatp;               |
+|                         |             |                   | hgatp.PPN[1:0] 0 in every x4      |
+|                         |             |                   | mode. sim_csr_tb_pkg 200/0.       |
+|                         |             |                   | debug_support (0x7C2) not yet     |
+|                         |             |                   | built, TD#198.                    |
 | frontend top            | Working     | tb_fe_top         | Built BP-118. 36 programs since   |
 |                         |             |                   | BP-124 (19 before BP-123), each   |
 |                         |             |                   | its own regression target         |
@@ -7661,6 +7712,19 @@ numbers are issued from one sequence across both tables.
 |     |          | constants not yet ruled. Until this closes, performance  |
 |     |          | runs use 2^18 for both (perf_decisions.md PF-5). Opened  |
 |     |          | session-084 (Jeff).                                      |
+| 198 | mmu, csr | OPEN, FEATURE. BUILD debug_support (csr_decisions.md     |
+|     |          | CSR-8, mmu_decisions.md MMU-33). csr_pkg: CSR 0x7C2,     |
+|     |          | bits 31 allow_all_satp_writes and 30                     |
+|     |          | allow_all_vsatp_writes, reset 0. csr_tb_pkg: a satp or   |
+|     |          | vsatp write with an unsupported MODE is written when its |
+|     |          | bit is set (CSR-5); a named setter for each bit.         |
+|     |          | ptw_csr_t carries the two bits (CSR-6, PROPOSED), and    |
+|     |          | W13 allows an unsupported MODE only while its bit is     |
+|     |          | set. Tests: tb_csr_tb_pkg, each bit set and clear for    |
+|     |          | each unsupported value, the reset value, bits 63:32 read |
+|     |          | 0; tb_ptw, a walk under an unsupported satp and vsatp    |
+|     |          | MODE with each bit set, walked as Sv39, W13 silent.      |
+|     |          | Opened session-085 (Jeff).                               |
 
 ---
 

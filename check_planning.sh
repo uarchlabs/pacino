@@ -204,6 +204,9 @@
 # fe_demo_tb_decisions.md).
 # Updated when BP-146 was written, session-085 (PROJECT_STATUS.md,
 # PROJECT_CORE.md).
+# Updated after BP-146, session-085, and for debug_support
+# (PROJECT_STATUS.md, csr_decisions.md, mmu_decisions.md,
+# itlb_l2tlb_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -247,7 +250,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   ccad7bc7d928
-PLAN  PROJECT_STATUS.md                 9c7c05a9e18c
+PLAN  PROJECT_STATUS.md                 7fc1cd405749
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 
@@ -255,7 +258,7 @@ ARCH  bp_arb_spec.md                    e948ad56ba7e
 ARCH  bp_cluster.md                     20a0101a7f3f
 ARCH  bp_history_decisions.md           eed6cb8d60a7
 ARCH  cachegen_decisions.md             de8bfe4e9845
-ARCH  csr_decisions.md                  2376f958459e
+ARCH  csr_decisions.md                  484fe6279bb8
 ARCH  dcd_decisions.md                  8232e5fdf27f
 ARCH  fe_decisions.md                   af2411c071bc
 ARCH  ftb_decisions.md            00f15664c751
@@ -267,7 +270,7 @@ ARCH  ifu_decisions.md            cbd1867428ab
 ARCH  itlb_decisions.md                 a523e4694115
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  a90a1bbd1342
+ARCH  mmu_decisions.md                  f2aef9f093c4
 ARCH  ras_decisions.md                  23e7974e38ad
 ARCH  sc_decisions.md                   667f9510517a
 ARCH  sc_table_hash_rules.md            ad6ddcde00a8
@@ -306,7 +309,7 @@ INTF  ftq_bpu_interfaces.md       46b0a0c6b0a1
 INTF  ftq_ifu_interfaces.md       554f219f72bd
 INTF  ifu_ibuf_interfaces.md      5079031d7d75
 INTF  itlb_ifu_interfaces.md      32dc29fae399
-INTF  itlb_l2tlb_interfaces.md    a816a158775e
+INTF  itlb_l2tlb_interfaces.md    dbac3b179b7f
 INTF  ptw_mem_interfaces.md       a7bb1b8e3253
 INTF  ittage_interfaces.md        18b3ed55b8fe
 INTF  l1i_ifu_interfaces.md       e3a6b77cb398

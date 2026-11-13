@@ -6,7 +6,7 @@
  FILE:    csr_decisions.md
  SOURCE:  session-079, TD#178
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-13
  CONTACT: Jeff Nye
 ```
 
@@ -37,7 +37,8 @@ CSR-2  rtl/core/csr/tb/csr_tb_pkg.sv (testbench only) holds a
          set_pmp_g(g)             grain of the read-back rules; 10
                                   unless a PMP checker testbench
                                   builds another PMP_GRAN_LG2
-         named setters            each field of 0x7C0 and 0x7C1
+         named setters            each field of 0x7C0, 0x7C1 and
+                                  0x7C2
        The shadow is a class with static members behind these
        package functions. An address with no CSR in csr_pkg stops the
        simulation ($fatal).
@@ -66,7 +67,27 @@ Machine-level read/write, range 0x7C0-0x7FF.
   bits    field
   31:0    tage_aging_interval
   63:32   ittage_aging_interval
+
+  0x7C2   debug_support, bring-up overrides
+  bit     field                   when 1
+  31      allow_all_satp_writes   a satp write with an unsupported
+                                  MODE is written (CSR-8)
+  30      allow_all_vsatp_writes  the same for vsatp (CSR-8)
+  29:0    reserved, read 0, writes ignored
+  63:32   read 0, writes ignored
 ```
+
+CSR-8  debug_support (0x7C2) is a 32-bit Pacino custom CSR for
+       silicon bring-up. The privileged specification requires a satp
+       write with an unsupported MODE to have no effect; it defines no
+       exception, so this is a Pacino extension. With
+       allow_all_satp_writes set, such a write writes every field as a
+       supported one does; allow_all_vsatp_writes does the same for
+       vsatp. hgatp has no override: its CSR-5 rule always applies.
+       Both bits reset to 0 (CSR-7), so the specified behavior holds
+       unless bring-up code sets them. What the walker does with the
+       value is mmu_decisions.md MMU-33. RULED session-085 (Jeff).
+       NOT YET BUILT (TD#198).
 
 CSR-3  sc_enable = 0: no SC update is issued, the SC prediction
        response is not consumed or waited on, SC-related FTB state
@@ -112,7 +133,7 @@ subset. Bits not listed read 0.
 ```
 
 The MODE values are mmu_decisions.md MMU-20, RULED session-085
-(Jeff); NOT YET BUILT in csr_pkg.sv and csr_tb_pkg.sv. The widths are
+(Jeff); BUILT by BP-146 in csr_pkg.sv and csr_tb_pkg.sv. The widths are
 the package parameters (bp_defines_pkg.sv, csr_pkg.sv), not restated
 here. CSR_VSATP_PPN_W is built by BP-145.
 
@@ -122,9 +143,12 @@ priv and V are hart state, not CSRs. priv encoding: 00 U, 01 S,
 CSR-5  csr_write rules:
 
 ```
-  satp     unsupported MODE: no field written
+  satp     unsupported MODE: no field written, unless
+           debug_support.allow_all_satp_writes = 1 (CSR-8)
   hgatp    unsupported MODE: MODE unchanged, VMID and PPN written
-  vsatp    unsupported MODE: no field written. PROPOSED
+  vsatp    unsupported MODE: no field written, unless
+           debug_support.allow_all_vsatp_writes = 1 (CSR-8).
+           PROPOSED
            unsupported is 1 to 7 and 11 to 15 in all three
   pmpcfg   locked entry (L = 1): entry and its pmpaddr not written
            A = NA4 written: stored as NAPOT
@@ -174,10 +198,12 @@ CSR-6  fe_top and the ITLB take fe_csr_t, fe_top takes fe_cfg_t and
   pmpcfg[16], pmpaddr[16] ITLB PMP checker
 
   ptw_csr_t  source: satp, vsatp, hgatp, menvcfg, henvcfg, pmpcfg,
-             pmpaddr
+             pmpaddr, debug_support
   member                  consumer
   satp, vsatp, hgatp
     MODE, PPN             walker
+  debug_support 31:30     walker assertion W13 (mmu_decisions.md
+                          MMU-33). PROPOSED, PA; NOT YET BUILT
   menvcfg ADUE, PBMTE     walker
   henvcfg ADUE, PBMTE     walker
   pmpcfg[16], pmpaddr[16] walker PMP checker
@@ -194,6 +220,7 @@ CSR-7  Reset values (csr_reset):
 ```
   0x7C0     0x1                  sc_enable 1, the other three 0
   0x7C1     0
+  0x7C2     0                    debug_support, both overrides off
   satp      0x0000_0000_0008_F000  MODE Bare, ASID 0, PPN 0x8F000
   vsatp     0
   hgatp     0
@@ -212,7 +239,8 @@ CSR-7  Reset values (csr_reset):
 
 ## 5. Open
 
-CSR-U1 Names of the CSRs at 0x7C0 and 0x7C1.
+CSR-U1 Names of the CSRs at 0x7C0 and 0x7C1. (0x7C2 is named
+       debug_support, CSR-8.)
 CSR-U2 Hardware delivery of CSR state to the groups, and ordering
        of a CSR write against fetch, SFENCE.VMA, HFENCE, FENCE.I.
 
@@ -249,4 +277,9 @@ CSR-U2 Hardware delivery of CSR state to the groups, and ordering
               widths stated by parameter; vsatp.PPN is
               CSR_VSATP_PPN_W = min(GPA_WIDTH - 12, 44). The entry
               above said GPA_WIDTH - 12, wider than the field.
+  2026-11-13  session-085, after BP-146. Section 3: the MODE values
+              built. Section 2 and CSR-8 new (Jeff): debug_support at
+              0x7C2, bits 31 and 30; CSR-5's exception for satp and
+              vsatp; CSR-7 reset 0; CSR-6 ptw_csr_t carries the bits
+              for W13 (PROPOSED). TD#198.
 ```
