@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-13
  CONTACT: Jeff Nye
 ```
 
@@ -300,6 +300,16 @@ PF-16  THE TRACES RUN UNCHANGED, UNDER SV57 (Jeff, session-085).
        under Sv48, and the other 63 only under Sv57. No PC needs more
        than Sv57 (pc_noncanon_sv57_static is 0 in every trace).
 
+PF-17  THE TRACES RUN BEHIND PAGE TABLES (Jeff, session-085), so the
+       ITLB and the walker are in the measurement. Each code page a
+       trace touches is mapped by a 4 KiB leaf to a physical page
+       allocated densely, in the order the trace first touches it,
+       from the start of main memory (mmu_decisions.md MMU-15a). The
+       mode is Sv57 (PF-16). A generator built on pt_build_pkg writes
+       the tables as a memory image file; the gasket (PF-4) loads
+       it. The generator is NOT YET BUILT (BP-149); the gasket is
+       PERF-002's.
+
 ## 7. Process
 
 PF-12  Performance tasks take the prefix PERF-NNN (Jeff,
@@ -320,9 +330,9 @@ PF-U1  CLOSED session-085 (Jeff) by PF-16. It read: "The address
        then applies)." Its far conditional branch sentence is PF-U11.
 PF-U2  Closed by PERF-001, into PF-1 and PF-7.
 PF-U3  Closed by PF-14.
-PF-U4  Memory: run bare with a sparse memory model, or build page
-       tables so the ITLB and walker are in the measurement. The int
-       sample's code spans 0x323048 to 0x80002b44.
+PF-U4  CLOSED session-085 (Jeff) by PF-17. It read: "Memory: run
+       bare with a sparse memory model, or build page tables so the
+       ITLB and walker are in the measurement."
 PF-U5  The C++ backend: the resolve latency, and the order of resolve
        and commit returned to fe_top.
 PF-U6  I-cache control: a switch for a real, preloaded or perfect
@@ -378,4 +388,6 @@ PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
   2026-11-12  session-085, after BP-145. PF-16: the counts from every
               PC; the entry above gave 53 and 28, from pc_min and
               pc_max alone.
+  2026-11-13  session-085 (Jeff). PF-17: page tables, dense 4 KiB
+              physical pages in first-touch order; PF-U4 closed.
 ```

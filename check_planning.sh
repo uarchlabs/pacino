@@ -207,6 +207,9 @@
 # Updated after BP-146, session-085, and for debug_support
 # (PROJECT_STATUS.md, csr_decisions.md, mmu_decisions.md,
 # itlb_l2tlb_interfaces.md).
+# Updated in session-085 for PA_WIDTH 48, PF-17 and the regression
+# modes (PROJECT_CORE.md, PROJECT_STATUS.md, icache_decisions.md,
+# mmu_decisions.md, l1i_ifu_interfaces.md, perf_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -249,8 +252,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   ccad7bc7d928
-PLAN  PROJECT_STATUS.md                 7fc1cd405749
+PLAN  PROJECT_CORE.md                   2d8332507267
+PLAN  PROJECT_STATUS.md                 4207b2853d65
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 
@@ -265,12 +268,12 @@ ARCH  ftb_decisions.md            00f15664c751
 ARCH  ftq_decisions.md            a628dacf4b9a
 ARCH  ftq_entry_formats.md        968ae67e193f
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
-ARCH  icache_decisions.md               29d94d35d776
+ARCH  icache_decisions.md               31bd42ad3b9d
 ARCH  ifu_decisions.md            cbd1867428ab
 ARCH  itlb_decisions.md                 a523e4694115
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  f2aef9f093c4
+ARCH  mmu_decisions.md                  55768f3f825b
 ARCH  ras_decisions.md                  23e7974e38ad
 ARCH  sc_decisions.md                   667f9510517a
 ARCH  sc_table_hash_rules.md            ad6ddcde00a8
@@ -312,7 +315,7 @@ INTF  itlb_ifu_interfaces.md      32dc29fae399
 INTF  itlb_l2tlb_interfaces.md    dbac3b179b7f
 INTF  ptw_mem_interfaces.md       a7bb1b8e3253
 INTF  ittage_interfaces.md        18b3ed55b8fe
-INTF  l1i_ifu_interfaces.md       e3a6b77cb398
+INTF  l1i_ifu_interfaces.md       24fe11876aff
 INTF  loop_pred_interfaces.md     f700641358ec
 INTF  ras_interfaces.md           8364da53998f
 INTF  sc_interfaces.md            7936cbf21f43
@@ -325,7 +328,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               2c199b77c704
+PERF  perf_decisions.md               b96333f91372
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

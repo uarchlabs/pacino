@@ -16,6 +16,38 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: PA_WIDTH 48, PF-U4, the next three tasks.
+
+RULED (Jeff):
+  1. PA_WIDTH is 48, for physical memory of the Sv57 data-center
+     class; the reference moves from XiangShan toward SiFive's P870-D
+     (whose physical width SiFive does not publish). Stated once, in
+     l1i_ifu_interfaces.md IF-1; icache_decisions.md L1I-20 (pa_bits
+     equals PA_WIDTH) and mmu_decisions.md MMU-15a (main memory to
+     the top of the PA_WIDTH space) name it.
+  2. The IA edits the pacino copy of the L1I to the new width in
+     BP-147. cachegen is backfilled separately: TD#199.
+  3. PF-U4 closed by PF-17: the traces run behind page tables, one
+     4 KiB leaf per code page, physical pages allocated densely in
+     first-touch order; a generator on pt_build_pkg writes the image
+     (perf_decisions.md).
+  4. Every translated test moves to Sv57, unit tests included;
+     tools/regress_weekly.sh runs every mode, by hand
+     (PROJECT_CORE.md, translation modes).
+  5. TD#198 (debug_support) stays for later.
+  6. The order: BP-147 PA_WIDTH 48, a width-only task; BP-148 the ITLB
+     in every mode, tb_fe_top on pt_build_pkg, Sv48 and Sv57
+     programs; BP-149 the Sv57 regression, regress_weekly.sh, and the
+     trace page-table generator.
+OPENED: TD#199, backfill cachegen to PA_WIDTH 48.
+PLANNING (PA): l1i_ifu_interfaces.md IF-1 and 3.1; icache_decisions.md
+  L1I-20, L1I-U1 and 1.2; mmu_decisions.md MMU-15a; perf_decisions.md
+  PF-17, PF-U4; PROJECT_CORE.md translation modes.
+
+Next free: BP-147, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#200.
+
+---
 ## Session-085, continued: BP-146 recorded; debug_support ruled.
 
 BP-146 COMPLETE (84bfff9). regress.sh 273 targets, RESULT: PASS. The
@@ -7725,6 +7757,18 @@ numbers are issued from one sequence across both tables.
 |     |          | 0; tb_ptw, a walk under an unsupported satp and vsatp    |
 |     |          | MODE with each bit set, walked as Sv39, W13 silent.      |
 |     |          | Opened session-085 (Jeff).                               |
+| 199 | cachegen | OPEN. BACKFILL CACHEGEN TO PA_WIDTH 48                   |
+|     |          | (l1i_ifu_interfaces.md IF-1, icache_decisions.md         |
+|     |          | L1I-20). BP-147 edits the pacino copy of the L1I in the  |
+|     |          | tree. cachegen's pacino topology (the tools/cachegen     |
+|     |          | submodule, uarchlabs/cachegen:                           |
+|     |          | testcases/pacino/pacino_topology.json,                   |
+|     |          | addressing.pa_bits and the four link address widths,     |
+|     |          | which are literals and move by hand) still says 36, so a |
+|     |          | regeneration would undo BP-147. Move the topology to 48, |
+|     |          | regenerate, and show the emission matches the pacino     |
+|     |          | copy, or record each difference. Opened session-085      |
+|     |          | (Jeff).                                                  |
 
 ---
 

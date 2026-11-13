@@ -8,7 +8,7 @@
           docs/superscalar_ooo_survey.md (NOT IN THE TREE,
           see section 1); INFRA-012; TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-13
  CONTACT: Jeff Nye
 ```
 
@@ -157,14 +157,17 @@ added beside it, so `offset + index + tag == pa_bits` still holds.
 ```
 
 ```
-  L1I-20  pa_bits is 36. Ruled session-068, applied by TOOLS-003.
-          XiangShan Kunminghu implements 36 under Sv39. RVA23
-          does not fix it: Sv39 bounds it through the PTE's PPN
-          field and the implementation chooses.
+  L1I-20  pa_bits equals PA_WIDTH (l1i_ifu_interfaces.md IF-1).
+          RVA23 does not fix it: the PTE's PPN field bounds it in
+          every mode and the implementation chooses. It was 36,
+          ruled session-068 after XiangShan Kunminghu under Sv39;
+          session-085 (Jeff) moved it with PA_WIDTH, the reference
+          now the Sv57 data-center class. BP-147 edits the pacino
+          copy of the L1I to it; cachegen's topology is TD#199.
 ```
 
-AT THE L1I-1 GEOMETRY the tag is 23 bits and the tag array is
-128 * 8 * (23 + 1 valid) = 24576 bits.
+AT THE L1I-1 GEOMETRY the tag is pa_bits - 13 bits and the tag
+array is 128 * 8 * (pa_bits - 13 + 1 valid) bits.
 
 THE CONFIGURED GEOMETRY IS L1I-1. The node carried 32 KiB with one
 bank, index 6 bits and tag 24, until the section 9 capacity and bank
@@ -778,7 +781,7 @@ Session-071.
 ### 10.1 Open, blocking specification
 
 ```
-  L1I-U1  CLOSED. pa_bits is 36; L1I-20, section 1.2. Ruled
+  L1I-U1  CLOSED. pa_bits is PA_WIDTH; L1I-20, section 1.2. Ruled
           session-068 and applied by TOOLS-003.
 
   L1I-U2  The ITLB. Entries, associativity, page sizes, ASID
@@ -1096,4 +1099,8 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
               merge tested (TD#172 closed); a merged cacheable
               install now updates the replacement state (D1), its
               no-second-update gate untested, TD#177.
+
+  2026-11-13  session-085 (Jeff). L1I-20: pa_bits equals PA_WIDTH,
+              48 (was 36); the pacino copy follows in BP-147,
+              cachegen in TD#199. 1.2: the tag stated by formula.
 ```

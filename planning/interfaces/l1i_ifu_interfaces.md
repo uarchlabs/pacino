@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-13
  CONTACT: Jeff Nye
 ```
 
@@ -96,8 +96,11 @@ If the suffixes are ever added here, record the rename here.
 
 ```
   IF-1   The core interface carries a PHYSICAL BYTE address,
-         PA_WIDTH bits wide. L1I-4. PA_WIDTH is 36, ruled
-         session-068, and this file uses no other value.
+         PA_WIDTH bits wide. L1I-4. PA_WIDTH IS 48, ruled
+         session-085 (Jeff), for physical memory of the Sv57
+         data-center class; it was 36, ruled session-068. This is its
+         one statement: bp_defines_pkg.sv holds it, and every other
+         document names it. NOT YET BUILT (BP-147).
 
   IF-2   The request identifier is REQ_ID_BITS wide, 4 bits, giving
          sixteen identifiers, one for each of the sixteen
@@ -129,14 +132,14 @@ them, BP-115.
 ```
   this file        bp_defines_pkg     l1i_pkg         value
   ---------------- ------------------ --------------- -----
-  PA_WIDTH         BP-115             L1iPaBits          36
+  PA_WIDTH         BP-115             L1iPaBits          --
   L1I_LINE_BYTES   BP-115             L1iLineBytes       64
   L1I_LINE_BITS    BP-115             L1iLineBits       512
   L1I_OFFSET_BITS  BP-115             L1iOffsetBits       6
   REQ_ID_BITS      BP-115             L1iReqIdBits        4
   MAX_OUTSTANDING  BP-115             L1iMaxOutstanding  16
   GPA_WIDTH        BP-109             (no counterpart)    --
-  PPN_WIDTH        BP-109             (no counterpart)    24
+  PPN_WIDTH        BP-109             (no counterpart)    --
   ASID_WIDTH       BP-109             (no counterpart)    16
   VMID_WIDTH       BP-109             (no counterpart)    14
   PERM_WIDTH       BP-109             (no counterpart)     8
@@ -167,7 +170,7 @@ ALL NINE NOW HAVE VALUES, ruled session-073. Their sources:
   GPA_WIDTH   --  MMU-20, the Sv57x4 guest physical width
   GVPN_WIDTH  --  REMOVED by BP-145
   VPN_WIDTH   --  REMOVED by BP-145
-  PPN_WIDTH   24  PA_WIDTH - 12, from IF-1's 36
+  PPN_WIDTH   --  PA_WIDTH - 12 (IF-1)
   ASID_WIDTH  16  ITLB-7, the maximum in every mode
   VMID_WIDTH  14  ITLB-7, the maximum in every x4 mode
   PERM_WIDTH   8  the PTE low byte, V R W X U G A D. IL-8 names
@@ -502,7 +505,7 @@ IF-40 REFUSES MORE THAN IF-21 REQUIRES. `ifu_l1i_req_rdy` is one
 wire and IF-40 does not qualify it by address, so a full MSHR
 refuses requests to every other line as well. The cost is
 throughput on a pattern the FTQ makes likely; the alternative put a
-36-bit compare against sixteen MSHR line addresses in the ready
+PA_WIDTH-bit compare against sixteen MSHR line addresses in the ready
 path and was rejected.
 
 ---
@@ -1346,4 +1349,8 @@ sees a 2-byte boundary.
   2026-11-12  session-085, after BP-145. 3.1: GPA_WIDTH and FAULT_GPA_WIDTH
               stated by their derivation; GVPN_WIDTH and VPN_WIDTH
               removed. VA_WIDTH named, not its value.
+
+  2026-11-13  session-085 (Jeff). IF-1: PA_WIDTH is 48 (was 36), stated
+              there only; 3.1 names PA_WIDTH and PPN_WIDTH, not their
+              values.
 ```

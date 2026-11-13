@@ -599,19 +599,17 @@ MMU-15a THE REGION TABLE IS A PARAMETER OF THE CHECKER, and its
         rest. Ruled session-075 (Jeff):
 
 ```
-  0x0_8000_0000 .. 0xF_FFFF_FFFF   main memory, 62 GiB
+  0x8000_0000 .. 2^PA_WIDTH - 1    main memory
                                    cacheable, coherent,
                                    executable, idempotent
   everything else                  none of the four
 ```
 
         Main memory starts at the reset vector (ftq_decisions.md
-        4.7) and runs to the top of the 36-bit physical space
-        (l1i_ifu_interfaces.md IF-1). 64 GiB is the whole space at
-        PA_WIDTH 36, so 62 GiB is the most main memory there can
-        be above 0x8000_0000; a larger memory needs a wider
-        PA_WIDTH, which moves PPN_WIDTH, the ITLB entry, l1i_pkg
-        and cachegen's pa_bits together. The shape is XiangShan's
+        4.7) and runs to the top of the physical space, PA_WIDTH
+        bits (l1i_ifu_interfaces.md IF-1). PA_WIDTH moves PPN_WIDTH,
+        the ITLB entry, l1i_pkg and cachegen's pa_bits together.
+        The shape is XiangShan's
         documented map: main memory from 0x8000_0000 to the top of
         the physical space, devices below it, which in pacino are
         not yet placed. The table classifies addresses and costs
@@ -1163,4 +1161,8 @@ TD#118    No longer bounds the walker, which has its own port
               is checked by its translated page. MMU-33 new (Jeff):
               an unsupported MODE, held under debug_support, is
               walked as Sv39.
+
+  2026-11-13  session-085 (Jeff). MMU-15a: main memory runs to the
+              top of the PA_WIDTH space, stated by name (PA_WIDTH 48,
+              IF-1).
 ```

@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-13
  CONTACT: Jeff Nye
 ```
 
@@ -771,15 +771,15 @@ tools/known_failures_demo.txt is its waiver list, Jeff's alone.
 fe_demo_tb_decisions.md FDT-2 and FDT-2a are the rule.
 
 TRANSLATION MODES (Jeff, session-085). Sv57 is the default mode
-(mmu_decisions.md MMU-20). tools/regress.sh runs its translated tests
-under Sv57, with Sv57x4 at the G-stage, and under no other mode.
-tools/regress_demo.sh runs the fe_demo scenarios under Sv39, the old
-default, until they move to Sv57. A separate weekly regression, run
-by hand and gating nothing, covers every mode. Tests that run
-untranslated (Bare) are unaffected. This applies once the walker and
-the ITLB both support Sv57, from the task after BP-146, which also
-writes the weekly script; until then the translated tests stay under
-Sv39.
+(mmu_decisions.md MMU-20). tools/regress.sh runs every translated test
+under Sv57, with Sv57x4 at the G-stage, and under no other mode: the
+fe_top programs and the unit tests whose subject is a mode (tb_ptw,
+tb_itlb) alike. tools/regress_weekly.sh, run by hand and gating
+nothing, runs the same tests under every mode, Sv39 and Sv48 and their
+x4 modes included. tools/regress_demo.sh runs the fe_demo scenarios
+under Sv39, the old default, until they move to Sv57. Tests that run
+untranslated (Bare) are unaffected. Both changes are BP-149's; until
+then the translated tests stay as they are.
 
 ### A package edit is a cross-unit change
 EVERY TARGET IN THE bpu AND ftq UNITS COMPILES bp_defines_pkg.sv
