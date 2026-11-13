@@ -108,12 +108,17 @@ package csr_pkg;
   // ================================================================
   // Encodings
   // ================================================================
-  // satp.MODE and vsatp.MODE
+  // satp.MODE and vsatp.MODE (mmu_decisions.md MMU-20; section 3). Every
+  // other value is unsupported (CSR-5).
   localparam logic [3:0] CSR_SATP_MODE_BARE    = 4'd0;
   localparam logic [3:0] CSR_SATP_MODE_SV39    = 4'd8;
-  // hgatp.MODE
+  localparam logic [3:0] CSR_SATP_MODE_SV48    = 4'd9;
+  localparam logic [3:0] CSR_SATP_MODE_SV57    = 4'd10;
+  // hgatp.MODE (MMU-20). Every other value is unsupported (CSR-5).
   localparam logic [3:0] CSR_HGATP_MODE_BARE   = 4'd0;
   localparam logic [3:0] CSR_HGATP_MODE_SV39X4 = 4'd8;
+  localparam logic [3:0] CSR_HGATP_MODE_SV48X4 = 4'd9;
+  localparam logic [3:0] CSR_HGATP_MODE_SV57X4 = 4'd10;
   // pmpcfg A field. NA4 is not selectable at G = 10 (section 3).
   localparam logic [1:0] CSR_PMP_A_OFF   = 2'd0;
   localparam logic [1:0] CSR_PMP_A_TOR   = 2'd1;
@@ -156,7 +161,8 @@ package csr_pkg;
     logic [43:0] ppn;                  // 43:0
   } vsatp_t;
 
-  // 0x680 hgatp. PPN CSR_PPN_W-1:0 implemented; 1:0 read 0 in Sv39x4.
+  // 0x680 hgatp. PPN CSR_PPN_W-1:0 implemented; 1:0 read 0 in every x4
+  // mode (Sv39x4, Sv48x4, Sv57x4: the 16 KiB root, MMU-32).
   typedef struct packed {
     logic [3:0]  mode;                 // 63:60
     logic [1:0]  rsvd;                 // 59:58, read 0

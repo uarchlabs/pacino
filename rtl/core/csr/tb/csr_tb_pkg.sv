@@ -30,10 +30,14 @@
 //                             an instance at another grain
 //
 // WRITE RULES (CSR-5), applied by csr_write:
-//   satp     unsupported MODE (not Bare or Sv39): no field written
-//   vsatp    unsupported MODE: no field written (PROPOSED in CSR-5)
-//   hgatp    unsupported MODE (not Bare or Sv39x4): MODE unchanged,
-//            VMID and PPN written
+//   satp     unsupported MODE (not Bare, Sv39, Sv48 or Sv57; that is
+//            1 to 7 and 11 to 15): no field written
+//   vsatp    unsupported MODE, the same values: no field written
+//            (PROPOSED in CSR-5)
+//   hgatp    unsupported MODE (not Bare, Sv39x4, Sv48x4 or Sv57x4; 1 to
+//            7 and 11 to 15): MODE unchanged, VMID and PPN written
+// The supported set is mmu_decisions.md MMU-20 (BP-146; Bare and Sv39
+// or Sv39x4 only until then).
 //   pmpcfg   locked entry (L = 1): entry and its pmpaddr not written
 //            R = 0 with W = 1 written: stored with W = 0 (SYS-002)
 //   pmpaddr  not written when the next entry is locked with A = TOR;
@@ -43,7 +47,8 @@
 //   pmpaddr  NAPOT entry: bits 8:0 read 1; OFF or TOR entry: bits 9:0
 //            read 0 (G = 10; set_pmp_g gives the same rule at another
 //            G)
-//   hgatp    PPN 1:0 read 0 when MODE is Sv39x4 (section 3)
+//   hgatp    PPN 1:0 read 0 when MODE is an x4 mode, Sv39x4, Sv48x4 or
+//            Sv57x4 (section 3; Sv39x4 only until BP-146)
 //   henvcfg  ADUE reads 0 when menvcfg.ADUE is 0 (section 3)
 //            PBMTE reads 0 when menvcfg.PBMTE is 0 (SYS-002)
 // A pmpcfg write of A = NA4 stores NAPOT: NA4 is not selectable at
@@ -99,6 +104,23 @@ package csr_tb_pkg;
     // ================================================================
     static function logic is_pmpaddr(input logic [CSR_ADDR_W-1:0] a);
       return (a >= CSR_PMPADDR0_ADDR) && (a <= CSR_PMPADDR15_ADDR);
+    endfunction
+
+    // The supported MODE values (MMU-20, section 3). satp and vsatp share
+    // one encoding, hgatp the other.
+    static function logic satp_mode_ok(input logic [3:0] m);
+      return (m == CSR_SATP_MODE_BARE) || (m == CSR_SATP_MODE_SV39) ||
+             (m == CSR_SATP_MODE_SV48) || (m == CSR_SATP_MODE_SV57);
+    endfunction
+
+    // An x4 mode: hgatp.PPN 1:0 read 0 (section 3, the 16 KiB root).
+    static function logic hgatp_mode_x4(input logic [3:0] m);
+      return (m == CSR_HGATP_MODE_SV39X4) || (m == CSR_HGATP_MODE_SV48X4) ||
+             (m == CSR_HGATP_MODE_SV57X4);
+    endfunction
+
+    static function logic hgatp_mode_ok(input logic [3:0] m);
+      return (m == CSR_HGATP_MODE_BARE) || hgatp_mode_x4(m);
     endfunction
 
     // The pmpaddr read-back of entry k (CSR-5): with G = 10, a NAPOT
@@ -197,8 +219,7 @@ package csr_tb_pkg;
         CSR_7C1_ADDR: r_7c1 = csr_7c1_t'(value);
         CSR_SATP_ADDR: begin
           // unsupported MODE: no field written
-          if ((mode == CSR_SATP_MODE_BARE) || (mode == CSR_SATP_MODE_SV39))
-          begin
+          if (satp_mode_ok(mode)) begin
             r_satp      = '0;
             r_satp.mode = mode;
             r_satp.asid = value[59:44];
@@ -207,8 +228,7 @@ package csr_tb_pkg;
         end
         CSR_VSATP_ADDR: begin
           // unsupported MODE: no field written (PROPOSED)
-          if ((mode == CSR_SATP_MODE_BARE) || (mode == CSR_SATP_MODE_SV39))
-          begin
+          if (satp_mode_ok(mode)) begin
             r_vsatp      = '0;
             r_vsatp.mode = mode;
             r_vsatp.asid = value[59:44];
@@ -217,10 +237,7 @@ package csr_tb_pkg;
         end
         CSR_HGATP_ADDR: begin
           // unsupported MODE: MODE unchanged, VMID and PPN written
-          if ((mode == CSR_HGATP_MODE_BARE) ||
-              (mode == CSR_HGATP_MODE_SV39X4)) begin
-            r_hgatp.mode = mode;
-          end
+          if (hgatp_mode_ok(mode)) r_hgatp.mode = mode;
           r_hgatp.rsvd = '0;
           r_hgatp.vmid = value[57:44];
           r_hgatp.ppn  = 44'(value[CSR_PPN_W-1:0]);
@@ -270,7 +287,7 @@ package csr_tb_pkg;
         CSR_VSATP_ADDR:   v = 64'(r_vsatp);
         CSR_HGATP_ADDR: begin
           hg = r_hgatp;
-          if (hg.mode == CSR_HGATP_MODE_SV39X4) hg.ppn[1:0] = 2'b00;
+          if (hgatp_mode_x4(hg.mode)) hg.ppn[1:0] = 2'b00;
           v = 64'(hg);
         end
         CSR_MENVCFG_ADDR: v = 64'(r_menvcfg);

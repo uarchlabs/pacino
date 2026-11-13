@@ -776,9 +776,10 @@ under Sv57, with Sv57x4 at the G-stage, and under no other mode.
 tools/regress_demo.sh runs the fe_demo scenarios under Sv39, the old
 default, until they move to Sv57. A separate weekly regression, run
 by hand and gating nothing, covers every mode. Tests that run
-untranslated (Bare) are unaffected. This applies once the walker
-supports Sv57; until then the translated tests stay under Sv39. The
-weekly script is not yet written.
+untranslated (Bare) are unaffected. This applies once the walker and
+the ITLB both support Sv57, from the task after BP-146, which also
+writes the weekly script; until then the translated tests stay under
+Sv39.
 
 ### A package edit is a cross-unit change
 EVERY TARGET IN THE bpu AND ftq UNITS COMPILES bp_defines_pkg.sv

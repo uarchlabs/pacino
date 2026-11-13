@@ -3,7 +3,8 @@
 // Copyright (c) 2026 Jeff Nye, uarchlabs.com
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
-// Page table walker (BP-123, BP-124). mmu_decisions.md MMU-1 to MMU-31;
+// Page table walker (BP-123, BP-124; every mode BP-146). mmu_decisions.md
+// MMU-1 to MMU-32;
 // client port itlb_l2tlb_interfaces.md IL-1 to IL-14; memory port
 // ptw_mem_interfaces.md WM-1 to WM-9.
 //
@@ -18,24 +19,38 @@
 // in progress is answered RETRY. The retry is held until the response
 // port is free; ready is low while one is held.
 //
+// MODES (MMU-20, MMU-32; BP-146). satp and vsatp: Bare, Sv39, Sv48 and
+// Sv57 (MODE 0, 8, 9, 10). hgatp: Bare, Sv39x4, Sv48x4 and Sv57x4 (0, 8,
+// 9, 10). A stage walks LEVELS = 3, 4 or 5 levels from its root, level
+// LEVELS-1, down to level 0; each level is indexed by nine VPN (or guest
+// page) bits, except an x4 root, indexed by eleven: GPA bits
+// [mode width - 1 : 12 + 9 * root level]. A leaf may be at any level.
+// The two stages of a nested walk take their modes independently, and
+// any pair is walked. Each stage's root level, and the G-stage's GPA
+// width, are sampled with the CSR group when the walk starts (MMU-24a)
+// and held for the walk and its restarts. No other MODE value reaches
+// the walker (csr_decisions.md CSR-5; ptw_assert W13); one would be
+// walked as Sv39 (Sv39x4). Until BP-146 every non-zero MODE was walked
+// as Sv39 or Sv39x4.
+//
 // REGIMES (MMU-19 to MMU-21). The CSR group (MMU-24a) is sampled when
-// a walk starts and held for the walk.
-//   V=0, satp Sv39            single-stage Sv39 from satp.PPN
-//   V=1, vsatp Sv39, hgatp Sv39x4
+// a walk starts and held for the walk. SvNN is Sv39, Sv48 or Sv57, and
+// SvMMx4 is Sv39x4, Sv48x4 or Sv57x4.
+//   V=0, satp SvNN            single-stage SvNN from satp.PPN
+//   V=1, vsatp SvNN, hgatp SvMMx4
 //                             NESTED: every VS-stage PTE address is a
 //                             guest physical address and is first
 //                             translated by a G-stage walk (an
 //                             implicit READ, kind 01); the final GPA
 //                             is translated by a G-stage walk too
 //                             (the fetch's own GPA, kind 00)
-//   V=1, vsatp Bare, hgatp Sv39x4
+//   V=1, vsatp Bare, hgatp SvMMx4
 //                             G-stage only; the GPA is the request
 //                             address, VA_WIDTH bits, and a bit set at
-//                             or above SV39X4_GPA_WIDTH (41) is a
-//                             guest-page fault (MMU-20, MMU-28)
-// Every non-zero MODE is walked as Sv39 or Sv39x4; the per-mode walk is
-// the next task's (MMU-32, BP-145).
-//   V=1, vsatp Sv39, hgatp Bare
+//                             or above the hgatp mode's GPA width (41,
+//                             50 or 59) is a guest-page fault (MMU-20,
+//                             MMU-28)
+//   V=1, vsatp SvNN, hgatp Bare
 //                             VS-stage only; GPA = SPA, so there is no
 //                             guest-page fault and a VS-stage PPN is
 //                             checked as a supervisor physical page
@@ -45,8 +60,9 @@
 //                             4 KiB hit, PA width checked, cause 1
 //                             beyond it
 //
-// PTE CHECKS (privileged translation algorithm, Sv39 and Sv39x4,
-// RISC-V Privileged ISA v1.13 chapter 11.3 and chapter 20.5). In the
+// PTE CHECKS (privileged translation algorithm, Sv39 to Sv57 and Sv39x4
+// to Sv57x4, RISC-V Privileged ISA v1.13 chapter 11.3 and chapter 20.5;
+// non-leaf and leaf PTEs have one format in every mode, MMU-32). In the
 // order the algorithm makes them, so a page fault found earlier in the
 // walk is reported first (MMU-28):
 //   - V clear, or W set with R clear                 page fault
@@ -58,10 +74,11 @@
 //     henvcfg's for the VS-stage (privileged 3.1.18 and 20.2.13; spike
 //     mmu.cc agrees)                                 page fault
 //   - leaf with N set: only level 0 with PPN[3:0] = 4'b1000 is
-//     defined (Svnapot, 64 KiB); every other N encoding is reserved
-//     (MMU-U7)                                       page fault
-//   - leaf superpage whose low PPN bits are not zero (misaligned)
+//     defined (Svnapot, 64 KiB, in every mode); every other N encoding,
+//     N at any level above 0 included, is reserved (MMU-U7)
 //                                                    page fault
+//   - leaf superpage, at any level from 1 to 4, whose low 9 * level PPN
+//     bits are not zero (misaligned, MMU-32)         page fault
 //   - the access type (MMU-26a): X clear for a fetch, W clear for a
 //     store, R clear for a read (MXR clear: no client presents MXR
 //     until the DTLB, MMU-24c)                       page fault
@@ -119,22 +136,28 @@
 //   - a supervisor physical page (single-stage, or G-stage, or a
 //     VS-stage PTE when hgatp is Bare) with a bit set above bit
 //     PPN_WIDTH-1: the access made with it, the next PTE read or the
-//     fetch, is an access fault
-//   - a guest physical page (VS-stage with hgatp Sv39x4) with a bit
-//     set at or above GPA bit SV39X4_GPA_WIDTH (41): a guest-page fault
+//     fetch, is an access fault. For a leaf this is the TRANSLATED
+//     page, the PPN with the VPN bits the leaf's size takes from the
+//     address: a 512 GiB or 256 TiB leaf takes VPN bits at and above
+//     PPN_WIDTH (BP-146; until then the leaf PTE's PPN was checked,
+//     the same thing at levels 0 to 2)
+//   - a guest physical page (VS-stage with hgatp SvMMx4) with a bit
+//     set at or above the hgatp mode's GPA width (SV39X4_GPA_WIDTH 41,
+//     SV48X4_GPA_WIDTH 50, SV57X4_GPA_WIDTH 59): a guest-page fault
 //     with the kind of the access that needed it, and the GPA WHOLE
-//     (MMU-23, BP-124)
+//     (MMU-23, BP-124). No 56-bit PTE GPA exceeds Sv57x4's 59
 // The fetch's own address is checked after the leaf's A update, where
 // the algorithm puts the access it makes.
 // EVERY G-STAGE TRANSLATION CHECKS ITS GPA FIRST (MMU-20, MMU-24b,
-// MMU-28; BP-145): a GPA with a bit set at or above SV39X4_GPA_WIDTH
-// is a guest-page fault with the kind of the access, before any G-stage
-// PTE is read. This is what catches a G-stage-only fetch address and a
-// vsatp root above 2^41, which VA_WIDTH and GPA_WIDTH 59 make possible.
+// MMU-28; BP-145, BP-146): a GPA with a bit set at or above the hgatp
+// mode's width is a guest-page fault with the kind of the access, before
+// any G-stage PTE is read. This is what catches a G-stage-only fetch
+// address and a vsatp root above that width.
 //
 // THE RESPONSE (IL-4 to IL-11b).
 //   hit    ppn, size, perm, pbmt. size is IL-7: 000 4 KiB, 001 64 KiB,
-//          010 2 MiB, 011 1 GiB. A single-stage ppn is the leaf PTE's
+//          010 2 MiB, 011 1 GiB, 100 512 GiB, 101 256 TiB (BP-146),
+//          ascending with the level. A single-stage ppn is the leaf PTE's
 //          (for 64 KiB its PPN[3:0] is the size marker, IL-7); a
 //          two-stage ppn is the final supervisor physical page, and the
 //          size is the smaller of the two stages' leaf sizes (MMU-27,
@@ -223,10 +246,21 @@ module ptw #(
   localparam int VW   = VA_WIDTH - 12;        // the request page
   localparam int PTEP = PTE_PPN_WIDTH;        // PTE PPN field, 53:10
   localparam int FGW  = FAULT_GPA_WIDTH;      // a faulting GPA, MMU-23
-  // The Sv39x4 bound as a guest page width (package constant, not
-  // derived from GPA_WIDTH): a guest page with a bit set at or above
-  // G4W is a guest-page fault under Sv39x4 (MMU-28).
-  localparam int G4W  = SV39X4_GPA_WIDTH - 12;   // = 29
+  // A level, 0 to 4 (MMU-32): Sv57 and Sv57x4 have five.
+  localparam int LVLW = 3;
+  localparam logic [LVLW-1:0] LVL_SV39 = LVLW'(2);   // the root levels
+  localparam logic [LVLW-1:0] LVL_SV48 = LVLW'(3);
+  localparam logic [LVLW-1:0] LVL_SV57 = LVLW'(4);
+  localparam int VPN_BITS  = 9;               // per level, PTESIZE 8
+  localparam int ROOT4_BITS = 11;             // an x4 root's index
+  // The widest hgatp GPA width (package constants, not derived from
+  // GPA_WIDTH, MMU-20). GPA_WIDTH must hold it.
+  localparam int G_MAXW =
+    (SV57X4_GPA_WIDTH > SV48X4_GPA_WIDTH) ?
+      ((SV57X4_GPA_WIDTH > SV39X4_GPA_WIDTH) ? SV57X4_GPA_WIDTH
+                                             : SV39X4_GPA_WIDTH) :
+      ((SV48X4_GPA_WIDTH > SV39X4_GPA_WIDTH) ? SV48X4_GPA_WIDTH
+                                             : SV39X4_GPA_WIDTH);
   // The checker's entries, taken from ptw_csr (SYS-001).
   localparam int PMP_N = (PMP_ENTRIES > 0) ? PMP_ENTRIES : 1;
 
@@ -236,8 +270,9 @@ module ptw #(
     // A G-stage-only request's address is its GPA (MMU-20, FE-19).
     if (GPA_WIDTH < VA_WIDTH)
       $error("ptw: GPA_WIDTH below VA_WIDTH truncates a G-only GPA");
-    if (GPA_WIDTH < SV39X4_GPA_WIDTH)
-      $error("ptw: GPA_WIDTH below the Sv39x4 GPA width");
+    // BP-146: the widest x4 GPA width, Sv57x4's, not Sv39x4's.
+    if (GPA_WIDTH < G_MAXW)
+      $error("ptw: GPA_WIDTH below the widest hgatp mode's GPA width");
   end
 
   // l2t_itlb_status, IL-4.
@@ -250,6 +285,8 @@ module ptw #(
   localparam logic [2:0] SZ_64K = 3'b001;
   localparam logic [2:0] SZ_2M  = 3'b010;
   localparam logic [2:0] SZ_1G  = 3'b011;
+  localparam logic [2:0] SZ_512G = 3'b100;   // level 3, BP-146
+  localparam logic [2:0] SZ_256T = 3'b101;   // level 4, BP-146
 
   // Exception codes by access type, MMU-16 and MMU-24c: execute,
   // read (load) and write (store).
@@ -276,7 +313,8 @@ module ptw #(
   localparam logic [1:0] PRV_U = 2'd0;        // itlb_l2t_priv, IL-3d
   localparam logic [1:0] PRV_S = 2'd1;        // MMU-10d
 
-  localparam logic [3:0] MODE_BARE = 4'd0;
+  // MODE values: csr_pkg CSR_SATP_MODE_* and CSR_HGATP_MODE_*. satp,
+  // vsatp and hgatp share the numbers (0, 8, 9, 10; MMU-20).
 
   localparam logic OP_READ = 1'b0;            // WM, section 3
   localparam logic OP_CAS  = 1'b1;
@@ -344,7 +382,11 @@ module ptw #(
   logic [1:0]              r_acc;
   logic [1:0]              r_priv;     // the request's privilege, IL-3d
   logic                    r_s_on;     // a single or VS stage walk
-  logic                    r_g_on;     // V=1 and hgatp Sv39x4
+  logic                    r_g_on;     // V=1 and hgatp an x4 mode
+  // The root level of each stage, from its MODE at walk start (MMU-24a,
+  // MMU-32): satp's (V=0) or vsatp's (V=1), and hgatp's.
+  logic [LVLW-1:0]         r_s_root;
+  logic [LVLW-1:0]         r_g_root;
   logic [PPN_WIDTH-1:0]    r_satp_ppn;
   logic [CSR_VSATP_PPN_W-1:0] r_vsatp_ppn; // MMU-24b
   logic [PPN_WIDTH-1:0]    r_hgatp_ppn;
@@ -354,7 +396,7 @@ module ptw #(
   logic                    r_g_pbmte;
 
   // The single / VS stage.
-  logic [1:0]              r_s_lvl;
+  logic [LVLW-1:0]         r_s_lvl;
   logic [PTEP-1:0]         r_s_base;   // table page (SPA, or GPA)
   logic [63:0]             r_s_pte;
   logic [GPA_WIDTH-1:0]    r_s_pte_gpa;
@@ -366,7 +408,7 @@ module ptw #(
   logic [1:0]              r_g_kind;
   logic [1:0]              r_g_acc;
   gret_e                   r_g_ret;
-  logic [1:0]              r_g_lvl;
+  logic [LVLW-1:0]         r_g_lvl;
   logic [PTEP-1:0]         r_g_base;
   logic [63:0]             r_g_pte;
   logic [PA_WIDTH-1:0]     r_g_pte_spa;
@@ -434,22 +476,46 @@ module ptw #(
   // -----------------------------------------------------------------
   // Helpers.
   // -----------------------------------------------------------------
-  // The VPN bits a leaf at this level, or a 64 KiB NAPOT leaf, takes
-  // from the address being translated.
-  function automatic logic [PTEP-1:0] lvl_mask(input logic [1:0] lvl,
-                                               input logic       napot);
-    if (lvl == 2'd2)      return PTEP'(18'h3FFFF);
-    else if (lvl == 2'd1) return PTEP'(9'h1FF);
-    else if (napot)       return PTEP'(4'hF);
-    else                  return '0;
+  // The root level of a MODE value (MMU-32): Sv39 and Sv39x4 2, Sv48 and
+  // Sv48x4 3, Sv57 and Sv57x4 4. satp, vsatp and hgatp share the values.
+  // Bare never walks (r_s_on, r_g_on clear); any other value never
+  // reaches the walker (CSR-5, ptw_assert W13) and is walked as Sv39.
+  function automatic logic [LVLW-1:0] root_lvl(input logic [3:0] m);
+    if (m == CSR_SATP_MODE_SV57)      return LVL_SV57;
+    else if (m == CSR_SATP_MODE_SV48) return LVL_SV48;
+    else                              return LVL_SV39;
   endfunction
 
-  function automatic logic [2:0] lvl_size(input logic [1:0] lvl,
-                                          input logic       napot);
-    if (lvl == 2'd2)      return SZ_1G;
-    else if (lvl == 2'd1) return SZ_2M;
-    else if (napot)       return SZ_64K;
-    else                  return SZ_4K;
+  // The GPA width of the hgatp mode whose root level is root (MMU-20,
+  // MMU-28): 41, 50 or 59 bits, the package constants.
+  function automatic int g_gpa_w(input logic [LVLW-1:0] root);
+    if (root == LVL_SV57)      return SV57X4_GPA_WIDTH;
+    else if (root == LVL_SV48) return SV48X4_GPA_WIDTH;
+    else                       return SV39X4_GPA_WIDTH;
+  endfunction
+
+  // The VPN bits a leaf at this level, or a 64 KiB NAPOT leaf, takes
+  // from the address being translated: the low 9 * level bits (MMU-32).
+  // A misaligned superpage is a leaf whose PPN has a bit set under the
+  // non-NAPOT mask.
+  function automatic logic [PTEP-1:0] lvl_mask(input logic [LVLW-1:0] lvl,
+                                               input logic          napot);
+    if (lvl != '0)  return (PTEP'(1) << (VPN_BITS * int'(lvl))) - PTEP'(1);
+    else if (napot) return PTEP'(4'hF);
+    else            return '0;
+  endfunction
+
+  // IL-7: ascending with the level, so the smaller of two sizes is the
+  // smaller code (MMU-27).
+  function automatic logic [2:0] lvl_size(input logic [LVLW-1:0] lvl,
+                                          input logic          napot);
+    case (lvl)
+      LVLW'(4): return SZ_256T;
+      LVLW'(3): return SZ_512G;
+      LVLW'(2): return SZ_1G;
+      LVLW'(1): return SZ_2M;
+      default:  return napot ? SZ_64K : SZ_4K;
+    endcase
   endfunction
 
   // The more restrictive memory type, PMA < NC < IO (MMU-U6).
@@ -482,10 +548,12 @@ module ptw #(
   logic                    ws_leaf;
   logic [PTEP-1:0]         ws_ppn;
   logic                    ws_next_wide;  // the next page cannot be formed
-  logic                    ws_next_gwide; // a GPA beyond Sv39x4's 41 bits
+  logic                    ws_next_gwide; // a GPA beyond the hgatp width
   logic [FGW-1:0]          ws_next_gpa;   // the next VS PTE's GPA, whole
   logic                    ws_upd;      // A, or A and D, to be set
   logic [PTEP-1:0]         ws_page;     // the translated page
+  logic                    ws_page_wide;  // it cannot be formed (SPA)
+  logic                    ws_page_gwide; // it is beyond the hgatp width
   logic [2:0]              ws_size;
 
   always_comb begin : s_eval
@@ -497,6 +565,8 @@ module ptw #(
     logic        need_a;
     logic        need_d;
     logic [PTEP-1:0] mask;
+    int          gpw;        // the hgatp mode's guest page width
+    int          nsh;        // the next level's VPN shift
     v_bad   = !r_s_pte[P_V] || (!r_s_pte[P_R] && r_s_pte[P_W]);
     rsv     = |r_s_pte[60:54];
     ws_leaf = r_s_pte[P_R] || r_s_pte[P_X];
@@ -504,17 +574,21 @@ module ptw #(
     napot   = r_s_pte[P_N];
     pbmt    = r_s_pte[62:61];
     mask    = lvl_mask(r_s_lvl, napot);
+    gpw     = g_gpa_w(r_g_root) - 12;
 
     // A supervisor physical page beyond PPN_WIDTH, or (nested) a guest
-    // physical page beyond the Sv39x4 GPA width, 41 bits (MMU-28). Read
-    // for the next table page of a non-leaf, and for the translated page
-    // of a leaf. The bound is the hgatp mode's, SV39X4_GPA_WIDTH, not
-    // GPA_WIDTH: until BP-145 it was written through GPA_WIDTH - 12,
-    // which is the Sv39x4 bound only at GPA_WIDTH 41.
+    // physical page beyond the hgatp mode's GPA width (MMU-28). Read for
+    // the next table page of a non-leaf (the PTE's PPN), and for the
+    // translated page of a leaf (BP-146: the page, which takes VPN bits
+    // at and above PPN_WIDTH at levels 3 and 4). The bound is the hgatp
+    // mode's, SV39X4_GPA_WIDTH, SV48X4_GPA_WIDTH or SV57X4_GPA_WIDTH, not
+    // GPA_WIDTH. Until BP-146 it was SV39X4_GPA_WIDTH in every mode.
     ws_next_wide  = |ws_ppn[PTEP-1:PPN_WIDTH];
-    ws_next_gwide = |ws_ppn[PTEP-1:G4W];
+    ws_next_gwide = |(ws_ppn >> gpw);
 
     ws_page = (ws_ppn & ~mask) | (PTEP'(r_vpn) & mask);
+    ws_page_wide  = |ws_page[PTEP-1:PPN_WIDTH];
+    ws_page_gwide = |(ws_page >> gpw);
     ws_size = lvl_size(r_s_lvl, napot);
 
     // The access type (MMU-26a; R with MXR clear) and U against the
@@ -530,10 +604,12 @@ module ptw #(
 
     // A non-leaf's next table, as a guest physical address: the PTE the
     // next level reads (an implicit READ). Formed whole, for a fault on
-    // a GPA beyond the Sv39x4 width (MMU-23, MMU-28).
+    // a GPA beyond the hgatp mode's width (MMU-23, MMU-28). The index is
+    // the next level's nine VPN bits; a non-leaf at level 0 faults, so
+    // its value there is not used.
+    nsh = (r_s_lvl == '0) ? 0 : VPN_BITS * (int'(r_s_lvl) - 1);
     ws_next_gpa = (FGW'(ws_ppn) << 12) +
-                  FGW'({(r_s_lvl == 2'd2) ? r_vpn[17:9] : r_vpn[8:0],
-                        3'b000});
+                  FGW'({VPN_BITS'(r_vpn >> nsh), 3'b000});
 
     ws_pf  = 1'b0;
     ws_upd = 1'b0;
@@ -541,16 +617,15 @@ module ptw #(
       ws_pf = 1'b1;
     end else if (!ws_leaf) begin
       if (r_s_pte[P_D] || r_s_pte[P_A] || r_s_pte[P_U] || napot ||
-          (pbmt != 2'b00) || (r_s_lvl == 2'd0))
+          (pbmt != 2'b00) || (r_s_lvl == '0))
         ws_pf = 1'b1;
     end else begin
       if ((pbmt == PBMT_RSV) || (!r_s_pbmte && (pbmt != 2'b00)))
         ws_pf = 1'b1;
-      else if (napot && ((r_s_lvl != 2'd0) ||
+      else if (napot && ((r_s_lvl != '0) ||
                          (ws_ppn[3:0] != NAPOT_64K)))
         ws_pf = 1'b1;
-      else if (((r_s_lvl == 2'd2) && (ws_ppn[17:0] != '0)) ||
-               ((r_s_lvl == 2'd1) && (ws_ppn[8:0]  != '0)))
+      else if ((ws_ppn & lvl_mask(r_s_lvl, 1'b0)) != '0)
         ws_pf = 1'b1;                      // misaligned superpage
       else if (perm_bad)
         ws_pf = 1'b1;
@@ -606,17 +681,16 @@ module ptw #(
       wg_gpf = 1'b1;
     end else if (!wg_leaf) begin
       if (r_g_pte[P_D] || r_g_pte[P_A] || r_g_pte[P_U] || napot ||
-          (pbmt != 2'b00) || (r_g_lvl == 2'd0))
+          (pbmt != 2'b00) || (r_g_lvl == '0))
         wg_gpf = 1'b1;
     end else begin
       if ((pbmt == PBMT_RSV) || (!r_g_pbmte && (pbmt != 2'b00)))
         wg_gpf = 1'b1;
-      else if (napot && ((r_g_lvl != 2'd0) ||
+      else if (napot && ((r_g_lvl != '0) ||
                          (wg_ppn[3:0] != NAPOT_64K)))
         wg_gpf = 1'b1;
-      else if (((r_g_lvl == 2'd2) && (wg_ppn[17:0] != '0)) ||
-               ((r_g_lvl == 2'd1) && (wg_ppn[8:0]  != '0)))
-        wg_gpf = 1'b1;
+      else if ((wg_ppn & lvl_mask(r_g_lvl, 1'b0)) != '0)
+        wg_gpf = 1'b1;                     // misaligned superpage
       else if (perm_bad)
         wg_gpf = 1'b1;
       else if (need_a || need_d) begin
@@ -636,19 +710,22 @@ module ptw #(
   logic [10:0]             w_g_idx;
 
   always_comb begin : addrs
-    case (r_s_lvl)
-      2'd2:    w_s_idx = r_vpn[26:18];
-      2'd1:    w_s_idx = r_vpn[17:9];
-      default: w_s_idx = r_vpn[8:0];
-    endcase
-    // Sv39x4: the root index is GPA bits 40:30, eleven bits, the GPA
-    // bits below SV39X4_GPA_WIDTH. The bits above are zero: S_G_START
-    // faulted the translation otherwise.
-    case (r_g_lvl)
-      2'd2:    w_g_idx = r_g_gpa[SV39X4_GPA_WIDTH-1:30];
-      2'd1:    w_g_idx = {2'b00, r_g_gpa[29:21]};
-      default: w_g_idx = {2'b00, r_g_gpa[20:12]};
-    endcase
+    int s_sh;
+    int g_sh;
+    // Level l is indexed by VPN bits 9l+8 : 9l (MMU-32).
+    s_sh    = VPN_BITS * int'(r_s_lvl);
+    w_s_idx = VPN_BITS'(r_vpn >> s_sh);
+    // The G-stage: GPA bits 12+9l+8 : 12+9l below the root. The x4 root
+    // is indexed by eleven bits, GPA bits [mode width - 1 : 12 + 9 *
+    // root level]: 40:30 (Sv39x4), 49:39 (Sv48x4), 58:48 (Sv57x4). The
+    // bits at and above the mode width are zero: S_G_START faulted the
+    // translation otherwise, so eleven bits from the root's low bit are
+    // exactly those.
+    g_sh = 12 + VPN_BITS * int'(r_g_lvl);
+    if (r_g_lvl == r_g_root)
+      w_g_idx = ROOT4_BITS'(r_g_gpa >> g_sh);
+    else
+      w_g_idx = ROOT4_BITS'(VPN_BITS'(r_g_gpa >> g_sh));
     w_s_addr = ({20'd0, r_s_base} << 12) + 64'({w_s_idx, 3'b000});
     w_g_addr = ({20'd0, r_g_base} << 12) + 64'({w_g_idx, 3'b000});
   end
@@ -710,6 +787,8 @@ module ptw #(
       r_priv       <= PRV_S;
       r_s_on       <= 1'b0;
       r_g_on       <= 1'b0;
+      r_s_root     <= LVL_SV39;
+      r_g_root     <= LVL_SV39;
       r_satp_ppn   <= '0;
       r_vsatp_ppn  <= '0;
       r_hgatp_ppn  <= '0;
@@ -771,9 +850,16 @@ module ptw #(
             r_satp_ppn  <= ptw_csr.satp_ppn;
             r_vsatp_ppn <= ptw_csr.vsatp_ppn;
             r_hgatp_ppn <= ptw_csr.hgatp_ppn;
-            r_s_on      <= itlb_l2t_v ? (ptw_csr.vsatp_mode != MODE_BARE)
-                                      : (ptw_csr.satp_mode  != MODE_BARE);
-            r_g_on      <= itlb_l2t_v && (ptw_csr.hgatp_mode != MODE_BARE);
+            r_s_on      <= itlb_l2t_v ?
+                             (ptw_csr.vsatp_mode != CSR_SATP_MODE_BARE) :
+                             (ptw_csr.satp_mode  != CSR_SATP_MODE_BARE);
+            r_g_on      <= itlb_l2t_v &&
+                           (ptw_csr.hgatp_mode != CSR_HGATP_MODE_BARE);
+            // MMU-32, MMU-24a: each stage's mode, as its root level,
+            // sampled here and held for the walk and every restart.
+            r_s_root    <= root_lvl(itlb_l2t_v ? ptw_csr.vsatp_mode
+                                               : ptw_csr.satp_mode);
+            r_g_root    <= root_lvl(ptw_csr.hgatp_mode);
             // MMU-7, MMU-7a; the PBMTE pair the same way.
             r_s_adue    <= itlb_l2t_v ? ptw_csr.henvcfg_adue
                                       : ptw_csr.menvcfg_adue;
@@ -789,7 +875,7 @@ module ptw #(
         S_START: begin
           r_rsp_tag <= r_tag;
           if (r_s_on) begin
-            r_s_lvl  <= 2'd2;
+            r_s_lvl  <= r_s_root;
             r_s_base <= r_v ? PTEP'(r_vsatp_ppn) : PTEP'(r_satp_ppn);
             r_st     <= S_S_ADDR;
           end else if (r_g_on) begin
@@ -823,12 +909,13 @@ module ptw #(
           if (r_g_on) begin
             // The VS-stage PTE address is a GPA (MMU-21): an implicit
             // read through the G-stage. It fits GPA_WIDTH bits: a
-            // non-root base was checked against the Sv39x4 bound when
-            // it was formed, and the root is vsatp.PPN, CSR_VSATP_PPN_W
-            // bits, at most GPA_WIDTH - 12. A root above 2^41 is NOT
-            // checked here: S_G_START checks every GPA, and faults this
-            // one with kind 01 (MMU-24b). Until BP-145 this comment said
-            // the root always fit 41 bits, true only at GPA_WIDTH 41.
+            // non-root base was checked against the hgatp mode's bound
+            // when it was formed, and the root is vsatp.PPN,
+            // CSR_VSATP_PPN_W bits, at most GPA_WIDTH - 12. A root above
+            // the hgatp mode's width is NOT checked here: S_G_START
+            // checks every GPA, and faults this one with kind 01
+            // (MMU-24b). Until BP-145 this comment said the root always
+            // fit 41 bits, true only at GPA_WIDTH 41.
             r_s_pte_gpa <= w_s_addr[GPA_WIDTH-1:0];
             r_g_gpa     <= w_s_addr[GPA_WIDTH-1:0];
             r_g_kind    <= IMP_READ;
@@ -851,19 +938,21 @@ module ptw #(
 
         // ---------------------------------------------------------------
         S_G_START: begin
-          if (|(r_g_gpa >> SV39X4_GPA_WIDTH)) begin
-            // MMU-20, MMU-28: a GPA with a bit set at or above the
-            // Sv39x4 width is a guest-page fault, with the kind of the
-            // access and the GPA whole (MMU-23). The G-stage-only fetch
-            // address (kind 00) and the vsatp root (kind 01, MMU-24b)
-            // reach here unchecked. At GPA_WIDTH 41 no GPA can fail.
+          if (|(r_g_gpa >> g_gpa_w(r_g_root))) begin
+            // MMU-20, MMU-28: a GPA with a bit set at or above the hgatp
+            // mode's width (41, 50 or 59) is a guest-page fault, with
+            // the kind of the access and the GPA whole (MMU-23). The
+            // G-stage-only fetch address (kind 00) and the vsatp root
+            // (kind 01, MMU-24b) reach here unchecked. Under Sv57x4 at
+            // GPA_WIDTH 59 no GPA can fail. Until BP-146 the bound was
+            // Sv39x4's in every mode.
             r_rsp_st    <= ST_FAULT;
             r_rsp_cause <= c_gpf(r_acc);
             r_rsp_gpa   <= FGW'(r_g_gpa);
             r_rsp_imp   <= r_g_kind;
             r_st        <= S_RSP;
           end else begin
-            r_g_lvl  <= 2'd2;
+            r_g_lvl  <= r_g_root;
             r_g_base <= PTEP'(r_hgatp_ppn);
             r_st     <= S_G_ADDR;
           end
@@ -953,9 +1042,8 @@ module ptw #(
           end else if (!ws_leaf) begin
             if (r_g_on && ws_next_gwide) begin
               // MMU-28: the next VS-stage table's GPA does not fit the
-              // Sv39x4 41 bits; its read is the implicit access that
-              // faults, and
-              // its GPA is returned whole (MMU-23).
+              // hgatp mode's width; its read is the implicit access that
+              // faults, and its GPA is returned whole (MMU-23).
               r_rsp_st    <= ST_FAULT;
               r_rsp_cause <= c_gpf(r_acc);
               r_rsp_gpa   <= ws_next_gpa;
@@ -969,7 +1057,7 @@ module ptw #(
               r_st        <= S_RSP;
             end else begin
               r_s_base <= ws_ppn;
-              r_s_lvl  <= r_s_lvl - 2'd1;
+              r_s_lvl  <= r_s_lvl - LVLW'(1);
               r_st     <= S_S_ADDR;
             end
           end else if (ws_upd) begin
@@ -1001,8 +1089,10 @@ module ptw #(
 
         S_S_FINAL: begin
           if (!r_v) begin
-            // Single stage: the fetch's own address (MMU-28).
-            if (ws_next_wide) begin
+            // Single stage: the fetch's own address (MMU-28), the
+            // translated page (BP-146; a 512 GiB or 256 TiB leaf takes
+            // VPN bits at and above PPN_WIDTH).
+            if (ws_page_wide) begin
               r_rsp_st    <= ST_FAULT;
               r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
@@ -1016,8 +1106,8 @@ module ptw #(
             end
             r_st <= S_RSP;
           end else if (!r_g_on) begin
-            // VS-stage only: GPA = SPA.
-            if (ws_next_wide) begin
+            // VS-stage only: GPA = SPA. The translated page (BP-146).
+            if (ws_page_wide) begin
               r_rsp_st    <= ST_FAULT;
               r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
@@ -1030,17 +1120,19 @@ module ptw #(
               r_rsp_pbmt  <= r_s_pte[62:61];
             end
             r_st <= S_RSP;
-          end else if (ws_next_gwide) begin
-            // MMU-28: the fetch's GPA does not fit the Sv39x4 41 bits.
-            // Its page is returned whole, bits 11:0 zero (MMU-23,
-            // IFU-2a).
+          end else if (ws_page_gwide) begin
+            // MMU-28: the fetch's GPA does not fit the hgatp mode's
+            // width. Its page is returned whole, bits 11:0 zero (MMU-23,
+            // IFU-2a). BP-146: the page, not the PTE's PPN, so a VPN bit
+            // a large VS leaf takes from the address counts.
             r_rsp_st    <= ST_FAULT;
             r_rsp_cause <= c_gpf(r_acc);
             r_rsp_gpa   <= FGW'({ws_page, 12'h000});
             r_rsp_imp   <= IMP_FETCH;
             r_st        <= S_RSP;
           end else begin
-            // ws_page is below 2^G4W here, so the GPA_WIDTH cast keeps
+            // ws_page is below 2^(hgatp width - 12) here, at most the
+            // widest, which GPA_WIDTH holds, so the GPA_WIDTH cast keeps
             // every set bit.
             r_g_gpa  <= GPA_WIDTH'({ws_page, 12'h000});
             r_g_kind <= IMP_FETCH;
@@ -1067,7 +1159,7 @@ module ptw #(
               r_st        <= S_RSP;
             end else begin
               r_g_base <= wg_ppn;
-              r_g_lvl  <= r_g_lvl - 2'd1;
+              r_g_lvl  <= r_g_lvl - LVLW'(1);
               r_st     <= S_G_ADDR;
             end
           end else if (wg_upd) begin

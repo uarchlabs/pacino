@@ -625,19 +625,24 @@ package bp_defines_pkg;
   // read them. A VPN port is [VA_WIDTH-13:0] (IT-16, IL-1a).
   parameter int PPN_WIDTH   = PA_WIDTH - 12; // the supervisor PPN
 
-  // ARCHITECTURAL BOUNDS OF THE BUILT MODES (BP-145, session-085). These
-  // are NOT implementation widths and are NOT derived from VA_WIDTH or
-  // GPA_WIDTH; they keep their values when those change. The walker
-  // walks Sv39 and Sv39x4 only and the ITLB checks Sv39 only; the next
-  // task extends each by mode (mmu_decisions.md MMU-32, itlb_decisions.md
-  // ITLB-18).
+  // ARCHITECTURAL BOUNDS OF THE MODES (BP-145, BP-146, session-085).
+  // These are NOT implementation widths and are NOT derived from VA_WIDTH
+  // or GPA_WIDTH; they keep their values when those change. The ITLB
+  // checks Sv39 only; its per-mode check is the next task
+  // (itlb_decisions.md ITLB-18). The walker bounds a GPA by the hgatp
+  // mode's width (mmu_decisions.md MMU-20, MMU-28, MMU-32; BP-146).
   //   SV39_SIGN_BIT     an Sv39 address is canonical when bits
   //                     VA_WIDTH-1 down to 38 are all equal (ITLB-18)
-  //   SV39X4_GPA_WIDTH  an Sv39x4 G-stage translates a GPA of 41 bits;
-  //                     a bit set at or above bit 41 is a guest-page
-  //                     fault, cause 20 (MMU-20, MMU-28)
+  //   SV39X4_GPA_WIDTH  an Sv39x4 G-stage translates a GPA of 41 bits,
+  //   SV48X4_GPA_WIDTH  Sv48x4 one of 50 bits and Sv57x4 one of 59 bits:
+  //   SV57X4_GPA_WIDTH  12 offset bits, nine VPN bits per level and two
+  //                     more at the x4 root. A bit set at or above the
+  //                     width is a guest-page fault, cause 20 (MMU-20,
+  //                     MMU-28)
   localparam int SV39_SIGN_BIT    = 38;
   localparam int SV39X4_GPA_WIDTH = 41;
+  localparam int SV48X4_GPA_WIDTH = 50;
+  localparam int SV57X4_GPA_WIDTH = 59;
   parameter int ASID_WIDTH  = 16; // ITLB-7, the Sv39 maximum
   parameter int VMID_WIDTH  = 14; // ITLB-7, the Sv39x4 maximum
   parameter int PERM_WIDTH  =  8; // PTE low byte, V R W X U G A D

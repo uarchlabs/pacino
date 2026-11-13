@@ -56,6 +56,16 @@
 //   W12 a_priv_legal     no request is accepted with itlb_l2t_priv
 //                        2'b10 (reserved) or 2'b11 (M) (IL-3d,
 //                        MMU-24c; BP-124)
+//   W13 a_mode_legal     no walk starts under an unsupported MODE value:
+//                        at V=0 satp.MODE, at V=1 vsatp.MODE and
+//                        hgatp.MODE, are each Bare, 8, 9 or 10
+//                        (mmu_decisions.md MMU-20, csr_decisions.md
+//                        CSR-5; BP-146)
+// W12 and W13 read only the walker's inputs, which the testbench drives:
+// they check the stimulus the walker is given (a CSR file that applies
+// CSR-5, an ITLB that presents U or S), not the walker's RTL.
+// BP-146: W11's level inputs are three bits, levels 0 to 4 (MMU-32), and
+// its misaligned-superpage check covers every level.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -94,9 +104,13 @@ module ptw_assert #(
   input logic                    mem_ptw_rsp_val,
   input logic                    csr_ptw_menvcfg_pbmte,
   input logic                    csr_ptw_henvcfg_pbmte,
-  // W11: which leaf a CAS updates (see the header)
-  input logic [1:0]              w_s_lvl,
-  input logic [1:0]              w_g_lvl,
+  // W13: the MODE fields of the CSR group
+  input logic [3:0]              csr_ptw_satp_mode,
+  input logic [3:0]              csr_ptw_vsatp_mode,
+  input logic [3:0]              csr_ptw_hgatp_mode,
+  // W11: which leaf a CAS updates (see the header); levels 0 to 4
+  input logic [2:0]              w_s_lvl,
+  input logic [2:0]              w_g_lvl,
   input logic [1:0]              w_m_ret,
   input logic [1:0]              w_g_acc,
   input logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][7:0]
@@ -127,18 +141,27 @@ module ptw_assert #(
   // (U must be set, every access a user one, MMU-26); otherwise U is
   // checked against priv (U needs U set, S needs it clear).
   function automatic logic leaf_bad(input logic [63:0] p,
-                                    input logic [1:0]  lvl,
+                                    input logic [2:0]  lvl,
                                     input logic        g,
                                     input logic [1:0]  acc,
                                     input logic [1:0]  priv,
                                     input logic        pbmte);
     logic bad;
+    logic mis;
     bad = !p[P_V] || (!p[P_R] && p[P_W]) || (p[60:54] != '0) ||
           !(p[P_R] || p[P_X]);
     bad = bad || (p[62:61] == 2'd3) || (!pbmte && (p[62:61] != 2'd0));
-    bad = bad || (p[P_N] && ((lvl != 2'd0) || (p[13:10] != 4'b1000)));
-    bad = bad || ((lvl == 2'd2) && (p[27:10] != '0)) ||
-                 ((lvl == 2'd1) && (p[18:10] != '0));
+    bad = bad || (p[P_N] && ((lvl != 3'd0) || (p[13:10] != 4'b1000)));
+    // The misaligned superpage (MMU-32): the PPN bits a leaf at this
+    // level takes from the address, PTE bits 10 + 9 * level - 1 : 10.
+    case (lvl)
+      3'd4:    mis = (p[45:10] != '0);
+      3'd3:    mis = (p[36:10] != '0);
+      3'd2:    mis = (p[27:10] != '0);
+      3'd1:    mis = (p[18:10] != '0);
+      default: mis = 1'b0;
+    endcase
+    bad = bad || mis;
     bad = bad || ((acc == ACC_X) && !p[P_X]) ||
                  ((acc == ACC_R) && !p[P_R]) ||
                  ((acc == ACC_W) && !p[P_W]);
@@ -358,6 +381,20 @@ module ptw_assert #(
   a_priv_legal: assert property (p_priv_legal)
     else $error("W12 walk request with a reserved or M privilege");
 
+  // W13 (MMU-20, CSR-5). The supported MODE values are Bare (0), and 8,
+  // 9 and 10: Sv39, Sv48, Sv57 in satp and vsatp, the x4 modes in hgatp.
+  // A V=0 walk reads satp; a V=1 walk reads vsatp and hgatp.
+  property p_mode_legal;
+    @(posedge clk) disable iff (!rstn)
+      w_take |->
+        (itlb_l2t_v ? ((csr_ptw_vsatp_mode inside {4'd0, 4'd8, 4'd9, 4'd10})
+                       && (csr_ptw_hgatp_mode inside
+                           {4'd0, 4'd8, 4'd9, 4'd10}))
+                    : (csr_ptw_satp_mode inside {4'd0, 4'd8, 4'd9, 4'd10}));
+  endproperty
+  a_mode_legal: assert property (p_mode_legal)
+    else $error("W13 walk started under an unsupported MODE value");
+
 endmodule : ptw_assert
 
 // Bind BY MODULE NAME.
@@ -395,6 +432,9 @@ bind ptw ptw_assert #(
   // keep their names.
   .csr_ptw_menvcfg_pbmte (ptw_csr.menvcfg_pbmte),
   .csr_ptw_henvcfg_pbmte (ptw_csr.henvcfg_pbmte),
+  .csr_ptw_satp_mode     (ptw_csr.satp_mode),
+  .csr_ptw_vsatp_mode    (ptw_csr.vsatp_mode),
+  .csr_ptw_hgatp_mode    (ptw_csr.hgatp_mode),
   .w_s_lvl           (r_s_lvl),
   .w_g_lvl           (r_g_lvl),
   .w_m_ret           (r_m_ret),

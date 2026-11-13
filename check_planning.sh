@@ -202,6 +202,8 @@
 # ittage_interfaces.md, ittage_table_interfaces.md,
 # l1i_ifu_interfaces.md, ras_interfaces.md, perf_decisions.md,
 # fe_demo_tb_decisions.md).
+# Updated when BP-146 was written, session-085 (PROJECT_STATUS.md,
+# PROJECT_CORE.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -244,8 +246,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   a79c147765db
-PLAN  PROJECT_STATUS.md                 be868e65e33f
+PLAN  PROJECT_CORE.md                   ccad7bc7d928
+PLAN  PROJECT_STATUS.md                 9c7c05a9e18c
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 

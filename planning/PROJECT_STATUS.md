@@ -16,6 +16,23 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-146 written.
+
+BP-146 WRITTEN: the walker in every mode (mmu_decisions.md MMU-32,
+  MMU-28; csr_decisions.md 3, CSR-5; itlb_l2tlb_interfaces.md IL-7).
+  The CSR packages accept Sv48, Sv57, Sv48x4 and Sv57x4; the walker
+  walks 3 to 5 levels at both stages with the x4 root and the
+  per-mode GPA bound, and returns the 512 GiB and 256 TiB sizes; a
+  testbench page-table builder maps a page in any mode. Directed
+  cases a to k at tb_ptw. The ITLB, IFU and fe_top are not changed.
+PROJECT_CORE.md, translation modes: the Sv57-only rule for regress.sh
+  takes effect when the walker and the ITLB both support Sv57, from
+  the task after BP-146; it read "once the walker supports Sv57".
+
+Next free: BP-147, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
+
+---
 ## Session-085, continued: BP-145 recorded.
 
 BP-145 COMPLETE (38ed413). regress.sh at VA_WIDTH 41 identical to

@@ -18,6 +18,12 @@
 //      read 0; an unsupported MODE writes no field
 //   V  vsatp: the same, PPN CSR_VSATP_PPN_W-1:0 (the PROPOSED row of
 //      CSR-5)
+// BP-146 (mmu_decisions.md MMU-20): Sv48 and Sv57 (MODE 9 and 10) are
+// supported in satp and vsatp, Sv48x4 and Sv57x4 (9 and 10) in hgatp.
+// S, V and H write every supported value and every unsupported one (1 to
+// 7, 11 to 15), and H reads hgatp.PPN 1:0 as 0 in each x4 mode. S3, S5,
+// V2, H2 and H4 wrote 9 or 10 as unsupported values until BP-146; they
+// now write 11 or 15.
 // BP-145: an expected value that depends on an implementation width
 // takes the width from the package (CSR_PPN_W, CSR_VSATP_PPN_W,
 // CSR_PMPADDR_W); the value is still written out here, not read back.
@@ -112,28 +118,68 @@ module tb;
     csr_tb_pkg::csr_write(12'h180, {4'd0, 16'h0012, 44'h0_0000_0345});
     chk("S2 Bare written", csr_tb_pkg::csr_read(12'h180),
         {4'd0, 16'h0012, 44'h345});
-    // Unsupported MODEs: no field written.
-    csr_tb_pkg::csr_write(12'h180, {4'd9, 16'hAAAA, 44'h0_0000_0BBB});
-    chk("S3 MODE 9 ignored", csr_tb_pkg::csr_read(12'h180),
+    // Unsupported MODEs: no field written. BP-146: S3 and S5 wrote MODE 9
+    // and 10, unsupported until MMU-20 added Sv48 and Sv57; they now
+    // write 11 and 15, the ends of the upper unsupported range.
+    csr_tb_pkg::csr_write(12'h180, {4'd11, 16'hAAAA, 44'h0_0000_0BBB});
+    chk("S3 MODE 11 ignored", csr_tb_pkg::csr_read(12'h180),
         {4'd0, 16'h0012, 44'h345});
     csr_tb_pkg::csr_write(12'h180, {4'd1, 16'hAAAA, 44'h0_0000_0BBB});
     chk("S4 MODE 1 ignored", csr_tb_pkg::csr_read(12'h180),
         {4'd0, 16'h0012, 44'h345});
-    csr_tb_pkg::csr_write(12'h180, {4'd10, 16'hAAAA, 44'h0_0000_0BBB});
-    chk("S5 MODE Sv57 ignored", csr_tb_pkg::csr_read(12'h180),
+    csr_tb_pkg::csr_write(12'h180, {4'd15, 16'hAAAA, 44'h0_0000_0BBB});
+    chk("S5 MODE 15 ignored", csr_tb_pkg::csr_read(12'h180),
         {4'd0, 16'h0012, 44'h345});
+    // BP-146: every unsupported value, 1 to 7 and 11 to 15.
+    for (int m = 1; m < 16; m++) begin
+      if ((m >= 8) && (m <= 10)) continue;
+      csr_tb_pkg::csr_write(12'h180, {4'(m), 16'hAAAA, 44'h0_0000_0BBB});
+      chk($sformatf("S6 MODE %0d ignored", m), csr_tb_pkg::csr_read(12'h180),
+          {4'd0, 16'h0012, 44'h345});
+    end
+    // BP-146: Sv48 (9) and Sv57 (10) are supported (MMU-20): every field
+    // written, PPN 43:CSR_PPN_W read 0, as Sv39 in S1.
+    csr_tb_pkg::csr_write(12'h180, {4'd9, 16'hBEEF, 44'hFFF_FFFF_FFFF});
+    chk("S7 Sv48 all fields", csr_tb_pkg::csr_read(12'h180),
+        {4'd9, 16'hBEEF, 44'((64'd1 << CSR_PPN_W) - 64'd1)});
+    csr_tb_pkg::csr_write(12'h180, {4'd10, 16'h0042, 44'h0_0000_0777});
+    chk("S8 Sv57 all fields", csr_tb_pkg::csr_read(12'h180),
+        {4'd10, 16'h0042, 44'h777});
+    // An unsupported write after Sv57 leaves Sv57.
+    csr_tb_pkg::csr_write(12'h180, {4'd12, 16'hAAAA, 44'h0_0000_0BBB});
+    chk("S9 MODE 12 after Sv57 ignored", csr_tb_pkg::csr_read(12'h180),
+        {4'd10, 16'h0042, 44'h777});
+    csr_tb_pkg::csr_write(12'h180, {4'd8, 16'h0001, 44'h0_0000_0001});
+    chk("S10 Sv57 to Sv39", csr_tb_pkg::csr_read(12'h180),
+        {4'd8, 16'h0001, 44'h1});
 
     // ---- V: vsatp ---------------------------------------------------
     csr_tb_pkg::csr_reset();
     csr_tb_pkg::csr_write(12'h280, {4'd8, 16'hFFFF, 44'hFFF_FFFF_FFFF});
     chk("V1 Sv39 all fields", csr_tb_pkg::csr_read(12'h280),
         {4'd8, 16'hFFFF, 44'((64'd1 << CSR_VSATP_PPN_W) - 64'd1)});
-    csr_tb_pkg::csr_write(12'h280, {4'd9, 16'h0001, 44'h1});
-    chk("V2 MODE 9 ignored", csr_tb_pkg::csr_read(12'h280),
+    // BP-146: V2 wrote MODE 9, unsupported until MMU-20; it writes 11.
+    csr_tb_pkg::csr_write(12'h280, {4'd11, 16'h0001, 44'h1});
+    chk("V2 MODE 11 ignored", csr_tb_pkg::csr_read(12'h280),
         {4'd8, 16'hFFFF, 44'((64'd1 << CSR_VSATP_PPN_W) - 64'd1)});
     csr_tb_pkg::csr_write(12'h280, {4'd0, 16'h0003, 44'h4});
     chk("V3 Bare written", csr_tb_pkg::csr_read(12'h280),
         {4'd0, 16'h0003, 44'h4});
+    // BP-146: every unsupported value, 1 to 7 and 11 to 15.
+    for (int m = 1; m < 16; m++) begin
+      if ((m >= 8) && (m <= 10)) continue;
+      csr_tb_pkg::csr_write(12'h280, {4'(m), 16'h0001, 44'h1});
+      chk($sformatf("V4 MODE %0d ignored", m), csr_tb_pkg::csr_read(12'h280),
+          {4'd0, 16'h0003, 44'h4});
+    end
+    // BP-146: Sv48 and Sv57 (MMU-20, Shvsatpa): every field written,
+    // PPN CSR_VSATP_PPN_W-1:0.
+    csr_tb_pkg::csr_write(12'h280, {4'd9, 16'h1234, 44'hFFF_FFFF_FFFF});
+    chk("V5 Sv48 all fields", csr_tb_pkg::csr_read(12'h280),
+        {4'd9, 16'h1234, 44'((64'd1 << CSR_VSATP_PPN_W) - 64'd1)});
+    csr_tb_pkg::csr_write(12'h280, {4'd10, 16'h5678, 44'h0_0000_0099});
+    chk("V6 Sv57 all fields", csr_tb_pkg::csr_read(12'h280),
+        {4'd10, 16'h5678, 44'h99});
 
     // ---- H: hgatp ---------------------------------------------------
     csr_tb_pkg::csr_reset();
@@ -143,8 +189,10 @@ module tb;
     chk("H1 Bare, 59:58 read 0, PPN 23:0", csr_tb_pkg::csr_read(12'h680),
         {4'd0, 2'b00, 14'h3FFF, 44'((64'd1 << CSR_PPN_W) - 64'd1)});
     // Unsupported MODE: MODE unchanged (Bare), VMID and PPN written.
-    csr_tb_pkg::csr_write(12'h680, {4'd9, 2'b00, 14'h0005, 44'h0_0000_0103});
-    chk("H2 MODE 9: MODE kept, VMID PPN written",
+    // BP-146: H2 and H4 wrote MODE 9 and 10, unsupported until MMU-20
+    // added Sv48x4 and Sv57x4; they now write 11 and 15.
+    csr_tb_pkg::csr_write(12'h680, {4'd11, 2'b00, 14'h0005, 44'h0_0000_0103});
+    chk("H2 MODE 11: MODE kept, VMID PPN written",
         csr_tb_pkg::csr_read(12'h680),
         {4'd0, 2'b00, 14'h0005, 44'h103});
     // Sv39x4: PPN 1:0 read 0.
@@ -152,9 +200,43 @@ module tb;
     chk("H3 Sv39x4: PPN 1:0 read 0", csr_tb_pkg::csr_read(12'h680),
         {4'd8, 2'b00, 14'h0003, 44'h8_E000});
     // Unsupported MODE from Sv39x4: MODE stays Sv39x4.
-    csr_tb_pkg::csr_write(12'h680, {4'd10, 2'b00, 14'h0007, 44'h0_0008_F001});
-    chk("H4 MODE 10: stays Sv39x4", csr_tb_pkg::csr_read(12'h680),
+    csr_tb_pkg::csr_write(12'h680, {4'd15, 2'b00, 14'h0007, 44'h0_0008_F001});
+    chk("H4 MODE 15: stays Sv39x4", csr_tb_pkg::csr_read(12'h680),
         {4'd8, 2'b00, 14'h0007, 44'h8_F000});
+    // BP-146: every unsupported value, 1 to 7 and 11 to 15, from Sv39x4:
+    // MODE kept, VMID and PPN written (PPN 1:0 read 0, still Sv39x4).
+    for (int m = 1; m < 16; m++) begin
+      if ((m >= 8) && (m <= 10)) continue;
+      csr_tb_pkg::csr_write(12'h680,
+                            {4'(m), 2'b00, 14'(m), 44'h0_0008_F003});
+      chk($sformatf("H5 MODE %0d: stays Sv39x4", m),
+          csr_tb_pkg::csr_read(12'h680),
+          {4'd8, 2'b00, 14'(m), 44'h8_F000});
+    end
+    // BP-146: Sv48x4 (9) and Sv57x4 (10) are supported, and PPN 1:0 read
+    // 0 in each (section 3, the 16 KiB root of MMU-32).
+    csr_tb_pkg::csr_write(12'h680, {4'd9, 2'b00, 14'h0011, 44'h0_0008_E003});
+    chk("H6 Sv48x4: PPN 1:0 read 0", csr_tb_pkg::csr_read(12'h680),
+        {4'd9, 2'b00, 14'h0011, 44'h8_E000});
+    gp = csr_tb_pkg::pack_ptw_csr();
+    chk("H7 Sv48x4: ptw hgatp_mode", 64'(gp.hgatp_mode), 64'd9);
+    chk("H8 Sv48x4: ptw hgatp_ppn 1:0 read 0", 64'(gp.hgatp_ppn),
+        64'h8_E000);
+    csr_tb_pkg::csr_write(12'h680, {4'd10, 2'b00, 14'h0012, 44'h0_0008_E002});
+    chk("H9 Sv57x4: PPN 1:0 read 0", csr_tb_pkg::csr_read(12'h680),
+        {4'd10, 2'b00, 14'h0012, 44'h8_E000});
+    gp = csr_tb_pkg::pack_ptw_csr();
+    chk("H10 Sv57x4: ptw hgatp_mode", 64'(gp.hgatp_mode), 64'd10);
+    chk("H11 Sv57x4: ptw hgatp_ppn 1:0 read 0", 64'(gp.hgatp_ppn),
+        64'h8_E000);
+    // An unsupported write keeps Sv57x4; PPN 1:0 still read 0.
+    csr_tb_pkg::csr_write(12'h680, {4'd7, 2'b00, 14'h0013, 44'h0_0008_E001});
+    chk("H12 MODE 7: stays Sv57x4", csr_tb_pkg::csr_read(12'h680),
+        {4'd10, 2'b00, 14'h0013, 44'h8_E000});
+    // The read rule keeps the stored bits: Bare shows PPN 1:0 again.
+    csr_tb_pkg::csr_write(12'h680, {4'd0, 2'b00, 14'h0013, 44'h0_0008_E001});
+    chk("H13 Bare: PPN 1:0 as written", csr_tb_pkg::csr_read(12'h680),
+        {4'd0, 2'b00, 14'h0013, 44'h8_E001});
 
     // ---- E: menvcfg, henvcfg ----------------------------------------
     csr_tb_pkg::csr_reset();

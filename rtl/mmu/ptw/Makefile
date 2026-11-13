@@ -8,6 +8,8 @@
 #
 #   lint_ptw        the walker with its PMP / PMA checker (MMU-10a,
 #                   MMU-10d)
+#   lint_pt_build_pkg  tb/pt_build_pkg.sv, the page-table builder
+#                   (BP-146)
 #   sim_ptw         tb/tb_ptw.sv, with tb/ptw_assert.sv bound in
 #   assert_labels   every property of tb/ptw_assert.sv is in the sim
 #                   model (the itlb Makefile's method)
@@ -52,19 +54,27 @@ PKG_SRCS := \
   $(DEC_DIR)/decode_pkg.sv \
   $(CSR_DIR)/rtl/csr_pkg.sv
 
-TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv
+# pt_build_pkg (BP-146): the page-table builder every BP-146 case uses.
+TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv $(TB_DIR)/pt_build_pkg.sv
 
 PTW_SRCS := $(PKG_SRCS) $(PMP_DIR)/pmp_pma_chk.sv $(RTL_DIR)/ptw.sv
 SIM_SRCS := $(PTW_SRCS) $(TB_DIR)/ptw_assert.sv
 
-.PHONY: all clean assert_labels lint_ptw sim_ptw
+.PHONY: all clean assert_labels lint_ptw lint_pt_build_pkg sim_ptw
 
-all: lint_ptw sim_ptw assert_labels
+all: lint_ptw lint_pt_build_pkg sim_ptw assert_labels
 
 lint_ptw:
 	@echo "[linting]    ptw"
 	$(Q)$(VERILATOR) --lint-only $(VER_FLAGS) $(COMMON) \
 	  --top-module ptw $(PTW_SRCS) $(VSILENCE)
+
+# Testbench code: SIM_EXTRA_FLAGS, since its classes, pt_image and
+# pt_stage, are not named for the file (rtl/CLAUDE.md, DECLFILENAME).
+lint_pt_build_pkg:
+	@echo "[linting]    pt_build_pkg"
+	$(Q)$(VERILATOR) --lint-only $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  $(COMMON) $(PKG_SRCS) $(TB_DIR)/pt_build_pkg.sv $(VSILENCE)
 
 sim_ptw:
 	@echo "[compiling]  tb_ptw"
@@ -97,7 +107,7 @@ clean:
 # Exclusions:
 #   all                 - aggregate.
 #   clean, regress_list - housekeeping and this plumbing.
-REGRESS_TARGETS := lint_ptw sim_ptw assert_labels
+REGRESS_TARGETS := lint_ptw lint_pt_build_pkg sim_ptw assert_labels
 REGRESS_EXCLUDE := all clean regress_list
 
 .PHONY: regress_list

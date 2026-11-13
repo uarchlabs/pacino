@@ -34,6 +34,13 @@
 // the fault, that no CAS was issued and that the PTE is unchanged.
 // t_causes: the access-fault and guest-page-fault causes of a read
 // and a store (5, 7, 21, 23).
+//
+// BP-146. Every mode (mmu_decisions.md MMU-20, MMU-32): t_m_a to t_m_k
+// are the cases a to k of BP-146 Problem 4, and t_bld checks the page-
+// table builder itself. Each builds its tables with pt_build_pkg (the
+// builder writes an image; bsync drains it into the word store), from
+// reset state. The tables of the earlier tests are written by hand for
+// Sv39 and Sv39x4 (path3, gpath3, gmap) and are unchanged.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -1455,6 +1462,684 @@ module tb;
   endtask
 
   // =================================================================
+  // BP-146: every mode, with the page-table builder (pt_build_pkg).
+  // =================================================================
+  // The builder's regions. Supervisor physical: the single-stage root and
+  // table pool, the G-stage root (16 KiB) and pool, and the supervisor
+  // pages that back the VS-stage tables. Guest physical: the VS-stage
+  // root and pool, at GPA bit 40, below every x4 width. Every builder
+  // region is apart from the hand-written tables above (0x8100_0000 to
+  // 0x8300_2FFF) and from the leaf pages the cases map.
+  localparam logic [63:0] B_SROOT = 64'h0_9000_0000;
+  localparam logic [63:0] B_SPOOL = 64'h0_9000_1000;
+  localparam logic [63:0] B_STOP  = 64'h0_9010_0000;
+  localparam logic [63:0] B_GROOT = 64'h0_9100_0000;
+  localparam logic [63:0] B_GPOOL = 64'h0_9100_4000;
+  localparam logic [63:0] B_GTOP  = 64'h0_9120_0000;
+  localparam logic [63:0] B_BACK  = 64'h0_9200_0000;
+  localparam logic [63:0] B_BTOP  = 64'h0_9230_0000;
+  localparam logic [63:0] B_VROOT = 64'h100_0000_0000;
+  localparam logic [63:0] B_VPOOL = 64'h100_0000_1000;
+  localparam logic [63:0] B_VTOP  = 64'h100_0010_0000;
+  // A table page no case follows (a bad pointer's target).
+  localparam logic [43:0] B_NOWHERE = 44'h9_5000;
+
+  localparam logic [3:0] M_BARE = CSR_SATP_MODE_BARE;
+  localparam logic [3:0] M_39   = CSR_SATP_MODE_SV39;   // and Sv39x4
+  localparam logic [3:0] M_48   = CSR_SATP_MODE_SV48;   // and Sv48x4
+  localparam logic [3:0] M_57   = CSR_SATP_MODE_SV57;   // and Sv57x4
+
+  // PTE flag bytes, D A G U X W R V.
+  localparam logic [7:0] F_GLEAF = 8'hDB;     // G-stage leaf: D A U X R V
+  localparam logic [7:0] F_BACK  = 8'hDF;     // a VS table page's G leaf
+
+  // The five address indices the cases use, level 4 to level 0. I2's
+  // bits 8:6 are zero, so a 512 GiB leaf's page (VPN 26:0) fits
+  // PPN_WIDTH; a 256 TiB leaf (VPN 35:0) also needs I3 = 0.
+  localparam logic [8:0] I4 = 9'h0A5;
+  localparam logic [8:0] I3 = 9'h0C3;
+  localparam logic [8:0] I2 = 9'h02B;
+  localparam logic [8:0] I1 = 9'h155;
+  localparam logic [8:0] I0 = 9'h0AA;
+
+  pt_build_pkg::pt_image img;
+  pt_build_pkg::pt_stage bs;     // the single or VS stage
+  pt_build_pkg::pt_stage bg;     // the G-stage
+
+  // ---- expected values, from the rule text --------------------------
+  // The levels of a MODE value (MMU-32).
+  function automatic int nlev(input logic [3:0] m);
+    return (m == M_57) ? 5 : (m == M_48) ? 4 : 3;
+  endfunction
+
+  // The GPA width of an hgatp MODE value (MMU-20).
+  function automatic int gwid(input logic [3:0] m);
+    return (m == M_57) ? 59 : (m == M_48) ? 50 : 41;
+  endfunction
+
+  // IL-7: the size code of a leaf at level l.
+  function automatic logic [2:0] sz_of(input int l, input logic napot);
+    case (l)
+      4:       return 3'b101;       // 256 TiB
+      3:       return 3'b100;       // 512 GiB
+      2:       return 3'b011;       // 1 GiB
+      1:       return 3'b010;       // 2 MiB
+      default: return napot ? 3'b001 : 3'b000;
+    endcase
+  endfunction
+
+  // The page bits a leaf at level l takes from the address.
+  function automatic logic [63:0] lmask(input int l);
+    return (64'd1 << (9 * l)) - 64'd1;
+  endfunction
+
+  // A VPN of nl levels from five indices (level 4 first).
+  function automatic logic [VW-1:0] vpn_n(input int nl,
+                                          input logic [8:0] i4,
+                                          input logic [8:0] i3,
+                                          input logic [8:0] i2,
+                                          input logic [8:0] i1,
+                                          input logic [8:0] i0);
+    logic [44:0] v;
+    v = {i4, i3, i2, i1, i0};
+    v = v & ((45'd1 << (9 * nl)) - 45'd1);
+    return VW'(v);
+  endfunction
+
+  // The 64-bit address of a request page, the builder's address type.
+  function automatic logic [63:0] va64(input logic [VW-1:0] v);
+    return 64'({v, 12'h000});
+  endfunction
+
+  // An aligned leaf PPN for each level, every one inside PPN_WIDTH.
+  function automatic logic [43:0] lppn(input int l);
+    case (l)
+      0:       return 44'h8_2345;
+      1:       return 44'h8_2200;
+      2:       return 44'h8_0000;
+      default: return 44'h0;         // 512 GiB, 256 TiB: aligned is 0
+    endcase
+  endfunction
+
+  // ---- builder set-up -------------------------------------------------
+  // Drain the builder's writes into the word store.
+  task automatic bsync();
+    logic [63:0] a;
+    logic [63:0] d;
+    logic        got;
+    got = img.pop(a, d);
+    while (got) begin
+      if ((a >> PA_WIDTH) != 64'd0)
+        $fatal(1, "tb_ptw: builder word at %016h beyond PA_WIDTH", a);
+      wrw(PW'(a), d);
+      got = img.pop(a, d);
+    end
+  endtask
+
+  // A single-stage walk in mode m, root B_SROOT.
+  task automatic bsetup_s(input string nm, input logic [3:0] m);
+    setup(nm);
+    img = new();
+    bs  = new("s", img, m, 1'b0, B_SROOT, B_SPOOL, B_STOP);
+    cs_satp_mode(m);
+    cs_satp_ppn(PNW'(B_SROOT >> 12));
+  endtask
+
+  // A V=1 walk: hgatp mode gm (root B_GROOT), vsatp mode vm (root
+  // B_VROOT, guest physical), or vsatp Bare.
+  task automatic bsetup_h(input string nm, input logic [3:0] vm,
+                          input logic [3:0] gm);
+    setup(nm);
+    cs_satp_mode(M_BARE);
+    img = new();
+    bg  = new("g", img, gm, 1'b1, B_GROOT, B_GPOOL, B_GTOP);
+    bg.set_back(B_BACK, B_BTOP, F_BACK);
+    cs_hgatp_mode(gm);
+    cs_hgatp_ppn(PNW'(B_GROOT >> 12));
+    if (vm != M_BARE) begin
+      bs = new("vs", img, vm, 1'b0, B_VROOT, B_VPOOL, B_VTOP);
+      bs.set_gstage(bg);
+    end
+    cs_vsatp_mode(vm);
+    cs_vsatp_ppn(CSR_VSATP_PPN_W'(B_VROOT >> 12));
+  endtask
+
+  // ---- t_bld: the builder itself ---------------------------------------
+  task automatic t_bld();
+    logic [63:0] la;
+    logic [63:0] lb;
+    logic [63:0] g;
+    logic        ok;
+    logic [VW-1:0] v;
+    int          np;
+    bsetup_s("bld_soft", M_48);
+    bs.set_soft(1'b1);
+    v  = vpn_n(4, I4, I3, I2, I1, I0);
+    la = bs.map(va64(v), 0, pte(44'h8_2345, F_RXAD));
+    chk("bld: three tables allocated",
+        bs.pool_nx == B_SPOOL + 64'h3000);
+    chk("bld: the leaf PTE address is the level-0 table's",
+        la == B_SPOOL + 64'h2000 + 64'(8 * I0));
+    chk("bld: the root PTE points at the first table",
+        img.get(B_SROOT + 64'(8 * I3)) == pte(44'(B_SPOOL >> 12), F_PTR));
+    lb = bs.map(va64(v), 0, pte(44'h8_2345, F_RXAD));
+    chk("bld: the same PTE again is no conflict",
+        (bs.n_conflict == 0) && (lb == la));
+    void'(bs.map(va64(v), 0, pte(44'h8_6666, F_RXAD)));
+    chk("bld: a different leaf is a conflict", bs.n_conflict == 1);
+    chk("bld: and the leaf is not overwritten",
+        img.get(la) == pte(44'h8_2345, F_RXAD));
+    void'(bs.map(va64(v), 1, pte(44'h8_2200, F_RXAD)));
+    chk("bld: a leaf over a pointer is a conflict", bs.n_conflict == 2);
+    // A neighbour in the same level-0 table allocates nothing.
+    np = int'(bs.pool_nx - B_SPOOL);
+    void'(bs.map(va64(v ^ VW'(1)), 0, pte(44'h8_2346, F_RXAD)));
+    chk("bld: a neighbour shares the path",
+        int'(bs.pool_nx - B_SPOOL) == np);
+    // A path through a leaf is a conflict.
+    void'(bs.map(va64(vpn_n(4, I4, 9'h001, I2, I1, I0)), 2,
+                 pte(44'h8_0000, F_RXAD)));
+    void'(bs.map(va64(vpn_n(4, I4, 9'h001, I2, I1, I0)), 0,
+                 pte(44'h8_2345, F_RXAD)));
+    chk("bld: a path through a leaf is a conflict", bs.n_conflict == 3);
+    chk("bld: pte_addr finds the leaf", bs.pte_addr(va64(v), 0) == la);
+
+    // The x4 root: 16 KiB, eleven index bits; the top index is in the
+    // fourth page.
+    bsetup_h("bld_x4_root", M_BARE, M_48);
+    g  = (64'h7FF << 39) | 64'h123_4000;
+    la = bg.map(g, 0, pte(44'h8_2345, F_GLEAF));
+    chk("bld: x4 root index 0x7FF", bg.idx(g, 3) == 32'h7FF);
+    chk("bld: x4 root PTE in the root's fourth page",
+        bg.pte_addr(g, 3) == B_GROOT + 64'h3FF8);
+    chk("bld: x4 translates its own mapping",
+        (bg.xlate(g, ok) == 64'h8_2345_000) && ok);
+    // A VS stage's tables are guest physical: its root page is backed by
+    // the first backing page, mapped by the G-stage.
+    bsetup_h("bld_vs", M_39, M_39);
+    la = bs.map(va64(vpn_n(3, 0, 0, I2, I1, I0)), 0,
+                pte(44'h4_0123, F_RXAD));
+    g  = bg.xlate(B_VROOT, ok);
+    chk("bld: the VS root page is mapped to the first backing page",
+        ok && (g == B_BACK));
+    g  = bg.xlate(B_VPOOL + 64'h1000, ok);
+    chk("bld: the VS level-0 table page is mapped",
+        ok && (g == B_BACK + 64'h2000));
+    chk("bld: the VS leaf is written at its supervisor address",
+        la == B_BACK + 64'h2000 + 64'(8 * I0));
+  endtask
+
+  // ---- a: single stage, Sv48 and Sv57, a leaf at every level ----------
+  task automatic t_m_a();
+    logic [3:0]    m;
+    int            nl;
+    logic [VW-1:0] v;
+    logic [63:0]   la;
+    for (int k = 0; k < 2; k++) begin
+      m  = (k == 0) ? M_48 : M_57;
+      nl = nlev(m);
+      for (int l = 0; l < nl; l++) begin
+        bsetup_s($sformatf("a_sv%0d_l%0d", (k == 0) ? 48 : 57, l), m);
+        v  = vpn_n(nl, I4, (l == 4) ? 9'h000 : I3, I2, I1, I0);
+        la = bs.map(va64(v), l, pte(lppn(l), F_RXAD));
+        bsync();
+        walk(1'b0, v, ACC_X);
+        exp_hit(tname, PNW'(lppn(l)), sz_of(l, 1'b0), 2'd0);
+        chk($sformatf("%s: %0d reads (%0d)", tname, nl - l, n_acc),
+            n_acc == nl - l);
+        chk($sformatf("%s: root PTE address", tname),
+            acc_pa[0] == PW'(B_SROOT +
+                             8 * ((64'(v) >> (9 * (nl - 1))) & 64'h1FF)));
+        chk($sformatf("%s: leaf PTE address", tname),
+            acc_pa[nl - l - 1] == PW'(la));
+        chk($sformatf("%s: perm", tname), r_perm == F_RXAD);
+      end
+    end
+  endtask
+
+  // ---- b: G-stage only, Sv48x4 and Sv57x4, a leaf at every level -------
+  task automatic t_m_b();
+    logic [3:0]    m;
+    int            nl;
+    int            gw;
+    logic [VW-1:0] v;
+    logic [63:0]   la;
+    logic [63:0]   ri;
+    for (int k = 0; k < 2; k++) begin
+      m  = (k == 0) ? M_48 : M_57;
+      nl = nlev(m);
+      gw = gwid(m);
+      for (int l = 0; l < nl; l++) begin
+        bsetup_h($sformatf("b_sv%0dx4_l%0d", (k == 0) ? 48 : 57, l),
+                 M_BARE, m);
+        // The GPA's top bit, gw - 1, is the root index's bit 10.
+        v  = vpn_n(nl, I4, (l == 4) ? 9'h000 : I3, I2, I1, I0) |
+             (VW'(1) << (gw - 13));
+        ri = 64'(v >> (9 * (nl - 1)));
+        la = bg.map(va64(v), l, pte(lppn(l), F_GLEAF));
+        bsync();
+        walk(1'b1, v, ACC_X);
+        exp_hit(tname, PNW'(64'(lppn(l)) | (64'(v) & lmask(l))),
+                sz_of(l, 1'b0), 2'd0);
+        chk($sformatf("%s: root index bit 10 set (%03h)", tname, ri),
+            (ri >> 10) == 64'd1);
+        chk($sformatf("%s: root PTE address, eleven-bit index", tname),
+            acc_pa[0] == PW'(B_GROOT + 8 * ri));
+        chk($sformatf("%s: %0d reads (%0d)", tname, nl - l, n_acc),
+            n_acc == nl - l);
+        chk($sformatf("%s: leaf PTE address", tname),
+            acc_pa[nl - l - 1] == PW'(la));
+        chk($sformatf("%s: perm, the G leaf's", tname), r_perm == F_GLEAF);
+      end
+    end
+  endtask
+
+  // ---- c: nested, every VS-stage / G-stage mode pair --------------------
+  task automatic t_m_c();
+    logic [3:0]    vm;
+    logic [3:0]    gm;
+    int            nv;
+    int            ng;
+    int            lv;
+    int            lg;
+    logic [VW-1:0] v;
+    logic [43:0]   gl;       // the VS leaf's guest page
+    logic [43:0]   sl;       // the G leaf's supervisor page
+    logic [63:0]   gp;       // the final guest page
+    logic [63:0]   sp;
+    logic [2:0]    sz;
+    for (int k = 0; k < 9; k++) begin
+      vm = (k / 3 == 0) ? M_39 : (k / 3 == 1) ? M_48 : M_57;
+      gm = (k % 3 == 0) ? M_39 : (k % 3 == 1) ? M_48 : M_57;
+      nv = nlev(vm);
+      ng = nlev(gm);
+      // The leaf levels, so the nine pairs see every size pair of
+      // levels 0 to 2 at the two stages.
+      lv = k % 3;
+      lg = (k / 3 + 1) % 3;
+      bsetup_h($sformatf("c_vs%0d_g%0d_l%0d%0d", 9 * nv + 12,
+                         9 * ng + 14, lv, lg), vm, gm);
+      v  = vpn_n(nv, I4, I3, I2, I1, I0);
+      gl = (lv == 0) ? 44'hC_0123 : (lv == 1) ? 44'hC_0200 : 44'hC_0000;
+      sl = (lg == 0) ? 44'h8_4567 : (lg == 1) ? 44'h8_4400 : 44'h8_0000;
+      gp = 64'(gl) | (64'(v) & lmask(lv));
+      sp = 64'(sl) | (gp & lmask(lg));
+      void'(bs.map(va64(v), lv, pte(gl, F_RXAD)));
+      void'(bg.map(gp << 12, lg, pte(sl, F_GLEAF)));
+      bsync();
+      walk(1'b1, v, ACC_X);
+      // MMU-27: the smaller of the two leaf sizes.
+      sz = (sz_of(lv, 1'b0) < sz_of(lg, 1'b0)) ? sz_of(lv, 1'b0)
+                                               : sz_of(lg, 1'b0);
+      exp_hit(tname, PNW'(sp), sz, 2'd0);
+      chk($sformatf("%s: perm, the VS leaf's", tname), r_perm == F_RXAD);
+      // MMU-21: a G-stage walk of ng reads before each VS-stage read,
+      // and one for the final GPA to its leaf.
+      chk($sformatf("%s: reads %0d exp %0d", tname, n_acc,
+                    (nv - lv) * (ng + 1) + (ng - lg)),
+          n_acc == (nv - lv) * (ng + 1) + (ng - lg));
+    end
+  endtask
+
+  // ---- d: the misaligned superpage at levels 3 and 4 ---------------------
+  // A PPN bit inside the leaf's mask that a leaf one level lower would
+  // not have: bit 20 at level 3 (mask 26:0), bit 30 at level 4 (35:0).
+  task automatic t_m_d();
+    logic [3:0]    m;
+    int            l;
+    int            nl;
+    logic [43:0]   p;
+    logic [VW-1:0] v;
+    for (int k = 0; k < 3; k++) begin
+      m  = (k == 0) ? M_48 : M_57;
+      l  = (k == 2) ? 4 : 3;
+      nl = nlev(m);
+      p  = (l == 4) ? 44'h4000_0000 : 44'h10_0000;
+      v  = vpn_n(nl, I4, (l == 4) ? 9'h000 : I3, I2, I1, I0);
+      bsetup_s($sformatf("d_s_sv%0d_l%0d", 9 * nl + 12, l), m);
+      void'(bs.map(va64(v), l, pte(p, F_RXAD)));
+      bsync();
+      walk(1'b0, v, ACC_X);
+      exp_flt(tname, 12);
+      chk($sformatf("%s: %0d reads", tname, nl - l), n_acc == nl - l);
+      bsetup_h($sformatf("d_g_sv%0dx4_l%0d", 9 * nl + 12, l), M_BARE, m);
+      void'(bg.map(va64(v), l, pte(p, F_GLEAF)));
+      bsync();
+      walk(1'b1, v, ACC_X);
+      exp_gpf(tname, FW'({v, 12'h000}), 2'b00);
+      chk($sformatf("%s: %0d reads", tname, nl - l), n_acc == nl - l);
+    end
+  endtask
+
+  // ---- e: a non-leaf PTE breaking a non-leaf rule at levels 3 and 4 -----
+  // Sv57 and Sv57x4: the root (level 4) and level 3. Rules: D, A, U, N,
+  // PBMT set on a non-leaf (privileged 11.3.2; MMU-U6, MMU-U7).
+  task automatic t_m_e();
+    logic [63:0]   bad;
+    logic [63:0]   la;
+    logic [VW-1:0] v;
+    string         rn;
+    v = vpn_n(5, I4, I3, I2, I1, I0);
+    for (int l = 3; l <= 4; l++) begin
+      for (int r = 0; r < 5; r++) begin
+        case (r)
+          0: begin rn = "d";    bad = pte(B_NOWHERE, 8'h81); end
+          1: begin rn = "a";    bad = pte(B_NOWHERE, 8'h41); end
+          2: begin rn = "u";    bad = pte(B_NOWHERE, 8'h11); end
+          3: begin rn = "n";    bad = pte_x(B_NOWHERE, F_PTR, 2'd0, 1'b1);
+             end
+          default: begin
+             rn = "pbmt"; bad = pte_x(B_NOWHERE, F_PTR, 2'd1, 1'b0);
+          end
+        endcase
+        bsetup_s($sformatf("e_s_l%0d_%s", l, rn), M_57);
+        la = bs.map(va64(v), l, bad);
+        bsync();
+        walk(1'b0, v, ACC_X);
+        exp_flt(tname, 12);
+        chk($sformatf("%s: %0d reads, the last the bad PTE", tname, 5 - l),
+            (n_acc == 5 - l) && (acc_pa[4 - l] == PW'(la)));
+        bsetup_h($sformatf("e_g_l%0d_%s", l, rn), M_BARE, M_57);
+        la = bg.map(va64(v), l, bad);
+        bsync();
+        walk(1'b1, v, ACC_X);
+        exp_gpf(tname, FW'({v, 12'h000}), 2'b00);
+        chk($sformatf("%s: %0d reads, the last the bad PTE", tname, 5 - l),
+            (n_acc == 5 - l) && (acc_pa[4 - l] == PW'(la)));
+      end
+    end
+  endtask
+
+  // ---- f: N at levels 1 to 4 (Sv57), and 64 KiB NAPOT at level 0 --------
+  task automatic t_m_f();
+    logic [63:0]   la;
+    logic [VW-1:0] v;
+    for (int l = 1; l <= 4; l++) begin
+      bsetup_s($sformatf("f_n_l%0d", l), M_57);
+      v  = vpn_n(5, I4, (l == 4) ? 9'h000 : I3, I2, I1, I0);
+      la = bs.map(va64(v), l, pte_x(lppn(l), F_RXAD, 2'd0, 1'b1));
+      bsync();
+      walk(1'b0, v, ACC_X);
+      exp_flt(tname, 12);
+      chk($sformatf("%s: %0d reads, the last the N leaf", tname, 5 - l),
+          (n_acc == 5 - l) && (acc_pa[4 - l] == PW'(la)));
+    end
+    for (int k = 0; k < 2; k++) begin
+      bsetup_s((k == 0) ? "f_napot_sv48" : "f_napot_sv57",
+               (k == 0) ? M_48 : M_57);
+      v = vpn_n((k == 0) ? 4 : 5, I4, I3, I2, I1, I0);
+      void'(bs.map(va64(v), 0, pte_x(44'h8_2348, F_RXAD, 2'd0, 1'b1)));
+      bsync();
+      walk(1'b0, v, ACC_X);
+      exp_hit(tname, PNW'('h8_2348), SZ_64K, 2'd0);
+      chk($sformatf("%s: %0d reads", tname, (k == 0) ? 4 : 5),
+          n_acc == ((k == 0) ? 4 : 5));
+    end
+  endtask
+
+  // ---- g: the GPA bound of each x4 mode ----------------------------------
+  // Sv39x4 rejects GPA bit 41 and Sv48x4 bit 50, with the GPA whole
+  // (MMU-23); Sv57x4 translates a GPA with its top bit set. For the
+  // fetch address (kind 00), the vsatp root (kind 01) and a VS-stage
+  // PTE's GPA (kind 01 for a non-leaf, 00 for a leaf).
+  task automatic t_m_g();
+    logic [3:0]    gm;
+    int            gw;
+    logic [VW-1:0] v;
+    logic [VW-1:0] vh;
+    logic [63:0]   hi;
+    logic [43:0]   p;
+    logic [CSR_VSATP_PPN_W-1:0] rt;
+    for (int k = 0; k < 2; k++) begin
+      gm = (k == 0) ? M_39 : M_48;
+      gw = gwid(gm);
+      // kind 00: the G-stage-only fetch address. The GPA without the
+      // high bit is mapped, so a walker that ignored it would hit.
+      bsetup_h($sformatf("g_fetch_x4_%0d_bit%0d", gw, gw), M_BARE, gm);
+      v  = vpn_n(nlev(gm), I4, I3, I2, I1, I0);
+      vh = v | (VW'(1) << (gw - 12));
+      void'(bg.map(va64(v), 0, pte(lppn(0), F_GLEAF)));
+      bsync();
+      walk(1'b1, vh, ACC_X);
+      exp_gpf(tname, FW'({vh, 12'h000}), 2'b00);
+      chk($sformatf("%s: no PTE read", tname), n_acc == 0);
+      // kind 01: the vsatp root at the bound. The path is built at the
+      // root without the bit, which the walker would otherwise read.
+      bsetup_h($sformatf("g_root_x4_%0d_bit%0d", gw, gw), M_39, gm);
+      v = vpn_n(3, I4, I3, I2, I1, I0);
+      void'(bs.map(va64(v), 0, pte(44'hC_0123, F_RXAD)));
+      void'(bg.map(64'hC_0123 << 12, 0, pte(44'h8_4567, F_GLEAF)));
+      bsync();
+      rt = CSR_VSATP_PPN_W'(B_VROOT >> 12) |
+           (CSR_VSATP_PPN_W'(1) << (gw - 12));
+      cs_vsatp_ppn(rt);
+      walk(1'b1, v, ACC_X);
+      exp_gpf(tname, FW'({rt, 12'h000}) + FW'(8 * I2), 2'b01);
+      chk($sformatf("%s: no PTE read", tname), n_acc == 0);
+      // A VS-stage PTE's GPA: a non-leaf at the VS root (kind 01, the next
+      // PTE's GPA) and a leaf (kind 00, the page).
+      p = 44'h4_0041 | (44'd1 << (gw - 12));
+      bsetup_h($sformatf("g_vsptr_x4_%0d_bit%0d", gw, gw), M_48, gm);
+      v = vpn_n(4, I4, I3, I2, I1, I0);
+      void'(bs.map(va64(v), 3, pte(p, F_PTR)));
+      bsync();
+      walk(1'b1, v, ACC_X);
+      exp_gpf(tname, FW'({p, 12'h000}) + FW'(8 * I2), 2'b01);
+      // The fault is found on the VS root PTE, before the G-stage walk
+      // for the next table: one G walk and the VS root read.
+      chk($sformatf("%s: %0d reads, none for the faulting GPA (%0d)",
+                    tname, nlev(gm) + 1, n_acc), n_acc == nlev(gm) + 1);
+      p = 44'h4_0123 | (44'd1 << (gw - 12));
+      bsetup_h($sformatf("g_vsleaf_x4_%0d_bit%0d", gw, gw), M_48, gm);
+      void'(bs.map(va64(v), 0, pte(p, F_RXAD)));
+      bsync();
+      walk(1'b1, v, ACC_X);
+      exp_gpf(tname, FW'({p, 12'h000}), 2'b00);
+      // Four VS reads, each after its G walk; none for the final GPA.
+      chk($sformatf("%s: %0d reads, none for the faulting GPA (%0d)",
+                    tname, 4 * (nlev(gm) + 1), n_acc),
+          n_acc == 4 * (nlev(gm) + 1));
+    end
+
+    // Sv57x4 translates. The fetch address with bit 58 set (kind 00).
+    bsetup_h("g_fetch_x4_59_bit58", M_BARE, M_57);
+    v = vpn_n(5, I4, I3, I2, I1, I0) | (VW'(1) << (58 - 12));
+    void'(bg.map(va64(v), 0, pte(lppn(0), F_GLEAF)));
+    bsync();
+    walk(1'b1, v, ACC_X);
+    exp_hit(tname, PNW'(lppn(0)), SZ_4K, 2'd0);
+    chk($sformatf("%s: 5 reads", tname), n_acc == 5);
+    // The vsatp root at the highest bit vsatp.PPN holds, bit
+    // CSR_VSATP_PPN_W + 11 (55): every VS table is above 2^50.
+    hi = 64'd1 << (CSR_VSATP_PPN_W + 11);
+    bsetup_h("g_root_x4_59_high", M_39, M_57);
+    bs = new("vs", img, M_39, 1'b0, hi | B_VROOT, hi | B_VPOOL,
+             hi | B_VTOP);
+    bs.set_gstage(bg);
+    cs_vsatp_ppn(CSR_VSATP_PPN_W'((hi | B_VROOT) >> 12));
+    v = vpn_n(3, I4, I3, I2, I1, I0);
+    // The VS leaf's guest page has the same high bit (kind 00 side).
+    p = 44'(hi >> 12) | 44'h123;
+    void'(bs.map(va64(v), 0, pte(p, F_RXAD)));
+    void'(bg.map(64'(p) << 12, 0, pte(44'h8_4567, F_GLEAF)));
+    bsync();
+    walk(1'b1, v, ACC_X);
+    exp_hit(tname, PNW'('h8_4567), SZ_4K, 2'd0);
+    chk($sformatf("%s: 3 x 6 + 5 reads (%0d)", tname, n_acc), n_acc == 23);
+    chk($sformatf("%s: the vsatp root's bit 55 is set", tname),
+        ptw_csr.vsatp_ppn[CSR_VSATP_PPN_W - 1]);
+  endtask
+
+  // ---- h: A and D under Svadu, 5 levels and Sv57 over Sv57x4 -------------
+  task automatic t_m_h();
+    logic [VW-1:0] v;
+    logic [63:0]   la;
+    logic [63:0]   ga;
+    logic [63:0]   vl;
+    logic [63:0]   gl;
+    // A store to a level-0 leaf with A and D clear: one CAS, last.
+    bsetup_s("h_s57_store", M_57);
+    cs_menvcfg_adue(1'b1);
+    v  = vpn_n(5, I4, I3, I2, I1, I0);
+    la = bs.map(va64(v), 0, pte(44'h8_2345, F_RWX));
+    bsync();
+    walk(1'b0, v, ACC_W);
+    exp_hit(tname, PNW'('h8_2345), SZ_4K, 2'd0);
+    chk($sformatf("%s: five reads and one CAS (%0d, %0d)", tname, n_acc,
+                  n_cas), (n_acc == 6) && (n_cas == 1) && acc_op[5]);
+    chk($sformatf("%s: CAS address", tname), acc_pa[5] == PW'(la));
+    chk($sformatf("%s: CAS value sets A and D", tname),
+        acc_swap[5] == pte(44'h8_2345, 8'hCF));
+    chk($sformatf("%s: memory holds it", tname),
+        rdw(PW'(la)) == pte(44'h8_2345, 8'hCF));
+    // A 256 TiB leaf at the root with A clear: the CAS is at the root.
+    bsetup_s("h_s57_root_leaf", M_57);
+    cs_menvcfg_adue(1'b1);
+    v  = vpn_n(5, I4, 9'h000, I2, I1, I0);
+    la = bs.map(va64(v), 4, pte(44'h0, F_RX));
+    bsync();
+    walk(1'b0, v, ACC_X);
+    exp_hit(tname, PNW'(0), 3'b101, 2'd0);
+    chk($sformatf("%s: one read, one CAS at the root PTE", tname),
+        (n_acc == 2) && (n_cas == 1) && acc_op[1] &&
+        (acc_pa[1] == PW'(la)) && (acc_swap[1] == pte(44'h0, F_RXA)));
+    // Sv57 over Sv57x4: the VS leaf and the G leaf of the final GPA have
+    // A clear. The VS update is a store through the G-stage (MMU-8a),
+    // whose leaf for the VS table page has W, A and D (F_BACK).
+    bsetup_h("h_vs57_g57", M_57, M_57);
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
+    v  = vpn_n(5, I4, I3, I2, I1, I0);
+    vl = pte(44'hC_0123, F_RX);
+    gl = pte(44'h8_4567, F_URX);
+    la = bs.map(va64(v), 0, vl);
+    ga = bg.map(64'hC_0123 << 12, 0, gl);
+    bsync();
+    walk(1'b1, v, ACC_X);
+    exp_hit(tname, PNW'('h8_4567), SZ_4K, 2'd0);
+    chk($sformatf("%s: perm has A", tname), r_perm == F_RXA);
+    // 5 x (5 + 1) for the VS walk, 5 + CAS for the VS update, 5 + CAS for
+    // the final GPA: 42, the CASes at 35 and 41.
+    chk($sformatf("%s: 42 accesses, 2 CAS (%0d, %0d)", tname, n_acc, n_cas),
+        (n_acc == 42) && (n_cas == 2));
+    chk($sformatf("%s: VS CAS at 35: address, value", tname),
+        acc_op[35] && (acc_pa[35] == PW'(la)) &&
+        (acc_swap[35] == (vl | 64'h40)));
+    chk($sformatf("%s: G CAS at 41: address, value", tname),
+        acc_op[41] && (acc_pa[41] == PW'(ga)) &&
+        (acc_swap[41] == (gl | 64'h40)));
+    chk($sformatf("%s: memory holds both", tname),
+        (rdw(PW'(la)) == (vl | 64'h40)) && (rdw(PW'(ga)) == (gl | 64'h40)));
+  endtask
+
+  // ---- i: MMU-21, Sv57 over Sv57x4 reads memory 35 times -------------
+  task automatic t_m_i();
+    logic [VW-1:0] v;
+    int            nr;
+    bsetup_h("i_vs57_g57_35", M_57, M_57);
+    v = vpn_n(5, I4, I3, I2, I1, I0);
+    void'(bs.map(va64(v), 0, pte(44'hC_0123, F_RXAD)));
+    void'(bg.map(64'hC_0123 << 12, 0, pte(44'h8_4567, F_GLEAF)));
+    bsync();
+    walk(1'b1, v, ACC_X);
+    exp_hit(tname, PNW'('h8_4567), SZ_4K, 2'd0);
+    nr = 0;
+    for (int k = 0; k < n_acc; k++) if (!acc_op[k]) nr++;
+    chk($sformatf("%s: (5+1)(5+1)-1 = 35 reads (%0d of %0d)", tname, nr,
+                  n_acc), (nr == 35) && (n_acc == 35) && (n_cas == 0));
+  endtask
+
+  // ---- j: a 512 GiB and a 256 TiB leaf beyond PPN_WIDTH -----------------
+  // The leaf PPN is 0 and aligned; the page takes VPN 26:0 (35:0), and a
+  // VPN bit at or above PPN_WIDTH puts it outside: access fault (MMU-28).
+  task automatic t_m_j();
+    logic [VW-1:0] v;
+    bsetup_s("j_512g_wide", M_48);
+    v = vpn_n(4, 0, I3, I2 | 9'h040, I1, I0);          // VPN bit 24
+    void'(bs.map(va64(v), 3, pte(44'h0, F_RXAD)));
+    bsync();
+    walk(1'b0, v, ACC_X);
+    exp_flt(tname, 1);
+    chk($sformatf("%s: one read", tname), n_acc == 1);
+    bsetup_s("j_256t_wide", M_57);
+    v = vpn_n(5, I4, I3, I2, I1, I0);                   // VPN bits 35:27
+    void'(bs.map(va64(v), 4, pte(44'h0, F_RXAD)));
+    bsync();
+    walk(1'b0, v, ACC_X);
+    exp_flt(tname, 1);
+    chk($sformatf("%s: one read", tname), n_acc == 1);
+    // The same at the G-stage (G-stage only, Sv57x4).
+    bsetup_h("j_g_256t_wide", M_BARE, M_57);
+    void'(bg.map(va64(v), 4, pte(44'h0, F_GLEAF)));
+    bsync();
+    walk(1'b1, v, ACC_X);
+    exp_flt(tname, 1);
+    chk($sformatf("%s: one read", tname), n_acc == 1);
+  endtask
+
+  // ---- k: MODE is sampled when the walk starts (MMU-24a) ------------------
+  // which 0: satp.MODE Sv57 -> Sv39 in the cycle after the request is
+  // taken, before the walk's first step. which 1: hgatp.MODE Sv57x4 ->
+  // Sv39x4 once the first memory access has been taken.
+  task automatic walk_k(input logic v, input logic [VW-1:0] vpn,
+                        input int which);
+    int   n0;
+    int   t;
+    logic done;
+    n0 = n_rsp;
+    itlb_l2t_req_val = 1'b1;
+    itlb_l2t_v       = v;
+    itlb_l2t_vpn     = vpn;
+    itlb_l2t_acc     = ACC_X;
+    itlb_l2t_priv    = req_priv;
+    itlb_l2t_tag     = 2'd1;
+    do @(posedge clk); while (!itlb_l2t_req_rdy);
+    #1;
+    itlb_l2t_req_val = 1'b0;
+    done = 1'b0;
+    if (which == 0) begin
+      cs_satp_mode(M_39);
+      done = 1'b1;
+    end
+    t = 0;
+    while ((n_rsp == n0) && (t < 4000)) begin
+      @(posedge clk);
+      #1;
+      t++;
+      if (!done && (n_rsp == n0) && (n_acc >= 1)) begin
+        cs_hgatp_mode(M_39);
+        done = 1'b1;
+      end
+    end
+    chk({tname, ": one response"}, n_rsp == n0 + 1);
+    chk({tname, ": the MODE changed during the walk"}, done);
+    chk({tname, ": no memory protocol error"}, n_mem_err == 0);
+  endtask
+
+  task automatic t_m_k();
+    logic [VW-1:0] v;
+    bsetup_s("k_satp_57_to_39", M_57);
+    v = vpn_n(5, I4, I3, I2, I1, I0);
+    void'(bs.map(va64(v), 0, pte(44'h8_2345, F_RXAD)));
+    bsync();
+    walk_k(1'b0, v, 0);
+    exp_hit(tname, PNW'('h8_2345), SZ_4K, 2'd0);
+    chk($sformatf("%s: five reads, Sv57 (%0d)", tname, n_acc), n_acc == 5);
+    chk($sformatf("%s: satp now Sv39", tname), ptw_csr.satp_mode == M_39);
+    bsetup_h("k_hgatp_57x4_to_39x4", M_39, M_57);
+    v = vpn_n(3, I4, I3, I2, I1, I0);
+    void'(bs.map(va64(v), 0, pte(44'hC_0123, F_RXAD)));
+    void'(bg.map(64'hC_0123 << 12, 0, pte(44'h8_4567, F_GLEAF)));
+    bsync();
+    walk_k(1'b1, v, 1);
+    exp_hit(tname, PNW'('h8_4567), SZ_4K, 2'd0);
+    chk($sformatf("%s: 3 x (5 + 1) + 5 reads, Sv57x4 (%0d)", tname, n_acc),
+        n_acc == 23);
+    chk($sformatf("%s: hgatp now Sv39x4", tname),
+        ptw_csr.hgatp_mode == M_39);
+  endtask
+
+  // =================================================================
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
@@ -1476,6 +2161,18 @@ module tb;
     t_leaf_checks();
     t_causes();
     t_wide();
+    t_bld();
+    t_m_a();
+    t_m_b();
+    t_m_c();
+    t_m_d();
+    t_m_e();
+    t_m_f();
+    t_m_g();
+    t_m_h();
+    t_m_i();
+    t_m_j();
+    t_m_k();
     $display("tb_ptw: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ptw: %0d checks failed", fail_cnt);
