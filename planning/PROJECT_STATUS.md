@@ -16,6 +16,52 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: the paging modes ruled; BP-145 written.
+
+RULED (Jeff):
+  1. The address scheme is Sv57: the CBP traces run unchanged
+     (perf_decisions.md PF-16). PF-U1 closed; its far conditional
+     branch part is PF-U11.
+  2. Pacino supports Sv57 and everything Sv57 requires: satp and
+     vsatp Bare, Sv39, Sv48, Sv57; hgatp Bare, Sv39x4, Sv48x4, Sv57x4
+     (mmu_decisions.md MMU-20). Checked against the privileged
+     specification source: Sv57 requires Sv48, Sv48 requires Sv39.
+  3. One build, not a variant. fe-1.0.0 survives as the Sv39-only
+     tag. regress.sh runs translated tests under Sv57 only;
+     regress_demo.sh runs under Sv39 until the demos move; a weekly
+     all-modes regression is run by hand (PROJECT_CORE, The
+     regression).
+  4. Full width: VA_WIDTH and GPA_WIDTH 59, FAULT_GPA_WIDTH 59,
+     predicted targets full width (fe_decisions.md FE-19).
+  5. Three tasks: the widths (BP-145); the walker in every mode, with
+     the page-table builder; the ITLB page sizes and mode checks, the
+     harness page tables (PF-U4) and the weekly script.
+PLANNING (PA, from the rulings): mmu_decisions.md MMU-20, MMU-21,
+  MMU-23, MMU-24b, MMU-28, MMU-U7, MMU-32 new; itlb_decisions.md
+  ITLB-3, ITLB-7, ITLB-18 new; csr_decisions.md 3 and CSR-5;
+  fe_decisions.md FE-19, TD-FE-3, FE-U11; itlb_ifu_interfaces.md
+  IT-16, IT-6a; itlb_l2tlb_interfaces.md IL-1a, IL-7, IL-11a;
+  ptw_mem_interfaces.md WM-1; perf_decisions.md PF-4, PF-15, PF-16,
+  PF-U1, PF-U11; pacino_features.md 1 and 3; PROJECT_CORE.md The
+  regression. The documents that state a built width (41, 56,
+  VA[40:1]) elsewhere are updated after BP-145, from its values as
+  built.
+BP-145 WRITTEN: every address width follows the package parameters,
+  with the Sv39 and Sv39x4 bounds as named constants (regress.sh
+  identical to BP-144's run at 41); then VA_WIDTH and GPA_WIDTH 59,
+  with directed cases for the cases 59 bits makes reachable; every
+  trace PC checked against Sv57. Runs regress.sh twice.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md, mmu_decisions.md,
+itlb_decisions.md, csr_decisions.md, fe_decisions.md,
+pacino_features.md, itlb_ifu_interfaces.md, itlb_l2tlb_interfaces.md,
+ptw_mem_interfaces.md, perf_decisions.md.
+
+Next free: BP-146, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
+
+---
 ## Session-085: record corrections (PA-direct).
 
 PA-DIRECT CORRECTION, session-085 (Jeff):
@@ -5003,6 +5049,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | PROPOSED; CSR-U1 (custom CSR     |
 |                         |             |                   | names), CSR-U2 (hardware         |
 |                         |             |                   | delivery) open.                  |
+|                         |             |                   | Session-085 (Jeff): MODE 9 and   |
+|                         |             |                   | 10 in satp, vsatp, hgatp;        |
+|                         |             |                   | vsatp.PPN 47 bits. Not yet       |
+|                         |             |                   | built.                           |
 | cachegen_decisions.md   | Draft       | --                | Created session-074. What pacino |
 |                         |             |                   | needs from cachegen, all pacino  |
 |                         |             |                   | caches: pacino drives, cachegen  |
@@ -5024,6 +5074,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | redirect groups; bp_loop_meta_t  |
 |                         |             |                   | replaced by lp_pred_t in 4.2;    |
 |                         |             |                   | FE-12 added.                     |
+|                         |             |                   | Session-085 (Jeff): FE-19        |
+|                         |             |                   | VA_WIDTH 59 from Sv57x4,         |
+|                         |             |                   | legality per mode, predicted     |
+|                         |             |                   | targets full width,              |
+|                         |             |                   | FTB_RTAG_BITS stays pinned. Not  |
+|                         |             |                   | yet built.                       |
 | bp_cluster.md           | Working     | --                | BP cluster summary data. The     |
 |                         |             |                   | LOCKED annotation is RETIRED --  |
 |                         |             |                   | it was never a Module Status     |
@@ -5425,6 +5481,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | hit. Closes TD#115. Session-071:  |
 |                         |             |                   | this read "all three Sv39 page    |
 |                         |             |                   | sizes".                           |
+|                         |             |                   | Session-085 (Jeff): ITLB-3 adds   |
+|                         |             |                   | 512 GiB and 256 TiB; ITLB-18 new, |
+|                         |             |                   | the address check per mode. Not   |
+|                         |             |                   | yet built.                        |
 | mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..31    |
 |                         |             |                   | (MMU-30 withdrawn session-077),   |
 |                         |             |                   | MMU-U1..U8 (U6, U7, U8 added      |
@@ -5450,6 +5510,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | bits (MMU-23); U is checked       |
 |                         |             |                   | before A is set (MMU-8c).         |
 |                         |             |                   | Session-079: MMU-24a confirmed.   |
+|                         |             |                   | Session-085 (Jeff): MMU-20 the    |
+|                         |             |                   | mode set Sv39, Sv48, Sv57 with    |
+|                         |             |                   | their x4 modes, one build; MMU-32 |
+|                         |             |                   | new; GPA_WIDTH and VA_WIDTH 59;   |
+|                         |             |                   | FAULT_GPA_WIDTH 59. Not yet       |
+|                         |             |                   | built.                            |
 | ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13.    |
 |                         |             |                   | IB-U1 CLOSED as IB-12 -- this row |
 |                         |             |                   | listed it open while the Shared   |
@@ -5461,6 +5527,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | One request port, one-bit tag,    |
 |                         |             |                   | out-of-order responses. No open   |
 |                         |             |                   | item.                             |
+|                         |             |                   | Session-085: IT-16 47 bits, IT-6a |
+|                         |             |                   | FAULT_GPA_WIDTH 59. Not yet       |
+|                         |             |                   | built.                            |
 | itlb_l2tlb_interfaces.md| Draft       | --                | Created session-069. IL-1..14.    |
 |                         |             |                   | Two-bit tag. A miss holds the     |
 |                         |             |                   | transaction open, the opposite of |
@@ -5469,11 +5538,16 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | is the second client. Session-077:|
 |                         |             |                   | the server is the walker; names   |
 |                         |             |                   | keep l2t; l2t_itlb_gpa_imp added. |
+|                         |             |                   | Session-085: IL-1a 47 bits, IL-7  |
+|                         |             |                   | size codes 512 GiB and 256 TiB,   |
+|                         |             |                   | IL-11a 59. Not yet built.         |
 | ptw_mem_interfaces.md   | Draft       | --                | Created session-077. WM-1..13.    |
 |                         |             |                   | The walker's memory port: 8-byte  |
 |                         |             |                   | READ and CAS, one outstanding,    |
 |                         |             |                   | answered by tb_fe_top's memory    |
 |                         |             |                   | model. No open item.              |
+|                         |             |                   | Session-085: WM-1 PTESIZE 8 in    |
+|                         |             |                   | every mode.                       |
 | ifu                     | Working     | tb_ifu, tb_ifu_*  | Built BP-116, session-074: ifu,   |
 |                         |             |                   | ifu_xlate, ifu_fetch, ifu_lbuf,   |
 |                         |             |                   | ifu_rvc_exp, ifu_predecode,       |
@@ -5654,11 +5728,16 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Performance analysis on the       |
 |                         |             |                   | CBP2025 traces: sources, harness, |
 |                         |             |                   | configurations, metrics.          |
+|                         |             |                   | Session-085 (Jeff): PF-16, the    |
+|                         |             |                   | traces run unchanged under Sv57;  |
+|                         |             |                   | PF-U1 closed; PF-U11 new.         |
 | pacino_features.md      | Draft       | --                | Created session-084,              |
 |                         |             |                   | planning/arch. What pacino is as  |
 |                         |             |                   | built; decides nothing, owns no   |
 |                         |             |                   | registry. Describes 79df3ad       |
 |                         |             |                   | (fe-1.0.0, DOC-016).              |
+|                         |             |                   | Session-085: section 1 adds Sv48  |
+|                         |             |                   | and Sv57; section 3, no variant.  |
 | new_user_decisions.md   | Draft       | --                | Created 2026-10-27, branch        |
 |                         |             |                   | install_scripts, planning/observ. |
 |                         |             |                   | Owns NU-N, NU-UN. The tools,      |

@@ -65,9 +65,9 @@ module ptw_assert #(
   parameter int PMP_GRAN_LG2 = 12,
   parameter int PMA_REGIONS  = 1,
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_BASE =
-    {36'h0_8000_0000},
+    {PA_WIDTH'('h8000_0000)},
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_TOP  =
-    {36'hF_FFFF_FFFF},
+    {{PA_WIDTH{1'b1}}},
   parameter logic [PMA_REGIONS-1:0][PMA_WIDTH-1:0] PMA_ATTR = {4'b1111},
   parameter logic [PMA_WIDTH-1:0]                  PMA_DFLT = 4'b0000
 ) (

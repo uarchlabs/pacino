@@ -107,7 +107,7 @@ module tb;
     p.fault_cause = ifu_fault_e'(i % 4);
     p.fault_va    = ~p.start_pc;
     // BP-124: FAULT_GPA_WIDTH, bits above 40 set (MMU-23).
-    p.fault_gpa   = {12'(b + i + 1), 44'(b * 977 + i)};
+    p.fault_gpa   = FAULT_GPA_WIDTH'({12'(b + i + 1), 44'(b * 977 + i)});
     p.fault_gpa_imp = 2'(b + i);                   // BP-123, DCD-16
     p.is_rvc      = i[0];
     p.br_type     = i[2:1];

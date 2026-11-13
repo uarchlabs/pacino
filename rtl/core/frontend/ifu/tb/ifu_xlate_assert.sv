@@ -128,7 +128,7 @@ module ifu_xlate_assert (
   //     page this file took from the FTQ's translation handshake. A
   //     lookup presented with the acceptance is tag 0 of the new block.
   //     A port narrower than VA_WIDTH-12 drops the high bits and fires
-  //     here for any fetch address above bit VPN_WIDTH+11.
+  //     here for any fetch address with a bit set above the port.
   property p_lookup_vpn_is_block_page;
     @(posedge clk) disable iff (!rstn)
       (ifu_itlb_req_val && !ftq_ifu_flush_val) |->

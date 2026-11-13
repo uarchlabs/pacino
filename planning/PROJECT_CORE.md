@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -769,6 +769,16 @@ regress.sh so that drift in the descriptions never blocks RTL work:
 it gates no push, and only a DOC task is blocked by it.
 tools/known_failures_demo.txt is its waiver list, Jeff's alone.
 fe_demo_tb_decisions.md FDT-2 and FDT-2a are the rule.
+
+TRANSLATION MODES (Jeff, session-085). Sv57 is the default mode
+(mmu_decisions.md MMU-20). tools/regress.sh runs its translated tests
+under Sv57, with Sv57x4 at the G-stage, and under no other mode.
+tools/regress_demo.sh runs the fe_demo scenarios under Sv39, the old
+default, until they move to Sv57. A separate weekly regression, run
+by hand and gating nothing, covers every mode. Tests that run
+untranslated (Bare) are unaffected. This applies once the walker
+supports Sv57; until then the translated tests stay under Sv39. The
+weekly script is not yet written.
 
 ### A package edit is a cross-unit change
 EVERY TARGET IN THE bpu AND ftq UNITS COMPILES bp_defines_pkg.sv

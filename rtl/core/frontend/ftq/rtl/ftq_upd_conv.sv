@@ -218,7 +218,8 @@ module ftq_upd_conv (
         tage_upd_inp_u0[s].cond_mispredict =
           (upd_meta[s].tage.tage_pred_tkn != upd[s].actual_taken);
 
-        // -- ITTAGE. resolved_target is VA[40:1], bit 0 not stored
+        // -- ITTAGE. resolved_target is VA[VA_WIDTH-1:1], bit 0 not
+        //    stored
         //    (ftq_bpu_interfaces.md 5.2). indir_mispredict is the
         //    provider target against it, the provider named by
         //    ittage_using_primary (ittage_cntrl_ctr_update_rules.md,

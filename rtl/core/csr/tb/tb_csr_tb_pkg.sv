@@ -16,7 +16,11 @@
 //      before any call (the package's own initializers)
 //   S  satp: supported MODE writes every field; unimplemented PPN bits
 //      read 0; an unsupported MODE writes no field
-//   V  vsatp: the same, PPN 28:0 (the PROPOSED row of CSR-5)
+//   V  vsatp: the same, PPN CSR_VSATP_PPN_W-1:0 (the PROPOSED row of
+//      CSR-5)
+// BP-145: an expected value that depends on an implementation width
+// takes the width from the package (CSR_PPN_W, CSR_VSATP_PPN_W,
+// CSR_PMPADDR_W); the value is still written out here, not read back.
 //   H  hgatp: unsupported MODE keeps MODE and writes VMID and PPN; PPN
 //      1:0 read 0 in Sv39x4 and not in Bare; bits 59:58 read 0
 //   E  menvcfg, henvcfg: only PBMTE and ADUE; henvcfg.ADUE reads 0
@@ -104,7 +108,7 @@ module tb;
     // Sv39, every bit set elsewhere: PPN 43:24 read 0.
     csr_tb_pkg::csr_write(12'h180, {4'd8, 16'hFFFF, 44'hFFF_FFFF_FFFF});
     chk("S1 Sv39 all fields", csr_tb_pkg::csr_read(12'h180),
-        {4'd8, 16'hFFFF, 20'h0, 24'hFF_FFFF});
+        {4'd8, 16'hFFFF, 44'((64'd1 << CSR_PPN_W) - 64'd1)});
     csr_tb_pkg::csr_write(12'h180, {4'd0, 16'h0012, 44'h0_0000_0345});
     chk("S2 Bare written", csr_tb_pkg::csr_read(12'h180),
         {4'd0, 16'h0012, 44'h345});
@@ -123,10 +127,10 @@ module tb;
     csr_tb_pkg::csr_reset();
     csr_tb_pkg::csr_write(12'h280, {4'd8, 16'hFFFF, 44'hFFF_FFFF_FFFF});
     chk("V1 Sv39 all fields", csr_tb_pkg::csr_read(12'h280),
-        {4'd8, 16'hFFFF, 15'h0, 29'h1FFF_FFFF});
+        {4'd8, 16'hFFFF, 44'((64'd1 << CSR_VSATP_PPN_W) - 64'd1)});
     csr_tb_pkg::csr_write(12'h280, {4'd9, 16'h0001, 44'h1});
     chk("V2 MODE 9 ignored", csr_tb_pkg::csr_read(12'h280),
-        {4'd8, 16'hFFFF, 15'h0, 29'h1FFF_FFFF});
+        {4'd8, 16'hFFFF, 44'((64'd1 << CSR_VSATP_PPN_W) - 64'd1)});
     csr_tb_pkg::csr_write(12'h280, {4'd0, 16'h0003, 44'h4});
     chk("V3 Bare written", csr_tb_pkg::csr_read(12'h280),
         {4'd0, 16'h0003, 44'h4});
@@ -137,7 +141,7 @@ module tb;
     csr_tb_pkg::csr_write(12'h680,
                           {4'd0, 2'b11, 14'h3FFF, 44'hFFF_FFFF_FFFF});
     chk("H1 Bare, 59:58 read 0, PPN 23:0", csr_tb_pkg::csr_read(12'h680),
-        {4'd0, 2'b00, 14'h3FFF, 20'h0, 24'hFF_FFFF});
+        {4'd0, 2'b00, 14'h3FFF, 44'((64'd1 << CSR_PPN_W) - 64'd1)});
     // Unsupported MODE: MODE unchanged (Bare), VMID and PPN written.
     csr_tb_pkg::csr_write(12'h680, {4'd9, 2'b00, 14'h0005, 44'h0_0000_0103});
     chk("H2 MODE 9: MODE kept, VMID PPN written",
@@ -438,7 +442,7 @@ module tb;
     chk("K24 satp_mode",  64'(gp.satp_mode),  64'd8);
     chk("K25 satp_ppn",   64'(gp.satp_ppn),   64'h8_1000);
     chk("K26 vsatp_mode", 64'(gp.vsatp_mode), 64'd8);
-    // vsatp PPN 28:0 of 0x1000_0003
+    // vsatp PPN CSR_VSATP_PPN_W-1:0 of 0x1000_0003
     chk("K27 vsatp_ppn",  64'(gp.vsatp_ppn),  64'h1000_0003);
     chk("K28 hgatp_mode", 64'(gp.hgatp_mode), 64'd8);
     // hgatp PPN 1:0 read 0 in Sv39x4
@@ -455,9 +459,11 @@ module tb;
     // The widths of the group members (CSR-6, the replaced ports).
     chk("K37 fe_cfg_t width",  64'($bits(fe_cfg_t)),  64'(1+1+1+32+1+32+16));
     chk("K38 fe_csr_t width",  64'($bits(fe_csr_t)),
-        64'(1 + 2 + 4 + 16 + 4 + 16 + 4 + 14 + 16*8 + 16*34));
+        64'(int'(1 + 2 + 4 + 16 + 4 + 16 + 4 + 14 + 16*8 +
+                 16*CSR_PMPADDR_W)));
     chk("K39 ptw_csr_t width", 64'($bits(ptw_csr_t)),
-        64'(4 + 24 + 4 + 29 + 4 + 24 + 4 + 16*8 + 16*34));
+        64'(int'(4 + CSR_PPN_W + 4 + CSR_VSATP_PPN_W + 4 + CSR_PPN_W + 4 +
+                 16*8 + 16*CSR_PMPADDR_W)));
 
     $display("tb_csr_tb_pkg: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

@@ -2830,13 +2830,15 @@ module tb;
     //   MMU-30's GPA 0). PPN bit 43 set, so GPA bit 55.
     W.wr64(W.vs_slot(tgt(3), 0),
            W.mk_pte(44'h800_0000_0123, PTE_LEAF, 2'b00, 1'b0));
-    W.jr_gfault(tgt(3), {44'h800_0000_0123, tgt(3)[11:0]}, 2'b00, hnd(3));
+    W.jr_gfault(tgt(3),
+                FAULT_GPA_WIDTH'({44'h800_0000_0123, tgt(3)[11:0]}), 2'b00,
+                hnd(3));
     W.mixed(2);
     // 4 a VS non-leaf whose GPA has a bit above 40: the whole GPA of the
     //   VS PTE the next level reads, kind 01 (BP-124: was GPA 0).
     W.wr64(W.vs_slot(tgt(4), 1),
            W.mk_pte(44'h2000_0041, PTE_PTR, 2'b00, 1'b0));
-    W.jr_gfault(tgt(4), {44'h2000_0041, 12'h000} +
+    W.jr_gfault(tgt(4), FAULT_GPA_WIDTH'({44'h2000_0041, 12'h000}) +
                 FAULT_GPA_WIDTH'(8 * tgt(4)[20:12]), 2'b01, hnd(4));
     W.mixed(2);
     // 5 cause 12: a VS leaf with W and not R.
@@ -3380,7 +3382,8 @@ module tb;
 
   // ---- the other two vsatp / hgatp combinations, end to end -------------
   // G-stage only (vsatp Bare, hgatp Sv39x4): the fetch address is the
-  // GPA, 41 bits (FE-19, MMU-20), and the walker returns the G-stage
+  // GPA, VA_WIDTH bits, 41 of them legal under Sv39x4 (FE-19, MMU-20,
+  // MMU-28), and the walker returns the G-stage
   // leaf; the ITLB's VS-level permission rule has no leaf to read
   // (ITLB-16, fixed by BP-123). Code runs at a GPA with bit 40 set,
   // and an unmapped GPA is a guest-page fault, kind 00.

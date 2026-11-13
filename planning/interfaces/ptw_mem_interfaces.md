@@ -6,7 +6,7 @@
  FILE:    ptw_mem_interfaces.md
  SOURCE:  session-077 rulings; mmu_decisions.md MMU-2, MMU-8
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -75,9 +75,11 @@ There is no response ready, no identifier and no byte enable.
   WM-1  EVERY ACCESS IS ONE PTE: 8 bytes, naturally aligned, and
         atomic. ptw_mem_req_paddr[2:0] is zero. The privileged
         specification performs every implicit access to the
-        translation structures at PTESIZE, which is 8 for Sv39 and
-        Sv39x4, and an A/D update rewrites the whole PTE, not one
-        bit of it. The memory side asserts the alignment.
+        translation structures at PTESIZE, which is 8 in every mode
+        pacino supports (mmu_decisions.md MMU-20, MMU-32), and an
+        A/D update rewrites the whole PTE, not one bit of it. The
+        memory side asserts the alignment. This read "8 for Sv39 and
+        Sv39x4"; session-085.
 
   WM-2  A request is accepted in a cycle where ptw_mem_req_val and
         ptw_mem_req_rdy are both high. The walker holds every
@@ -194,4 +196,7 @@ MMU-U3, moved to the L2 work.
               until an L2 exists. One request outstanding, 8-byte
               READ and CAS, a CAS response only once the store is
               visible, checks made before the request.
+
+  2026-11-12  session-085. WM-1: PTESIZE is 8 in every mode
+              (mmu_decisions.md MMU-20).
 ```

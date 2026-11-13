@@ -79,10 +79,11 @@ module pmp_pma_chk #(
   parameter int PMP_ENTRIES  = 16,                      // MMU-11
   parameter int PMP_GRAN_LG2 = 12,                      // 4 KiB grain
   parameter int PMA_REGIONS  = 1,                       // MMU-15a
+  // Main memory from 0x8000_0000 to the top of the PA_WIDTH space.
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_BASE =
-    {36'h0_8000_0000},
+    {PA_WIDTH'('h8000_0000)},
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_TOP  =
-    {36'hF_FFFF_FFFF},
+    {{PA_WIDTH{1'b1}}},
   parameter logic [PMA_REGIONS-1:0][PMA_WIDTH-1:0] PMA_ATTR = {4'b1111},
   parameter logic [PMA_WIDTH-1:0]                  PMA_DFLT = 4'b0000
 ) (
@@ -98,8 +99,8 @@ module pmp_pma_chk #(
   // PMP_ENTRIES-1 of them: the checker takes the members it uses, not
   // a group, because its two sites are fed from different groups and
   // the walker's site checks at a fixed privilege. pmpaddr holds
-  // PA[PA_WIDTH-1:2]; higher pmpaddr bits are WARL zero at PA_WIDTH
-  // 36. One entry is declared when PMP_ENTRIES is 0 so the ports keep
+  // PA[PA_WIDTH-1:2]; higher pmpaddr bits are WARL zero. One entry is
+  // declared when PMP_ENTRIES is 0 so the ports keep
   // a legal shape; it is never read.
   input  pmpcfg_ent_t  [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0]
                                 pmp_cfg,

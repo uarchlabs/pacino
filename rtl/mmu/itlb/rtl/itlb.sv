@@ -23,13 +23,13 @@
 // to hgatp.VMID; and G set or the ASID equal to the current one,
 // satp.ASID for V=0 and vsatp.ASID for V=1. G applies within a VMID.
 //
-// THE VPN TAG IS VA_WIDTH-12 = 29 BITS, the width of ifu_itlb_vpn
-// (IT-16), not VPN_WIDTH. With V=1, vsatp.MODE=Bare and hgatp in
-// Sv39x4 the lookup address is a 41-bit guest physical address and
-// all 29 bits are significant (FE-19). itlb_l2t_vpn is built at the
-// same width for the same reason, as itlb_l2tlb_interfaces.md 2
-// declares it, [VA_WIDTH-13:0] (IL-1a). That document read
-// [VPN_WIDTH-1:0] until session-075; this note reported it.
+// THE VPN TAG IS VA_WIDTH-12 BITS, the width of ifu_itlb_vpn (IT-16).
+// With V=1 and vsatp.MODE=Bare the lookup address is a VA_WIDTH-bit
+// guest physical address and every bit is significant (FE-19).
+// itlb_l2t_vpn is built at the same width for the same reason, as
+// itlb_l2tlb_interfaces.md 2 declares it, [VA_WIDTH-13:0] (IL-1a).
+// That document read [VPN_WIDTH-1:0] until session-075; this note
+// reported it. (VPN_WIDTH itself was removed by BP-145.)
 //
 // REGIMES (fe_decisions.md FE-19, ITLB-17). Read from the CSR input
 // group every cycle; the ITLB holds no CSR.
@@ -38,10 +38,13 @@
 //               with any bit set above PPN_WIDTH is outside the
 //               implemented physical space and faults cause 1.
 //   Sv39        V=0 with satp in Sv39, or V=1 with vsatp in Sv39.
-//               Address bits 40:39 must equal bit 38, else cause 12
-//               before any lookup.
-//   G only      V=1, vsatp Bare, hgatp Sv39x4. Every 41-bit pattern
-//               is legal; looked up, walked by the L2 TLB.
+//               Address bits VA_WIDTH-1 down to SV39_SIGN_BIT (38)
+//               must all be equal, else cause 12 before any lookup
+//               (ITLB-18). Every non-Bare MODE is checked as Sv39:
+//               the per-mode check is the next task's (BP-145).
+//   G only      V=1, vsatp Bare, hgatp not Bare. Every VA_WIDTH-bit
+//               pattern is passed to the walker, which checks the
+//               bits the hgatp mode requires to be zero (MMU-28).
 // M-mode fetch is never translated, whatever satp holds; FE-19 lists
 // the Bare regimes and does not name M-mode. Reported.
 //
@@ -163,10 +166,11 @@ module itlb #(
   parameter int PMP_ENTRIES  = 16,                      // MMU-11
   parameter int PMP_GRAN_LG2 = 12,
   parameter int PMA_REGIONS  = 1,                       // MMU-15a
+  // Main memory from 0x8000_0000 to the top of the PA_WIDTH space.
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_BASE =
-    {36'h0_8000_0000},
+    {PA_WIDTH'('h8000_0000)},
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_TOP  =
-    {36'hF_FFFF_FFFF},
+    {{PA_WIDTH{1'b1}}},
   parameter logic [PMA_REGIONS-1:0][PMA_WIDTH-1:0] PMA_ATTR = {4'b1111},
   parameter logic [PMA_WIDTH-1:0]                  PMA_DFLT = 4'b0000
 ) (
@@ -228,7 +232,10 @@ module itlb #(
   // -----------------------------------------------------------------
   // Constants.
   // -----------------------------------------------------------------
-  localparam int VW     = VA_WIDTH - 12;                  // 29
+  localparam int VW     = VA_WIDTH - 12;                  // the VPN
+  // The Sv39 sign bit as a VPN bit: VPN bits VW-1 down to SX_LO must
+  // all be equal (ITLB-18). SV39_SIGN_BIT is architectural (package).
+  localparam int SX_LO  = SV39_SIGN_BIT - 12;             // = 26
   localparam int EI     = (ITLB_ENTRIES > 1) ? $clog2(ITLB_ENTRIES) : 1;
   localparam int TI     = 2;                              // IL-1
   // The checker's entries, taken from fe_csr (SYS-001).
@@ -288,6 +295,8 @@ module itlb #(
       $error("itlb: PMP grain below one page; a page check is inexact");
     if (PMP_ENTRIES > CSR_PMP_ENTRIES)
       $error("itlb: PMP_ENTRIES above the fe_csr_t entries");
+    if (VA_WIDTH <= SV39_SIGN_BIT)
+      $error("itlb: VA_WIDTH must exceed the Sv39 sign bit");
   end
 
   typedef struct packed {
@@ -316,15 +325,19 @@ module itlb #(
     logic [1:0]             imp;
   } trk_t;
 
-  // The VPN bits a page size leaves out of the compare. A reserved
-  // code is never installed, so it cannot reach here from an entry;
-  // it masks nothing.
+  // The VPN bits a page size leaves out of the compare: 4 for 64 KiB,
+  // 9 for 2 MiB, 18 for 1 GiB. ARCHITECTURAL page sizes, the same in
+  // every mode; not address widths. A reserved code is never
+  // installed, so it cannot reach here from an entry; it masks nothing.
+  localparam int SZB_64K = 4;
+  localparam int SZB_2M  = 9;
+  localparam int SZB_1G  = 18;
   function automatic logic [VW-1:0] size_mask(input logic [2:0] sz);
     case (sz)
       SZ_4K:   return VW'(0);
-      SZ_64K:  return VW'(18'h0000F);
-      SZ_2M:   return VW'(18'h001FF);
-      SZ_1G:   return VW'(18'h3FFFF);
+      SZ_64K:  return VW'((64'd1 << SZB_64K) - 64'd1);
+      SZ_2M:   return VW'((64'd1 << SZB_2M)  - 64'd1);
+      SZ_1G:   return VW'((64'd1 << SZB_1G)  - 64'd1);
       default: return VW'(0);
     endcase
   endfunction
@@ -483,8 +496,11 @@ module itlb #(
                (!w_hit_ent.perm[P_X] ||
                 ((fe_csr.priv == PRV_U) && !w_hit_ent.perm[P_U]) ||
                 ((fe_csr.priv == PRV_S) &&  w_hit_ent.perm[P_U]));
+    // ITLB-18, Sv39: bits VA_WIDTH-1 down to 38 all equal. Until BP-145
+    // this compared VPN bits VW-1:VW-2 with VW-3, which is that check
+    // only at VA_WIDTH 41.
     sx_bad   = w_sv39 &&
-               (r_rq_vpn[VW-1:VW-2] != {2{r_rq_vpn[VW-3]}});
+               !((&r_rq_vpn[VW-1:SX_LO]) || !(|r_rq_vpn[VW-1:SX_LO]));
     pa_bad   = |r_rq_vpn[VW-1:PA_HI];
 
     itlb_ifu_rsp_val = r_rq_val;

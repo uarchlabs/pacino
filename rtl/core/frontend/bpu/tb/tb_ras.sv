@@ -3724,6 +3724,50 @@ module tb;
           ptr_is(1, 3, 0) && (dut.spec_ret_addr[3] == '0) &&
           ent_is(2, ADDR_B, 0, 1, 0));
 
+    // =============================================================
+    // TC-72 (BP-145, FE-19): return addresses above 2^41 are held
+    // whole. The RAS holds VA_WIDTH bits in both stacks. (a) Two pushes
+    // of addresses with bits 58, 56 and 41 set, popped in order; (b) a
+    // committed call's address, the p0 read and the fallback pop of an
+    // empty speculative stack (as TC-70). Each expected value is a 64-bit
+    // constant, so a stack narrower than 59 bits cannot match it.
+    // Skipped below VA_WIDTH 59.
+    // =============================================================
+    if (VA_WIDTH >= 59) begin
+      do_reset();
+      push_one(VA_WIDTH'(64'h500_0200_0000_1234));
+      push_one(VA_WIDTH'(64'h500_0200_0000_5678));
+      drv(0, 1'b1, RETURN, '0);
+      #1;
+      check("TC-72a the first pop is the second push, whole",
+            pop_valid_p2[0] &&
+            (64'(pop_addr_p2[0]) == 64'h500_0200_0000_5678));
+      tick();
+      drv(0, 1'b1, RETURN, '0);
+      #1;
+      check("TC-72a the second pop is the first push, whole",
+            pop_valid_p2[0] &&
+            (64'(pop_addr_p2[0]) == 64'h500_0200_0000_1234));
+      tick();
+      do_reset();
+      push_one(VA_WIDTH'(64'h500_0200_0000_9ABC));
+      commit_op(DIRECT_CALL, VA_WIDTH'(64'h500_0200_0000_9ABC), 4'd1);
+      drv(0, 1'b0, NO_BRANCH, '0);
+      #1;
+      check("TC-72b the p0 read is the commit top, whole",
+            tos_valid_p0[0] &&
+            (64'(tos_addr_p0[0]) == 64'h500_0200_0000_9ABC));
+      tick();
+      drv(0, 1'b1, RETURN, '0);
+      #1;
+      check("TC-72b the fallback pop is the commit top, whole",
+            pop_valid_p2[0] &&
+            (64'(pop_addr_p2[0]) == 64'h500_0200_0000_9ABC));
+      tick();
+    end else begin
+      $display("SKIP TC-72: VA_WIDTH %0d", VA_WIDTH);
+    end
+
     // -------------------------------------------------------------
     // The reference model (Problem 2): it ran in every case above,
     // from each case's reset. One check stands for all its comparisons.

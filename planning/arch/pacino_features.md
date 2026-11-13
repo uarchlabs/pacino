@@ -6,7 +6,7 @@
  FILE:    pacino_features.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-10
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -40,6 +40,8 @@ also implements.
 | Extension | What it adds                                   | Source          |
 |-----------|------------------------------------------------|-----------------|
 | Svadu     | hardware A/D bit update; menvcfg.ADUE selects Svade or Svadu at runtime | mmu_decisions.md MMU-6, MMU-7 |
+| Sv48      | 48-bit paged virtual memory; with Shgatpa, Sv48x4 at the G-stage. Ruled session-085, not yet built | mmu_decisions.md MMU-20 |
+| Sv57      | 57-bit paged virtual memory; with Shgatpa, Sv57x4 at the G-stage. Ruled session-085, not yet built | mmu_decisions.md MMU-20 |
 
 Pacino is the front end and the MMU today; the units not yet built
 implement nothing.
@@ -424,7 +426,11 @@ Also present: IFU line buffer 8192 (1.00 KB), block queue
 
 ## 3. Variants
 
-None yet. An extended-address variant (Sv57) is the first planned.
+None. Sv48 and Sv57 are in the one build, not in a variant (Jeff,
+session-085; mmu_decisions.md MMU-20): software selects the mode at
+run time. fe-1.0.0, the Sv39-only design, survives as a tag; section
+2 describes it until the next extraction. This read "None yet. An
+extended-address variant (Sv57) is the first planned."
 
 ---
 
@@ -435,4 +441,6 @@ None yet. An extended-address variant (Sv57) is the first planned.
               section 2 to be filled from DOC-016.
   2026-11-10  session-084, after DOC-016. Section 2 filled from
               DOC-016's report.
+  2026-11-12  session-085 (Jeff). Section 1: Sv48 and Sv57. Section
+              3: no variant; one build.
 ```

@@ -6,7 +6,7 @@
  FILE:    itlb_l2tlb_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-15
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -66,11 +66,13 @@ instantiated twice.
 The far end is the page table walker (section 1). This list read
 L2TLB at the far end (DOC-002, D9). Session-080.
 
-IL-1a `itlb_l2t_vpn` is VA_WIDTH - 12 = 29 bits, for the reason
+IL-1a `itlb_l2t_vpn` is VA_WIDTH - 12 bits, for the reason
       itlb_ifu_interfaces.md IT-16 gives for the IFU side: with V=1
-      and vsatp.MODE=Bare the address is a 41-bit guest physical
-      address, and a 27-bit field drops bits 40:39. BP-118 built
-      it at 29. This read [VPN_WIDTH-1:0]. Session-075.
+      and vsatp.MODE=Bare the address is a guest physical address of
+      up to VA_WIDTH bits. BP-118 built it at 29 (VA_WIDTH 41). This
+      read [VPN_WIDTH-1:0]. Session-075. VA_WIDTH is 59 since
+      session-085 (mmu_decisions.md MMU-20), so the field is 47
+      bits; NOT YET BUILT.
 
 IL-1  `itlb_l2t_tag` is two bits. Up to four requests may be
       outstanding from one client. The walker accepts one at a
@@ -182,11 +184,14 @@ L1I line (fe_decisions.md Conventions). Session-071.
 ## 4. Page size and permissions
 
 IL-7  `l2t_itlb_size` names which page size the translation
-      covers: 4 KiB, 64 KiB (Svnapot), 2 MiB or 1 GiB. THREE bits,
-      RULED session-075 (Jeff): 3'b000 4 KiB, 3'b001 64 KiB,
-      3'b010 2 MiB, 3'b011 1 GiB, 3'b1xx reserved for a future
-      size. Ascending, so a larger code always masks more VPN
-      bits. BP-118 built two bits; BP-119 widened to three. A
+      covers: 4 KiB, 64 KiB (Svnapot), 2 MiB, 1 GiB, 512 GiB or
+      256 TiB. THREE bits, RULED session-075 (Jeff): 3'b000 4 KiB,
+      3'b001 64 KiB, 3'b010 2 MiB, 3'b011 1 GiB, 3'b100 512 GiB,
+      3'b101 256 TiB, 3'b11x reserved. Ascending, so a larger code
+      always masks more VPN bits. 3'b100 and 3'b101 RULED
+      session-085 (Jeff) with mmu_decisions.md MMU-32; they were
+      inside 3'b1xx, reserved for a future size. NOT YET BUILT.
+      BP-118 built two bits; BP-119 widened to three. A
       response that hits with a reserved size code is handled as a
       reserved status (IT-4, IL-4), built by BP-119. The ITLB
       installs the entry at that size, ITLB-3; a 64 KiB entry is
@@ -258,8 +263,9 @@ IL-11a The faulting GUEST PHYSICAL address IS returned on
        produced inside the nested walk. Shtvala requires `htval`
        to carry it. This is the one address that travels back on
        this port, and it continues to the IFU as
-       `itlb_ifu_gpa`, IT-6a. It is FAULT_GPA_WIDTH = 56 bits and
-       carries every faulting GPA whole (mmu_decisions.md MMU-23).
+       `itlb_ifu_gpa`, IT-6a. It is FAULT_GPA_WIDTH bits, 59 since
+       session-085 (56 before), and carries every faulting GPA whole
+       (mmu_decisions.md MMU-23).
        For kind 00 (IL-11b) the walker returns the page and the
        IFU fills the offset. Ruled session-077 (Jeff), after
        BP-123; BUILT by BP-124. This read "It is 0 when the
@@ -361,4 +367,9 @@ MMU-31    The G-stage-only permission byte, IL-8.
 
   2026-10-15  session-080, after DOC-002. Section 2: the far end is
               the walker.
+
+  2026-11-12  session-085, rulings (Jeff), with mmu_decisions.md
+              MMU-20. IL-1a: the VPN is VA_WIDTH - 12, 47 bits. IL-7:
+              size codes for 512 GiB and 256 TiB. IL-11a:
+              FAULT_GPA_WIDTH 59.
 ```

@@ -37,7 +37,7 @@
 //   L  a page-crossing block, two tags, finals out of order
 //   M  two walks outstanding, responses out of order (depth 2 only)
 //   N  a held fault releases the tracker; an invalidate drops it
-//   P  the address check of Sv39 (bits 40:39 equal bit 38)
+//   P  the address check of Sv39 (bits VA_WIDTH-1:38 all equal)
 //   R  a reserved page-size code (IL-7 3'b1xx) handled as a reserved
 //      status (IT-4): fault cause 1, nothing installed (BP-119)
 //   Q  a held fault records the privilege and V of its walk (ITLB-10b,
@@ -59,6 +59,13 @@ module tb #(
 );
 
   localparam int VW = VA_WIDTH - 12;
+  // BP-145: short names for the implementation widths, so a cast
+  // fits a line: FW a faulting GPA, PW the PA, PNW the PPN, PMW
+  // pmpaddr. A VPN literal is VW'(...).
+  localparam int FW  = FAULT_GPA_WIDTH;
+  localparam int PW  = PA_WIDTH;
+  localparam int PNW = PPN_WIDTH;
+  localparam int PMW = CSR_PMPADDR_W;
 
   localparam logic [1:0] ST_HIT = 2'b00, ST_MISS = 2'b01,
                          ST_FAULT = 2'b10;
@@ -529,9 +536,9 @@ module tb #(
   int m0, n0;
 
   // VPNs used below. Main memory starts at PPN 0x80000.
-  localparam logic [VW-1:0] VA_A = 29'h0001000;
-  localparam logic [VW-1:0] VA_B = 29'h0002000;
-  localparam logic [VW-1:0] VA_C = 29'h0003000;
+  localparam logic [VW-1:0] VA_A = VW'('h0001000);
+  localparam logic [VW-1:0] VA_B = VW'('h0002000);
+  localparam logic [VW-1:0] VA_C = VW'('h0003000);
 
   initial begin
     inv_arm = 1'b0;
@@ -540,39 +547,39 @@ module tb #(
     // ---- A: physical regimes ------------------------------------------
     reset_all();
     cs_satp_mode(BARE);
-    look(29'h0080000);
+    look(VW'('h0080000));
     ok("A1 Bare main memory base", g_st == ST_HIT &&
-       g_ppn == 24'h080000 && g_pma == MM);
-    look(29'h0FFFFFF);
-    ok("A2 Bare top of PA space", g_st == ST_HIT && g_ppn == 24'hFFFFFF);
-    look(29'h007FFFF);
+       g_ppn == PNW'('h080000) && g_pma == MM);
+    look(VW'('h0FFFFFF));
+    ok("A2 Bare top of PA space", g_st == ST_HIT && g_ppn == PNW'('hFFFFFF));
+    look(VW'('h007FFFF));
     ok("A3 Bare below main memory", g_st == ST_FAULT && g_cause == 5'd1);
     // PA bit 36 set over a main-memory page: dropping bit 36 would
     // land in main memory, so only the range check faults it.
-    look(29'h1080000);
+    look(VW'('h1080000));
     ok("A4 Bare above pa_bits", g_st == ST_FAULT && g_cause == 5'd1);
-    look(29'h1008_0000);
+    look(VW'('h1008_0000));
     ok("A5 Bare bit 40 set", g_st == ST_FAULT && g_cause == 5'd1);
     cs_satp_mode(SV39);
     cs_priv(PM);
-    look(29'h0080123);
-    ok("A6 M-mode untranslated", g_st == ST_HIT && g_ppn == 24'h080123);
+    look(VW'('h0080123));
+    ok("A6 M-mode untranslated", g_st == ST_HIT && g_ppn == PNW'('h080123));
     cs_priv(PS);
     cs_v(1'b1); cs_vsatp_mode(BARE); cs_hgatp_mode(BARE);
-    look(29'h0090000);
-    ok("A7 V=1 Bare/Bare physical", g_st == ST_HIT && g_ppn == 24'h090000);
+    look(VW'('h0090000));
+    ok("A7 V=1 Bare/Bare physical", g_st == ST_HIT && g_ppn == PNW'('h090000));
     cs_v(1'b0); cs_satp_mode(BARE);
     cs_pmpcfg(0, 8'h00);                    // PMP entry OFF
-    look(29'h0080000);
+    look(VW'('h0080000));
     ok("A8 Bare S no PMP match", g_st == ST_FAULT && g_cause == 5'd1);
     cs_priv(PM);
-    look(29'h0080000);
+    look(VW'('h0080000));
     ok("A9 Bare M no PMP match", g_st == ST_HIT);
     ok("A10 no walk in any physical regime", l2_reqs == 0);
 
     // ---- B: miss, walk, hit ---------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX, 2'd0, 5);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX, 2'd0, 5);
     look(VA_A);
     ok("B1 first lookup misses", g_st == ST_MISS);
     idle(2);
@@ -582,17 +589,17 @@ module tb #(
     ok("B3a L2 request: execute, at the miss's privilege (S)",
        n_bad_acc == 0 && last_priv == PS);
     xlate(VA_A, m0);
-    ok("B4 hit after the walk", g_st == ST_HIT && g_ppn == 24'h080010 &&
+    ok("B4 hit after the walk", g_st == ST_HIT && g_ppn == PNW'('h080010) &&
        g_pma == MM && g_cause == 5'd0);
     n0 = l2_reqs;
     look(VA_A);
     ok("B5 installed, one-cycle hit", g_st == ST_HIT &&
-       g_ppn == 24'h080010);
+       g_ppn == PNW'('h080010));
     ok("B6 no second walk", l2_reqs == n0);
 
     // ---- C: ITLB-10, IT-9 -------------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX, 2'd0, 12);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX, 2'd0, 12);
     xlate(VA_A, m0);
     ok("C1 re-requested while walking", m0 >= 8);
     ok("C2 hit at the end", g_st == ST_HIT);
@@ -600,36 +607,36 @@ module tb #(
 
     // ---- D: ITLB-8 --------------------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX, 2'd0, 2);
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PX, 2'd0, 30);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX, 2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PX, 2'd0, 30);
     install(VA_A);
     look(VA_B);
     ok("D1 VA_B misses", g_st == ST_MISS);
     idle(2);
     for (int k = 0; k < 5; k++) begin
       look(VA_A);
-      ok("D2 hit during a walk", g_st == ST_HIT && g_ppn == 24'h080010);
+      ok("D2 hit during a walk", g_st == ST_HIT && g_ppn == PNW'('h080010));
     end
     ok("D3 the walk is still outstanding", pend.size() == 1);
     xlate(VA_B, m0);
-    ok("D4 VA_B completes", g_st == ST_HIT && g_ppn == 24'h080020);
+    ok("D4 VA_B completes", g_st == ST_HIT && g_ppn == PNW'('h080020));
 
     // ---- E: IL-6 retry ----------------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, 24'h080030, PX, 2'd0, 3);
+    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, PNW'('h080030), PX, 2'd0, 3);
     maps[0].retries = 2;
     xlate(VA_C, m0);
-    ok("E1 hit after two retries", g_st == ST_HIT && g_ppn == 24'h080030);
+    ok("E1 hit after two retries", g_st == ST_HIT && g_ppn == PNW'('h080030));
     ok("E2 three requests: two re-asked", l2_reqs == 3);
     // The ITLB re-asks by itself: one lookup, no IFU re-request.
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, 24'h080030, PX, 2'd0, 3);
+    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, PNW'('h080030), PX, 2'd0, 3);
     maps[0].retries = 2;
     look(VA_C);
     ok("E3 one lookup misses", g_st == ST_MISS);
     idle(20);
     ok("E4 the ITLB asked three times", l2_reqs == 3);
-    expect_hit("E5 installed with no re-request", VA_C, 24'h080030);
+    expect_hit("E5 installed with no re-request", VA_C, PNW'('h080030));
 
     // ---- F: faults from the walk ----------------------------------------
     reset_all();
@@ -646,26 +653,26 @@ module tb #(
     reset_all();
     cs_v(1'b1);
     // MMU-23 (BP-124): a GPA above bit 40 passes through whole.
-    add_fault(VA_B, L2_FAULT, 5'd20, 56'h80_0001_2345_6789, 3);
+    add_fault(VA_B, L2_FAULT, 5'd20, FW'('h80_0001_2345_6789), 3);
     xlate(VA_B, m0);
     ok("F4 cause 20 with GPA", g_st == ST_FAULT && g_cause == 5'd20 &&
-       g_gpa == 56'h80_0001_2345_6789);
+       g_gpa == FW'('h80_0001_2345_6789));
     ok("F5 V=1 walk carries V and VMID", last_v == 1'b1 &&
        last_vmid == 14'd3);
     // BP-123, IT-6c, ITLB-10a: the held fault keeps the GPA's kind.
     for (int k = 0; k < 3; k++) begin
       reset_all();
       cs_v(1'b1);
-      add_fault(VA_B, L2_FAULT, 5'd20, 56'h0_0004_2AB8 | (56'(k) << 50),
+      add_fault(VA_B, L2_FAULT, 5'd20, FW'('h0_0004_2AB8) | (FW'(k) << 50),
                 3);
       maps[maps.size()-1].imp = 2'(k);
       xlate(VA_B, m0);
       ok($sformatf("F5b.%0d cause 20 carries its kind %0d", k, k),
          g_st == ST_FAULT && g_cause == 5'd20 && rsp_imp == 2'(k) &&
-         g_gpa == (56'h0_0004_2AB8 | (56'(k) << 50)));
+         g_gpa == (FW'('h0_0004_2AB8) | (FW'(k) << 50)));
     end
     reset_all();
-    add_fault(VA_C, L2_FAULT, 5'd1, 56'h0_0000_0FFF, 3);
+    add_fault(VA_C, L2_FAULT, 5'd1, FW'('h0_0000_0FFF), 3);
     xlate(VA_C, m0);
     ok("F6 cause 1, no GPA", g_st == ST_FAULT && g_cause == 5'd1 &&
        g_gpa == '0);
@@ -682,49 +689,52 @@ module tb #(
     // ---- G: page sizes ----------------------------------------------------
     reset_all();
     // 64 KiB NAPOT: the PTE PPN carries the 1000 marker in [3:0].
-    add_map(1'b0, '0, 16'd5, 29'h0040000, SZ64K, 24'h081238, PX, 2'd0, 2);
-    xlate(29'h0040005, m0);
+    add_map(1'b0, '0, 16'd5, VW'('h0040000), SZ64K, PNW'('h081238), PX,
+            2'd0, 2);
+    xlate(VW'('h0040005), m0);
     ok("G1 64K walk hit, PPN[3:0] = VPN[3:0]", g_st == ST_HIT &&
-       g_ppn == 24'h081235);
+       g_ppn == PNW'('h081235));
     n0 = l2_reqs;
-    expect_hit("G2 64K low end",  29'h0040000, 24'h081230);
-    expect_hit("G3 64K high end", 29'h004000F, 24'h08123F);
+    expect_hit("G2 64K low end",  VW'('h0040000), PNW'('h081230));
+    expect_hit("G3 64K high end", VW'('h004000F), PNW'('h08123F));
     ok("G4 64K held once", l2_reqs == n0);
-    expect_miss("G5 64K just above", 29'h0040010);
-    expect_miss("G6 64K just below", 29'h003FFFF);
+    expect_miss("G5 64K just above", VW'('h0040010));
+    expect_miss("G6 64K just below", VW'('h003FFFF));
     reset_all();
-    add_map(1'b0, '0, 16'd5, 29'h0000200, SZ2M, 24'h080200, PX, 2'd0, 2);
-    install(29'h00003FF);
+    add_map(1'b0, '0, 16'd5, VW'('h0000200), SZ2M, PNW'('h080200), PX, 2'd0, 2);
+    install(VW'('h00003FF));
     n0 = l2_reqs;
-    expect_hit("G7 2M low end",  29'h0000200, 24'h080200);
-    expect_hit("G8 2M high end", 29'h00003FF, 24'h0803FF);
+    expect_hit("G7 2M low end",  VW'('h0000200), PNW'('h080200));
+    expect_hit("G8 2M high end", VW'('h00003FF), PNW'('h0803FF));
     ok("G9 2M held once", l2_reqs == n0);
-    expect_miss("G10 2M just above", 29'h0000400);
+    expect_miss("G10 2M just above", VW'('h0000400));
     reset_all();
-    add_map(1'b0, '0, 16'd5, 29'h00C0000, SZ1G, 24'h840000, PX, 2'd0, 2);
-    install(29'h00C1234);
+    add_map(1'b0, '0, 16'd5, VW'('h00C0000), SZ1G, PNW'('h840000), PX, 2'd0, 2);
+    install(VW'('h00C1234));
     n0 = l2_reqs;
-    expect_hit("G11 1G low end",  29'h00C0000, 24'h840000);
-    expect_hit("G12 1G high end", 29'h00FFFFF, 24'h87FFFF);
+    expect_hit("G11 1G low end",  VW'('h00C0000), PNW'('h840000));
+    expect_hit("G12 1G high end", VW'('h00FFFFF), PNW'('h87FFFF));
     ok("G13 1G held once", l2_reqs == n0);
-    expect_miss("G14 1G just above", 29'h0100000);
-    // Sv39 high half: bits 40:39 equal bit 38.
+    expect_miss("G14 1G just above", VW'('h0100000));
+    // Sv39 high half: bits VA_WIDTH-1 down to 38 all set. The top page
+    // is all ones at any VA_WIDTH (it was 29'h1FFF_FFFF, that page only
+    // at VA_WIDTH 41; BP-145).
     reset_all();
-    add_map(1'b0, '0, 16'd5, 29'h1FFF_FFFF, SZ4K, 24'h080400, PX, 2'd0, 2);
-    install(29'h1FFF_FFFF);
-    expect_hit("G15 Sv39 top page", 29'h1FFF_FFFF, 24'h080400);
+    add_map(1'b0, '0, 16'd5, {VW{1'b1}}, SZ4K, PNW'('h080400), PX, 2'd0, 2);
+    install({VW{1'b1}});
+    expect_hit("G15 Sv39 top page", {VW{1'b1}}, PNW'('h080400));
 
     // ---- H: tag matching --------------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX,  2'd0, 2);
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PXG, 2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX,  2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PXG, 2'd0, 2);
     install(VA_A);
     install(VA_B);
     cs_satp_asid(16'd6);
     expect_miss("H1 other ASID misses", VA_A);
-    expect_hit("H2 global ignores ASID", VA_B, 24'h080020);
+    expect_hit("H2 global ignores ASID", VA_B, PNW'('h080020));
     cs_satp_asid(16'd5);
-    expect_hit("H3 own ASID hits", VA_A, 24'h080010);
+    expect_hit("H3 own ASID hits", VA_A, PNW'('h080010));
     // V: the V=0 entries do not serve V=1.
     cs_v(1'b1);
     look(VA_A);
@@ -735,17 +745,17 @@ module tb #(
     idle(4);
     reset_all();
     cs_v(1'b1);
-    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080110, PX,  2'd0, 2);
-    add_map(1'b1, 14'd3, 16'd5, VA_B, SZ4K, 24'h080120, PXG, 2'd0, 2);
+    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, PNW'('h080110), PX,  2'd0, 2);
+    add_map(1'b1, 14'd3, 16'd5, VA_B, SZ4K, PNW'('h080120), PXG, 2'd0, 2);
     install(VA_A);
     install(VA_B);
-    expect_hit("H6 V=1 VMID 3 hit", VA_A, 24'h080110);
+    expect_hit("H6 V=1 VMID 3 hit", VA_A, PNW'('h080110));
     cs_vmid(14'd4);
     expect_miss("H7 other VMID misses", VA_A);
     expect_miss("H8 global is per VMID", VA_B);
     cs_vmid(14'd3);
     cs_vsatp_asid(16'd9);
-    expect_hit("H9 V=1 global ignores ASID", VA_B, 24'h080120);
+    expect_hit("H9 V=1 global ignores ASID", VA_B, PNW'('h080120));
     expect_miss("H10 V=1 other ASID misses", VA_A);
     cs_vsatp_asid(16'd5);
     cs_v(1'b0);
@@ -753,24 +763,24 @@ module tb #(
 
     // ---- I: ITLB-16 ------------------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX,  2'd0, 2);
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PXU, 2'd0, 2);
-    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, 24'h080030, PR,  2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX,  2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PXU, 2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, PNW'('h080030), PR,  2'd0, 2);
     install(VA_A);
     cs_priv(PU);
     install(VA_B);
     cs_priv(PS);
     n0 = l2_reqs;
-    expect_hit("I1 S, U clear: legal", VA_A, 24'h080010);
+    expect_hit("I1 S, U clear: legal", VA_A, PNW'('h080010));
     cs_priv(PU);
     look(VA_A);
     ok("I2 U, U clear: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
     cs_priv(PS);
-    expect_hit("I3 back to S, no fence", VA_A, 24'h080010);
+    expect_hit("I3 back to S, no fence", VA_A, PNW'('h080010));
     look(VA_B);
     ok("I4 S, U set: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
     cs_priv(PU);
-    expect_hit("I5 U, U set: legal", VA_B, 24'h080020);
+    expect_hit("I5 U, U set: legal", VA_B, PNW'('h080020));
     ok("I6 no walk for a permission change", l2_reqs == n0);
     cs_priv(PS);
     xlate(VA_C, m0);
@@ -778,7 +788,7 @@ module tb #(
     // VU and VS for a V=1 entry.
     reset_all();
     cs_v(1'b1);
-    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080110, PX, 2'd0, 2);
+    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, PNW'('h080110), PX, 2'd0, 2);
     install(VA_A);
     cs_priv(PU);
     look(VA_A);
@@ -786,9 +796,9 @@ module tb #(
 
     // ---- J: effective attributes; PMP and PMA on a hit -------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX, 2'd1, 2);   // NC
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PX, 2'd2, 2);   // IO
-    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, 24'h000010, PX, 2'd0, 2);   // dev
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX, 2'd1, 2);   // NC
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PX, 2'd2, 2);   // IO
+    add_map(1'b0, '0, 16'd5, VA_C, SZ4K, PNW'('h000010), PX, 2'd0, 2);   // dev
     install(VA_A);
     ok("J1 NC: not cacheable", g_pma == 4'b1110);
     install(VA_B);
@@ -800,7 +810,7 @@ module tb #(
     // page is denied; entry 1 still grants the rest.
     cs_pmpcfg(1, 8'h1F); cs_pmpaddr(1, '1);
     cs_pmpcfg(0, 8'h1B);                              // NAPOT R W
-    cs_pmpaddr(0, 34'(36'h0_8001_0000 >> 2) | 34'h1FF);
+    cs_pmpaddr(0, PMW'(PW'('h0_8001_0000) >> 2) | PMW'('h1FF));
     look(VA_A);
     ok("J4 PMP denies X: cause 1", g_st == ST_FAULT && g_cause == 5'd1);
     look(VA_B);
@@ -815,18 +825,19 @@ module tb #(
     for (int f = 0; f < 13; f++) begin
       reset_all();
       // V=0: E1 asid5 @A, E2 global @B, E3 asid6 @C
-      add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080001, PX,  2'd0, 2);
-      add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080002, PXG, 2'd0, 2);
-      add_map(1'b0, '0, 16'd6, VA_C, SZ4K, 24'h080003, PX,  2'd0, 2);
+      add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080001), PX,  2'd0, 2);
+      add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080002), PXG, 2'd0, 2);
+      add_map(1'b0, '0, 16'd6, VA_C, SZ4K, PNW'('h080003), PX,  2'd0, 2);
       // V=1: E4 vmid3 asid5 @A, E5 vmid4 asid5 @A, E6 vmid3 global @B
-      add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080004, PX,  2'd0, 2);
-      add_map(1'b1, 14'd4, 16'd5, VA_A, SZ4K, 24'h080005, PX,  2'd0, 2);
-      add_map(1'b1, 14'd3, 16'd5, VA_B, SZ4K, 24'h080006, PXG, 2'd0, 2);
+      add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, PNW'('h080004), PX,  2'd0, 2);
+      add_map(1'b1, 14'd4, 16'd5, VA_A, SZ4K, PNW'('h080005), PX,  2'd0, 2);
+      add_map(1'b1, 14'd3, 16'd5, VA_B, SZ4K, PNW'('h080006), PXG, 2'd0, 2);
       // a 2 MiB V=0 entry for the superpage address form
-      add_map(1'b0, '0, 16'd5, 29'h0000200, SZ2M, 24'h080200, PX, 2'd0, 2);
+      add_map(1'b0, '0, 16'd5, VW'('h0000200), SZ2M, PNW'('h080200), PX,
+              2'd0, 2);
       install(VA_A); install(VA_B);
       cs_satp_asid(16'd6); install(VA_C); cs_satp_asid(16'd5);
-      install(29'h0000210);
+      install(VW'('h0000210));
       cs_v(1'b1);
       install(VA_A); install(VA_B);
       cs_vmid(14'd4); install(VA_A); cs_vmid(14'd3);
@@ -843,8 +854,8 @@ module tb #(
         8:  inval(OP_VVMA, 1, 1, VA_B, 16'd5, 14'd3);
         9:  inval(OP_GVMA, 0, 1, '0,   '0,    14'd3);
         10: inval(OP_GVMA, 0, 0, '0,   '0,    '0);
-        11: inval(OP_VMA,  1, 0, 29'h00003F0, '0, '0);
-        default: inval(OP_VMA, 1, 0, 29'h0001FFF, '0, '0); // no match
+        11: inval(OP_VMA,  1, 0, VW'('h00003F0), '0, '0);
+        default: inval(OP_VMA, 1, 0, VW'('h0001FFF), '0, '0); // no match
       endcase
       // Expected survivors, from ITLB-13 / 13a / 13b. Bit order:
       // E1 E2 E3 E4 E5 E6 E7(2M).
@@ -868,7 +879,7 @@ module tb #(
         endcase
         // got[6:0] is E1..E7 in the order of exp.
         n0 = l2_reqs;
-        look(29'h0000210); got[0] = (g_st == ST_HIT); idle(4);
+        look(VW'('h0000210)); got[0] = (g_st == ST_HIT); idle(4);
         cs_satp_asid(16'd6);
         look(VA_C);        got[4] = (g_st == ST_HIT); idle(4);
         cs_satp_asid(16'd5);
@@ -889,7 +900,7 @@ module tb #(
     end
     // IL-13 / IL-14: an invalidate during a walk installs nothing.
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX, 2'd0, 8);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX, 2'd0, 8);
     look(VA_A);
     idle(3);
     inval(OP_VMA, 1, 0, VA_C, '0, '0);      // unrelated address
@@ -903,7 +914,7 @@ module tb #(
     ok("K15 the new walk installs", g_st == ST_HIT);
     // the invalidate in the cycle the response returns
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PX, 2'd0, 4);
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PX, 2'd0, 4);
     // The model raises the invalidate in the cycle it presents the
     // response (inv_arm), so the two reach the DUT on one edge.
     inv_op = OP_VMA; inv_rs1 = 1'b1; inv_vpn = VA_C;
@@ -918,46 +929,46 @@ module tb #(
 
     // ---- L: page-crossing block ------------------------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A,        SZ4K, 24'h080010, PX, 2'd0, 6);
-    add_map(1'b0, '0, 16'd5, VA_A + 29'd1, SZ4K, 24'h080011, PX, 2'd0, 2);
-    install(VA_A + 29'd1);
+    add_map(1'b0, '0, 16'd5, VA_A,        SZ4K, PNW'('h080010), PX, 2'd0, 6);
+    add_map(1'b0, '0, 16'd5, VA_A + VW'(1), SZ4K, PNW'('h080011), PX, 2'd0, 2);
+    install(VA_A + VW'(1));
     // tag 0 misses, tag 1 hits: the tag-1 final arrives first.
     look(VA_A, 1'b0);
     ok("L1 tag 0 miss carries tag 0", g_st == ST_MISS && g_tag == 1'b0);
-    look(VA_A + 29'd1, 1'b1);
+    look(VA_A + VW'(1), 1'b1);
     ok("L2 tag 1 hit carries tag 1", g_st == ST_HIT && g_tag == 1'b1 &&
-       g_ppn == 24'h080011);
+       g_ppn == PNW'('h080011));
     xlate(VA_A, m0, 1'b0);
     ok("L3 tag 0 final later, tag 0", g_st == ST_HIT && g_tag == 1'b0 &&
-       g_ppn == 24'h080010);
+       g_ppn == PNW'('h080010));
     // back to back, one per cycle, each answered the next cycle
     req_val = 1'b1; req_vpn = VA_A; req_tag = 1'b0;
     @(negedge clk);
     ok("L4 first answer tag 0", rsp_val && rsp_tag == 1'b0 &&
-       rsp_ppn == 24'h080010);
-    req_vpn = VA_A + 29'd1; req_tag = 1'b1;
+       rsp_ppn == PNW'('h080010));
+    req_vpn = VA_A + VW'(1); req_tag = 1'b1;
     @(negedge clk);
     ok("L5 second answer tag 1", rsp_val && rsp_tag == 1'b1 &&
-       rsp_ppn == 24'h080011);
+       rsp_ppn == PNW'('h080011));
     req_val = 1'b0;
     @(negedge clk);
     ok("L6 no answer without a request", !rsp_val);
 
     // ---- M: two walks, out of order (WALK_DEPTH 2) -------------------------
     reset_all();
-    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, 24'h080010, PX, 2'd0, 10);
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PX, 2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_A, SZ4K, PNW'('h080010), PX, 2'd0, 10);
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PX, 2'd0, 2);
     look(VA_A);
     look(VA_B);
     idle(2);
     if (WALK_DEPTH >= 2) begin
       ok("M1 depth 2: two walks", l2_reqs == 2);
       idle(4);
-      expect_hit("M2 the later walk returned first", VA_B, 24'h080020);
+      expect_hit("M2 the later walk returned first", VA_B, PNW'('h080020));
       look(VA_A);
       ok("M3 the earlier still walking", g_st == ST_MISS);
       idle(10);
-      expect_hit("M4 the earlier installs", VA_A, 24'h080010);
+      expect_hit("M4 the earlier installs", VA_A, PNW'('h080010));
     end else begin
       ok("M1 depth 1: the second miss starts no walk", l2_reqs == 1);
       idle(12);
@@ -966,7 +977,7 @@ module tb #(
     // ---- N: held faults ----------------------------------------------------
     reset_all();
     add_fault(VA_A, L2_FAULT, 5'd12, '0, 2);
-    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PX, 2'd0, 2);
+    add_map(1'b0, '0, 16'd5, VA_B, SZ4K, PNW'('h080020), PX, 2'd0, 2);
     look(VA_A);                    // the fault is never collected
     idle(6);
     xlate(VA_B, m0);
@@ -1028,7 +1039,7 @@ module tb #(
     // answer at V=0.
     reset_all();
     cs_v(1'b1);
-    add_fault(VA_B, L2_FAULT, 5'd20, 56'h0_0004_2000, 2);
+    add_fault(VA_B, L2_FAULT, 5'd20, FW'('h0_0004_2000), 2);
     look(VA_B);
     idle(6);
     cs_v(1'b0);
@@ -1040,20 +1051,76 @@ module tb #(
        last_v == 1'b0);
     idle(6);
 
+    // ---- W: BP-145, the cases VA_WIDTH 59 makes reachable ------------
+    // a  V=0, satp Sv39: a fetch address whose bits VA_WIDTH-1 down to 39
+    //    are not all equal to bit 38 is a page fault, cause 12, before
+    //    any lookup (ITLB-18). W1: one bit set in 58:41, bit 38 clear.
+    //    W2: bits 58:39 set, bit 38 clear. Both pass a check of bits
+    //    VW-1:VW-2 against VW-3, the Sv39 check only at VA_WIDTH 41.
+    //    W3: bits 58:38 all set is canonical: a miss, and a walk.
+    // b  The same with V=1, vsatp Sv39.
+    // f  V=0, satp Bare: a fetch address with a bit set above bit 40 is
+    //    outside the PA space, an access fault, cause 1 (FE-19).
+    // At VA_WIDTH 41 the addresses cannot be formed; W is skipped.
+    if (VA_WIDTH > SV39X4_GPA_WIDTH) begin
+      logic [VW-1:0] w1;
+      logic [VW-1:0] w2;
+      logic [VW-1:0] w3;
+      w1 = VW'(1) << (VA_WIDTH - 8 - 12);            // VA bit 51 at 59
+      w2 = {VW{1'b1}} << (SV39_SIGN_BIT + 1 - 12);   // VA bits 58:39
+      w3 = {VW{1'b1}} << (SV39_SIGN_BIT - 12);       // VA bits 58:38
+      for (int pass = 0; pass < 2; pass++) begin
+        string pv;
+        reset_all();
+        pv = (pass == 0) ? "V=0 satp" : "V=1 vsatp";
+        if (pass == 1) begin cs_v(1'b1); cs_vsatp_mode(SV39); end
+        n0 = l2_reqs;
+        look(w1);
+        ok($sformatf("W1 %s Sv39, VA bit %0d alone: cause 12", pv,
+                     VA_WIDTH - 8),
+           g_st == ST_FAULT && g_cause == 5'd12);
+        look(w2);
+        ok($sformatf("W2 %s Sv39, bits %0d:39 set, 38 clear: cause 12",
+                     pv, VA_WIDTH - 1),
+           g_st == ST_FAULT && g_cause == 5'd12);
+        idle(2);
+        ok($sformatf("W1, W2 %s: no walk", pv), l2_reqs == n0);
+        look(w3);
+        ok($sformatf("W3 %s Sv39, bits %0d:38 set: a miss", pv,
+                     VA_WIDTH - 1),
+           g_st == ST_MISS);
+        idle(2);
+        ok($sformatf("W3 %s: one walk, the whole VPN", pv),
+           l2_reqs == n0 + 1 && last_vpn == w3);
+        idle(6);
+      end
+      reset_all();
+      cs_satp_mode(BARE);
+      look(VW'('h0080000) | (VW'(1) << (SV39X4_GPA_WIDTH - 12)));
+      ok("W4 Bare, PA bit 41 over main memory: cause 1",
+         g_st == ST_FAULT && g_cause == 5'd1);
+      look(VW'('h0080000) | (VW'(1) << (VA_WIDTH - 1 - 12)));
+      ok($sformatf("W5 Bare, PA bit %0d over main memory: cause 1",
+                   VA_WIDTH - 1),
+         g_st == ST_FAULT && g_cause == 5'd1);
+    end else begin
+      $display("SKIP W: VA_WIDTH %0d", VA_WIDTH);
+    end
+
     // ---- P: Sv39 address check --------------------------------------------
     reset_all();
-    look(29'h0800_0000);            // VA bit 39 set, bit 38 clear
+    look(VW'('h0800_0000));            // VA bit 39 set, bit 38 clear
     ok("P1 V=0 Sv39 bad sign: cause 12", g_st == ST_FAULT &&
        g_cause == 5'd12);
-    look(29'h1000_0000);            // VA bit 40 set only
+    look(VW'('h1000_0000));            // VA bit 40 set only
     ok("P2 bit 40 alone: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
     cs_v(1'b1); cs_vsatp_mode(BARE);
-    add_map(1'b1, 14'd3, 16'd5, 29'h1000_0000, SZ4K, 24'h080500, PX,
+    add_map(1'b1, 14'd3, 16'd5, VW'('h1000_0000), SZ4K, PNW'('h080500), PX,
             2'd0, 2);
-    xlate(29'h1000_0000, m0);
-    ok("P3 V=1 G-only: all 41 bits legal", g_st == ST_HIT &&
-       g_ppn == 24'h080500);
-    ok("P4 V=1 G-only: L2 sees bit 40", last_vpn == 29'h1000_0000);
+    xlate(VW'('h1000_0000), m0);
+    ok("P3 V=1 G-only: bit 40 passed on", g_st == ST_HIT &&
+       g_ppn == PNW'('h080500));
+    ok("P4 V=1 G-only: L2 sees bit 40", last_vpn == VW'('h1000_0000));
     ok("P5 no walk for P1, P2", l2_reqs == 1);
     // BP-123. A G-stage-only translation (vsatp Bare) has no VS-stage
     // leaf: the walker returns the G-stage leaf, U set (MMU-26), and
@@ -1061,17 +1128,17 @@ module tb #(
     // VS-mode fetch through such an entry faulted cause 12.
     reset_all();
     cs_v(1'b1); cs_vsatp_mode(BARE); cs_priv(2'd1);          // VS-mode
-    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080600, PXU, 2'd0, 2);
+    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, PNW'('h080600), PXU, 2'd0, 2);
     xlate(VA_A, m0);
     ok("P6 G-only entry, U set, hits in VS-mode", g_st == ST_HIT &&
-       g_ppn == 24'h080600);
+       g_ppn == PNW'('h080600));
     cs_priv(2'd0);                                            // VU-mode
     look(VA_A);
-    ok("P7 and in VU-mode", g_st == ST_HIT && g_ppn == 24'h080600);
+    ok("P7 and in VU-mode", g_st == ST_HIT && g_ppn == PNW'('h080600));
     // With a VS-stage the rule applies: a U page faults in VS-mode.
     reset_all();
     cs_v(1'b1); cs_priv(2'd1);
-    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080600, PXU, 2'd0, 2);
+    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, PNW'('h080600), PXU, 2'd0, 2);
     xlate(VA_A, m0);
     ok("P8 with vsatp Sv39 a U page faults in VS-mode", g_st == ST_FAULT &&
        g_cause == 5'd12);
@@ -1086,8 +1153,8 @@ module tb #(
     for (int r = 4; r < 8; r++) begin
       string tn;
       reset_all();
-      add_map(1'b0, '0, 16'd5, VA_A, 3'(r), 24'h080010, PX, 2'd0, 3);
-      add_map(1'b0, '0, 16'd5, VA_B, SZ4K,  24'h080020, PX, 2'd0, 2);
+      add_map(1'b0, '0, 16'd5, VA_A, 3'(r), PNW'('h080010), PX, 2'd0, 3);
+      add_map(1'b0, '0, 16'd5, VA_B, SZ4K,  PNW'('h080020), PX, 2'd0, 2);
       install(VA_B);
       xlate(VA_A, m0);
       tn = $sformatf("R1.%0d size %b: fault cause 1", r, 3'(r));
@@ -1103,7 +1170,7 @@ module tb #(
       idle(6);
       tn = $sformatf("R4.%0d size %b: legal entry still hits", r, 3'(r));
       look(VA_B);
-      ok(tn, g_st == ST_HIT && g_ppn == 24'h080020);
+      ok(tn, g_st == ST_HIT && g_ppn == PNW'('h080020));
     end
 
     $display("tb_itlb (WALK_DEPTH=%0d): PASS=%0d FAIL=%0d", WALK_DEPTH,

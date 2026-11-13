@@ -673,7 +673,8 @@ module ftb_cntrl (
       hit_vec[w] = plru_rd_valid[w]
                    && (way_entry[w].tag == pred_tag_p1);
     end
-    // Full tag -> at most one way hits (no aliasing below VA bit 40).
+    // Full tag -> at most one way hits (no aliasing below VA bit 40;
+    // bits VA_WIDTH-1 down to 40 are outside the pinned region tag).
     for (int unsigned w = 0; w < FTB_WAYS; w++) begin
       if (hit_vec[w]) hit_way = FTB_WAY_BITS'(w);
     end

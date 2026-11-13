@@ -58,13 +58,22 @@ package csr_pkg;
   localparam int CSR_ADDR_W      = 12;
   localparam int CSR_PMP_ENTRIES = 16;                     // MMU-11
   localparam int CSR_PMP_G       = 10;                     // 4 KiB grain
-  // satp.PPN and hgatp.PPN: 23:0, PPN_WIDTH 24
+  // The PPN field of satp, vsatp and hgatp at XLEN 64: bits 43:0.
+  // ARCHITECTURAL, the layouts below.
+  localparam int CSR_ATP_PPN_ARCH = 44;
+  // satp.PPN and hgatp.PPN: PPN_WIDTH-1:0 (PA_WIDTH - 12)
   localparam int CSR_PPN_W       = bp_defines_pkg::PPN_WIDTH;
-  // vsatp.PPN: 28:0, GPA_WIDTH 41 - 12
-  localparam int CSR_VSATP_PPN_W = bp_defines_pkg::GPA_WIDTH - 12;
+  // vsatp.PPN: CSR_VSATP_PPN_W-1:0 (MMU-24b), GPA_WIDTH - 12 bits, but
+  // never wider than the 44-bit field that holds it. At GPA_WIDTH 59
+  // that is 44: GPA_WIDTH - 12 is 47 and the field has 44 bits, so the
+  // vsatp root is a GPA of at most 56 bits (BP-145, reported against
+  // MMU-24b's 47). It was GPA_WIDTH - 12 unclamped until BP-145.
+  localparam int CSR_VSATP_PPN_W =
+    (bp_defines_pkg::GPA_WIDTH - 12 < CSR_ATP_PPN_ARCH) ?
+     bp_defines_pkg::GPA_WIDTH - 12 : CSR_ATP_PPN_ARCH;
   localparam int CSR_ASID_W      = bp_defines_pkg::ASID_WIDTH;  // 16
   localparam int CSR_VMID_W      = bp_defines_pkg::VMID_WIDTH;  // 14
-  // pmpaddr.ADDR: 33:0, PA_WIDTH 36 - 2
+  // pmpaddr.ADDR: CSR_PMPADDR_W-1:0 (PA_WIDTH - 2)
   localparam int CSR_PMPADDR_W   = bp_defines_pkg::PA_WIDTH - 2;
 
   // ================================================================
@@ -133,21 +142,21 @@ package csr_pkg;
     logic [31:0] tage_aging_interval;    // 31:0
   } csr_7c1_t;
 
-  // 0x180 satp. PPN 23:0 implemented.
+  // 0x180 satp. PPN CSR_PPN_W-1:0 implemented.
   typedef struct packed {
     logic [3:0]  mode;                 // 63:60
     logic [15:0] asid;                 // 59:44
     logic [43:0] ppn;                  // 43:0
   } satp_t;
 
-  // 0x280 vsatp. PPN 28:0 implemented.
+  // 0x280 vsatp. PPN CSR_VSATP_PPN_W-1:0 implemented.
   typedef struct packed {
     logic [3:0]  mode;                 // 63:60
     logic [15:0] asid;                 // 59:44
     logic [43:0] ppn;                  // 43:0
   } vsatp_t;
 
-  // 0x680 hgatp. PPN 23:0 implemented; 1:0 read 0 in Sv39x4.
+  // 0x680 hgatp. PPN CSR_PPN_W-1:0 implemented; 1:0 read 0 in Sv39x4.
   typedef struct packed {
     logic [3:0]  mode;                 // 63:60
     logic [1:0]  rsvd;                 // 59:58, read 0
@@ -188,7 +197,7 @@ package csr_pkg;
     pmpcfg_ent_t [7:0] ent;
   } pmpcfg_t;
 
-  // 0x3B0-0x3BF pmpaddr0-15. ADDR 33:0 implemented (PA_WIDTH 36).
+  // 0x3B0-0x3BF pmpaddr0-15. ADDR CSR_PMPADDR_W-1:0 implemented.
   typedef struct packed {
     logic [9:0]  rsvd;                 // 63:54, read 0
     logic [53:0] addr;                 // 53:0

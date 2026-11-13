@@ -1163,8 +1163,8 @@ module bp_cluster (
       w_pft_p2 = w_ftb_pft_addr_p2;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      // ITTAGE target. The metadata holds VA[40:1]; bit 0 is always
-      // zero at 2-byte granularity and is not stored. The target is
+      // ITTAGE target. The metadata holds VA[VA_WIDTH-1:1]; bit 0 is
+      // always zero at 2-byte granularity and is not stored. It is
       // {stored, 1'b0}, exactly VA_WIDTH bits: no bit is inferred and
       // there is no extension (ftq_bpu_interfaces.md 5.2, TD#132).
       it_hit = w_ittage_pred_rdy_p2[s]

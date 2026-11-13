@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-15
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -823,16 +823,18 @@ Proposed numbering. Stated here for the first time; not carried from
          correction group says what the entry must record. The two
          are different questions and fire at different rates.
 
-  FE-19  A FETCH ADDRESS IS 41 BITS AND ITS HIGH BITS ARE CHECKED
-         BEFORE IT NARROWS. VA_WIDTH is 41 because H is mandatory
-         through Sha, MMU-20 makes the G-stage Sv39x4, and Shvsatpa
-         requires vsatp to support Bare. With V=1 and
+  FE-19  A FETCH ADDRESS IS 59 BITS AND ITS HIGH BITS ARE CHECKED
+         BEFORE IT NARROWS. VA_WIDTH is 59 because H is mandatory
+         through Sha, MMU-20 supports Sv57x4 at the G-stage, and
+         Shvsatpa requires vsatp to support Bare. With V=1 and
          vsatp.MODE=Bare the fetch PC is a guest physical address of
-         up to 41 bits. Sv39x4 requires bits 63:41 to be zero or the
-         access guest-page faults.
+         up to 59 bits. Sv57x4 requires bits 63:59 to be zero or the
+         access guest-page faults. RULED session-085 (Jeff) with
+         MMU-20; this invariant read 41 bits, from Sv39x4, until
+         then. NOT YET BUILT: VA_WIDTH is 41 in bp_defines_pkg.sv.
 
          The backend computes a JALR target with 64-bit arithmetic
-         and may produce a PC with bits 63:41 set. That must fault.
+         and may produce a PC with bits 63:59 set. That must fault.
          Narrowing it to VA_WIDTH discards the evidence, so
          bkend_ftq_redir_pc is checked WHERE IT IS FORMED, in the
          backend, before it narrows. The front end does not
@@ -847,19 +849,21 @@ Proposed numbering. Stated here for the first time; not carried from
          traps before forming the redirect at all, or a fifth cause
          is added. FE-U11.
 
-         This is not new with 41 bits. The same hole exists at 40
-         today; two-stage translation moves the boundary from 39 to
-         41 and makes it visible.
+         This is not new with 59 bits. The same hole existed at 41;
+         the widest mode sets where the boundary falls.
 
-         WITHIN 41 BITS, LEGALITY IS THE ITLB'S. THREE REGIMES, not
+         WITHIN 59 BITS, LEGALITY IS THE MMU'S. THREE REGIMES, not
          two:
 
-         - translation on, V=0 with satp.MODE=Sv39 or V=1 with
-           vsatp.MODE=Sv39: a legal address has bits 40:39 equal to
-           bit 38.
+         - translation on, V=0 with satp.MODE=SvNN or V=1 with
+           vsatp.MODE=SvNN (NN = 39, 48 or 57): a legal address has
+           bits 58 down to NN-1 all equal. The ITLB checks it
+           (itlb_decisions.md ITLB-18).
          - V=1 with vsatp.MODE=Bare: the fetch PC is a guest
-           physical address and all 2^41 patterns are legal, which
-           is why VA_WIDTH is 41.
+           physical address. Every 59-bit pattern is legal under
+           Sv57x4, which is why VA_WIDTH is 59; under Sv39x4 or
+           Sv48x4 bits 58:41 or 58:50 must be zero, and the walker
+           checks them (MMU-28), cause 20.
          - V=0 with satp.MODE=Bare: THE FETCH ADDRESS IS PHYSICAL.
            Svbare is mandatory (rva23-profile.adoc), so this regime
            is reachable, and it is the one the machine resets into.
@@ -872,10 +876,11 @@ Proposed numbering. Stated here for the first time; not carried from
            hgatp.MODE Bare reaches physical space the same way.
 
          The same value is legal in one regime and a fault in
-         another, and only the ITLB holds V, satp.MODE and
-         vsatp.MODE. MMU-16 has cause 12 and cause 20 for the
-         translating regimes and cause 1 for the third. No predictor
-         and no FTQ stage evaluates this.
+         another, and only the MMU holds V and the MODE fields.
+         MMU-16 has cause 12 and cause 20 for the translating regimes
+         and cause 1 for the third. No predictor and no FTQ stage
+         evaluates this. This read "within 41 bits" and named Sv39
+         alone; session-085.
 
          This enumeration carried two regimes and attributed the
          sign-extension rule to the whole of V=0, which is wrong
@@ -883,12 +888,21 @@ Proposed numbering. Stated here for the first time; not carried from
 
          CONSEQUENCE FOR PREDICTORS. Predictor storage need not
          represent every address exactly. An FTB tag that does not
-         cover bit 40 aliases, and is caught by predecode at the
+         cover bits 58:40 aliases, and is caught by predecode at the
          block end. MMU-14 already keeps speculation out of
          non-idempotent regions. Architectural addresses -- pc,
          pft_addr, target_pc, ftq_resolve_t.target,
          bkend_ftq_redir_pc, RESET_VECTOR -- may not truncate.
-         FTB_TAG_BITS is pinned at 26 on that basis, TD#122.
+         FTB_RTAG_BITS is pinned at 26 on that basis, TD#122, and
+         stays pinned at VA_WIDTH 59 (session-085).
+
+         PREDICTED TARGETS ARE FULL WIDTH. RULED session-085 (Jeff):
+         a predictor that stores a target stores all of it, VA_WIDTH
+         bits less the always-zero bit 0, rather than narrow targets
+         with a region or upper-bits scheme. The ITTAGE target is
+         VA[VA_WIDTH-1:1] and IT_MAX_TGT_WIDTH is VA_WIDTH - 1, 58;
+         the RAS holds VA_WIDTH bits. The FTB and uBTB targets are
+         displacements and do not change.
 
          THE ITTAGE STORES THE WHOLE TARGET. Since BP-111 (TD#132)
          its target field is VA[40:1], IT_MAX_TGT_WIDTH is 40, and
@@ -1120,6 +1134,8 @@ ubtb.sv.
            session-070.
 
   TD-FE-3  bp_ftq_entry_t.pc and per-slot target are VA_WIDTH bits.
+           At VA_WIDTH 59 (FE-19, session-085) the floor below is 58,
+           as addr[58:1]; the reasoning is unchanged.
            REVERSED session-070, TD#122. This entry read that 39
            bits suffice because RVA23 mandates C so bit 0 of an
            instruction address is always zero, and that 39 was the
@@ -1339,7 +1355,8 @@ ubtb.sv.
          revision of this item read "four of the seven" and named
          three unlisted encodings. Corrected session-070.
 
-  FE-U11 How a backend redirect PC with bits 63:41 set is signalled.
+  FE-U11 How a backend redirect PC with bits 63:59 set is signalled
+         (63:41 until session-085).
          FE-19 requires the check where the redirect is formed and
          does not say what the backend does with the result. The
          ftq_backend_interfaces.md 5 cause field has no value for
@@ -1824,4 +1841,11 @@ create one.
 
   2026-10-19  session-081, after DOC-007. 10: FD-23 re-pointed at the
               split; w_jmp_cut_p2 is read by nothing.
+
+  2026-11-12  session-085, rulings (Jeff), with mmu_decisions.md
+              MMU-20. FE-19: VA_WIDTH 59 from Sv57x4; legality per
+              mode, the canonical check the ITLB's (ITLB-18), the
+              G-stage bound the walker's; predicted targets full
+              width; FTB_RTAG_BITS stays pinned. TD-FE-3 and FE-U11:
+              the widths follow.
 ```

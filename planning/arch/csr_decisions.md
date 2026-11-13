@@ -6,7 +6,7 @@
  FILE:    csr_decisions.md
  SOURCE:  session-079, TD#178
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -87,15 +87,16 @@ subset. Bits not listed read 0.
 
 ```
   addr   CSR       field   bits    implemented
-  0x180  satp      MODE    63:60   0 Bare, 8 Sv39
+  0x180  satp      MODE    63:60   0 Bare, 8 Sv39, 9 Sv48, 10 Sv57
                    ASID    59:44   16 bits
                    PPN     43:0    23:0 (PPN_WIDTH 24)
-  0x280  vsatp     MODE    63:60   0 Bare, 8 Sv39
+  0x280  vsatp     MODE    63:60   0 Bare, 8 Sv39, 9 Sv48, 10 Sv57
                    ASID    59:44   16 bits
-                   PPN     43:0    28:0 (GPA_WIDTH 41 - 12)
-  0x680  hgatp     MODE    63:60   0 Bare, 8 Sv39x4
+                   PPN     43:0    46:0 (GPA_WIDTH 59 - 12)
+  0x680  hgatp     MODE    63:60   0 Bare, 8 Sv39x4, 9 Sv48x4,
+                                   10 Sv57x4
                    VMID    57:44   14 bits
-                   PPN     43:0    23:0; 1:0 read 0 in Sv39x4
+                   PPN     43:0    23:0; 1:0 read 0 in every x4 mode
   0x30A  menvcfg   PBMTE   62
                    ADUE    61
   0x60A  henvcfg   PBMTE   62      read 0 when menvcfg.PBMTE = 0
@@ -108,6 +109,10 @@ subset. Bits not listed read 0.
   0x3BF  -15
 ```
 
+The MODE values are mmu_decisions.md MMU-20, RULED session-085
+(Jeff); they were 0 and 8 only, and vsatp.PPN was 28:0 (GPA_WIDTH
+41). NOT YET BUILT in csr_pkg.sv and csr_tb_pkg.sv.
+
 priv and V are hart state, not CSRs. priv encoding: 00 U, 01 S,
 11 M.
 
@@ -117,6 +122,7 @@ CSR-5  csr_write rules:
   satp     unsupported MODE: no field written
   hgatp    unsupported MODE: MODE unchanged, VMID and PPN written
   vsatp    unsupported MODE: no field written. PROPOSED
+           unsupported is 1 to 7 and 11 to 15 in all three
   pmpcfg   locked entry (L = 1): entry and its pmpaddr not written
            A = NA4 written: stored as NAPOT
            R = 0 with W = 1 written: stored with W = 0
@@ -232,4 +238,8 @@ CSR-U2 Hardware delivery of CSR state to the groups, and ordering
               CSR-6 port shapes and walker sampling, CSR-7 reset
               values.
   2026-10-14  session-080, after SYS-002. CSR-5: every rule built.
+  2026-11-12  session-085 (Jeff), mmu_decisions.md MMU-20. Section 3:
+              satp and vsatp add Sv48 and Sv57, hgatp Sv48x4 and
+              Sv57x4; vsatp.PPN 47 bits. CSR-5: the unsupported MODE
+              values.
 ```

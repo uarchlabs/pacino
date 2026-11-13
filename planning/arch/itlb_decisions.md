@@ -6,7 +6,7 @@
  FILE:    itlb_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -44,17 +44,22 @@ ITLB-1  64 entries.
 
 ITLB-2  Fully associative.
 
-ITLB-3  One array holds every page size: the three Sv39 sizes,
-        4 KiB, 2 MiB and 1 GiB, and the 64 KiB Svnapot case. No
+ITLB-3  One array holds every page size: 4 KiB, 2 MiB, 1 GiB,
+        512 GiB (Sv48 and Sv57) and 256 TiB (Sv57), and the 64 KiB
+        Svnapot case (mmu_decisions.md MMU-32). No
         separate large-page array. A NAPOT entry is HELD ONCE and
         matched across its range by masking VPN[3:0] out of the
         compare; on a hit the output PPN[3:0] is VPN[3:0], not the
         stored value, which is the size marker (mmu_decisions.md
         MMU-U7, ruled session-071). Svnapot is mandatory in
         RVA23S64. This read "all three Sv39 page sizes".
-        A response whose size code is reserved (3'b1xx,
+        A response whose size code is reserved (3'b11x,
         itlb_l2tlb_interfaces.md IL-7) is never installed; it is
         handled as a reserved status (IT-4). Built by BP-119.
+        The 512 GiB and 256 TiB sizes match by masking VPN[26:0] and
+        VPN[35:0] out of the compare, as the smaller sizes do. RULED
+        session-085 (Jeff) with MMU-20; this read "the three Sv39
+        sizes". NOT YET BUILT.
 
 ITLB-3a Each entry also holds the page's PBMT, the more restrictive
         of the two stages' values as returned on
@@ -89,8 +94,10 @@ separate 8-entry array for large pages, so it is not evidence that
 
 ITLB-6  Replacement is not-most-recently-used over the 64 entries.
 
-ITLB-7  ASID width is 16 bits, the Sv39 maximum. VMID width is 14
-        bits, the Sv39x4 maximum.
+ITLB-7  ASID width is 16 bits, the maximum for Sv39, Sv48 and
+        Sv57. VMID width is 14 bits, the maximum for every x4 mode.
+        Neither changes with the mode set (session-085); this read
+        "the Sv39 maximum" and "the Sv39x4 maximum".
 
 Neither of these was in the L1I-U2 recommendation. Both are
 required to build the array and are recorded here rather than left
@@ -246,6 +253,21 @@ ITLB-17 The ITLB reads its translation regime from a CSR input
         the request waits (BP-124 Assumption 5).
         BP-123 built `itlb_l2t_acc` on the walker only (D2), tied to
         execute in tb_fe_top.
+
+ITLB-18 THE ITLB CHECKS A TRANSLATED FETCH ADDRESS AGAINST THE
+        CURRENT MODE. With V=0 and satp.MODE, or V=1 and vsatp.MODE,
+        set to SvNN (NN = 39, 48 or 57), the fetch address bits from
+        VA_WIDTH-1 down to NN-1 must all be equal, or the fetch raises
+        an instruction page fault, cause 12. Bits 63 down to VA_WIDTH
+        are the backend's to check (fe_decisions.md FE-19). The check
+        reads the mode from the ITLB-17 group, at lookup. It does not
+        apply in the other two regimes. With V=1 and vsatp.MODE=Bare
+        the address is a guest physical address, and its bound is
+        checked by the walker against hgatp.MODE (mmu_decisions.md
+        MMU-28). With satp.MODE=Bare it is physical, and an address
+        beyond PA_WIDTH is an access fault, cause 1. RULED
+        session-085 (Jeff) with MMU-20. As built (itlb.sv) the check
+        is the Sv39 one, correct only at VA_WIDTH 41.
 
 ## 6. Check placement
 
@@ -498,4 +520,9 @@ TD#118    Bounded ITLB-U1, now closed. The walker has its own
   2026-10-10  session-077, after BP-124. ITLB-10b and ITLB-17
               built, with the drop condition and the recorded
               privilege as built (Assumptions 6 and 5).
+
+  2026-11-12  session-085, rulings (Jeff), with mmu_decisions.md
+              MMU-20. ITLB-3: the 512 GiB and 256 TiB sizes. ITLB-7:
+              the ASID and VMID maxima hold for every mode. ITLB-18
+              new: the address check follows the current mode.
 ```

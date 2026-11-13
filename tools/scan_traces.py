@@ -39,6 +39,15 @@ Branch reach, RISC-V (unprivileged ISA, B-type and J-type immediates):
 A taken conditional branch or a direct jump or call whose traced
 displacement is outside that range is counted as far.
 
+Address modes (BP-145, perf_decisions.md PF-16). A 64-bit PC is
+canonical under SvNN when bits 63 down to NN-1 are all equal. Over
+every distinct PC of the trace (every record's PC, not only pc_min and
+pc_max):
+  pc_mode_min             the narrowest of sv39, sv48 and sv57 under
+                          which every PC is canonical, or none
+  pc_noncanon_sv57_static the number of distinct PCs not canonical
+                          under Sv57
+
 The traces are found through the environment variable CBP_TRACES,
 default ../cbp_traces relative to the repository root (PF-14). The
 training set is CBP_TRACES/training_traces/<group>/<trace>.gz. Each
@@ -112,7 +121,29 @@ COLUMNS = [
     "far_cond_taken_dyn", "far_cond_static",
     "far_jal_dyn", "far_jal_static",
     "half_instr", "half_cond_br_pieces",
+    "pc_mode_min", "pc_noncanon_sv57_static",
 ]
+
+# The translation modes PF-16 checks, narrowest first: (name, NN).
+SV_MODES = (("sv39", 39), ("sv48", 48), ("sv57", 57))
+
+
+def canonical(pc, nn):
+    """True when bits 63 down to nn-1 of the 64-bit pc are all equal."""
+    top = pc >> (nn - 1)
+    return top == 0 or top == (1 << (65 - nn)) - 1
+
+
+def pc_modes(pcs):
+    """(narrowest mode under which every pc is canonical or "none",
+    count of pcs not canonical under Sv57)."""
+    mode = "none"
+    for name, nn in SV_MODES:
+        if all(canonical(x, nn) for x in pcs):
+            mode = name
+            break
+    bad57 = sum(1 for x in pcs if not canonical(x, 57))
+    return mode, bad57
 
 
 class TraceError(Exception):
@@ -319,6 +350,7 @@ def parse_trace(path):
         if h_instr > half_target:
             break
 
+    mode_min, noncanon57 = pc_modes(pcs)
     return {
         "instructions": nrec,
         "cond_br": n_cond,
@@ -343,6 +375,8 @@ def parse_trace(path):
         "far_jal_static": len(far_j_pcs),
         "half_instr": h_instr,
         "half_cond_br_pieces": h_cond,
+        "pc_mode_min": mode_min,
+        "pc_noncanon_sv57_static": noncanon57,
     }
 
 

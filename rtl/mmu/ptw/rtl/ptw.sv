@@ -30,7 +30,11 @@
 //                             (the fetch's own GPA, kind 00)
 //   V=1, vsatp Bare, hgatp Sv39x4
 //                             G-stage only; the GPA is the request
-//                             address, 41 bits (MMU-20)
+//                             address, VA_WIDTH bits, and a bit set at
+//                             or above SV39X4_GPA_WIDTH (41) is a
+//                             guest-page fault (MMU-20, MMU-28)
+// Every non-zero MODE is walked as Sv39 or Sv39x4; the per-mode walk is
+// the next task's (MMU-32, BP-145).
 //   V=1, vsatp Sv39, hgatp Bare
 //                             VS-stage only; GPA = SPA, so there is no
 //                             guest-page fault and a VS-stage PPN is
@@ -117,10 +121,16 @@
 //     PPN_WIDTH-1: the access made with it, the next PTE read or the
 //     fetch, is an access fault
 //   - a guest physical page (VS-stage with hgatp Sv39x4) with a bit
-//     set above GPA bit 40: a guest-page fault with the kind of the
-//     access that needed it, and the GPA WHOLE (MMU-23, BP-124)
+//     set at or above GPA bit SV39X4_GPA_WIDTH (41): a guest-page fault
+//     with the kind of the access that needed it, and the GPA WHOLE
+//     (MMU-23, BP-124)
 // The fetch's own address is checked after the leaf's A update, where
 // the algorithm puts the access it makes.
+// EVERY G-STAGE TRANSLATION CHECKS ITS GPA FIRST (MMU-20, MMU-24b,
+// MMU-28; BP-145): a GPA with a bit set at or above SV39X4_GPA_WIDTH
+// is a guest-page fault with the kind of the access, before any G-stage
+// PTE is read. This is what catches a G-stage-only fetch address and a
+// vsatp root above 2^41, which VA_WIDTH and GPA_WIDTH 59 make possible.
 //
 // THE RESPONSE (IL-4 to IL-11b).
 //   hit    ppn, size, perm, pbmt. size is IL-7: 000 4 KiB, 001 64 KiB,
@@ -134,7 +144,7 @@
 //          bit of a G-stage PTE is not a global mapping). pbmt is the
 //          more restrictive of the two stages' (MMU-U6, IL-9a)
 //   fault  the cause of MMU-24c. On a guest-page fault gpa is the
-//          faulting guest physical address at FAULT_GPA_WIDTH = 56 bits,
+//          faulting guest physical address at FAULT_GPA_WIDTH bits,
 //          never replaced by a sentinel (MMU-23; MMU-30, a zero for a
 //          GPA above bit 40, is withdrawn, BP-124): for kind 00 the
 //          fetch's page, bits 11:0 zero (the IFU fills the offset,
@@ -156,10 +166,11 @@ module ptw #(
   parameter int PMP_ENTRIES  = 16,                      // MMU-11
   parameter int PMP_GRAN_LG2 = 12,
   parameter int PMA_REGIONS  = 1,                       // MMU-15a
+  // Main memory from 0x8000_0000 to the top of the PA_WIDTH space.
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_BASE =
-    {36'h0_8000_0000},
+    {PA_WIDTH'('h8000_0000)},
   parameter logic [PMA_REGIONS-1:0][PA_WIDTH-1:0]  PMA_TOP  =
-    {36'hF_FFFF_FFFF},
+    {{PA_WIDTH{1'b1}}},
   parameter logic [PMA_REGIONS-1:0][PMA_WIDTH-1:0] PMA_ATTR = {4'b1111},
   parameter logic [PMA_WIDTH-1:0]                  PMA_DFLT = 4'b0000
 ) (
@@ -209,16 +220,24 @@ module ptw #(
   // -----------------------------------------------------------------
   // Constants.
   // -----------------------------------------------------------------
-  localparam int VW   = VA_WIDTH - 12;        // 29, the request page
-  localparam int GPW  = GPA_WIDTH - 12;       // 29, a guest page
-  localparam int PTEP = 44;                   // PTE PPN field, 53:10
-  localparam int FGW  = FAULT_GPA_WIDTH;      // 56, a faulting GPA
+  localparam int VW   = VA_WIDTH - 12;        // the request page
+  localparam int PTEP = PTE_PPN_WIDTH;        // PTE PPN field, 53:10
+  localparam int FGW  = FAULT_GPA_WIDTH;      // a faulting GPA, MMU-23
+  // The Sv39x4 bound as a guest page width (package constant, not
+  // derived from GPA_WIDTH): a guest page with a bit set at or above
+  // G4W is a guest-page fault under Sv39x4 (MMU-28).
+  localparam int G4W  = SV39X4_GPA_WIDTH - 12;   // = 29
   // The checker's entries, taken from ptw_csr (SYS-001).
   localparam int PMP_N = (PMP_ENTRIES > 0) ? PMP_ENTRIES : 1;
 
   initial begin
     if (PMP_ENTRIES > CSR_PMP_ENTRIES)
       $error("ptw: PMP_ENTRIES above the ptw_csr_t entries");
+    // A G-stage-only request's address is its GPA (MMU-20, FE-19).
+    if (GPA_WIDTH < VA_WIDTH)
+      $error("ptw: GPA_WIDTH below VA_WIDTH truncates a G-only GPA");
+    if (GPA_WIDTH < SV39X4_GPA_WIDTH)
+      $error("ptw: GPA_WIDTH below the Sv39x4 GPA width");
   end
 
   // l2t_itlb_status, IL-4.
@@ -327,7 +346,7 @@ module ptw #(
   logic                    r_s_on;     // a single or VS stage walk
   logic                    r_g_on;     // V=1 and hgatp Sv39x4
   logic [PPN_WIDTH-1:0]    r_satp_ppn;
-  logic [GPW-1:0]          r_vsatp_ppn;
+  logic [CSR_VSATP_PPN_W-1:0] r_vsatp_ppn; // MMU-24b
   logic [PPN_WIDTH-1:0]    r_hgatp_ppn;
   logic                    r_s_adue;   // ADUE of the single / VS stage
   logic                    r_g_adue;   // menvcfg.ADUE, the G-stage
@@ -463,7 +482,7 @@ module ptw #(
   logic                    ws_leaf;
   logic [PTEP-1:0]         ws_ppn;
   logic                    ws_next_wide;  // the next page cannot be formed
-  logic                    ws_next_gwide; // a GPA above bit 40
+  logic                    ws_next_gwide; // a GPA beyond Sv39x4's 41 bits
   logic [FGW-1:0]          ws_next_gpa;   // the next VS PTE's GPA, whole
   logic                    ws_upd;      // A, or A and D, to be set
   logic [PTEP-1:0]         ws_page;     // the translated page
@@ -487,10 +506,13 @@ module ptw #(
     mask    = lvl_mask(r_s_lvl, napot);
 
     // A supervisor physical page beyond PPN_WIDTH, or (nested) a guest
-    // physical page beyond 41 bits. Read for the next table page of a
-    // non-leaf, and for the translated page of a leaf.
+    // physical page beyond the Sv39x4 GPA width, 41 bits (MMU-28). Read
+    // for the next table page of a non-leaf, and for the translated page
+    // of a leaf. The bound is the hgatp mode's, SV39X4_GPA_WIDTH, not
+    // GPA_WIDTH: until BP-145 it was written through GPA_WIDTH - 12,
+    // which is the Sv39x4 bound only at GPA_WIDTH 41.
     ws_next_wide  = |ws_ppn[PTEP-1:PPN_WIDTH];
-    ws_next_gwide = |ws_ppn[PTEP-1:GPW];
+    ws_next_gwide = |ws_ppn[PTEP-1:G4W];
 
     ws_page = (ws_ppn & ~mask) | (PTEP'(r_vpn) & mask);
     ws_size = lvl_size(r_s_lvl, napot);
@@ -508,8 +530,8 @@ module ptw #(
 
     // A non-leaf's next table, as a guest physical address: the PTE the
     // next level reads (an implicit READ). Formed whole, for a fault on
-    // a GPA above bit 40 (MMU-23, MMU-28).
-    ws_next_gpa = ({12'd0, ws_ppn} << 12) +
+    // a GPA beyond the Sv39x4 width (MMU-23, MMU-28).
+    ws_next_gpa = (FGW'(ws_ppn) << 12) +
                   FGW'({(r_s_lvl == 2'd2) ? r_vpn[17:9] : r_vpn[8:0],
                         3'b000});
 
@@ -619,9 +641,11 @@ module ptw #(
       2'd1:    w_s_idx = r_vpn[17:9];
       default: w_s_idx = r_vpn[8:0];
     endcase
-    // Sv39x4: the root index is GPA bits 40:30, eleven bits.
+    // Sv39x4: the root index is GPA bits 40:30, eleven bits, the GPA
+    // bits below SV39X4_GPA_WIDTH. The bits above are zero: S_G_START
+    // faulted the translation otherwise.
     case (r_g_lvl)
-      2'd2:    w_g_idx = r_g_gpa[40:30];
+      2'd2:    w_g_idx = r_g_gpa[SV39X4_GPA_WIDTH-1:30];
       2'd1:    w_g_idx = {2'b00, r_g_gpa[29:21]};
       default: w_g_idx = {2'b00, r_g_gpa[20:12]};
     endcase
@@ -769,8 +793,9 @@ module ptw #(
             r_s_base <= r_v ? PTEP'(r_vsatp_ppn) : PTEP'(r_satp_ppn);
             r_st     <= S_S_ADDR;
           end else if (r_g_on) begin
-            // G-stage only: the request address is the GPA.
-            r_g_gpa  <= {r_vpn, 12'h000};
+            // G-stage only: the request address is the GPA, all
+            // VA_WIDTH bits of it (S_G_START checks its bound).
+            r_g_gpa  <= GPA_WIDTH'({r_vpn, 12'h000});
             r_g_kind <= IMP_FETCH;
             r_g_acc  <= r_acc;
             r_g_ret  <= GR_FINAL;
@@ -797,8 +822,13 @@ module ptw #(
         S_S_ADDR: begin
           if (r_g_on) begin
             // The VS-stage PTE address is a GPA (MMU-21): an implicit
-            // read through the G-stage. It fits 41 bits: the base was
-            // checked when it was formed (vsatp.PPN is 29 bits, MMU-24b).
+            // read through the G-stage. It fits GPA_WIDTH bits: a
+            // non-root base was checked against the Sv39x4 bound when
+            // it was formed, and the root is vsatp.PPN, CSR_VSATP_PPN_W
+            // bits, at most GPA_WIDTH - 12. A root above 2^41 is NOT
+            // checked here: S_G_START checks every GPA, and faults this
+            // one with kind 01 (MMU-24b). Until BP-145 this comment said
+            // the root always fit 41 bits, true only at GPA_WIDTH 41.
             r_s_pte_gpa <= w_s_addr[GPA_WIDTH-1:0];
             r_g_gpa     <= w_s_addr[GPA_WIDTH-1:0];
             r_g_kind    <= IMP_READ;
@@ -821,9 +851,22 @@ module ptw #(
 
         // ---------------------------------------------------------------
         S_G_START: begin
-          r_g_lvl  <= 2'd2;
-          r_g_base <= PTEP'(r_hgatp_ppn);
-          r_st     <= S_G_ADDR;
+          if (|(r_g_gpa >> SV39X4_GPA_WIDTH)) begin
+            // MMU-20, MMU-28: a GPA with a bit set at or above the
+            // Sv39x4 width is a guest-page fault, with the kind of the
+            // access and the GPA whole (MMU-23). The G-stage-only fetch
+            // address (kind 00) and the vsatp root (kind 01, MMU-24b)
+            // reach here unchecked. At GPA_WIDTH 41 no GPA can fail.
+            r_rsp_st    <= ST_FAULT;
+            r_rsp_cause <= c_gpf(r_acc);
+            r_rsp_gpa   <= FGW'(r_g_gpa);
+            r_rsp_imp   <= r_g_kind;
+            r_st        <= S_RSP;
+          end else begin
+            r_g_lvl  <= 2'd2;
+            r_g_base <= PTEP'(r_hgatp_ppn);
+            r_st     <= S_G_ADDR;
+          end
         end
 
         S_G_ADDR: begin
@@ -909,8 +952,9 @@ module ptw #(
             r_st        <= S_RSP;
           end else if (!ws_leaf) begin
             if (r_g_on && ws_next_gwide) begin
-              // MMU-28: the next VS-stage table's GPA does not fit 41
-              // bits; its read is the implicit access that faults, and
+              // MMU-28: the next VS-stage table's GPA does not fit the
+              // Sv39x4 41 bits; its read is the implicit access that
+              // faults, and
               // its GPA is returned whole (MMU-23).
               r_rsp_st    <= ST_FAULT;
               r_rsp_cause <= c_gpf(r_acc);
@@ -987,15 +1031,18 @@ module ptw #(
             end
             r_st <= S_RSP;
           end else if (ws_next_gwide) begin
-            // MMU-28: the fetch's GPA does not fit 41 bits. Its page is
-            // returned whole, bits 11:0 zero (MMU-23, IFU-2a).
+            // MMU-28: the fetch's GPA does not fit the Sv39x4 41 bits.
+            // Its page is returned whole, bits 11:0 zero (MMU-23,
+            // IFU-2a).
             r_rsp_st    <= ST_FAULT;
             r_rsp_cause <= c_gpf(r_acc);
-            r_rsp_gpa   <= {ws_page, 12'h000};
+            r_rsp_gpa   <= FGW'({ws_page, 12'h000});
             r_rsp_imp   <= IMP_FETCH;
             r_st        <= S_RSP;
           end else begin
-            r_g_gpa  <= {ws_page[GPW-1:0], 12'h000};
+            // ws_page is below 2^G4W here, so the GPA_WIDTH cast keeps
+            // every set bit.
+            r_g_gpa  <= GPA_WIDTH'({ws_page, 12'h000});
             r_g_kind <= IMP_FETCH;
             r_g_acc  <= r_acc;
             r_g_ret  <= GR_FINAL;

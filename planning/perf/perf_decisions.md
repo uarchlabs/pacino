@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -130,8 +130,9 @@ PF-4   The gasket cuts in at fe_top, not at bp_cluster (Jeff,
        Cost: the trace carries no instruction bytes, so the gasket
        builds a code image, one RISC-V instruction of the trace
        record's class at each traced PC, with its traced target.
-       Far conditional branches are PF-U1. The fe_top build is slower
-       per simulated instruction than bp_cluster alone.
+       Far conditional branches are PF-U11 (PF-U1 until
+       session-085). The fe_top build is slower per simulated
+       instruction than bp_cluster alone.
 
 PF-13  Instructions reach a timing model through one interface,
        designed for trace-driven and execution-driven supply alike,
@@ -288,7 +289,17 @@ PF-15  Changing the traces' addresses invalidates the published
        emits it, in the code image and in the changed trace alike, so
        that pacino and the CBP predictors see one stream (Jeff,
        session-084). PERF-001 counted 11.76e6 of them, in 89 traces.
-       Which addresses are changed, and how, is PF-U1.
+       Which addresses are changed, and how, was PF-U1; PF-16
+       changes none.
+
+PF-16  THE TRACES RUN UNCHANGED, UNDER SV57 (Jeff, session-085).
+       Pacino supports Sv57 (mmu_decisions.md MMU-20), so every trace
+       address is used as recorded and PF-15 does not apply. From
+       perf/cbp2025_training_scan.csv pc_min and pc_max (PA,
+       session-085): both extremes are canonical under Sv39 in 24
+       traces, under Sv48 in 53 more, and only under Sv57 in the
+       other 28; none needs more than Sv57. Every PC, not only the
+       extremes, is checked by BP-145.
 
 ## 7. Process
 
@@ -302,20 +313,12 @@ PF-12  Performance tasks take the prefix PERF-NNN (Jeff,
 
 ## 8. Open
 
-PF-U1  The address scheme. 81 of the 105 traces have PCs at or
-       above 2^41, kernel addresses among them (PERF-001). Pacino
-       fetches Sv39 virtual addresses (39 bits, canonical) or, with
-       translation off, 36-bit physical ones (PA_WIDTH 36); its
-       41-bit VA_WIDTH is the V=1 guest case only. The two ways open:
-       - a Sv57 variant of pacino, under which every trace address is
-         canonical and the traces run unchanged (Sv57 and Sv57x4 are
-         RVA23S64 options; pacino_features.md section 1);
-       - Sv39 page tables built by the gasket, each PC keeping its low
-         38 bits, kernel addresses in the upper half, with a check
-         that stops on any collision (PF-15 then applies).
-       Far conditional branches, beyond +-4 KB, remain under either:
-       0.99e6 in the training set (PERF-001). The linker form is an
-       inverted branch over a jal.
+PF-U1  CLOSED session-085 (Jeff) by PF-16. It read: "The address
+       scheme. 81 of the 105 traces have PCs at or above 2^41 ... a
+       Sv57 variant of pacino, under which every trace address is
+       canonical and the traces run unchanged ...; Sv39 page tables
+       built by the gasket, each PC keeping its low 38 bits ... (PF-15
+       then applies)." Its far conditional branch sentence is PF-U11.
 PF-U2  Closed by PERF-001, into PF-1 and PF-7.
 PF-U3  Closed by PF-14.
 PF-U4  Memory: run bare with a sparse memory model, or build page
@@ -344,6 +347,9 @@ PF-U10 One parameter source for the RTL and the model, from which
        bp_defines_pkg and the model's configuration are both
        generated, so that a configuration name (PF-5) names one
        parameter set. Not yet ruled.
+PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
+       training set (PERF-001). The linker form is an inverted branch
+       over a jal. Moved from PF-U1, session-085.
 
 ---
 
@@ -367,4 +373,7 @@ PF-U10 One parameter source for the RTL and the model, from which
   2026-11-10  session-084 (Jeff). PF-5: the CSR reset values are kept;
               a performance run enables SC, the FTB fast path and
               TAGE and ITTAGE aging after reset, intervals 2^18.
+  2026-11-12  session-085 (Jeff). PF-16: the traces run unchanged
+              under Sv57; PF-U1 closed; its far conditional branch
+              part moved to PF-U11, and PF-4 points there.
 ```

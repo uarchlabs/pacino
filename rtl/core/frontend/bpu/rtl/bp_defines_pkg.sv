@@ -18,11 +18,12 @@ package bp_defines_pkg;
   // ================================================================
   // :Global parameters:
   // ================================================================
-  // VA_WIDTH: fetch address width. 41, ruled session-070 (TD#122,
-  // fe_decisions.md FE-19). With H mandatory and a Sv39x4 G-stage, a
-  // V=1 fetch PC under vsatp.MODE=Bare is a ZERO-extended 41-bit guest
-  // physical address, so a Sv39 width of 39 or 40 cannot hold it.
-  parameter int VA_WIDTH          = 41;
+  // VA_WIDTH: fetch address width. 59, ruled session-085 (fe_decisions.md
+  // FE-19, mmu_decisions.md MMU-20; built BP-145). With H mandatory and
+  // an Sv57x4 G-stage, a V=1 fetch PC under vsatp.MODE=Bare is a
+  // ZERO-extended 59-bit guest physical address. It was 41, from
+  // Sv39x4, ruled session-070 (TD#122).
+  parameter int VA_WIDTH          = 59;
   parameter int GHR_WIDTH         = 256; // global history register width
   parameter int PHR_WIDTH         = 32;  // path history register width
   parameter int GHIST_PTR_BITS    = $clog2(GHR_WIDTH); // = 8
@@ -185,8 +186,9 @@ package bp_defines_pkg;
   // PC[FTB_OFFSET_BITS-1:1], which the entry identity carries.
   localparam int FTB_BR_POS_BITS = $clog2(FTB_BLOCK_BYTES / 2); // = 4
   // FTB_RTAG_BITS: PINNED at 26, NOT derived from VA_WIDTH. TD#122,
-  // ruled session-070 (ftb_decisions.md 4.1, 8). This region tag spans
-  // VA[39:14]; VA bit 40 aliases. Predictor storage may alias, an
+  // ruled session-070 (ftb_decisions.md 4.1, 8), kept at 26 when
+  // VA_WIDTH became 59 (session-085). This region tag spans VA[39:14];
+  // VA bits VA_WIDTH-1 down to 40 alias. Predictor storage may alias, an
   // architectural address may not (FE-19): an alias is caught by
   // predecode and a wrong target by the mispredict redirect. It was
   // FTB_TAG_BITS until BP-140.
@@ -195,7 +197,8 @@ package bp_defines_pkg;
   // start's halfword offset VA[4:1] (BP-140, PROVISIONAL, ruled by Jeff
   // 2026-10-18: one entry per start PC at 2-byte granularity). With the
   // index below, two starts that differ anywhere in VA[39:1] have
-  // different (index, tag) pairs; bit 40 stays outside (4.1, TD#122).
+  // different (index, tag) pairs; bits VA_WIDTH-1 down to 40 stay
+  // outside (4.1, TD#122).
   localparam int FTB_TAG_BITS    = FTB_RTAG_BITS + FTB_BR_POS_BITS; // 30
   // FTB_SOFF_SHIFT: the index is VA[13:5] XOR (VA[4:1] << FTB_SOFF_SHIFT)
   // (BP-140, PROVISIONAL). The starts of one 32-byte region then index
@@ -516,7 +519,8 @@ package bp_defines_pkg;
   parameter int IT_TBL_USE[0:5]        = '{ 0,   2,   2,   2,   2,   2 };
   parameter int IT_TBL_EPC[0:5]        = '{ 0,   2,   2,   2,   2,   2 };
   parameter int IT_TBL_IDX[0:5]        = '{ 0,   8,   8,   9,   9,   9 };
-  parameter int IT_TBL_TGT_WIDTH[0:5]  = '{ 0,  40,  40,  40,  40,  40 };
+  // IT_TBL_TGT_WIDTH (all 40) was removed by BP-145: no module read it.
+  // Every table stores IT_MAX_TGT_WIDTH target bits.
 
   localparam int IT_MAX_IDX_WIDTH = 9;
   localparam int IT_MAX_TAG_WIDTH = 11;
@@ -524,12 +528,14 @@ package bp_defines_pkg;
   localparam int IT_MAX_USE_WIDTH = 2;
   localparam int IT_MAX_CTR_WIDTH = 3;
   localparam int IT_MAX_VAL_WIDTH = 1;
-  // IT_MAX_TGT_WIDTH: 40, holds VA[40:1]. TD#132, ruled session-073
-  // (ittage_table_entry_formats.md TGT field). Bit 0 is always zero at
+  // IT_MAX_TGT_WIDTH: VA_WIDTH - 1, holds VA[VA_WIDTH-1:1], the full
+  // fetch address (fe_decisions.md FE-19, session-085; TD#132,
+  // ittage_table_entry_formats.md TGT field). Bit 0 is always zero at
   // 2-byte granularity and is not stored. Reconstruction is
   // ftq_bpu_interfaces.md 5.2: {stored, 1'b0}. No bit is inferred:
-  // there is no sign or zero extension anywhere in the path.
-  localparam int IT_MAX_TGT_WIDTH = 40;
+  // there is no sign or zero extension anywhere in the path. It was the
+  // literal 40 until BP-145, correct only at VA_WIDTH 41.
+  localparam int IT_MAX_TGT_WIDTH = VA_WIDTH - 1;
   localparam int IT_MAX_FH        = 9;
   localparam int IT_MAX_FH1       = 9;
   localparam int IT_MAX_FH2       = 8;
@@ -597,15 +603,41 @@ package bp_defines_pkg;
   // the source of each is l1i_ifu_interfaces.md 3.1. The ITLB port
   // declarations using them are itlb_ifu_interfaces.md 2 and
   // itlb_l2tlb_interfaces.md 2.
-  parameter int GPA_WIDTH   = 41; // MMU-20, Sv39x4 guest physical
-  // The FAULTING guest physical address, MMU-23 (BP-124): a VS-stage
-  // PTE holds a 44-bit PPN, so a walk can form a 56-bit GPA that faults
-  // under Sv39x4, and Shtvala needs it whole. Only the faulting GPA is
-  // this wide; an address that translates is GPA_WIDTH.
-  parameter int FAULT_GPA_WIDTH = 56; // MMU-23, 44-bit PPN + offset
-  parameter int GVPN_WIDTH  = 29; // G-stage VPN, GPA_WIDTH - 12
-  parameter int VPN_WIDTH   = 27; // Sv39 VA, three levels of nine
-  parameter int PPN_WIDTH   = PA_WIDTH - 12; // PA_WIDTH - 12, from IF-1's 36
+  // GPA_WIDTH: the widest guest physical address that translates under
+  // some hgatp mode (MMU-20). A root parameter, like VA_WIDTH: with V=1
+  // and vsatp.MODE=Bare the fetch PC is the GPA, so the two are equal
+  // (FE-19); the walker checks GPA_WIDTH >= VA_WIDTH at elaboration.
+  parameter int GPA_WIDTH   = 59; // MMU-20, Sv57x4; was 41 until BP-145
+  // PTE_PPN_WIDTH: the PPN field of a PTE, bits 53:10, the same in every
+  // mode (privileged specification, Sv39 to Sv57). ARCHITECTURAL.
+  localparam int PTE_PPN_WIDTH = 44;
+  // The FAULTING guest physical address, MMU-23 (BP-124, session-085):
+  // the wider of two sources. A VS-stage PTE holds a PTE_PPN_WIDTH PPN,
+  // so a walk can form a 56-bit GPA that faults under a narrower hgatp
+  // mode; and with vsatp.MODE=Bare the GPA is the fetch PC, GPA_WIDTH
+  // bits. Shtvala needs it whole. Only the faulting GPA is this wide;
+  // an address that translates is GPA_WIDTH. It was the literal 56
+  // until BP-145.
+  localparam int FAULT_GPA_PTE = PTE_PPN_WIDTH + 12;          // = 56
+  parameter int FAULT_GPA_WIDTH = (GPA_WIDTH > FAULT_GPA_PTE) ?
+                                  GPA_WIDTH : FAULT_GPA_PTE;  // MMU-23
+  // GVPN_WIDTH (29) and VPN_WIDTH (27) were removed by BP-145: no module
+  // read them. A VPN port is [VA_WIDTH-13:0] (IT-16, IL-1a).
+  parameter int PPN_WIDTH   = PA_WIDTH - 12; // the supervisor PPN
+
+  // ARCHITECTURAL BOUNDS OF THE BUILT MODES (BP-145, session-085). These
+  // are NOT implementation widths and are NOT derived from VA_WIDTH or
+  // GPA_WIDTH; they keep their values when those change. The walker
+  // walks Sv39 and Sv39x4 only and the ITLB checks Sv39 only; the next
+  // task extends each by mode (mmu_decisions.md MMU-32, itlb_decisions.md
+  // ITLB-18).
+  //   SV39_SIGN_BIT     an Sv39 address is canonical when bits
+  //                     VA_WIDTH-1 down to 38 are all equal (ITLB-18)
+  //   SV39X4_GPA_WIDTH  an Sv39x4 G-stage translates a GPA of 41 bits;
+  //                     a bit set at or above bit 41 is a guest-page
+  //                     fault, cause 20 (MMU-20, MMU-28)
+  localparam int SV39_SIGN_BIT    = 38;
+  localparam int SV39X4_GPA_WIDTH = 41;
   parameter int ASID_WIDTH  = 16; // ITLB-7, the Sv39 maximum
   parameter int VMID_WIDTH  = 14; // ITLB-7, the Sv39x4 maximum
   parameter int PERM_WIDTH  =  8; // PTE low byte, V R W X U G A D

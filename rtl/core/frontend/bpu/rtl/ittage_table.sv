@@ -17,8 +17,8 @@
 //   [3:1]      = CTR (confidence counter, not direction predictor)
 //   [5:4]      = USE
 //   [7:6]      = EPC
-//   [47:8]     = TGT (40-bit indirect target, VA[40:1])
-//   [ALLOC_DATA_WIDTH-1:48] = TAG
+//   [IT_MAX_TGT_WIDTH+7:8] = TGT (indirect target, VA[VA_WIDTH-1:1])
+//   [ALLOC_DATA_WIDTH-1:IT_MAX_TGT_WIDTH+8] = TAG
 //
 // Prediction pipeline: inputs at p0, outputs at p1 (1-cycle).
 // Update: write-enable gated by THIS_TABLE vs prm/alt_tbl_sel.

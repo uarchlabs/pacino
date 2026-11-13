@@ -6,7 +6,7 @@
  FILE:    itlb_ifu_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -49,14 +49,18 @@ there is no L2 TLB now (mmu_decisions.md MMU-1), session-077.
   itlb_ifu_pma   [PMA_WIDTH-1:0]          ITLB -> IFU
 ```
 
-IT-16 `ifu_itlb_vpn` is VA_WIDTH - 12 = 29 bits, the fetch
-      address above the page offset, not VPN_WIDTH (27). With V=1
-      and vsatp.MODE=Bare the fetch PC is a 41-bit guest physical
-      address, and with V=0 and satp.MODE=Bare a fetch address
-      above bit 35 must reach the PMA check to fault (FE-19). A
-      27-bit port drops both. Ruled session-074 (Jeff); this read
-      [VPN_WIDTH-1:0]. The IFU port is built at this width on
-      both lookups by BP-117, TD#146 closed.
+IT-16 `ifu_itlb_vpn` is VA_WIDTH - 12 bits, the fetch address
+      above the page offset, not an Sv39 VPN width. With V=1 and
+      vsatp.MODE=Bare the fetch PC is a guest physical address of up
+      to VA_WIDTH bits; with V=0 and satp.MODE=Bare a fetch address
+      above bit 35 must reach the PMA check to fault; and a SvNN
+      address must reach the check of itlb_decisions.md ITLB-18
+      (FE-19). A narrower port drops all three. Ruled session-074
+      (Jeff); this read [VPN_WIDTH-1:0]. The IFU port is built at
+      this width on both lookups by BP-117, TD#146 closed, at 29 bits
+      (VA_WIDTH 41). VA_WIDTH is 59 since session-085
+      (mmu_decisions.md MMU-20), so the port is 47 bits; NOT YET
+      BUILT.
 
 IT-1  One request port. A block that crosses a page needs two
       translations and they are issued on successive cycles, not
@@ -110,7 +114,8 @@ IT-6a `itlb_ifu_gpa` carries the faulting GUEST PHYSICAL address
       `htval` to be written with it, and unlike the virtual
       address of IT-5 the IFU never had it: it is produced inside
       the walk. So it returns here and IT-5 does not apply to it.
-      It is FAULT_GPA_WIDTH = 56 bits (mmu_decisions.md MMU-23).
+      It is FAULT_GPA_WIDTH bits (mmu_decisions.md MMU-23): 59
+      since session-085, 56 before.
       For kind 00 the ITLB passes the walker's page and the IFU
       fills the offset (ifu_decisions.md IFU-2a). This was
       [GPA_WIDTH-1:0]. Ruled session-077 (Jeff), after BP-123;
@@ -276,4 +281,8 @@ MMU-29    The implicit-access kind of IT-6c.
               itlb_ifu_gpa is FAULT_GPA_WIDTH = 56.
 
   2026-10-10  session-077, after BP-124. IT-6a built.
+
+  2026-11-12  session-085, rulings (Jeff), with mmu_decisions.md
+              MMU-20. IT-16: VA_WIDTH - 12, 47 bits. IT-6a:
+              FAULT_GPA_WIDTH 59.
 ```

@@ -1454,7 +1454,7 @@ module tb;
 
   // The lookup carries every fetch address bit above the page offset
   // (C19, IT-16, TD#146, BP-117). A crossing block whose PC has bits
-  // 40 and 39 set, above the Sv39 VPN's top bit VPN_WIDTH+11 = 38,
+  // 40 and 39 set, above the Sv39 VPN's top bit 38 (SV39_SIGN_BIT),
   // then the block after it on the next page.
   task automatic t_vpn_high();
     logic [VA_WIDTH-1:0] b;

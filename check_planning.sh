@@ -186,6 +186,11 @@
 # Updated in session-085 for BP-143 and BP-144 (PROJECT_STATUS.md,
 # ras_decisions.md) and the record corrections (PROJECT_STATUS.md,
 # PROJECT_CORE.md, CLAUDE.md).
+# Updated in session-085 for the paging-mode rulings and BP-145
+# (PROJECT_STATUS.md, PROJECT_CORE.md, mmu_decisions.md,
+# itlb_decisions.md, csr_decisions.md, fe_decisions.md,
+# pacino_features.md, itlb_ifu_interfaces.md,
+# itlb_l2tlb_interfaces.md, ptw_mem_interfaces.md, perf_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -228,8 +233,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   7d73bf2ed514
-PLAN  PROJECT_STATUS.md                 82aa8c5b4d9a
+PLAN  PROJECT_CORE.md                   a79c147765db
+PLAN  PROJECT_STATUS.md                 b60e0207d788
 
 UNKN  CLAUDE.md                         a11aec16af33
 
@@ -237,19 +242,19 @@ ARCH  bp_arb_spec.md                    e948ad56ba7e
 ARCH  bp_cluster.md                     3654c007321b
 ARCH  bp_history_decisions.md           eed6cb8d60a7
 ARCH  cachegen_decisions.md             de8bfe4e9845
-ARCH  csr_decisions.md                  1df550fedc68
+ARCH  csr_decisions.md                  4f09e8659374
 ARCH  dcd_decisions.md                  476a129d4e63
-ARCH  fe_decisions.md                   cc3722d8f782
+ARCH  fe_decisions.md                   a29ba614ff2f
 ARCH  ftb_decisions.md            244e288f3cd5
 ARCH  ftq_decisions.md            1e4af7d2487e
 ARCH  ftq_entry_formats.md        953b2a75281b
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
 ARCH  icache_decisions.md               29d94d35d776
 ARCH  ifu_decisions.md            23b78769459f
-ARCH  itlb_decisions.md                 165b7936bf55
+ARCH  itlb_decisions.md                 e85a0fe8e689
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  1edb8b57f003
+ARCH  mmu_decisions.md                  e34379366f6a
 ARCH  ras_decisions.md                  e4f731c6e444
 ARCH  sc_decisions.md                   667f9510517a
 ARCH  sc_table_hash_rules.md            790d17443665
@@ -270,7 +275,7 @@ ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  b9b96a5a6b38
 ARCH  pacino_cache.md                   f90a7b3ce267
 ARCH  status_decisions.md               3451a10eeeaa
-ARCH  pacino_features.md                2a5cf900f8d9
+ARCH  pacino_features.md                547bdf4c7d67
 TEST  fe_demo_tb_decisions.md           220d9acc31ef
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
@@ -287,9 +292,9 @@ INTF  ftq_backend_interfaces.md   1c425156a6e7
 INTF  ftq_bpu_interfaces.md       ec5b5e653a4e
 INTF  ftq_ifu_interfaces.md       554f219f72bd
 INTF  ifu_ibuf_interfaces.md      ab4d4051748b
-INTF  itlb_ifu_interfaces.md      ab489f6db489
-INTF  itlb_l2tlb_interfaces.md    31ca2847e5a3
-INTF  ptw_mem_interfaces.md       053eb7faf457
+INTF  itlb_ifu_interfaces.md      9a9990b731a1
+INTF  itlb_l2tlb_interfaces.md    0db3f0e252e9
+INTF  ptw_mem_interfaces.md       a7bb1b8e3253
 INTF  ittage_interfaces.md        9217c9322080
 INTF  l1i_ifu_interfaces.md       3fb484b495e3
 INTF  loop_pred_interfaces.md     f700641358ec
@@ -304,7 +309,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               30207f0c82e6
+PERF  perf_decisions.md               cb24ab33874c
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

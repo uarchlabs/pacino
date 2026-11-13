@@ -1663,6 +1663,36 @@ module tb;
     chk("C1f4 bits 40:39 = 11 target is stored, not extended",
         64'(bpu_redir_p2[0].target_pc) === 64'h180_0000_7788);
 
+    // -- C1f5. BP-145 (FE-19, session-085). ITTAGE target above 2^41:
+    //    bits 58, 43 and 41 set. IT_MAX_TGT_WIDTH is VA_WIDTH - 1, so
+    //    the field holds VA[VA_WIDTH-1:1] and the target is stored and
+    //    read back whole. Same fixture as C1f4. The expected value is a
+    //    64-bit constant; with the literal 40 of IT_MAX_TGT_WIDTH before
+    //    BP-145 bits 58:41 were not stored. Skipped below VA_WIDTH 59.
+    if (VA_WIDTH >= 59) begin
+      do_reset();
+      tage_bim_fill(2'b00);
+      pc   = VA_WIDTH'('h00_0158_0000);
+      base = blk_base(pc);
+      pft  = base + BLK_SZ;
+      ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0,
+                    1'b1, pft, 1'b0);
+      ubtb_clear_set(pc);
+      lp_clear_both(pc);
+      req(pc, 6'h21);
+      #1;                              // let the p0 hashes settle
+      ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'(64'h400_0A00_0000_7788)));
+      tick();
+      norq();
+      tick();
+      chk("C1f5 ITTAGE reports a hit on the bit-58 target",
+          bpu_meta_ittage_p2[0].ittage_hit === 1'b1);
+      chk("C1f5 bit-58 target is stored whole",
+          64'(bpu_redir_p2[0].target_pc) === 64'h400_0A00_0000_7788);
+    end else begin
+      $display("SKIP C1f5: VA_WIDTH %0d", VA_WIDTH);
+    end
+
     // -- C1f3. TD#122. A fetch PC with bit 40 set must not truncate.
     //    A direct jump's successor is the block base plus the stored
     //    displacement, so bit 40 of the request PC must reach the
