@@ -58,8 +58,7 @@ ITLB-3  One array holds every page size: 4 KiB, 2 MiB, 1 GiB,
         handled as a reserved status (IT-4). Built by BP-119.
         The 512 GiB and 256 TiB sizes match by masking VPN[26:0] and
         VPN[35:0] out of the compare, as the smaller sizes do. RULED
-        session-085 (Jeff) with MMU-20; this read "the three Sv39
-        sizes". NOT YET BUILT.
+        session-085 (Jeff) with MMU-20. NOT YET BUILT.
 
 ITLB-3a Each entry also holds the page's PBMT, the more restrictive
         of the two stages' values as returned on
@@ -266,8 +265,10 @@ ITLB-18 THE ITLB CHECKS A TRANSLATED FETCH ADDRESS AGAINST THE
         checked by the walker against hgatp.MODE (mmu_decisions.md
         MMU-28). With satp.MODE=Bare it is physical, and an address
         beyond PA_WIDTH is an access fault, cause 1. RULED
-        session-085 (Jeff) with MMU-20. As built (itlb.sv) the check
-        is the Sv39 one, correct only at VA_WIDTH 41.
+        session-085 (Jeff) with MMU-20. As built by BP-145 (itlb.sv)
+        the check is the Sv39 one, bits VA_WIDTH-1 down to 38 equal
+        (SV39_SIGN_BIT), for every non-Bare MODE. The per-mode check
+        is not yet built.
 
 ## 6. Check placement
 
@@ -525,4 +526,7 @@ TD#118    Bounded ITLB-U1, now closed. The walker has its own
               MMU-20. ITLB-3: the 512 GiB and 256 TiB sizes. ITLB-7:
               the ASID and VMID maxima hold for every mode. ITLB-18
               new: the address check follows the current mode.
+
+  2026-11-12  session-085, after BP-145. ITLB-18: the Sv39 check
+              built at VA_WIDTH.
 ```

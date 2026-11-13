@@ -16,6 +16,60 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-145 recorded.
+
+BP-145 COMPLETE (38ed413). regress.sh at VA_WIDTH 41 identical to
+  BP-144's run on all 272 targets, result and check count; at 59, 272
+  targets, 0 failures, RESULT: PASS. Every address width follows the
+  package; SV39_SIGN_BIT (38) and SV39X4_GPA_WIDTH (41) name the Sv39
+  and Sv39x4 bounds; the walker checks every G-stage GPA against
+  SV39X4_GPA_WIDTH before the first G-stage read. Directed cases a to
+  g; f and the RAS half of g needed no fix. Storage at 59: predictors
+  102.48 -> 111.58 KB (ITTAGE 28.62 -> 37.62), FTQ 8.48 -> 9.60 KB,
+  ibuf 1.48 -> 1.79 KB, ITLB 0.77 -> 0.91 KB.
+FINDINGS, both PA errors in session-085 planning text:
+  - vsatp.PPN is 44 bits, its field width; mmu_decisions.md MMU-24b
+    and csr_decisions.md 3 said 47 (GPA_WIDTH - 12). csr_pkg clamps
+    CSR_VSATP_PPN_W to min(GPA_WIDTH - 12, 44). Corrected.
+  - PF-16's trace counts came from pc_min and pc_max alone. Every PC:
+    24 Sv39, 18 Sv48, 63 Sv57, none beyond. Corrected.
+DEMO: regress_demo.sh ran under the issued task, 15 of 24 scenarios
+  passing. No action: a task that changes rtl/ no longer runs it; it
+  runs when the tag is to move (Jeff; fe_demo_tb_decisions.md FDT-2a,
+  CLAUDE.md, applied here).
+IA RULE SLIP: an empty python3 heredoc, a form CLAUDE.md forbids. No
+  file changed.
+SMALL, OPEN: tools/scan_traces.py's docstring gives its usage as
+  python3 perf/scan_traces.py; the script is in tools/.
+PLANNING (PA, from BP-145): mmu_decisions.md MMU-20, MMU-23, MMU-24b,
+  MMU-28; csr_decisions.md 3; itlb_decisions.md ITLB-18;
+  itlb_ifu_interfaces.md IT-16, IT-6a; itlb_l2tlb_interfaces.md IL-1a,
+  IL-11a; fe_decisions.md FE-19, TD-FE-3; perf_decisions.md PF-16; and
+  the widths as built in ras_decisions.md, dcd_decisions.md DCD-16,
+  ftq_decisions.md TD-FE-3, ittage_table_entry_formats.md,
+  ifu_decisions.md, ifu_ibuf_interfaces.md, ittage_table_interfaces.md,
+  ittage_interfaces.md, ftq_bpu_interfaces.md, l1i_ifu_interfaces.md
+  3.1, ras_interfaces.md, ftb_interfaces.md, ftb_decisions.md,
+  bp_cluster.md, sc_table_hash_rules.md, ftq_entry_formats.md.
+  Module Status: bp_defines_pkg.sv, bp_structs_pkg.sv, itlb,
+  pmp_pma_chk, page table walker, csr (unit). pacino_features.md
+  section 2 still describes fe-1.0.0 and is not changed.
+ONE STATEMENT PER VALUE (Jeff): each width is stated once -- VA_WIDTH
+  and IT_MAX_TGT_WIDTH in fe_decisions.md FE-19, GPA_WIDTH in
+  mmu_decisions.md MMU-20, FAULT_GPA_WIDTH (as its formula) in MMU-23,
+  the FTQ entry widths in ftq_entry_formats.md 1 -- and every other
+  document names the parameter. Architectural bounds (the 44-bit PTE
+  PPN, the Sv39, Sv48, Sv57 and x4 widths, page sizes) stay as
+  numbers. Not yet swept: other parameter-reference blocks that copy
+  package values, for example sc_table_hash_rules.md and
+  ftb_decisions.md 8.
+NEXT TASK: the walker in every mode (MMU-32), with the page-table
+  builder. Not yet written.
+
+Next free: BP-146, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#198.
+
+---
 ## Session-085, continued: the paging modes ruled; BP-145 written.
 
 RULED (Jeff):
@@ -4253,6 +4307,15 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 0}, the fold width equal to the  |
 |                         |             |                   | index width; SC_MAX_FH 9;        |
 |                         |             |                   | comments.                        |
+|                         |             |                   | BP-145: VA_WIDTH and GPA_WIDTH   |
+|                         |             |                   | 59; IT_MAX_TGT_WIDTH = VA_WIDTH  |
+|                         |             |                   | - 1; FAULT_GPA_WIDTH =           |
+|                         |             |                   | max(GPA_WIDTH, PTE_PPN_WIDTH +   |
+|                         |             |                   | 12); SV39_SIGN_BIT,              |
+|                         |             |                   | SV39X4_GPA_WIDTH and             |
+|                         |             |                   | PTE_PPN_WIDTH added;             |
+|                         |             |                   | IT_TBL_TGT_WIDTH, GVPN_WIDTH,    |
+|                         |             |                   | VPN_WIDTH removed.               |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -4309,6 +4372,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | bp_ras_snapshot_t gains rctr, 12 |
 |                         |             |                   | -> 16 bits (TD#194 option A);    |
 |                         |             |                   | bp_ftq_entry_t 228 -> 232 bits.  |
+|                         |             |                   | BP-145, at VA_WIDTH 59:          |
+|                         |             |                   | bp_ftq_entry_t 304b,             |
+|                         |             |                   | bp_ftq_meta_t 461b,              |
+|                         |             |                   | ittage_pred_meta_t 183b,         |
+|                         |             |                   | ifu_pd_pkt_t 229b. No source     |
+|                         |             |                   | change.                          |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected (BP-071);|
@@ -5592,6 +5661,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (ITLB-10b); 147 and 150 checks.   |
 |                         |             |                   | SYS-001: takes fe_csr_t (fe_csr)  |
 |                         |             |                   | for its CSR group.                |
+|                         |             |                   | BP-145: the Sv39 address check at |
+|                         |             |                   | VA_WIDTH 59 (SV39_SIGN_BIT); size |
+|                         |             |                   | masks named; PMA bounds from      |
+|                         |             |                   | PA_WIDTH. sim_itlb 159,           |
+|                         |             |                   | sim_itlb_d2 162.                  |
 | pmp_pma_chk             | Working     | tb_pmp_pma_chk    | Built BP-118, rtl/mmu/pmp. The    |
 |                         |             |                   | one checker of MMU-10a: 16 PMP    |
 |                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
@@ -5608,6 +5682,7 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 10 low-bit masking lost in        |
 |                         |             |                   | tb_pmp_pma_chk G5-G8b. SYS-002:   |
 |                         |             |                   | G9-G12c restore it; 70 checks.    |
+|                         |             |                   | BP-145: PMA bounds from PA_WIDTH. |
 | page table walker       | Working     | tb_ptw            | Built BP-123, rtl/mmu/ptw,        |
 |                         |             |                   | outside the front end top;        |
 |                         |             |                   | tb_fe_top instantiates it beside  |
@@ -5625,12 +5700,23 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | SYS-001: takes ptw_csr_t          |
 |                         |             |                   | (ptw_csr). tb_ptw 806 checks.     |
 |                         |             |                   | SYS-002: 807 checks (h_g_pbmte).  |
+|                         |             |                   | BP-145: every G-stage GPA checked |
+|                         |             |                   | against SV39X4_GPA_WIDTH before   |
+|                         |             |                   | the first G-stage read (G-only    |
+|                         |             |                   | fetch address, vsatp root);       |
+|                         |             |                   | widths from the package. Walks    |
+|                         |             |                   | Sv39 and Sv39x4 only. sim_ptw     |
+|                         |             |                   | 841.                              |
 | csr (unit)              | Working     | tb_csr_tb_pkg     | Built SYS-001, rtl/core/csr:      |
 |                         |             |                   | csr_pkg.sv, tb/csr_tb_pkg.sv.     |
 |                         |             |                   | lint_csr_pkg, lint_csr_tb_pkg,    |
 |                         |             |                   | sim_csr_tb_pkg 126/0. SYS-002     |
 |                         |             |                   | built the last three CSR-5 rules; |
 |                         |             |                   | sim_csr_tb_pkg 150/0.             |
+|                         |             |                   | BP-145: CSR_VSATP_PPN_W =         |
+|                         |             |                   | min(GPA_WIDTH - 12, 44), 44 bits  |
+|                         |             |                   | at 59. MODE 9 and 10 still        |
+|                         |             |                   | unsupported.                      |
 | frontend top            | Working     | tb_fe_top         | Built BP-118. 36 programs since   |
 |                         |             |                   | BP-124 (19 before BP-123), each   |
 |                         |             |                   | its own regression target         |

@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-15
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -25,10 +25,12 @@ question: it fires only when the successor the cluster would publish
 differs from the one its own p1 stage registers hold
 (fe_decisions.md FE-4 and 2.5). ITTAGE does not predict direction
 -- it predicts
-a 40-bit target, VA[40:1]; bit 0 is always zero for instruction
-alignment and is not stored. IT_MAX_TGT_WIDTH and IT_TBL_TGT_WIDTH
-are 40 and the reconstruction is {stored, 1'b0}: no target bit is
-inferred by extension. Built by BP-111 (TD#132, closed).
+a target, VA[VA_WIDTH-1:1]; bit 0 is always zero for instruction
+alignment and is not stored. IT_MAX_TGT_WIDTH is VA_WIDTH - 1
+(fe_decisions.md FE-19) and the reconstruction is {stored, 1'b0}: no
+target bit is inferred by extension. Built by BP-111 (TD#132,
+closed), and at the full VA_WIDTH by BP-145, which removed
+IT_TBL_TGT_WIDTH.
 
 AN EARLIER REVISION described a 38-bit field (VA[38:1]) that was
 deliberately not widened, with a reconstruction that had to

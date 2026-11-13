@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -105,7 +105,7 @@ IFU-2a A slot whose cause is an instruction guest-page fault, cause
        the same way; the backend needs it for htinst
        (mmu_decisions.md MMU-29). Session-077.
 
-       THE GPA IS FAULT_GPA_WIDTH = 56 BITS (mmu_decisions.md
+       THE GPA IS FAULT_GPA_WIDTH BITS (mmu_decisions.md
        MMU-23), on IT-6a, in the queue of IFU-25 and in
        `ifu_pd_pkt_t.fault_gpa`. For kind 00 the walker returns
        the faulting page and the IFU fills `fault_gpa[11:0]` from
@@ -289,8 +289,8 @@ so F2 and F3 do not hold what XiangShan's do. Expansion is a mux
 per position and predecode on expanded encodings is a narrow
 decode. The prediction check is a priority encode over the 16
 positions to find the earliest control flow instruction, feeding
-a 40-bit target compare, target[VA_WIDTH-1:1] at VA_WIDTH 41
-(fe_decisions.md FE-19, TD-FE-3), and a 4-bit position compare.
+a target compare on target[VA_WIDTH-1:1] (fe_decisions.md FE-19,
+TD-FE-3), and a 4-bit position compare.
 This read "a 39-bit target compare", the floor computed against the
 retired 40-bit address. Session-071. F2 keeps
 the data return, the fault information and the position select.
@@ -313,7 +313,7 @@ IFU-25  The translation queue holds, per block: the physical
         status of IT-4, and the guest physical address of IT-6a
         with its implicit-access kind of IT-6c when the cause is
         20. F0 reads the head. The kind added session-077. The GPA
-        is FAULT_GPA_WIDTH = 56 bits in both results (IFU-2a);
+        is FAULT_GPA_WIDTH bits in both results (IFU-2a);
         session-077, after BP-123, BUILT by BP-124.
 
         A BLOCK THAT CROSSES A PAGE HOLDS TWO RESULTS in its one
@@ -758,4 +758,7 @@ MMU-23    FAULT_GPA_WIDTH, the width of the GPA of IFU-2a and
 
   2026-10-10  session-077, after BP-125. IFU-27: the p2, p3 row
               measured, 1 cycle. IFU-2: the two fields removed.
+
+  2026-11-12  session-085, after BP-145. IFU-2a, IFU-25 and section 5:
+              FAULT_GPA_WIDTH and VA_WIDTH named, not their values.
 ```

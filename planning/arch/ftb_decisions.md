@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -275,8 +275,9 @@ only):
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
   tag                    -- FTB_TAG_BITS, VA[39:14] and the start's
-                            halfword offset VA[4:1]; bit 40 is
-                            NOT covered (4.1, TD#122)
+                            halfword offset VA[4:1]; bits
+                            VA_WIDTH-1:40 are NOT covered (4.1,
+                            TD#122)
   conditional branch 0   -- valid, position, target, conf[2:0]
   conditional branch 1   -- valid, position, target, conf[2:0]
   jump field             -- valid, position, target (reconstructed full
@@ -339,10 +340,11 @@ area change only, out of BP-140's scope (TD#179).
   FTB_TAG_BITS  = 30  FTB_RTAG_BITS + FTB_BR_POS_BITS: the region tag
                       and the start's offset VA[4:1] (BP-140).
 
-It was VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS = 40 - 9 - 5.
-VA_WIDTH is now 41, and the tag is PINNED AT 26 rather than widened
-to 27. The reason is that predictor storage may alias: a tag that
-does not cover bit 40 mispredicts a block end, which predecode
+It was VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS = 40 - 9 - 5. The
+tag is PINNED AT 26 rather than derived from VA_WIDTH, and stays
+pinned as VA_WIDTH grows (fe_decisions.md FE-19). The reason is that
+predictor storage may alias: a tag that does not cover bits
+VA_WIDTH-1:40 mispredicts a block end, which predecode
 catches (ftq_ifu_interfaces.md 6 and 7), and a wrong target, which
 the mispredict redirect catches at resolve. Architectural addresses
 may not truncate; a predictor tag may. Pinning also kept
@@ -351,8 +353,9 @@ FTB_ENTRY_WIDTH at 110 and the RAM widths untouched, so sim_ftb's
 positions separately. Section 8 is the sole home of the arithmetic.
 
 THE TAG NO LONGER COVERS THE WHOLE UPPER VA. At 26 bits over a
-9-bit index and 5 offset bits it spans VA[39:14]. BIT 40 IS
-DISCARDED, so two PCs differing only in bit 40 ALIAS -- they hit
+9-bit index and 5 offset bits it spans VA[39:14]. BITS
+VA_WIDTH-1:40 ARE DISCARDED, so two PCs differing only in those bits
+ALIAS -- they hit
 the same entry and the older one's target or block end is returned.
 Two PCs differing anywhere in VA[39:5] still miss each other, which
 is the Xiangshan comparison that used to apply to the whole VA:
@@ -995,8 +998,7 @@ policy.
 
 Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 
-  VA_WIDTH          = 41      ruled session-070, FE-19; the
-                              package still says 40, TD#122.
+  VA_WIDTH                    stated in fe_decisions.md FE-19.
   FTB_WAYS          = 4       set-associative (package fixed to 4 in
                               BP-065; an earlier draft annotation read
                               "currently 8" -- stale, struck).
@@ -1008,8 +1010,9 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
   FTB_BLOCK_BYTES   = 32      FTB prediction block (16 positions).
   FTB_OFFSET_BITS   = 5       $clog2(FTB_BLOCK_BYTES).
   FTB_RTAG_BITS     = 26      PINNED, NOT DERIVED (4.1, TD#122).
-                              The region tag VA[39:14]; bit 40
-                              aliases, a misprediction, not a fault.
+                              The region tag VA[39:14]; bits
+                              VA_WIDTH-1:40 alias, a misprediction,
+                              not a fault.
                               It was FTB_TAG_BITS until BP-140.
   FTB_TAG_BITS      = 30      FTB_RTAG_BITS + FTB_BR_POS_BITS: the
                               region tag and the start offset VA[4:1]
@@ -1495,4 +1498,7 @@ bits hold.
   2026-11-11  session-084, after BP-141. 1: the fast path skips the
               SC and TAGE terms and stays below a trusted loop
               prediction; the sentence was ambiguous.
+
+  2026-11-12  session-085, after BP-145. 3, 4.1 and 8: VA_WIDTH named, not
+              its value; the tag stays pinned at 26.
 ```

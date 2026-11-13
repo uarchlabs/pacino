@@ -6,7 +6,7 @@
  FILE:    fe_demo_tb_decisions.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-11-03
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -65,9 +65,11 @@ FDT-2  The scenarios are checked by the demonstration regression,
 FDT-2a A DOC task that changes examples/fe_demo/ ends by running the
        demonstration regression; a failing scenario not in
        tools/known_failures_demo.txt blocks its Status: complete. A task
-       that changes rtl/ runs it and reports each failing scenario in
-       Results Capture; the failures do not block that task, and the
-       next DOC task brings the descriptions and checks to the RTL.
+       that changes rtl/ does not run it. The demonstrations describe
+       the tagged RTL (fe-1.0.0), so they are brought to the RTL, and
+       the demonstration regression run, only when the tag is to move
+       (Jeff, session-085). This read that a task changing rtl/ runs
+       it and reports each failing scenario in Results Capture.
 
 ---
 
@@ -409,4 +411,7 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               lists the block connectivity diagram, the pipeline view
               and demo_explainer.md; section 4 RTL file and line in a
               footnote, citations cyc <n> (event <k>); figures allowed.
+  2026-11-12  session-085 (Jeff). FDT-2a: a task that changes rtl/
+              does not run the demonstration regression; it runs when
+              the tag is to move.
 ```

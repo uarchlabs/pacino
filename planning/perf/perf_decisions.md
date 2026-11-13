@@ -294,12 +294,11 @@ PF-15  Changing the traces' addresses invalidates the published
 
 PF-16  THE TRACES RUN UNCHANGED, UNDER SV57 (Jeff, session-085).
        Pacino supports Sv57 (mmu_decisions.md MMU-20), so every trace
-       address is used as recorded and PF-15 does not apply. From
-       perf/cbp2025_training_scan.csv pc_min and pc_max (PA,
-       session-085): both extremes are canonical under Sv39 in 24
-       traces, under Sv48 in 53 more, and only under Sv57 in the
-       other 28; none needs more than Sv57. Every PC, not only the
-       extremes, is checked by BP-145.
+       address is used as recorded and PF-15 does not apply. Every PC
+       of every trace (BP-145; perf/cbp2025_training_scan.csv
+       pc_mode_min): 24 traces are canonical under Sv39, 18 more
+       under Sv48, and the other 63 only under Sv57. No PC needs more
+       than Sv57 (pc_noncanon_sv57_static is 0 in every trace).
 
 ## 7. Process
 
@@ -376,4 +375,7 @@ PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
   2026-11-12  session-085 (Jeff). PF-16: the traces run unchanged
               under Sv57; PF-U1 closed; its far conditional branch
               part moved to PF-U11, and PF-4 points there.
+  2026-11-12  session-085, after BP-145. PF-16: the counts from every
+              PC; the entry above gave 53 and 28, from pc_min and
+              pc_max alone.
 ```

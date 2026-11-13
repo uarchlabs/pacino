@@ -69,10 +69,8 @@ L2TLB at the far end (DOC-002, D9). Session-080.
 IL-1a `itlb_l2t_vpn` is VA_WIDTH - 12 bits, for the reason
       itlb_ifu_interfaces.md IT-16 gives for the IFU side: with V=1
       and vsatp.MODE=Bare the address is a guest physical address of
-      up to VA_WIDTH bits. BP-118 built it at 29 (VA_WIDTH 41). This
-      read [VPN_WIDTH-1:0]. Session-075. VA_WIDTH is 59 since
-      session-085 (mmu_decisions.md MMU-20), so the field is 47
-      bits; NOT YET BUILT.
+      up to VA_WIDTH bits. Built by BP-118, and at the Sv57 VA_WIDTH
+      by BP-145. This read [VPN_WIDTH-1:0]. Session-075.
 
 IL-1  `itlb_l2t_tag` is two bits. Up to four requests may be
       outstanding from one client. The walker accepts one at a
@@ -263,9 +261,9 @@ IL-11a The faulting GUEST PHYSICAL address IS returned on
        produced inside the nested walk. Shtvala requires `htval`
        to carry it. This is the one address that travels back on
        this port, and it continues to the IFU as
-       `itlb_ifu_gpa`, IT-6a. It is FAULT_GPA_WIDTH bits, 59 since
-       session-085 (56 before), and carries every faulting GPA whole
-       (mmu_decisions.md MMU-23).
+       `itlb_ifu_gpa`, IT-6a. It is FAULT_GPA_WIDTH bits and carries
+       every faulting GPA whole (mmu_decisions.md MMU-23); built at
+       the Sv57 width by BP-145.
        For kind 00 (IL-11b) the walker returns the page and the
        IFU fills the offset. Ruled session-077 (Jeff), after
        BP-123; BUILT by BP-124. This read "It is 0 when the
@@ -372,4 +370,7 @@ MMU-31    The G-stage-only permission byte, IL-8.
               MMU-20. IL-1a: the VPN is VA_WIDTH - 12, 47 bits. IL-7:
               size codes for 512 GiB and 256 TiB. IL-11a:
               FAULT_GPA_WIDTH 59.
+
+  2026-11-12  session-085, after BP-145. IL-1a and IL-11a: built at
+              the Sv57 widths; stated by VA_WIDTH and FAULT_GPA_WIDTH.
 ```

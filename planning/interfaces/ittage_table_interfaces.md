@@ -6,7 +6,7 @@
  FILE:    ittage_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -171,7 +171,8 @@ IT_TBL_CTR[0:5]       : int  this is the width of the CTR field
 IT_TBL_USE[0:5]       : int  this is the width of the USE field
 IT_TBL_EPC[0:5]       : int  this is the width of the EPC field
 IT_TBL_IDX[0:5]       : int  this is the width of the index bus for tables 
-IT_TBL_TGT_WIDTH[0:5] : int  this is the width of the target bus 
+IT_TBL_TGT_WIDTH[0:5]   REMOVED by BP-145, session-085: nothing read
+                        it; every table's target is IT_MAX_TGT_WIDTH.
 ```
 
 ## Derived Parameters

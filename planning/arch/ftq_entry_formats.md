@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-11-10
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -36,11 +36,16 @@ update. The two are separated so the every-cycle read does not carry
 the width of the update-only metadata.
 
 ```
-  fast path   bp_ftq_entry_t   232b   x 64 entries        14,848b
-  slow path   bp_ftq_meta_t    425b   x 2 slots x 64      54,400b
+  fast path   bp_ftq_entry_t   304b   x 64 entries        19,456b
+  slow path   bp_ftq_meta_t    461b   x 2 slots x 64      59,008b
                                                           -------
-                                                          69,248b
+                                                          78,464b
 ```
+
+These are the widths as built at the VA_WIDTH of fe_decisions.md
+FE-19, measured by BP-145 ($bits); this section is their one
+statement. VA_WIDTH reaches pc, pft_addr and the two slot targets of
+the fast path, and the two ITTAGE targets of each slot's metadata.
 
 The slow-path figure is the unpacked layout. Section 3.1 defines an
 overload that takes it to 278b per slot and 35,584b, which is
@@ -220,14 +225,15 @@ at all updates the FTB, so it is common to both arms.
     lp           lp_pred_t              80b   [79:0]
 
   u.ind                                 271b
-    rsvd                               124b   [270:147]
-    ittage       ittage_pred_meta_t    147b   [146:0]
+    rsvd                                88b   [270:183]
+    ittage       ittage_pred_meta_t    183b   [182:0]
 ```
 
-Per slot 278b against 425b unpacked. The slow-path array falls from
-54,400b to 35,584b and the FTQ from 68,992b to 50,176b, a 30%
-reduction. The union is slow-path only, so VA_WIDTH does not
-reach it.
+Per slot 278b against 461b unpacked. The slow-path array falls from
+59,008b to 35,584b and the FTQ from 78,464b to 55,040b, a 30%
+reduction. VA_WIDTH reaches only the ITTAGE block, which still fits
+u.ind, so the union is set by u.cond and does not change with
+VA_WIDTH while the ITTAGE block fits.
 
 THE UNION ABSORBS THE SESSION-073 ITTAGE WIDENING FOR FREE. The two
 extra bits on each of ittage_prm_tgt and ittage_alt_tgt take the
@@ -386,10 +392,8 @@ are NOT members of `bp_ftq_entry_t` and not members of
   and the walk would have to finish before those indices could be
   reallocated.
 
-The entry totals of section 1 are therefore unchanged. Fast path
-232b, slow path 425b per slot, 69,248b together; these 192 bits sit
-outside both. This read 421b and 68,480b, the figures before BP-111
-(TD#132); section 1 already carried the current ones. Session-075.
+The entry totals of section 1 are therefore unchanged; these 192 bits
+sit outside both.
 
 ### 4.2 Write and clear
 
@@ -646,4 +650,10 @@ path touches none of those.
               scalars 114 -> 118, bp_ftq_entry_t 228 -> 232 at two
               slots, fast-path array 14,592 -> 14,848, total 68,992
               -> 69,248 (also 4.1). To be built by BP-142.
+
+  2026-11-12  session-085, after BP-145. 1: bp_ftq_entry_t 304b,
+              bp_ftq_meta_t 461b, 78,464b, measured at VA_WIDTH 59
+              (were 232b, 425b, 69,248b). 3.1: ittage_pred_meta_t
+              183b, rsvd 88b (were 147b, 124b); the union stays
+              278b. 4.1: the totals stated in 1 only.
 ```

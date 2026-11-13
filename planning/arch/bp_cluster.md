@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 ---
@@ -219,9 +219,9 @@ Session-076.
            non-return). Target stored directly in the ITTAGE tables --
            no base+offset secondary LUT. Active only when FTB
            identifies branch type as indirect.
-- Target:  40b, VA[40:1]. Bit 0 is always zero for instruction
-           alignment and is not stored. IT_MAX_TGT_WIDTH = 40 and the
-           reconstruction is {stored, 1'b0}; no target bit is
+- Target:  VA[VA_WIDTH-1:1]. Bit 0 is always zero for instruction
+           alignment and is not stored. IT_MAX_TGT_WIDTH = VA_WIDTH - 1
+           and the reconstruction is {stored, 1'b0}; no target bit is
            inferred by extension. Built by BP-111 (TD#132, closed).
            This read "38b ... must zero-extend; TD#122", stale since
            BP-111. Session-076. See ittage_interfaces.md.
@@ -774,3 +774,6 @@ Raw observations to be captured in docs/observations/ during BP work.
 
   2026-11-11  session-084, after BP-141. Folded Histories: the SC
               folds are 9 bits (SC_TBL_FH), H 4, 16 and 64.
+
+  2026-11-12  session-085, after BP-145. ITTAGE: the target is
+              VA[VA_WIDTH-1:1], named, not its width.

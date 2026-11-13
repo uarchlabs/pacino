@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -33,10 +33,10 @@ Conventions:
     conclusion is unchanged.
   - Active-low reset: rstn. Rising-edge clock: clk. Storage-module
     enables are active low (IC-FTB-13).
-  - VA_WIDTH = 41. All full-width addresses are [VA_WIDTH-1:0].
-    41 because H is mandatory through Sha and a V=1 vsatp.MODE=Bare
-    fetch PC is a 41-bit guest physical address (fe_decisions.md
-    FE-19). Was 40; TD#122 tracks the RTL.
+  - All full-width addresses are [VA_WIDTH-1:0]. VA_WIDTH is the
+    width of the widest guest physical address, because H is
+    mandatory through Sha and a V=1 vsatp.MODE=Bare fetch PC is a
+    guest physical address (fe_decisions.md FE-19).
   - conf is a bimodal DIRECTION counter; its MSB is FTB's predicted
     direction. There is no always_taken bit (removed session-053).
 
@@ -591,8 +591,9 @@ IC-FTB-11 (resolved session-052, REOPENED session-070):
   HAVE CHANGED. ftb_decisions.md 4.5 restored a bounds check in
   session-069 (FTB-G1, FTB-G2) because blocks are unaligned and two
   lookup PCs in one 32-byte region share an entry, which is not a
-  wrong-entry hit. And the tag is now PINNED at 26 over a 41-bit VA
-  (4.1, TD#122), so it no longer covers the whole upper VA.
+  wrong-entry hit. And the tag is now PINNED at 26 over a
+  VA_WIDTH-bit VA (4.1, TD#122), so it no longer covers the whole
+  upper VA.
   RESOLVED AS SPECIFIED session-071: the reconstruction is bounds
   checked per ftb_decisions.md 4.5 (FTB-G1, FTB-G2), with the
   start + FTB_BLOCK_BYTES fallback, and the upper bound is FTB-G3
@@ -850,3 +851,6 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
 
   2026-11-11  session-084, after BP-141. 2.3: ftb_brI_conf_p2 is
               not read by the cluster.
+
+  2026-11-12  session-085, after BP-145. 1 and IC-FTB-11: VA_WIDTH named,
+              not its value.

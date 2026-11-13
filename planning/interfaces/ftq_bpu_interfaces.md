@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-15
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -513,8 +513,9 @@ supplies a target: `ittage_pred_meta_t.ittage_prm_tgt` or
 `ittage_alt_tgt`, selected by `ittage_using_primary`.
 `ittage_hit` clear means the FTB target stands.
 
-THE FIELD HOLDS VA[40:1] AND THERE IS NO EXTENSION RULE. RULED
-session-073 (Jeff): IT_MAX_TGT_WIDTH is 40, so the field carries
+THE FIELD HOLDS VA[VA_WIDTH-1:1] AND THERE IS NO EXTENSION RULE.
+RULED session-073 (Jeff): IT_MAX_TGT_WIDTH is VA_WIDTH - 1
+(fe_decisions.md FE-19, full width since BP-145), so the field carries
 every bit of the target except bit 0, which is always zero on a
 2-byte-granular ISA. The cluster reconstructs by appending that bit:
 `{stored, 1'b0}`. Nothing is inferred, so no rule can be wrong.
@@ -1213,8 +1214,8 @@ match it and to match this specification.
     VA_WIDTH, block scalar, holding the value delivered on
     `bpu_pred_pft_p1`. Applied to bp_structs_pkg.sv and checked in
     tb_bp_pkg.sv. Entry width 182b -> 222b AT THE TIME. It is now
-    228b after the BP-099 position widening and VA_WIDTH 41;
-    ftq_entry_formats.md 1 is the sole home. Session-072.
+    wider; ftq_entry_formats.md 1 is the sole home of its width.
+    Session-072.
 
 16. CLOSED, 2026-08-19. bp_cluster.sv gains the section 4a slot
     correction group, six ports, driven from the p2 classification,
@@ -1430,4 +1431,8 @@ match it and to match this specification.
   2026-10-19  session-081, after BP-139. 4c: w_pft_p2 is the PC of the
               first branch no slot carries (option A). 9: the
               unslotted branch is one the FTB did not report.
+
+  2026-11-12  session-085, after BP-145. 5.2: the ITTAGE target is
+              VA[VA_WIDTH-1:1]. Item 15: the entry width is stated in
+              ftq_entry_formats.md 1 only.
 ```

@@ -6,7 +6,7 @@
  FILE:    ittage_table_entry_formats.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -50,7 +50,7 @@ VALID  : 1 bit
 CTR    : `IT_TBL_CTR[t]`
 USE    : `IT_TBL_USE[t]`
 EPC    : `IT_TBL_EPC[t]`
-TGT    : `IT_TBL_TGT_WIDTH[t]`
+TGT    : `IT_MAX_TGT_WIDTH`
 TAG    : `IT_TBL_TAG[t]`
 ```
 
@@ -79,11 +79,12 @@ In ITTAGE CTR is not a direction predictor as it is in TAGE.
 
 ### TGT field
 
-The TGT width is `IT_TBL_TGT_WIDTH[t]`, 40 for every tagged table.
-THE FIELD HOLDS VA[40:1]. Bit 0 is not stored because it is always
-zero at 2-byte granularity, and the reconstruction is
-`{stored, 1'b0}`. NO BITS ARE INFERRED: there is no sign or zero
-extension anywhere in the path.
+The TGT width is `IT_MAX_TGT_WIDTH`, VA_WIDTH - 1, for every tagged
+table (fe_decisions.md FE-19; BP-145 removed IT_TBL_TGT_WIDTH, which
+nothing read). THE FIELD HOLDS VA[VA_WIDTH-1:1]. Bit 0 is not stored
+because it is always zero at 2-byte granularity, and the
+reconstruction is `{stored, 1'b0}`. NO BITS ARE INFERRED: there is
+no sign or zero extension anywhere in the path.
 
 RULED session-073 (Jeff), raised by BP-109 as TD#132. The field was
 38 bits, pinned session-070, with bits 40:39 supplied by extension.

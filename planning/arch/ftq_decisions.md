@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-10-15
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -1034,10 +1034,11 @@ Collected for navigation. Each is recorded in `fe_decisions.md` or
            ftq_entry_formats.md 4.4, ftq_ifu_interfaces.md 6.1.
   TD-FE-2  The slow-path overload is defined and DEFERRED. See
            ftq_entry_formats.md 3.1.
-  TD-FE-3  bp_ftq_entry_t.pc and the per-slot target are VA_WIDTH,
-           now 41 (FE-19, TD#122). The floor is 40 as addr[40:1],
-           not 39, and 35 is NOT available because blocks do not
-           start on an FTB_BLOCK_BYTES boundary (4.7, IFU-6).
+  TD-FE-3  bp_ftq_entry_t.pc and the per-slot target are VA_WIDTH
+           bits (FE-19, TD#122). The floor is VA_WIDTH - 1, as
+           addr[VA_WIDTH-1:1], and (VA_WIDTH - 1) - FTB_OFFSET_BITS
+           is NOT available because blocks do not start on an
+           FTB_BLOCK_BYTES boundary (4.7, IFU-6).
            This read "40 bits; 39 suffice under the C extension,
            35 if a block always starts on an FTB_BLOCK_BYTES
            boundary". fe_decisions.md 13 is the owner.
@@ -1564,4 +1565,6 @@ Section 1 counts six, since session-074.
   2026-10-15  session-080, after BP-137. 4.5: H5, the init hold; the
               w_hold equation. 4.7: when the first request goes out.
               7.5: the three init readies.
+
+  2026-11-12  session-085, after BP-145. TD-FE-3: stated by VA_WIDTH.
 ```

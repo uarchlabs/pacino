@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -75,7 +75,7 @@ widths, or counter widths.
                          Already present in bp_defines_pkg.sv.
   RAS_COMMIT_PTR_BITS -- commit pointer width
                          $clog2(RAS_COMMIT_ENTRIES) = 5b
-  RAS_ADDR_WIDTH      -- return address width = VA_WIDTH = 41b
+  RAS_ADDR_WIDTH      -- return address width = VA_WIDTH
 
 ---
 
@@ -775,3 +775,6 @@ While rstn is low (active low, synchronous):
               IC-RAS-06: full is 14 allocations (this read 15).
               9.2: the scan is not gated on ras_rst_done; this read
               "Gate the scan on a registered valid signal".
+
+  2026-11-12  session-085, after BP-145. 2: RAS_ADDR_WIDTH is VA_WIDTH,
+              named, not its value.

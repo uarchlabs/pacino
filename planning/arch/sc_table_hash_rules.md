@@ -6,7 +6,7 @@
  FILE:    sc_table_hash_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -30,8 +30,8 @@ All widths are in bp_defines_pkg.sv. That file is authoritative.
 ## Parameter references
 
 ```
-VA_WIDTH         = 41        (bp_defines_pkg.sv; fe_decisions.md FE-19,
-                              TD#122. This read 40. Session-071)
+VA_WIDTH                     (bp_defines_pkg.sv; the value is stated in
+                              fe_decisions.md FE-19)
 SC_TBL_IDX[0:4]  = {9,9,9,9,10}  (bp_defines_pkg.sv)
 SC_MAX_IDX_WIDTH = 10        (bp_defines_pkg.sv)
 SC_MAX_FH        = 9         (bp_defines_pkg.sv; 64 before

@@ -89,14 +89,16 @@ subset. Bits not listed read 0.
   addr   CSR       field   bits    implemented
   0x180  satp      MODE    63:60   0 Bare, 8 Sv39, 9 Sv48, 10 Sv57
                    ASID    59:44   16 bits
-                   PPN     43:0    23:0 (PPN_WIDTH 24)
+                   PPN     43:0    PPN_WIDTH-1:0
   0x280  vsatp     MODE    63:60   0 Bare, 8 Sv39, 9 Sv48, 10 Sv57
                    ASID    59:44   16 bits
-                   PPN     43:0    46:0 (GPA_WIDTH 59 - 12)
+                   PPN     43:0    CSR_VSATP_PPN_W-1:0,
+                                   min(GPA_WIDTH - 12, 44)
   0x680  hgatp     MODE    63:60   0 Bare, 8 Sv39x4, 9 Sv48x4,
                                    10 Sv57x4
                    VMID    57:44   14 bits
-                   PPN     43:0    23:0; 1:0 read 0 in every x4 mode
+                   PPN     43:0    PPN_WIDTH-1:0; 1:0 read 0 in every
+                                   x4 mode
   0x30A  menvcfg   PBMTE   62
                    ADUE    61
   0x60A  henvcfg   PBMTE   62      read 0 when menvcfg.PBMTE = 0
@@ -105,13 +107,14 @@ subset. Bits not listed read 0.
   0x3A2  pmpcfg2   entries 8-15  L 7, A 4:3, X 2, W 1, R 0
                                    A: 0 OFF, 1 TOR, 3 NAPOT
                                    (NA4 not selectable, G = 10)
-  0x3B0- pmpaddr0  ADDR    53:0    33:0 (PA_WIDTH 36)
+  0x3B0- pmpaddr0  ADDR    53:0    CSR_PMPADDR_W-1:0, PA_WIDTH - 2
   0x3BF  -15
 ```
 
 The MODE values are mmu_decisions.md MMU-20, RULED session-085
-(Jeff); they were 0 and 8 only, and vsatp.PPN was 28:0 (GPA_WIDTH
-41). NOT YET BUILT in csr_pkg.sv and csr_tb_pkg.sv.
+(Jeff); NOT YET BUILT in csr_pkg.sv and csr_tb_pkg.sv. The widths are
+the package parameters (bp_defines_pkg.sv, csr_pkg.sv), not restated
+here. CSR_VSATP_PPN_W is built by BP-145.
 
 priv and V are hart state, not CSRs. priv encoding: 00 U, 01 S,
 11 M.
@@ -242,4 +245,8 @@ CSR-U2 Hardware delivery of CSR state to the groups, and ordering
               satp and vsatp add Sv48 and Sv57, hgatp Sv48x4 and
               Sv57x4; vsatp.PPN 47 bits. CSR-5: the unsupported MODE
               values.
+  2026-11-12  session-085, after BP-145. Section 3: the implemented
+              widths stated by parameter; vsatp.PPN is
+              CSR_VSATP_PPN_W = min(GPA_WIDTH - 12, 44). The entry
+              above said GPA_WIDTH - 12, wider than the field.
 ```

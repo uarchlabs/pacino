@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -238,10 +238,9 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        ifu_pd_pkt_t 192 -> 190 bits (T78 checks the width). The two
        paragraphs below record why they were carried.
 
-       THE FAULTING GPA IS FAULT_GPA_WIDTH = 56 BITS, the widest
-       guest physical address a walk can form (a 44-bit VS-stage
-       PPN plus the page offset), so every faulting GPA is carried
-       whole and none is replaced by a sentinel
+       THE FAULTING GPA IS FAULT_GPA_WIDTH BITS, the widest guest
+       physical address that can fault, so every faulting GPA is
+       carried whole and none is replaced by a sentinel
        (mmu_decisions.md MMU-23, MMU-30 withdrawn). Ruled
        session-077 (Jeff); a package change, built by BP-124. For
        kind 00 the IFU fills the page offset from the faulting
@@ -762,4 +761,7 @@ MMU-23    FAULT_GPA_WIDTH, DCD-16.
 
   2026-11-11  session-084, after BP-141. DCD-37: decode cannot gate
               Zvfhmin; the check is at vtype resolution.
+
+  2026-11-12  session-085, after BP-145. DCD-16: FAULT_GPA_WIDTH named, not
+              its value.
 ```

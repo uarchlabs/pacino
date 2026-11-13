@@ -209,8 +209,8 @@ production-quality outputs.
   examples/fe_demo scenarios and gates no push. A DOC task that
   changes examples/fe_demo/ runs it, and a failing scenario not in
   tools/known_failures_demo.txt blocks Status: complete. A task that
-  changes rtl/ runs it and reports its failing scenarios; they do not
-  block that task. The IA never edits tools/known_failures_demo.txt.
+  changes rtl/ does not run it; it runs when the tag is to move. The
+  IA never edits tools/known_failures_demo.txt.
 
 ## Verification - self-contained tests (no test debt)
 

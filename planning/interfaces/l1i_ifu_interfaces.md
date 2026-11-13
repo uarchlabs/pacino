@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -135,21 +135,24 @@ them, BP-115.
   L1I_OFFSET_BITS  BP-115             L1iOffsetBits       6
   REQ_ID_BITS      BP-115             L1iReqIdBits        4
   MAX_OUTSTANDING  BP-115             L1iMaxOutstanding  16
-  GPA_WIDTH        BP-109             (no counterpart)    41
-  GVPN_WIDTH       BP-109             (no counterpart)    29
-  VPN_WIDTH        BP-109             (no counterpart)    27
+  GPA_WIDTH        BP-109             (no counterpart)    --
   PPN_WIDTH        BP-109             (no counterpart)    24
   ASID_WIDTH       BP-109             (no counterpart)    16
   VMID_WIDTH       BP-109             (no counterpart)    14
   PERM_WIDTH       BP-109             (no counterpart)     8
   CAUSE_WIDTH      BP-109             (no counterpart)     5
   PMA_WIDTH        BP-109             (no counterpart)     4
-  FAULT_GPA_WIDTH  BP-124             (no counterpart)    56
+  FAULT_GPA_WIDTH  BP-124             (no counterpart)    --
 ```
+
+GPA_WIDTH is the Sv57x4 guest physical width (mmu_decisions.md
+MMU-20) and FAULT_GPA_WIDTH is max(GPA_WIDTH, PTE_PPN_WIDTH + 12)
+(MMU-23); their values are stated there only. BP-145 removed
+GVPN_WIDTH and VPN_WIDTH, which nothing read.
 
 FAULT_GPA_WIDTH was added session-077, after BP-123: the width of a
 faulting guest physical address (mmu_decisions.md MMU-23), which
-can exceed GPA_WIDTH. It is declared by BP-124.
+is never narrower than GPA_WIDTH. It is declared by BP-124.
 
 The rows below MAX_OUTSTANDING were added session-070, GVPN_WIDTH
 session-073. The ITLB interfaces declare ports against every one of
@@ -161,14 +164,12 @@ Same class as PA_WIDTH above. TD#122.
 ALL NINE NOW HAVE VALUES, ruled session-073. Their sources:
 
 ```
-  GPA_WIDTH   41  MMU-20, Sv39x4 guest physical
-  GVPN_WIDTH  29  the G-stage VPN, GPA_WIDTH - 12. VPN_WIDTH is
-                  VS-stage only and one parameter cannot serve
-                  both stages
-  VPN_WIDTH   27  Sv39 VA, three levels of nine
+  GPA_WIDTH   --  MMU-20, the Sv57x4 guest physical width
+  GVPN_WIDTH  --  REMOVED by BP-145
+  VPN_WIDTH   --  REMOVED by BP-145
   PPN_WIDTH   24  PA_WIDTH - 12, from IF-1's 36
-  ASID_WIDTH  16  ITLB-7, the Sv39 maximum
-  VMID_WIDTH  14  ITLB-7, the Sv39x4 maximum
+  ASID_WIDTH  16  ITLB-7, the maximum in every mode
+  VMID_WIDTH  14  ITLB-7, the maximum in every x4 mode
   PERM_WIDTH   8  the PTE low byte, V R W X U G A D. IL-8 names
                   executable, user and global and is not
                   exhaustive; carrying the byte whole needs no
@@ -181,9 +182,10 @@ ALL NINE NOW HAVE VALUES, ruled session-073. Their sources:
                   the EFFECTIVE four. The PBMT of IL-9a is a
                   separate two-bit field and is not this
   FAULT_GPA_WIDTH
-              56  MMU-23: a VS-stage PTE's 44-bit PPN can form a
-                  56-bit guest physical address that faults, and
-                  Shtvala requires htval to carry it. Session-077
+              --  MMU-23: max(GPA_WIDTH, PTE_PPN_WIDTH + 12); a
+                  VS-stage PTE's 44-bit PPN can form a 56-bit
+                  guest physical address that faults, and Shtvala
+                  requires htval to carry it. Session-077
 ```
 
 A PTE PPN field is 44 bits in Sv39 and PPN_WIDTH is 24, so a PTE
@@ -1121,11 +1123,12 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
            It read: "VA_WIDTH is 40 and addressing.va_bits is 39. These
            are different quantities: 40 is the Sv39 address plus its
            sign bit, the vaddrBitsExtended convention. No action."
-           VA_WIDTH IS 41. H is mandatory through Sha, the G-stage is
-           Sv39x4, and Shvsatpa requires vsatp to support Bare because
-           Svbare requires it of satp, so with V=1 and vsatp.MODE=Bare
-           the fetch PC is a 41-bit GUEST PHYSICAL address, zero
-           extended. A sign-extended 40-bit field cannot hold it, and
+           VA_WIDTH is the width of the widest guest physical address
+           (fe_decisions.md FE-19). H is mandatory through Sha, and
+           Shvsatpa requires vsatp to support Bare because Svbare
+           requires it of satp, so with V=1 and vsatp.MODE=Bare the
+           fetch PC is a GUEST PHYSICAL address, zero extended. A
+           sign-extended 40-bit field cannot hold it, and
            sign extension corrupts any GPA with bit 38 set.
            fe_decisions.md FE-19. TD#122 tracks the RTL.
 
@@ -1339,4 +1342,8 @@ sees a 2-byte boundary.
               fill updates the replacement state (L1I-24).
 
   2026-10-14  session-079. IF-30 and IF-36 confirmed (Jeff).
+
+  2026-11-12  session-085, after BP-145. 3.1: GPA_WIDTH and FAULT_GPA_WIDTH
+              stated by their derivation; GVPN_WIDTH and VPN_WIDTH
+              removed. VA_WIDTH named, not its value.
 ```

@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -946,12 +946,12 @@ IFU-8 covers 34 bytes and 17 halfword positions for exactly this
 reason. It is handled by the fall-through arithmetic rather than
 by a correction at the RAS.
 
-VA_WIDTH = 41b. It is not a virtual address width in the plain
-sense: H is mandatory through Sha, the G-stage is Sv39x4, and with
-V=1 and vsatp.MODE=Bare the fetch PC is a 41-bit guest physical
-address. An earlier revision read "VA_WIDTH = 40b covers the RVA23
-implementation VA space". fe_decisions.md FE-19, TD#122, which
-tracks the RTL.
+Return addresses are VA_WIDTH bits. VA_WIDTH is not a virtual
+address width in the plain sense: H is mandatory through Sha, and
+with V=1 and vsatp.MODE=Bare the fetch PC is a guest physical address
+of the widest G-stage mode (fe_decisions.md FE-19). BP-145 checked
+that both stacks hold a return address with bits above the Sv39x4
+width set (TC-72a, TC-72b).
 
 ---
 
@@ -1472,4 +1472,7 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               closed. 12.12: the converse of IV1 checked (model, RS4);
               RS2/RS3 at every slot and in repair cycles; RS5 the
               fallback. 12 intro: TC-68 to TC-71; no RTL fault.
+
+  2026-11-12  session-085, after BP-145. 12: return addresses are VA_WIDTH
+              bits; the value is stated in FE-19 only.
 ```

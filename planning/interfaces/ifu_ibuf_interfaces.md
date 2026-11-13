@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-11-12
  CONTACT: Jeff Nye
 ```
 
@@ -102,7 +102,7 @@ Each slot carries `ifu_pd_pkt_t` as defined in
   fault_cause  access fault, page fault, guest-page fault, none
   fault_va     the faulting virtual address
   fault_gpa    the faulting guest physical address, valid only on
-               a guest-page fault; FAULT_GPA_WIDTH = 56 bits, and
+               a guest-page fault; FAULT_GPA_WIDTH bits, and
                for kind 00 the whole address, offset included
                (mmu_decisions.md MMU-23, ifu_decisions.md IFU-2a).
                Session-077, after BP-123; BUILT by BP-124
@@ -230,6 +230,8 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-11-12  session-085, after BP-145. Section 4: fault_gpa is
+              FAULT_GPA_WIDTH bits, named, not its value.
   2026-10-10  session-077, after BP-125. Section 4: the removal
               built.
   2026-10-10  session-077, ruling (Jeff). Section 4: is_vsetvl and

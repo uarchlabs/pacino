@@ -148,12 +148,15 @@ MMU-20 THE MODE SET. `satp` and `vsatp` support Bare, Sv39, Sv48
        from that width up to bit 63 must be zero, or the access
        guest-page faults with cause 20 (hypervisor chapter, G-stage
        translation). hgatp.MODE decides at walk time which bits must
-       be zero, and the walker checks them (MMU-28). GPA_WIDTH is the
-       widest of these, 59: the width of a guest physical address
-       that translates under some mode. With `V=1` and
-       `vsatp.MODE=Bare` the incoming address is the fetch PC itself,
-       which is why VA_WIDTH is also 59 (fe_decisions.md FE-19).
-       This read 41 bits for both, from Sv39x4 alone (TD#122).
+       be zero, and the walker checks them (MMU-28).
+       GPA_WIDTH IS 59, the widest of these: the width of a guest
+       physical address that translates under some mode. This is its
+       one statement; bp_defines_pkg.sv holds it, and every other
+       document names it. With `V=1` and `vsatp.MODE=Bare` the
+       incoming address is the fetch PC itself, which is why VA_WIDTH
+       equals GPA_WIDTH (fe_decisions.md FE-19). BUILT by BP-145.
+       Until MMU-32 is built, the walker bounds every GPA by the
+       Sv39x4 width (SV39X4_GPA_WIDTH).
 
 MMU-21 The walk is NESTED, not sequential. Every address the
        VS-stage walk produces is a guest physical address and
@@ -199,15 +202,15 @@ MMU-22 The MMU raises a GUEST page fault when the G-stage fails
 MMU-23 Shtvala: `htval` is written with the faulting guest
        physical address on a guest page fault. The MMU produces
        that address; the trap path writes it. THE FAULTING GPA IS
-       FAULT_GPA_WIDTH BITS, THE WIDER OF 56 AND GPA_WIDTH: 59.
-       Two sources set it. A VS-stage PTE carries a 44-bit PPN, so a
-       walk can form a guest physical address of up to 56 bits, which
-       faults under Sv39x4 and Sv48x4 (MMU-28). And with
-       vsatp.MODE=Bare the guest physical address is the fetch PC, up
-       to GPA_WIDTH = 59 bits, which faults under any narrower hgatp
-       mode. Shtvala requires htval to carry it in all circumstances
-       the ISA permits. RULED session-085 (Jeff) with MMU-20; it was
-       56 while GPA_WIDTH was 41. It travels on `l2t_itlb_gpa` and
+       FAULT_GPA_WIDTH = max(GPA_WIDTH, PTE_PPN_WIDTH + 12) BITS.
+       Two sources set it. A VS-stage PTE carries a 44-bit PPN
+       (PTE_PPN_WIDTH), so a walk can form a guest physical address
+       of up to 56 bits, which faults under Sv39x4 and Sv48x4
+       (MMU-28). And with vsatp.MODE=Bare the guest physical address
+       is the fetch PC, up to GPA_WIDTH bits, which faults under any
+       narrower hgatp mode. Shtvala requires htval to carry it in all
+       circumstances the ISA permits. RULED session-085 (Jeff) with
+       MMU-20; BUILT by BP-145. It travels on `l2t_itlb_gpa` and
        `itlb_ifu_gpa`, both declared `[FAULT_GPA_WIDTH-1:0]`, and
        in `ifu_pd_pkt_t.fault_gpa`. Everywhere else the width is
        GPA_WIDTH, the width of an address that translates. RULED
@@ -303,10 +306,11 @@ MMU-24c THE REQUEST CARRIES THE ACCESS TYPE AND THE PRIVILEGE.
 
 MMU-24b THE ROOT POINTERS ALWAYS FIT. The CSR file implements
         `satp.PPN` and `hgatp.PPN` at PPN_WIDTH bits and
-        `vsatp.PPN` at GPA_WIDTH - 12 = 47 bits, the bits above
-        read-only zero. The privileged specification lets satp.PPN
-        hold fewer than all physical page numbers, and the hgatp
-        fields are WARL; vsatp.PPN is narrowed on the same footing
+        `vsatp.PPN` at CSR_VSATP_PPN_W = min(GPA_WIDTH - 12, 44)
+        bits, the narrower of GPA_WIDTH - 12 and the 44-bit field,
+        the bits above read-only zero. The privileged specification
+        lets satp.PPN hold fewer than all physical page numbers, and
+        the hgatp fields are WARL; vsatp.PPN is narrowed on the same footing
         as satp.PPN, whose role it takes at V=1. A satp or hgatp root
         can then never name an address this implementation cannot
         form. No CSR file exists, so this is
@@ -314,12 +318,12 @@ MMU-24b THE ROOT POINTERS ALWAYS FIT. The CSR file implements
         declared at those widths. Ruled session-077 (Jeff).
 
         A VSATP ROOT IS A GUEST PHYSICAL ADDRESS and is checked like
-        one. Under an hgatp mode narrower than Sv57x4, a 47-bit
-        vsatp.PPN can name a GPA that mode rejects. That is a
-        guest-page fault, cause 20, kind implicit read (MMU-28,
-        MMU-29). Session-085, with MMU-20. This read "vsatp.PPN at
-        GPA_WIDTH - 12 = 29 bits" and that MMU-28 applies to PTEs
-        only, which held while every G-stage was Sv39x4.
+        one. A full 44-bit vsatp.PPN names a GPA of up to 56 bits,
+        which Sv39x4 and Sv48x4 reject. That is a guest-page fault,
+        cause 20, kind implicit read (MMU-28, MMU-29). Session-085,
+        with MMU-20. BUILT by BP-145 for Sv39x4: the walker checks
+        every G-stage GPA, the vsatp root included, against
+        SV39X4_GPA_WIDTH before the first G-stage read.
 
 MMU-27 THE SIZE OF A TWO-STAGE TRANSLATION is the SMALLER of the
        VS-stage leaf size and the G-stage leaf size for the final
@@ -781,7 +785,7 @@ MMU-28  A PPN IS NEVER TRUNCATED. The supervisor chapter states that
         every mode, so a large PPN is not a reserved-bit page fault. The
         walker reads all 44 PPN bits of every PTE:
           - a PTE whose PPN is a SUPERVISOR physical page (single
-            stage, or G-stage): a bit set above bit 23 names an
+            stage, or G-stage): a bit set at or above PPN_WIDTH names an
             address outside every PMA region, so the access made
             with it -- the next PTE read, or the fetch -- is an
             access fault, cause 1;
@@ -791,8 +795,8 @@ MMU-28  A PPN IS NEVER TRUNCATED. The supervisor chapter states that
             (hypervisor chapter). The width is 41 bits for Sv39x4 and
             50 for Sv48x4; no 56-bit address exceeds Sv57x4's 59. The
             vsatp root is checked the same way (MMU-24b), and so is
-            the fetch PC of a G-stage-only translation (MMU-20). This
-            read "above bit 40", for Sv39x4 alone; session-085.
+            the fetch PC of a G-stage-only translation (MMU-20).
+            BUILT for Sv39x4 by BP-145.
         The checks fall where the algorithm's steps put them, so a
         page fault found earlier in the walk is reported first. The
         ITLB is never filled with a truncated PPN. Ruled
@@ -1122,4 +1126,11 @@ TD#118    No longer bounds the walker, which has its own port
               follows hgatp.MODE. MMU-U7: no NAPOT size above 64 KiB.
               Checked against the privileged specification source
               (riscv-isa-manual 2713ba1).
+
+  2026-11-12  session-085, after BP-145. MMU-20, MMU-23, MMU-24b,
+              MMU-28: built for the widths and the Sv39x4 bound.
+              MMU-24b: vsatp.PPN is min(GPA_WIDTH - 12, 44); the
+              entry above said GPA_WIDTH - 12, wider than the 44-bit
+              field (BP-145's finding). GPA_WIDTH is stated once, in
+              MMU-20; the derived widths are stated as formulas.
 ```
