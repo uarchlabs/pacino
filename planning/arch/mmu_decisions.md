@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-11-13
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -809,8 +809,10 @@ MMU-28  A PPN IS NEVER TRUNCATED. The supervisor chapter states that
             with it -- the next PTE read, or the fetch -- is an
             access fault, cause 1. For a leaf the page checked is the
             translated page, the PPN with the VPN bits the leaf's
-            size takes from the address: a 512 GiB or 256 TiB leaf
-            takes VPN bits at and above PPN_WIDTH (BP-146);
+            size takes from the address (BP-146). A 512 GiB or
+            256 TiB page reaches PPN_WIDTH only if its top address
+            bit is at or above PA_WIDTH; at the current PA_WIDTH neither
+            does, so that check cannot fire (BP-147, case j);
           - a PTE whose PPN is a GUEST physical page (VS-stage): a
             guest physical address with a bit set at or above the
             hgatp mode's width is a guest-page fault, cause 20
@@ -1165,4 +1167,7 @@ TD#118    No longer bounds the walker, which has its own port
   2026-11-13  session-085 (Jeff). MMU-15a: main memory runs to the
               top of the PA_WIDTH space, stated by name (PA_WIDTH 48,
               IF-1).
+
+  2026-11-14  session-085, after BP-147. MMU-28: the translated-page
+              check cannot fire at the current PA_WIDTH.
 ```

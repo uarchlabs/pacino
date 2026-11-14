@@ -8,7 +8,7 @@
           docs/superscalar_ooo_survey.md (NOT IN THE TREE,
           see section 1); INFRA-012; TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-11-13
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -162,8 +162,11 @@ added beside it, so `offset + index + tag == pa_bits` still holds.
           every mode and the implementation chooses. It was 36,
           ruled session-068 after XiangShan Kunminghu under Sv39;
           session-085 (Jeff) moved it with PA_WIDTH, the reference
-          now the Sv57 data-center class. BP-147 edits the pacino
-          copy of the L1I to it; cachegen's topology is TD#199.
+          now the Sv57 data-center class. BUILT by BP-147 in the
+          pacino copy of the L1I: L1iPaBits equals PA_WIDTH,
+          l1i_param_chk checks that they agree, L1iTagBits and
+          L1iTagMsb are derived from L1iPaBits, and the address
+          ports are l1i_addr_t. cachegen's topology is TD#199.
 ```
 
 AT THE L1I-1 GEOMETRY the tag is pa_bits - 13 bits and the tag
@@ -714,7 +717,7 @@ Core link, replacing the `pe_port` shape:
 | Field                    | Value | Decision | Changed |
 |--------------------------|-------|----------|---------|
 | read_width_bits          | 512   | L1I-9    | DONE    |
-| address_width_bits       | 36    | L1I-20   | DONE    |
+| address_width_bits       | 36    | L1I-20   | TD#199  |
 | outstanding_requests     | 16    | L1I-10   | DONE    |
 | write_width_bits         | 0     | read only| DONE    |
 | handshake.read_data_return | valid_with_id | R2 | DONE |
@@ -1103,4 +1106,8 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
   2026-11-13  session-085 (Jeff). L1I-20: pa_bits equals PA_WIDTH,
               48 (was 36); the pacino copy follows in BP-147,
               cachegen in TD#199. 1.2: the tag stated by formula.
+
+  2026-11-14  session-085, after BP-147. L1I-20 built in the pacino
+              copy. Section 9: address_width_bits is cachegen's 36,
+              moved by TD#199.
 ```

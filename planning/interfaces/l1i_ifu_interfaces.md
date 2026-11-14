@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-11-13
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -100,7 +100,8 @@ If the suffixes are ever added here, record the rename here.
          session-085 (Jeff), for physical memory of the Sv57
          data-center class; it was 36, ruled session-068. This is its
          one statement: bp_defines_pkg.sv holds it, and every other
-         document names it. NOT YET BUILT (BP-147).
+         document names it. BUILT by BP-147: bp_defines_pkg and the
+         pacino L1I (icache_decisions.md L1I-20).
 
   IF-2   The request identifier is REQ_ID_BITS wide, 4 bits, giving
          sixteen identifiers, one for each of the sixteen
@@ -115,8 +116,8 @@ If the suffixes are ever added here, record the rename here.
 
 STATUS, session-074. All fifteen are declared in
 `bp_defines_pkg`: the nine ITLB/MMU widths by BP-109, the six L1I
-names by BP-115. `VA_WIDTH` is 41 and PPN_WIDTH is now
-PA_WIDTH - 12. `l1i_param_chk` checks the six against `l1i_pkg` at
+names by BP-115. `VA_WIDTH` is stated in fe_decisions.md FE-19, and
+PPN_WIDTH is PA_WIDTH - 12. `l1i_param_chk` checks the six against `l1i_pkg` at
 elaboration; its lint and lint_neg targets run under regress.sh.
 
 Before that ruling `bp_defines_pkg.sv` carried no physical address
@@ -264,8 +265,8 @@ saying so would carry one constant value.
          the IFU and nowhere else.
 ```
 
-WHY THE FULL BYTE ADDRESS AND NOT PA[35:6]. Six of the thirty-six
-wires carry a constant zero by IF-5, and dropping them would save
+WHY THE FULL BYTE ADDRESS AND NOT PA[PA_WIDTH-1:6]. Six of the
+PA_WIDTH wires carry a constant zero by IF-5, and dropping them would save
 them. Rejected. The ITLB delivers a byte physical address (2.3 T1)
 and the IFU's own block extract is byte granular, so a line-granular
 port would make the L1I's address a different quantity from every
@@ -930,7 +931,9 @@ For a `custom` link carrying the interface of sections 4 and 5:
                                      new T-10 checker rule makes a
                                      value that disagrees with
                                      addressing.pa_bits an error,
-                                     which closes TD-L1I-6
+                                     which closes TD-L1I-6. 36 is
+                                     cachegen's configuration;
+                                     PA_WIDTH is TD#199
   address_granularity          byte  yes. `line` is also available,
                                      which is the rejected form of
                                      section 4.2
@@ -1353,4 +1356,8 @@ sees a 2-byte boundary.
   2026-11-13  session-085 (Jeff). IF-1: PA_WIDTH is 48 (was 36), stated
               there only; 3.1 names PA_WIDTH and PPN_WIDTH, not their
               values.
+
+  2026-11-14  session-085, after BP-147. IF-1 built. 4.2 and 3.1 name
+              PA_WIDTH and VA_WIDTH, not values; 14.1 notes cachegen's
+              36 (TD#199).
 ```

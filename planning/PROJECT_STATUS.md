@@ -16,6 +16,41 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-147 recorded.
+
+BP-147 COMPLETE (e03e542). regress.sh 273 targets, RESULT: PASS.
+  PA_WIDTH is 48; PPN_WIDTH, CSR_PPN_W, CSR_PMPADDR_W, the ITLB, walker
+  and PMA follow by derivation. The pacino L1I: L1iPaBits equals
+  PA_WIDTH (l1i_param_chk checks it), L1iTagBits and L1iTagMsb derived,
+  ports l1i_addr_t, geometry unchanged. Every physical-width literal
+  under rtl/ derived, and every "outside" stimulus formed from
+  PA_WIDTH or PPN_WIDTH. Rewritten by ruling: tb_itlb A5 (bit
+  PA_WIDTH - 1 hits) and W4 (bit PA_WIDTH faults), tb_ptw case j
+  (computed from PPN_WIDTH; at 48 every leaf hits). Cases a to f
+  added; e passes with no fix. sim_l1i 281 -> 296, sim_ptw
+  1523 -> 1564, sim_pmp_pma_chk 70 -> 73, sim_fe_top and _1slot +2,
+  sim_fe_top_sv39 and _1slot 21 -> 23. Storage: L1I tag +12288 bits,
+  ITLB +768 bits (entry 93 + PPN_WIDTH); no other DOC-016 unit
+  changes.
+FINDING, fixed: tb_csr_tb_pkg wrote the pmpaddr width as 34 bits;
+  at 48 R0, R10 and A1 failed. Not in the Background; the sweep found
+  it.
+PA CORRECTIONS (Problem 0): the tb_pmp_pma_chk concatenation was not
+  silent at 48 (Verilator WIDTHEXPAND stops the build);
+  s_ppn_wide_nonleaf became a page fault at 48, not a hit.
+NOTE: BP-146's translated-page check cannot fire at the current
+  PA_WIDTH (mmu_decisions.md MMU-28). It stays, derived from
+  PPN_WIDTH.
+PROCESS: run time was lost to approval waits on commands that used
+  shell variables. BP-148's Constraints forbid them.
+PLANNING (PA, from BP-147): l1i_ifu_interfaces.md IF-1 built, 3.1,
+  4.2, 14.1; icache_decisions.md L1I-20 built, section 9 row;
+  mmu_decisions.md MMU-28.
+
+Next free: BP-148, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#200.
+
+---
 ## Session-085, continued: BP-147 written.
 
 BP-147 WRITTEN: PA_WIDTH 48, a width-only task (l1i_ifu_interfaces.md
@@ -7781,9 +7816,11 @@ numbers are issued from one sequence across both tables.
 |     |          | Opened session-085 (Jeff).                               |
 | 199 | cachegen | OPEN. BACKFILL CACHEGEN TO PA_WIDTH 48                   |
 |     |          | (l1i_ifu_interfaces.md IF-1, icache_decisions.md         |
-|     |          | L1I-20). BP-147 edits the pacino copy of the L1I in the  |
-|     |          | tree. cachegen's pacino topology (the tools/cachegen     |
-|     |          | submodule, uarchlabs/cachegen:                           |
+|     |          | L1I-20). BP-147 built the pacino copy of the L1I in the  |
+|     |          | tree; its Results Capture lists every L1I change, file   |
+|     |          | and line, and what the emitter should write from pa_bits |
+|     |          | (the port and tag widths). cachegen's pacino topology    |
+|     |          | (the tools/cachegen submodule, uarchlabs/cachegen:       |
 |     |          | testcases/pacino/pacino_topology.json,                   |
 |     |          | addressing.pa_bits and the four link address widths,     |
 |     |          | which are literals and move by hand) still says 36, so a |
