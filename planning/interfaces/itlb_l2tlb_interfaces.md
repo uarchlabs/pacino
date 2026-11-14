@@ -6,7 +6,7 @@
  FILE:    itlb_l2tlb_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-11-13
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -189,7 +189,8 @@ IL-7  `l2t_itlb_size` names which page size the translation
       always masks more VPN bits. 3'b100 and 3'b101 RULED
       session-085 (Jeff) with mmu_decisions.md MMU-32; they were
       inside 3'b1xx, reserved for a future size. The walker returns
-      them since BP-146; the ITLB installs them from the next task.
+      them since BP-146. The ITLB installs, matches and invalidates
+      them since BP-148, masking VPN[26:0] and VPN[35:0].
       BP-118 built two bits; BP-119 widened to three. A
       response that hits with a reserved size code is handled as a
       reserved status (IT-4, IL-4), built by BP-119. The ITLB
@@ -376,5 +377,8 @@ MMU-31    The G-stage-only permission byte, IL-8.
               the Sv57 widths; stated by VA_WIDTH and FAULT_GPA_WIDTH.
 
   2026-11-13  session-085, after BP-146. IL-7: the walker returns
+              3'b100 and 3'b101.
+
+  2026-11-14  session-085, after BP-148. IL-7: the ITLB installs
               3'b100 and 3'b101.
 ```

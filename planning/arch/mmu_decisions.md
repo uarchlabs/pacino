@@ -191,7 +191,7 @@ MMU-32 THE WALK FOLLOWS THE MODE. LEVELS is 3 for Sv39 and Sv39x4,
        Sv57x4 G-stage. RULED session-085 (Jeff) with MMU-20. BUILT in
        the walker by BP-146: each stage's root level is sampled with
        the CSR group. The ITLB's sizes 3'b100 and 3'b101 and its
-       per-mode address check are the next task's.
+       per-mode address check are BUILT by BP-148.
 
 MMU-33 AN UNSUPPORTED MODE IS WALKED AS SV39. The CSR-5 write rules
        keep an unsupported value out of satp, vsatp and hgatp, so in
@@ -206,9 +206,10 @@ MMU-33 AN UNSUPPORTED MODE IS WALKED AS SV39. The CSR-5 write rules
        the W13 qualification is NOT YET BUILT (TD#198). The privileged
        specification defines no such exception: this is a Pacino
        extension, off at reset.
-       PROPOSED, PA: the ITLB's address check (itlb_decisions.md
-       ITLB-18) treats the value as Sv39 too, so the fetch and the
-       walk agree.
+       The ITLB's address check (itlb_decisions.md ITLB-18) treats
+       the value as Sv39 too, so the fetch and the walk agree. RULED
+       session-085 (Jeff). BUILT by BP-148; tb_itlb P20-P23 present
+       the value on the CSR group directly.
 
 MMU-21 is the reason the outstanding walk count matters more than
 it did. A single two-stage walk occupies the walker for far longer
@@ -1170,4 +1171,7 @@ TD#118    No longer bounds the walker, which has its own port
 
   2026-11-14  session-085, after BP-147. MMU-28: the translated-page
               check cannot fire at the current PA_WIDTH.
+
+  2026-11-14  session-085, after BP-148. MMU-32: the ITLB half built.
+              MMU-33: the ITLB half ruled and built.
 ```

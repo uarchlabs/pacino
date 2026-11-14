@@ -214,6 +214,8 @@
 # Updated after BP-147, session-085 (PROJECT_STATUS.md,
 # l1i_ifu_interfaces.md, icache_decisions.md, mmu_decisions.md).
 # Updated when BP-148 was written, session-085 (PROJECT_STATUS.md).
+# Updated after BP-148, session-085 (PROJECT_STATUS.md,
+# itlb_decisions.md, itlb_l2tlb_interfaces.md, mmu_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -257,7 +259,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   2d8332507267
-PLAN  PROJECT_STATUS.md                 4c0389318f9b
+PLAN  PROJECT_STATUS.md                 7ea0a0b7815a
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 
@@ -274,10 +276,10 @@ ARCH  ftq_entry_formats.md        968ae67e193f
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
 ARCH  icache_decisions.md               0e18fe32a823
 ARCH  ifu_decisions.md            cbd1867428ab
-ARCH  itlb_decisions.md                 a523e4694115
+ARCH  itlb_decisions.md                 d97092555525
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  1bbbdffed52f
+ARCH  mmu_decisions.md                  d92dd0e7fd3d
 ARCH  ras_decisions.md                  23e7974e38ad
 ARCH  sc_decisions.md                   667f9510517a
 ARCH  sc_table_hash_rules.md            ad6ddcde00a8
@@ -316,7 +318,7 @@ INTF  ftq_bpu_interfaces.md       46b0a0c6b0a1
 INTF  ftq_ifu_interfaces.md       554f219f72bd
 INTF  ifu_ibuf_interfaces.md      5079031d7d75
 INTF  itlb_ifu_interfaces.md      32dc29fae399
-INTF  itlb_l2tlb_interfaces.md    dbac3b179b7f
+INTF  itlb_l2tlb_interfaces.md    11a4dbe0981d
 INTF  ptw_mem_interfaces.md       a7bb1b8e3253
 INTF  ittage_interfaces.md        18b3ed55b8fe
 INTF  l1i_ifu_interfaces.md       5267cfdffe1c

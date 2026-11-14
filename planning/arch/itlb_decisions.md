@@ -6,7 +6,7 @@
  FILE:    itlb_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -58,7 +58,9 @@ ITLB-3  One array holds every page size: 4 KiB, 2 MiB, 1 GiB,
         handled as a reserved status (IT-4). Built by BP-119.
         The 512 GiB and 256 TiB sizes match by masking VPN[26:0] and
         VPN[35:0] out of the compare, as the smaller sizes do. RULED
-        session-085 (Jeff) with MMU-20. NOT YET BUILT.
+        session-085 (Jeff) with MMU-20. BUILT by BP-148 (itlb.sv
+        size_mask and size_rsv; tb_itlb G16-G28, K17-K19). Until
+        BP-148 every code with bit 2 set was reserved.
 
 ITLB-3a Each entry also holds the page's PBMT, the more restrictive
         of the two stages' values as returned on
@@ -265,10 +267,13 @@ ITLB-18 THE ITLB CHECKS A TRANSLATED FETCH ADDRESS AGAINST THE
         checked by the walker against hgatp.MODE (mmu_decisions.md
         MMU-28). With satp.MODE=Bare it is physical, and an address
         beyond PA_WIDTH is an access fault, cause 1. RULED
-        session-085 (Jeff) with MMU-20. As built by BP-145 (itlb.sv)
-        the check is the Sv39 one, bits VA_WIDTH-1 down to 38 equal
-        (SV39_SIGN_BIT), for every non-Bare MODE. The per-mode check
-        is not yet built.
+        session-085 (Jeff) with MMU-20. BUILT by BP-148: the sign
+        bit is SV39_SIGN_BIT, SV48_SIGN_BIT or SV57_SIGN_BIT
+        (bp_defines_pkg), by satp.MODE for V=0 and vsatp.MODE for
+        V=1, read at lookup. A MODE value that is none of Bare, Sv39,
+        Sv48 and Sv57 is checked as Sv39 (mmu_decisions.md MMU-33).
+        From BP-145 to BP-148 every non-Bare MODE was checked as
+        Sv39. tb_itlb P9-P23.
 
 ## 6. Check placement
 
@@ -529,4 +534,7 @@ TD#118    Bounded ITLB-U1, now closed. The walker has its own
 
   2026-11-12  session-085, after BP-145. ITLB-18: the Sv39 check
               built at VA_WIDTH.
+
+  2026-11-14  session-085, after BP-148. ITLB-3: 512 GiB and 256 TiB
+              built. ITLB-18: the per-mode check built.
 ```

@@ -16,6 +16,53 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-148 recorded. TOOLS-007 opened.
+
+BP-148 COMPLETE (40afd69). regress.sh 279 targets, RESULT: PASS.
+  The ITLB installs, matches and invalidates 3'b100 (512 GiB) and
+  3'b101 (256 TiB); only 3'b11x is reserved (ITLB-3, IL-7). ITLB-18
+  checks by the mode of the stage, read at lookup, with SV48_SIGN_BIT
+  and SV57_SIGN_BIT new in bp_defines_pkg. MMU-33's ITLB half RULED
+  (Jeff) and built: an unsupported MODE is checked as Sv39, which the
+  BP-145 RTL already did. sim_itlb 159 -> 228, sim_itlb_d2 162 -> 231.
+  tb_fe_top's writer builds every table with pt_build_pkg through one
+  shared pool (pt_pool); the helper names and fields stay as wrappers
+  for examples/fe_demo, and pt_build_pkg is in fe_top_srcs.mk. No
+  table address moved: a replay of every builder call against a model
+  of the BP-147 walk matched all 38 programs and fe_demo fd14, fd15,
+  fd16 and fd18. tb_fe_top places no PTE directly; fe_demo keeps three
+  direct writes (fd14:34-36, fd15:36-38, fd15:47). New programs sv48,
+  sv57 and h57 (23, 23, 24 checks). tb_fe_demo builds; not run.
+NOTES:
+  - The only 256 TiB page is at physical address 0, outside main
+    memory, so its first page cannot hit (tb_itlb G22).
+  - A VS-stage names a GPA of at most PTE_PPN_WIDTH + 12 bits, so h57
+    cannot reach the Sv57x4 root entries 0x100 and above; only the
+    G-stage-only regime reaches them.
+  - Jeff: permission to read BP-147's regress summary was given during
+    the run; it belonged in the task file.
+  - The IA's scratch build first used the real tree through RVA_ROOT,
+    and rebuilt against the copy.
+  - The Grep tool was missing in the IA's session; grep went through
+    Bash.
+TOOLS-007 OPENED: the Verilator class-member store. In
+  fe_tb_writer.svh pw_c, a member flag set in pt_post read as 0 in
+  wr64, which pt_post called. Not root-caused; BP-148 worked around it
+  and only +PTLOG logging was affected. The task: a minimal test with
+  variants (same object or another, a pop loop with output arguments,
+  a $display, -O0); if it reproduces, the generated C++ and every site
+  of the pattern in the testbench classes; if not, the BP-148 code
+  re-created to settle whether the writer was at fault. Source:
+  BP-148's Follow-on Actions and Other Notes 2. Runs before BP-149.
+FOR BP-149: a G-stage-only Sv57x4 case with GPA bits 58:56 set; the
+  baseline's regress summary in Context Loaded; grep through Bash
+  allowed when the Grep tool is missing; every scratch build sets
+  RVA_ROOT to the copy.
+
+Next free: BP-149, SYS-003, DOC-017, INFRA-014, TOOLS-008, PERF-002,
+TD#200.
+
+---
 ## Session-085, continued: BP-148 written.
 
 BP-148 WRITTEN: the ITLB in every mode (itlb_decisions.md ITLB-3,
