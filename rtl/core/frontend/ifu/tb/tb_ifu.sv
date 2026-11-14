@@ -1236,8 +1236,8 @@ module tb;
     // Across a page: position 15 at 0xFFE, position 16 at the next
     // page, which maps to a different physical page.
     b = VA_WIDTH'('h0_8004_0FE0);
-    map_page(b, 24'h00_0A00, IFU_FAULT_NONE, 0, '0);
-    map_page(b + VA_WIDTH'(32), 24'h00_0B37, IFU_FAULT_NONE, 0, '0);
+    map_page(b, PPN_WIDTH'('h00_0A00), IFU_FAULT_NONE, 0, '0);
+    map_page(b + VA_WIDTH'(32), PPN_WIDTH'('h00_0B37), IFU_FAULT_NONE, 0, '0);
     for (int i = 0; i < 15; i++) put16(b + VA_WIDTH'(2 * i), 16'h0505,
                                        32'h0015_0513);
     put32(b + VA_WIDTH'(30), 32'h0020_0113);         // addi x2,x0,2
@@ -1261,7 +1261,7 @@ module tb;
     // A crossing block whose SECOND page faults (IFU-25): a 32-bit
     // instruction at 0xFFE straddles into it.
     b = VA_WIDTH'('h0_8005_0FE0);
-    map_page(b, 24'h00_0C00, IFU_FAULT_NONE, 0, '0);
+    map_page(b, PPN_WIDTH'('h00_0C00), IFU_FAULT_NONE, 0, '0);
     map_page(b + VA_WIDTH'(32), '0, IFU_FAULT_PAGE, 0, '0);
     for (int i = 0; i < 15; i++) put16(b + VA_WIDTH'(2 * i), 16'h0505,
                                        32'h0015_0513);
@@ -1303,7 +1303,7 @@ module tb;
     $display("-- %s --", tname);
     reset_all();
     b = VA_WIDTH'('h0_8009_0040);
-    map_page(b, 24'h00_0D11, IFU_FAULT_NONE, 3, '0);
+    map_page(b, PPN_WIDTH'('h00_0D11), IFU_FAULT_NONE, 3, '0);
     fill_mixed(b, 64);
     add_blk(b, b + VA_WIDTH'(32), 1'b0, 0);
     // A second, crossing block, and the ITLB refusing on odd cycles,
@@ -1379,7 +1379,7 @@ module tb;
     // second page faulting, taken at position 12 in that page: the
     // fault at position 8 cuts the range before the taken position.
     b = VA_WIDTH'('h0_800C_3FF0);
-    map_page(b, 24'h00_0E00, IFU_FAULT_NONE, 0, '0);
+    map_page(b, PPN_WIDTH'('h00_0E00), IFU_FAULT_NONE, 0, '0);
     map_page(b + VA_WIDTH'(16), '0, IFU_FAULT_PAGE, 0, '0);
     for (int i = 0; i < 8; i++) put16(b + VA_WIDTH'(2 * i), 16'h0505,
                                       32'h0015_0513);
@@ -1780,7 +1780,7 @@ module tb;
     reset_all();
     a = VA_WIDTH'('h0_8024_0FE0);
     n = VA_WIDTH'('h0_8025_0040);
-    map_page(n, 24'h00_0F55, IFU_FAULT_NONE, 0, '0);
+    map_page(n, PPN_WIDTH'('h00_0F55), IFU_FAULT_NONE, 0, '0);
     fill_mixed(a, 64);
     fill_mixed(n, 128);
     add_blk(a, a + VA_WIDTH'(32), 1'b0, 0);

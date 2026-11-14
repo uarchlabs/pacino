@@ -582,9 +582,12 @@ package bp_defines_pkg;
   //
   // The generated L1I declares the same quantities in l1i_pkg under
   // cachegen's names (L1iPaBits, L1iLineBytes, ...). l1i_param_chk
-  // compares the two at elaboration; a change here must be matched
-  // by the cachegen configuration or that check fails.
-  parameter  int   PA_WIDTH        = 36;   // IF-1, L1I-4
+  // compares the two at elaboration; a change here must be matched in
+  // the pacino copy's l1i_pkg (rtl/core/frontend/icache) or that check
+  // fails. cachegen's own configuration is TD#199.
+  // PA_WIDTH is 48, ruled session-085 (IF-1, L1I-20); it was 36 until
+  // BP-147.
+  parameter  int   PA_WIDTH        = 48;   // IF-1, L1I-4
   parameter  int   L1I_LINE_BYTES  = 64;   // L1I-9
   localparam int   L1I_LINE_BITS   = L1I_LINE_BYTES * 8;  // = 512
   localparam int   L1I_OFFSET_BITS = $clog2(L1I_LINE_BYTES); // = 6

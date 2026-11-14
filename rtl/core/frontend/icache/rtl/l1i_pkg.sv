@@ -18,6 +18,13 @@
 // None of them appears in the input, D-37. The address
 // decomposition is built once here and read by the cache
 // control, the testbench and the self checking tests, D-39.
+//
+// PACINO CHANGES (BP-147, icache_decisions.md L1I-20). L1iPaBits is
+// PA_WIDTH, 48 (l1i_ifu_interfaces.md IF-1; the emission has 36), and
+// L1iTagBits and L1iTagMsb are derived from it rather than written as
+// literals, so a width change is the one edit on the L1iPaBits line.
+// l1i_param_chk checks L1iPaBits against bp_defines_pkg::PA_WIDTH.
+// The geometry (L1I-1) is unchanged. cachegen's topology is TD#199.
 //--------------------------------------------------------------------
 package l1i_pkg;
 
@@ -29,7 +36,7 @@ package l1i_pkg;
   // ----------------------------------------------------------------
   // Geometry
   // ----------------------------------------------------------------
-  localparam int unsigned L1iPaBits        = 36;
+  localparam int unsigned L1iPaBits        = 48;    // PA_WIDTH, BP-147
   localparam int unsigned L1iCapacityBytes = 65536;
   localparam int unsigned L1iLineBytes     = 64;
   localparam int unsigned L1iLineBits      = 512;
@@ -45,7 +52,9 @@ package l1i_pkg;
   // ----------------------------------------------------------------
   localparam int unsigned L1iOffsetBits    = 6;
   localparam int unsigned L1iIndexBits     = 7;
-  localparam int unsigned L1iTagBits       = 23;
+  // the tag is every address bit above the index, BP-147
+  localparam int unsigned L1iTagBits       =
+      L1iPaBits - L1iOffsetBits - L1iIndexBits;
   localparam int unsigned L1iBankBits      = 1;
   localparam int unsigned L1iSetIdxBits    = 6;
   localparam int unsigned L1iWayBits       = 3;
@@ -55,7 +64,7 @@ package l1i_pkg;
   localparam int unsigned L1iIndexLsb      = 6;
   localparam int unsigned L1iIndexMsb      = 12;
   localparam int unsigned L1iTagLsb        = 13;
-  localparam int unsigned L1iTagMsb        = 35;
+  localparam int unsigned L1iTagMsb        = L1iPaBits - 1;
 
   // R-7. The bank select. The index already spans the whole set
   // space, so the select is taken OUT of the index rather than

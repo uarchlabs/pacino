@@ -725,16 +725,20 @@ module tb;
     exp_flt("page table outside cacheable coherent memory", 1);
     chk("not cacheable: nothing presented", n_acc == 0);
 
+    // BP-147: the PPN bit outside the physical space is PPN_WIDTH, the
+    // first bit a PPN cannot have (it was bit 24, PPN_WIDTH only at
+    // PA_WIDTH 36). The leaf case sets bit 43, outside at any PA_WIDTH
+    // up to 55.
     setup("s_ppn_wide_nonleaf");
-    wrw(T2 + PW'(8 * VA[26:18]), pte(44'h100_0000 | 44'(T1 >> 12), F_PTR));
+    wrw(T2 + PW'(8 * VA[26:18]), pte((44'd1 << PNW) | 44'(T1 >> 12), F_PTR));
     walk(1'b0, VW'(VA), ACC_X);
-    exp_flt("non-leaf PPN above bit 23", 1);
+    exp_flt("non-leaf PPN bit PPN_WIDTH", 1);
     chk("wide non-leaf: one read", n_acc == 1);
 
     setup("s_ppn_wide_leaf");
     path3(T2, T1, T0, VA, pte(44'h800_0000_0123, F_RXAD));
     walk(1'b0, VW'(VA), ACC_X);
-    exp_flt("leaf PPN above bit 23", 1);
+    exp_flt("leaf PPN bit 43", 1);
 
     setup("s_err_read");
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RXAD));
@@ -1061,9 +1065,11 @@ module tb;
 
     setup2("h_g_ppn_wide");
     vspath(pte(44'(GP_CODE), F_RXAD));
-    wrw(G0 + PW'(8 * GP_CODE[8:0]), pte(44'h100_0000 | 44'(SP_CODE), F_URXA));
+    // BP-147: PPN bit PPN_WIDTH, as s_ppn_wide_nonleaf (it was bit 24).
+    wrw(G0 + PW'(8 * GP_CODE[8:0]),
+        pte((44'd1 << PNW) | 44'(SP_CODE), F_URXA));
     walk(1'b1, VW'(VA), ACC_X);
-    exp_flt("G leaf PPN above bit 23", 1);
+    exp_flt("G leaf PPN bit PPN_WIDTH", 1);
 
     setup2("h_vs_pbmte");
     cs_henvcfg_pbmte(1'b0);                    // menvcfg's stays set
@@ -1494,8 +1500,9 @@ module tb;
   localparam logic [7:0] F_BACK  = 8'hDF;     // a VS table page's G leaf
 
   // The five address indices the cases use, level 4 to level 0. I2's
-  // bits 8:6 are zero, so a 512 GiB leaf's page (VPN 26:0) fits
-  // PPN_WIDTH; a 256 TiB leaf (VPN 35:0) also needs I3 = 0.
+  // bits 8:6 are zero, so a 512 GiB leaf's page (VPN 26:0) is below bit
+  // 24, inside PPN_WIDTH at any PA_WIDTH from 36; a 256 TiB leaf's page
+  // (VPN 35:0) is inside it only with I3 = 0 while PPN_WIDTH is below 36.
   localparam logic [8:0] I4 = 9'h0A5;
   localparam logic [8:0] I3 = 9'h0C3;
   localparam logic [8:0] I2 = 9'h02B;
@@ -2049,28 +2056,98 @@ module tb;
                   n_acc), (nr == 35) && (n_acc == 35) && (n_cas == 0));
   endtask
 
-  // ---- j: a 512 GiB and a 256 TiB leaf beyond PPN_WIDTH -----------------
-  // The leaf PPN is 0 and aligned; the page takes VPN 26:0 (35:0), and a
-  // VPN bit at or above PPN_WIDTH puts it outside: access fault (MMU-28).
+  // ---- j: a 512 GiB and a 256 TiB leaf whose page may pass PPN_WIDTH ----
+  // The leaf PPN is 0 and aligned; the page takes VPN 26:0 (35:0). A page
+  // with a bit at or above PPN_WIDTH is outside: access fault (MMU-28).
+  // BP-147, rewritten by ruling: the expected answer is computed from
+  // PPN_WIDTH. At PA_WIDTH 36 (PPN_WIDTH 24) both stimuli reach bit 24
+  // and fault; at 48 (PPN_WIDTH 36) neither page can reach bit 36, so
+  // both hit and the fault half is unreachable (it said fault at any
+  // width until BP-147).
+  task automatic j_leaf(input logic g, input int l, input logic [VW-1:0] v);
+    logic [63:0] pg;
+    pg = 64'(v) & lmask(l);                    // the leaf PPN is 0
+    walk(g, v, ACC_X);
+    if ((pg >> PNW) != 64'd0) begin
+      exp_flt(tname, 1);
+    end else begin
+      // The single stage returns the leaf PPN, the G-stage only walk the
+      // translated page (as cases a and b).
+      exp_hit(tname, g ? PNW'(pg) : PNW'(0), sz_of(l, 1'b0), 2'd0);
+    end
+    chk($sformatf("%s: one read", tname), n_acc == 1);
+  endtask
+
   task automatic t_m_j();
     logic [VW-1:0] v;
     bsetup_s("j_512g_wide", M_48);
     v = vpn_n(4, 0, I3, I2 | 9'h040, I1, I0);          // VPN bit 24
     void'(bs.map(va64(v), 3, pte(44'h0, F_RXAD)));
     bsync();
-    walk(1'b0, v, ACC_X);
-    exp_flt(tname, 1);
-    chk($sformatf("%s: one read", tname), n_acc == 1);
+    j_leaf(1'b0, 3, v);
     bsetup_s("j_256t_wide", M_57);
     v = vpn_n(5, I4, I3, I2, I1, I0);                   // VPN bits 35:27
     void'(bs.map(va64(v), 4, pte(44'h0, F_RXAD)));
     bsync();
-    walk(1'b0, v, ACC_X);
-    exp_flt(tname, 1);
-    chk($sformatf("%s: one read", tname), n_acc == 1);
+    j_leaf(1'b0, 4, v);
     // The same at the G-stage (G-stage only, Sv57x4).
     bsetup_h("j_g_256t_wide", M_BARE, M_57);
     void'(bg.map(va64(v), 4, pte(44'h0, F_GLEAF)));
+    bsync();
+    j_leaf(1'b1, 4, v);
+  endtask
+
+  // ---- BP-147 d: a 512 GiB page at a non-zero physical address ---------
+  // A Sv48 leaf at level 3 (the root) whose PPN has every bit from 27 up
+  // to PPN_WIDTH - 1 set, and PPN 26:0 zero (aligned): a hit. The single
+  // stage returns the leaf PPN, checked whole; the G-stage only walk
+  // (Sv48x4) returns the translated page, the PPN with VPN 26:0, checked
+  // whole. PPN_WIDTH 24 (PA_WIDTH 36) has no bit at or above 27 to set.
+  task automatic t_m_bp147_d();
+    logic [VW-1:0] v;
+    logic [43:0]   p;
+    logic [63:0]   pg;
+    if (PNW <= 27) begin
+      $display("SKIP d_512g_high: PPN_WIDTH %0d has no bit 27", PNW);
+      return;
+    end
+    p  = 44'(((64'd1 << PNW) - 64'd1) & ~((64'd1 << 27) - 64'd1));
+    v  = vpn_n(4, 0, I3, I2, I1, I0);
+    pg = 64'(p) | (64'(v) & lmask(3));
+    bsetup_s("d_512g_high", M_48);
+    void'(bs.map(va64(v), 3, pte(p, F_RXAD)));
+    bsync();
+    walk(1'b0, v, ACC_X);
+    exp_hit(tname, PNW'(p), sz_of(3, 1'b0), 2'd0);
+    chk($sformatf("%s: PPN bit %0d set", tname, PNW - 1), r_ppn[PNW - 1]);
+    chk($sformatf("%s: one read", tname), n_acc == 1);
+    bsetup_h("d_g_512g_high", M_BARE, M_48);
+    void'(bg.map(va64(v), 3, pte(p, F_GLEAF)));
+    bsync();
+    walk(1'b1, v, ACC_X);
+    exp_hit(tname, PNW'(pg), sz_of(3, 1'b0), 2'd0);
+    chk($sformatf("%s: one read", tname), n_acc == 1);
+  endtask
+
+  // ---- BP-147 e: a 256 TiB leaf whose PPN has bit 36 or above set ------
+  // Aligned (PPN 35:0 zero), so not a misaligned superpage. Bit 36 is at
+  // or above PPN_WIDTH at every PA_WIDTH up to 48: the page names an
+  // address outside every PMA region, an access fault, cause 1 (MMU-28).
+  // Single stage, Sv57, with bit 36 and with bit 43, the PTE's top PPN
+  // bit; and G-stage only, Sv57x4, with bit 36.
+  task automatic t_m_bp147_e();
+    logic [VW-1:0] v;
+    v = vpn_n(5, I4, I3, I2, I1, I0);
+    for (int b = 36; b <= 43; b += 7) begin
+      bsetup_s($sformatf("e_256t_ppn_bit%0d", b), M_57);
+      void'(bs.map(va64(v), 4, pte(44'd1 << b, F_RXAD)));
+      bsync();
+      walk(1'b0, v, ACC_X);
+      exp_flt(tname, 1);
+      chk($sformatf("%s: one read", tname), n_acc == 1);
+    end
+    bsetup_h("e_g_256t_ppn_bit36", M_BARE, M_57);
+    void'(bg.map(va64(v), 4, pte(44'd1 << 36, F_GLEAF)));
     bsync();
     walk(1'b1, v, ACC_X);
     exp_flt(tname, 1);
@@ -2172,6 +2249,8 @@ module tb;
     t_m_h();
     t_m_i();
     t_m_j();
+    t_m_bp147_d();
+    t_m_bp147_e();
     t_m_k();
     $display("tb_ptw: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

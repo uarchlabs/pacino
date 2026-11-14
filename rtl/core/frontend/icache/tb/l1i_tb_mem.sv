@@ -35,6 +35,9 @@
 //
 // With none of them set it serves the lowest numbered pending
 // fill and keeps the link until that line is done.
+//
+// PACINO CHANGES (BP-147, L1I-20): mem_a_address is l1i_addr_t; the
+// emission writes it [35:0].
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -59,7 +62,7 @@ module l1i_tb_mem (
   input  logic [2:0]           mem_a_param,         // op qualifier
   input  logic [2:0]           mem_a_size,          // log2 beat bytes
   input  logic [3:0]           mem_a_source,        // master txn id
-  input  logic [35:0]          mem_a_address,       // byte address, R-7
+  input  l1i_addr_t            mem_a_address,       // byte address, R-7
   input  logic [31:0]          mem_a_mask,          // one bit a data byte
   input  logic [255:0]         mem_a_data,          // the beat
   input  logic                 mem_a_corrupt,       // the beat is bad

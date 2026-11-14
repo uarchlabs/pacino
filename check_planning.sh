@@ -210,6 +210,7 @@
 # Updated in session-085 for PA_WIDTH 48, PF-17 and the regression
 # modes (PROJECT_CORE.md, PROJECT_STATUS.md, icache_decisions.md,
 # mmu_decisions.md, l1i_ifu_interfaces.md, perf_decisions.md).
+# Updated when BP-147 was written, session-085 (PROJECT_STATUS.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -253,7 +254,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   2d8332507267
-PLAN  PROJECT_STATUS.md                 4207b2853d65
+PLAN  PROJECT_STATUS.md                 224a4c0a16a7
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 

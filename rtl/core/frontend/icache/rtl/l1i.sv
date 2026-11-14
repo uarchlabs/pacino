@@ -36,6 +36,10 @@
 //   core_inv_done    l1i_ifu_inv_done
 // The invalidate is l1i_maint's; the uncached qualifier is read by
 // l1i_mshr and by the bank's compare stage.
+//
+// PACINO CHANGES (BP-147, L1I-20): core_addr, core_inv_addr and
+// mem_a_address are l1i_addr_t, L1iPaBits wide; the emission writes
+// them [35:0].
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -51,7 +55,7 @@ module l1i (
 
   // interface 'core', link 'pe_port_i'
   input  logic                 core_valid,          // a request is live
-  input  logic [35:0]          core_addr,           // byte address, R-7
+  input  l1i_addr_t            core_addr,           // byte address, R-7
   input  logic [3:0]           core_id,             // request id
   input  logic                 core_prefetch,
   input  logic                 core_uncached,       // L1I-24
@@ -65,7 +69,7 @@ module l1i (
   input  logic                 core_inv_val,
   output logic                 core_inv_rdy,
   input  logic                 core_inv_all,
-  input  logic [35:0]          core_inv_addr,       // any byte, IF-29
+  input  l1i_addr_t            core_inv_addr,       // any byte, IF-29
   output logic                 core_inv_done,
 
   // interface 'mem', link 'tl_l1i_l2'
@@ -75,7 +79,7 @@ module l1i (
   output logic [2:0]           mem_a_param,         // op qualifier
   output logic [2:0]           mem_a_size,          // log2 beat bytes
   output logic [3:0]           mem_a_source,        // master txn id
-  output logic [35:0]          mem_a_address,       // byte address, R-7
+  output l1i_addr_t            mem_a_address,       // byte address, R-7
   output logic [31:0]          mem_a_mask,          // one bit a data byte
   output logic [255:0]         mem_a_data,          // the beat
   output logic                 mem_a_corrupt,       // the beat is bad

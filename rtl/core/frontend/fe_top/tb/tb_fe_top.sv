@@ -1439,6 +1439,28 @@ module tb;
   // =================================================================
   // Program 2, Sv39 (V=0, satp.MODE Sv39, S-mode).
   // =================================================================
+  // BP-147 (case c): one of the program's code pages is at a physical
+  // address with bit PA_WIDTH - 1 set (IF-1, PA_WIDTH 48; main memory by
+  // MMU-15a). The L1I's Gets with that bit set are counted here, and each
+  // is checked to name that page whole; a Get that lost the bit would
+  // read memory the writer never wrote, and run_and_check would fail.
+  localparam logic [PA_WIDTH-1:0] SV39_PA_HI =
+      (PA_WIDTH'(1) << (PA_WIDTH - 1)) | PA_WIDTH'('h0_8150_3000);
+  int l1i_hi_n;                // L1I Gets with bit PA_WIDTH - 1 set
+  int l1i_hi_bad;              // of those, Gets outside SV39_PA_HI's page
+
+  always @(posedge clk) begin
+    if (!rstn) begin
+      l1i_hi_n   <= 0;
+      l1i_hi_bad <= 0;
+    end else if (l1i_mem_a_valid && l1i_mem_a_ready &&
+                 l1i_mem_a_address[PA_WIDTH-1]) begin
+      l1i_hi_n <= l1i_hi_n + 1;
+      if (l1i_mem_a_address[PA_WIDTH-1:12] != SV39_PA_HI[PA_WIDTH-1:12])
+        l1i_hi_bad <= l1i_hi_bad + 1;
+    end
+  end
+
   task automatic p_sv39();
     logic [VA_WIDTH-1:0] b;
     logic [VA_WIDTH-1:0] fn;
@@ -1453,6 +1475,8 @@ module tb;
     W.map4k(b + VA_WIDTH'('h1000),   PA_WIDTH'('h0_8120_5000));
     W.map4k(b + VA_WIDTH'('h2000),   PA_WIDTH'('h0_8100_7000));
     W.map4k(VA_WIDTH'('h0_8002_0000), PA_WIDTH'('h0_8130_0000));
+    // BP-147: b + 0x3000, physical bit PA_WIDTH - 1 set.
+    W.map4k(b + VA_WIDTH'('h3000),   SV39_PA_HI);
     // The reset vector is fetched physically before any translation,
     // so it jumps to the program; under Sv39 that fetch is already
     // translated, so the reset vector page is mapped to itself.
@@ -1477,6 +1501,10 @@ module tb;
       W.ret(link);
       W.mixed(2);
     end
+    // BP-147: run code on the page at SV39_PA_HI, then take the fault
+    // from there.
+    W.jal(5'd0, b + VA_WIDTH'('h3000));
+    W.mixed(8);
     // A page fault: a fetch from an unmapped VA, cause 12.
     W.jal_fault(b + VA_WIDTH'('h4000), IFU_FAULT_PAGE,
               VA_WIDTH'('h0_8002_0000));
@@ -1486,6 +1514,10 @@ module tb;
     W.halt();
     release_reset();
     run_and_check(20000);
+    chk($sformatf("the L1I fetched the PA bit %0d page (%0d Gets)",
+                  PA_WIDTH - 1, l1i_hi_n), l1i_hi_n > 0);
+    chk($sformatf("each such Get named that page whole (%0d did not)",
+                  l1i_hi_bad), l1i_hi_bad == 0);
     chk($sformatf("the L2 TLB walked (%0d)", n_walks), n_walks > 0);
     chk("the page fault reached decode with its cause and VA",
         n_fault_ok == 1);
@@ -2762,14 +2794,19 @@ module tb;
            W.mk_pte(44'h8_1420, PTE_LEAF, 2'b00, 1'b0));
     W.jr_fault(tgt(3), IFU_FAULT_ACCESS, hnd(3));
     W.mixed(2);
-    // 4 cause 1: a leaf PPN above bit 23.
+    // 4 cause 1: a leaf PPN with bit PPN_WIDTH set. BP-147: the bit is
+    // PPN_WIDTH at any width (it was bit 24, PPN_WIDTH at PA_WIDTH 36
+    // only, and main memory at 48). So are cases 5 and 6 and
+    // p_pt_vsonly's case 1.
     W.wr64(W.s_slot(tgt(4), 0),
-           W.mk_pte(44'h100_0000 | 44'h8_1430, PTE_LEAF, 2'b00, 1'b0));
+           W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8_1430, PTE_LEAF, 2'b00,
+                    1'b0));
     W.jr_fault(tgt(4), IFU_FAULT_ACCESS, hnd(4));
     W.mixed(2);
-    // 5 cause 1: a non-leaf PPN above bit 23.
+    // 5 cause 1: a non-leaf PPN with bit PPN_WIDTH set.
     W.wr64(W.s_slot(tgt(5), 1),
-           W.mk_pte(44'h100_0000 | 44'h8_F100, PTE_PTR, 2'b00, 1'b0));
+           W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8_F100, PTE_PTR, 2'b00,
+                    1'b0));
     W.jr_fault(tgt(5), IFU_FAULT_ACCESS, hnd(5));
     W.mixed(2);
     // 6 cause 1: the memory port answers the leaf read with an error.
@@ -2846,11 +2883,12 @@ module tb;
            W.mk_pte(44'h1234, 8'hC5, 2'b00, 1'b0));
     W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(5));
     W.mixed(2);
-    // 6 cause 1: a G-stage leaf PPN above bit 23.
+    // 6 cause 1: a G-stage leaf PPN with bit PPN_WIDTH set.
     g = GPA_WIDTH'('h0_2400_0000);
     h_map(tgt(6), g, PA_WIDTH'('h0_8140_0000),
           W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
-          W.mk_pte(44'h100_8140, F_URWXAD, 2'b00, 1'b0));
+          W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8140, F_URWXAD, 2'b00,
+                   1'b0));
     W.jr_fault(tgt(6), IFU_FAULT_ACCESS, hnd(6));
     W.mixed(2);
     // 7 cause 1: a memory error on the G-stage leaf read.
@@ -3141,11 +3179,11 @@ module tb;
     W.mixed(1);
     a1 = W.s_slot(tgt(1), 0);
     W.wr64(a1, W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
-    W.vmap[tgt(1)[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1410);
+    W.vmap[tgt(1)[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1410);
     run_at(tgt(1), hnd(1));
     a2 = W.s_slot(tgt(2), 0);
     W.wr64(a2, W.mk_pte(44'h8_1420, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
-    W.vmap[tgt(2)[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1420);
+    W.vmap[tgt(2)[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1420);
     chg_arm = 1'b1;
     chg_pa  = a2;
     chg_val = W.mk_pte(44'h8_1420, PTE_LEAF, 2'b00, 1'b0);
@@ -3408,7 +3446,7 @@ module tb;
     hi = VA_WIDTH'('h100_8000_3000);                // GPA bit 40
     W.g_map(hi[VA_WIDTH-1:12], PA_WIDTH'('h0_8145_0000),
             W.mk_pte(44'h8_1450, F_URWXAD, 2'b00, 1'b0));
-    W.vmap[hi[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1450);
+    W.vmap[hi[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1450);
     W.wp = RESET_VECTOR;
     W.mixed(3);
     W.jal(5'd0, PC_C);
@@ -3457,7 +3495,8 @@ module tb;
     W.jal(5'd0, PC_C);
     W.mixed(4);
     W.wr64(W.vs_slot(tgt(1), 0),
-           W.mk_pte(44'h100_8140, PTE_LEAF, 2'b00, 1'b0));
+           W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8140, PTE_LEAF, 2'b00,
+                    1'b0));
     W.jr_fault(tgt(1), IFU_FAULT_ACCESS, hnd(1));
     W.mixed(2);
     W.wr64(W.vs_slot(tgt(2), 0), W.mk_pte(44'h8_1410, 8'hC5, 2'b00, 1'b0));
@@ -3513,7 +3552,7 @@ module tb;
     W.wr64(a0, l0);
     W.wr64(a1, l1);
     W.wr64(a2, l2);
-    W.vmap[p2[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1420);
+    W.vmap[p2[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1420);
     up_vpn = p2[VA_WIDTH-1:12];
     // 0: to U, then a fetch from the U-clear page.
     W.sret_to(PC_U + VA_WIDTH'('h100), 2'd0);

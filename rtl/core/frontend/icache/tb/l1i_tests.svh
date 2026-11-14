@@ -23,6 +23,9 @@
 // than through cg_check_eq, because a word on this node is 512 bits
 // and cg_check_eq carries 64. A width safe compare is exact
 // and a truncated one is not.
+//
+// PACINO CHANGES (BP-147, L1I-20): every address constant is
+// l1i_addr_t'('h...), L1iPaBits wide; the emission writes 36'h.
 //--------------------------------------------------------------------
 
   // the beat the responder returns for one line address
@@ -126,7 +129,8 @@
     nb_clear();
     all_ok = 1'b1;
     for(k = 0; k < L1iMaxOutstanding; k++) begin
-      nb_req(36'h00040000 + l1i_addr_t'(k) * l1i_addr_t'(L1iLineBytes),
+      nb_req(l1i_addr_t'('h00040000)
+               + l1i_addr_t'(k) * l1i_addr_t'(L1iLineBytes),
              l1i_req_id_t'(k), 1'b0, took);
       if(!took) all_ok = 1'b0;
     end
@@ -161,11 +165,11 @@
     // presented SECOND and answered FIRST, and the
     // identifier is the only thing that says so.
     // -----------------------------------------------------
-    drv_core(36'h00050040, 1'b0, '0, '0, r0);
+    drv_core(l1i_addr_t'('h00050040), 1'b0, '0, '0, r0);
     tb_hold = 1'b1;
     nb_clear();
-    nb_req(36'h00050000,        l1i_req_id_t'(1), 1'b0, took);
-    nb_req(36'h00050040, l1i_req_id_t'(2), 1'b0, took);
+    nb_req(l1i_addr_t'('h00050000),        l1i_req_id_t'(1), 1'b0, took);
+    nb_req(l1i_addr_t'('h00050040), l1i_req_id_t'(2), 1'b0, took);
     nb_idle();
     nb_wait(l1i_req_id_t'(2), took);
     cg_check("the request presented second was answered",
@@ -188,9 +192,9 @@
     tb_hold = 1'b1;
     nb_clear();
     all_ok = 1'b1;
-    nb_req(36'h00060000, l1i_req_id_t'(3), 1'b0, took);
+    nb_req(l1i_addr_t'('h00060000), l1i_req_id_t'(3), 1'b0, took);
     if(!took) all_ok = 1'b0;
-    nb_req(36'h00060000, l1i_req_id_t'(4), 1'b0, took);
+    nb_req(l1i_addr_t'('h00060000), l1i_req_id_t'(4), 1'b0, took);
     if(!took) all_ok = 1'b0;
     nb_idle();
     cg_check("both requests for one line were accepted",
@@ -215,7 +219,7 @@
     nb_clear();
     all_ok = 1'b1;
     for(k = 0; k < L1iMshrTargets; k++) begin
-      nb_req(36'h00070000, l1i_req_id_t'(k), 1'b0, took);
+      nb_req(l1i_addr_t'('h00070000), l1i_req_id_t'(k), 1'b0, took);
       if(!took) all_ok = 1'b0;
     end
     nb_idle();
@@ -224,7 +228,7 @@
     nb_ready(1'b0, rdy_dm);
     cg_check("the target after the last one is refused",
              !rdy_dm);
-    nb_try(36'h00071000, l1i_req_id_t'(8), 1'b0, 8, took);
+    nb_try(l1i_addr_t'('h00071000), l1i_req_id_t'(8), 1'b0, 8, took);
     cg_check("and so is a request to an unrelated line",
              !took);
     tb_hold = 1'b0;
@@ -249,7 +253,8 @@
     nb_clear();
     all_ok = 1'b1;
     for(k = 0; k < L1iMshrs - 1; k++) begin
-      nb_req(36'h00080000 + l1i_addr_t'(k) * l1i_addr_t'(L1iLineBytes),
+      nb_req(l1i_addr_t'('h00080000)
+               + l1i_addr_t'(k) * l1i_addr_t'(L1iLineBytes),
              l1i_req_id_t'(k), 1'b0, took);
       if(!took) all_ok = 1'b0;
     end
@@ -274,7 +279,7 @@
     cg_check("a prefetch is accepted outside the reserve",
              rdy_pf);
     nb_clear();
-    nb_req(36'h00090000, l1i_req_id_t'(0), 1'b1, took);
+    nb_req(l1i_addr_t'('h00090000), l1i_req_id_t'(0), 1'b1, took);
     nb_idle();
     nb_wait(l1i_req_id_t'(0), rdy_pf);
     cg_check("and it is answered like any other request",
@@ -296,13 +301,13 @@
     // L1I-5, hit throughput one request per cycle.
     // ---------------------------------------------------
     for(k = 0; k < 4; k++) begin
-      drv_core(36'h000a0000 + l1i_addr_t'(k) * l1i_addr_t'(128),
+      drv_core(l1i_addr_t'('h000a0000) + l1i_addr_t'(k) * l1i_addr_t'(128),
                1'b0, '0, '0, r0);
     end
     nb_clear();
     all_ok = 1'b1;
     for(k = 0; k < 4; k++) begin
-      nb_req(36'h000a0000 + l1i_addr_t'(k) * l1i_addr_t'(128),
+      nb_req(l1i_addr_t'('h000a0000) + l1i_addr_t'(k) * l1i_addr_t'(128),
              l1i_req_id_t'(k), 1'b0, took);
       if(!took) all_ok = 1'b0;
     end
@@ -350,9 +355,9 @@
     // between that and L1iReadLatency is a pad stage
     cg_check("the pipeline depth adds up to L1iReadLatency",
              (L1iCmpStage + L1iPipePad + 1) == L1iReadLatency);
-    drv_core(36'h000a4000, 1'b0, '0, '0, r0);
+    drv_core(l1i_addr_t'('h000a4000), 1'b0, '0, '0, r0);
     nb_clear();
-    nb_req(36'h000a4000, l1i_req_id_t'(5), 1'b0, took);
+    nb_req(l1i_addr_t'('h000a4000), l1i_req_id_t'(5), 1'b0, took);
     nb_idle();
     nb_wait(l1i_req_id_t'(5), took);
     cg_check("the warm line was answered", took);
@@ -368,13 +373,14 @@
     // latency it would have had on its own. A blocking
     // bank is stuck waiting for the fill and cannot.
     // ---------------------------------------------------
-    drv_core(36'h000a8000, 1'b0, '0, '0, r0);
+    drv_core(l1i_addr_t'('h000a8000), 1'b0, '0, '0, r0);
     cg_check("the two lines are in one bank",
-             l1i_bank_of(36'h000a8000) == l1i_bank_of(36'h000ac000));
+             l1i_bank_of(l1i_addr_t'('h000a8000))
+               == l1i_bank_of(l1i_addr_t'('h000ac000)));
     tb_hold = 1'b1;
     nb_clear();
-    nb_req(36'h000ac000, l1i_req_id_t'(6), 1'b0, took);
-    nb_req(36'h000a8000, l1i_req_id_t'(7), 1'b0, took);
+    nb_req(l1i_addr_t'('h000ac000), l1i_req_id_t'(6), 1'b0, took);
+    nb_req(l1i_addr_t'('h000a8000), l1i_req_id_t'(7), 1'b0, took);
     nb_idle();
     nb_wait(l1i_req_id_t'(7), took);
     cg_check("the hit was answered under the miss", took);
@@ -399,7 +405,8 @@
     nb_clear();
     all_ok = 1'b1;
     for(k = 0; k < L1iMshrs; k++) begin
-      nb_req(36'h000b0000 + l1i_addr_t'(k) * l1i_addr_t'(L1iLineBytes),
+      nb_req(l1i_addr_t'('h000b0000)
+               + l1i_addr_t'(k) * l1i_addr_t'(L1iLineBytes),
              l1i_req_id_t'(k), 1'b0, took);
       if(!took) all_ok = 1'b0;
     end
@@ -430,8 +437,8 @@
     tb_dhold = 1'b1;
     tb_ilv   = 1'b1;
     nb_clear();
-    nb_req(36'h000b8000, l1i_req_id_t'(1), 1'b0, took);
-    nb_req(36'h000b8080, l1i_req_id_t'(2), 1'b0, took);
+    nb_req(l1i_addr_t'('h000b8000), l1i_req_id_t'(1), 1'b0, took);
+    nb_req(l1i_addr_t'('h000b8080), l1i_req_id_t'(2), 1'b0, took);
     nb_idle();
     cg_tick(16);
     cg_check_eq("two fills are outstanding together",
@@ -445,9 +452,9 @@
     cg_check("the beats of the two did interleave",
              nb_ilv > 0);
     cg_check("the first line was reassembled correctly",
-             nb_data[1] == l1i_word_t'(tb_line(36'h000b8000)));
+             nb_data[1] == l1i_word_t'(tb_line(l1i_addr_t'('h000b8000))));
     cg_check("and so was the second",
-             nb_data[2] == l1i_word_t'(tb_line(36'h000b8080)));
+             nb_data[2] == l1i_word_t'(tb_line(l1i_addr_t'('h000b8080))));
     tb_ilv = 1'b0;
 
     // ---------------------------------------------------
@@ -460,8 +467,8 @@
     tb_dhold = 1'b1;
     tb_rev   = 1'b1;
     nb_clear();
-    nb_req(36'h000bc000, l1i_req_id_t'(1), 1'b0, took);
-    nb_req(36'h000bc080, l1i_req_id_t'(2), 1'b0, took);
+    nb_req(l1i_addr_t'('h000bc000), l1i_req_id_t'(1), 1'b0, took);
+    nb_req(l1i_addr_t'('h000bc080), l1i_req_id_t'(2), 1'b0, took);
     nb_idle();
     cg_tick(16);
     cg_check_eq("both fills are outstanding together",
@@ -474,9 +481,9 @@
     cg_check("and the first came back after it",
              took && (nb_ord[2] < nb_ord[1]));
     cg_check("the first line went to the register that asked for it",
-             nb_data[1] == l1i_word_t'(tb_line(36'h000bc000)));
+             nb_data[1] == l1i_word_t'(tb_line(l1i_addr_t'('h000bc000))));
     cg_check("and the same for the second",
-             nb_data[2] == l1i_word_t'(tb_line(36'h000bc080)));
+             nb_data[2] == l1i_word_t'(tb_line(l1i_addr_t'('h000bc080))));
     tb_rev = 1'b0;
 
   endtask

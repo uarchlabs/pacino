@@ -42,7 +42,8 @@
 //      while entry k+1 is locked NAPOT or unlocked TOR; across the
 //      pmpcfg0/pmpcfg2 boundary; pmpaddr15 has no next entry (SYS-002)
 //   A  pmpaddr read-back: NAPOT bits 8:0 read 1, OFF and TOR bits 9:0
-//      read 0, bits 63:34 read 0; set_pmp_g at G = 0 and G = 2
+//      read 0, bits 63:CSR_PMPADDR_W read 0; set_pmp_g at G = 0 and
+//      G = 2
 //   C  0x7C0 and 0x7C1: reserved bits; every named setter alone
 //   X  set_ext_enable, set_priv, set_v
 //   K  pack_fe_cfg, pack_fe_csr, pack_ptw_csr: every member against
@@ -73,7 +74,10 @@ module tb;
     return 12'h3B0 + 12'(k);
   endfunction
 
-  localparam logic [63:0] ONES34 = 64'h0000_0003_FFFF_FFFF;
+  // pmpaddr's implemented bits, CSR_PMPADDR_W = PA_WIDTH - 2 of them
+  // (BP-147: this was 64'h0000_0003_FFFF_FFFF, the value at PA_WIDTH
+  // 36).
+  localparam logic [63:0] PMPA_ONES = (64'd1 << CSR_PMPADDR_W) - 64'd1;
 
   initial begin
     fe_cfg_t     gc;
@@ -84,7 +88,8 @@ module tb;
     // ---- R: reset ---------------------------------------------------
     // Before any call: the package initializers are the reset values.
     chk("R0 7C0 before any call",   csr_tb_pkg::csr_read(12'h7C0), 64'h1);
-    chk("R0 pmpaddr0 before call",  csr_tb_pkg::csr_read(12'h3B0), ONES34);
+    chk("R0 pmpaddr0 before call", csr_tb_pkg::csr_read(12'h3B0),
+        PMPA_ONES);
     csr_tb_pkg::csr_write(12'h7C0, 64'h0);
     csr_tb_pkg::csr_write(12'h180, {4'd8, 16'h1234, 44'h12345});
     csr_tb_pkg::csr_reset();
@@ -97,7 +102,7 @@ module tb;
     chk("R7 henvcfg", csr_tb_pkg::csr_read(12'h60A), 64'h4000_0000_0000_0000);
     chk("R8 pmpcfg0", csr_tb_pkg::csr_read(12'h3A0), 64'h0000_0000_0000_001F);
     chk("R9 pmpcfg2", csr_tb_pkg::csr_read(12'h3A2), 64'h0);
-    chk("R10 pmpaddr0", csr_tb_pkg::csr_read(12'h3B0), ONES34);
+    chk("R10 pmpaddr0", csr_tb_pkg::csr_read(12'h3B0), PMPA_ONES);
     for (int k = 1; k < 16; k++) begin
       // OFF entries: bits 9:0 read 0 of a 0 value.
       chk($sformatf("R11 pmpaddr%0d", k), csr_tb_pkg::csr_read(pa_addr(k)),
@@ -111,7 +116,7 @@ module tb;
 
     // ---- S: satp ----------------------------------------------------
     csr_tb_pkg::csr_reset();
-    // Sv39, every bit set elsewhere: PPN 43:24 read 0.
+    // Sv39, every bit set elsewhere: PPN 43:CSR_PPN_W read 0.
     csr_tb_pkg::csr_write(12'h180, {4'd8, 16'hFFFF, 44'hFFF_FFFF_FFFF});
     chk("S1 Sv39 all fields", csr_tb_pkg::csr_read(12'h180),
         {4'd8, 16'hFFFF, 44'((64'd1 << CSR_PPN_W) - 64'd1)});
@@ -186,7 +191,8 @@ module tb;
     // Bare, PPN low bits set: readable in Bare. 59:58 written 1 read 0.
     csr_tb_pkg::csr_write(12'h680,
                           {4'd0, 2'b11, 14'h3FFF, 44'hFFF_FFFF_FFFF});
-    chk("H1 Bare, 59:58 read 0, PPN 23:0", csr_tb_pkg::csr_read(12'h680),
+    chk("H1 Bare, 59:58 read 0, PPN CSR_PPN_W-1:0",
+        csr_tb_pkg::csr_read(12'h680),
         {4'd0, 2'b00, 14'h3FFF, 44'((64'd1 << CSR_PPN_W) - 64'd1)});
     // Unsupported MODE: MODE unchanged (Bare), VMID and PPN written.
     // BP-146: H2 and H4 wrote MODE 9 and 10, unsupported until MMU-20
@@ -381,8 +387,8 @@ module tb;
     csr_tb_pkg::csr_reset();
     csr_tb_pkg::csr_write(12'h3A0, 64'h0000_0000_0000_0000);  // all OFF
     csr_tb_pkg::csr_write(pa_addr(0), 64'hFFFF_FFFF_FFFF_FFFF);
-    chk("A1 OFF: 9:0 read 0, 63:34 read 0",
-        csr_tb_pkg::csr_read(pa_addr(0)), 64'h0000_0003_FFFF_FC00);
+    chk("A1 OFF: 9:0 read 0, 63:CSR_PMPADDR_W read 0",
+        csr_tb_pkg::csr_read(pa_addr(0)), PMPA_ONES & ~64'h3FF);
     csr_tb_pkg::csr_write(pa_addr(1), 64'h0000_0000_2000_0000);
     csr_tb_pkg::csr_write(12'h3A0, 64'h0000_0000_0000_1800); // e1 NAPOT
     chk("A2 NAPOT: 8:0 read 1", csr_tb_pkg::csr_read(pa_addr(1)),

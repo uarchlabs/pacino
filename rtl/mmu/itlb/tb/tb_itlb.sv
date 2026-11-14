@@ -550,16 +550,27 @@ module tb #(
     look(VW'('h0080000));
     ok("A1 Bare main memory base", g_st == ST_HIT &&
        g_ppn == PNW'('h080000) && g_pma == MM);
-    look(VW'('h0FFFFFF));
-    ok("A2 Bare top of PA space", g_st == ST_HIT && g_ppn == PNW'('hFFFFFF));
+    // BP-147: the top of the physical space and the bits around it are
+    // formed from PPN_WIDTH and PA_WIDTH (they were 0xFF_FFFF, PA bit 36
+    // and PA bit 40). A2 is the last page below 2^PA_WIDTH, main memory
+    // (MMU-15a); A4 sets PA bit PA_WIDTH, the first bit outside.
+    look(VW'({PNW{1'b1}}));
+    ok("A2 Bare top of PA space", g_st == ST_HIT &&
+       g_ppn == {PNW{1'b1}} && g_pma == MM);
     look(VW'('h007FFFF));
     ok("A3 Bare below main memory", g_st == ST_FAULT && g_cause == 5'd1);
-    // PA bit 36 set over a main-memory page: dropping bit 36 would
+    // PA bit PA_WIDTH set over a main-memory page: dropping the bit would
     // land in main memory, so only the range check faults it.
-    look(VW'('h1080000));
-    ok("A4 Bare above pa_bits", g_st == ST_FAULT && g_cause == 5'd1);
-    look(VW'('h1008_0000));
-    ok("A5 Bare bit 40 set", g_st == ST_FAULT && g_cause == 5'd1);
+    look(VW'('h0080000) | (VW'(1) << (PW - 12)));
+    ok($sformatf("A4 Bare PA bit %0d (PA_WIDTH) set", PW),
+       g_st == ST_FAULT && g_cause == 5'd1);
+    // BP-147, rewritten by ruling: A5 set PA bit 40 and expected a fault,
+    // which is main memory at PA_WIDTH 48. Bit PA_WIDTH - 1 over main
+    // memory is a hit, and the PPN is carried whole.
+    look(VW'('h0080000) | (VW'(1) << (PW - 1 - 12)));
+    ok($sformatf("A5 Bare PA bit %0d (PA_WIDTH - 1) over main memory", PW - 1),
+       g_st == ST_HIT && g_pma == MM &&
+       g_ppn == (PNW'('h080000) | (PNW'(1) << (PNW - 1))));
     cs_satp_mode(SV39);
     cs_priv(PM);
     look(VW'('h0080123));
@@ -1059,8 +1070,9 @@ module tb #(
     //    VW-1:VW-2 against VW-3, the Sv39 check only at VA_WIDTH 41.
     //    W3: bits 58:38 all set is canonical: a miss, and a walk.
     // b  The same with V=1, vsatp Sv39.
-    // f  V=0, satp Bare: a fetch address with a bit set above bit 40 is
-    //    outside the PA space, an access fault, cause 1 (FE-19).
+    // f  V=0, satp Bare: a fetch address with a bit set at or above bit
+    //    PA_WIDTH is outside the PA space, an access fault, cause 1
+    //    (FE-19). It read "above bit 40" until BP-147.
     // At VA_WIDTH 41 the addresses cannot be formed; W is skipped.
     if (VA_WIDTH > SV39X4_GPA_WIDTH) begin
       logic [VW-1:0] w1;
@@ -1096,8 +1108,12 @@ module tb #(
       end
       reset_all();
       cs_satp_mode(BARE);
-      look(VW'('h0080000) | (VW'(1) << (SV39X4_GPA_WIDTH - 12)));
-      ok("W4 Bare, PA bit 41 over main memory: cause 1",
+      // BP-147, rewritten by ruling: W4 set PA bit 41 (SV39X4_GPA_WIDTH),
+      // which is main memory at PA_WIDTH 48. The first bit outside the PA
+      // space is PA_WIDTH.
+      look(VW'('h0080000) | (VW'(1) << (PW - 12)));
+      ok($sformatf("W4 Bare, PA bit %0d (PA_WIDTH) over main memory: %s",
+                   PW, "cause 1"),
          g_st == ST_FAULT && g_cause == 5'd1);
       look(VW'('h0080000) | (VW'(1) << (VA_WIDTH - 1 - 12)));
       ok($sformatf("W5 Bare, PA bit %0d over main memory: cause 1",

@@ -179,7 +179,7 @@ module ifu_fetch #(
   localparam int BQ_PTR   = $clog2(BQ_DEPTH);
   localparam int BQ_CNT   = $clog2(BQ_DEPTH + 1);
   localparam int NPOS     = FTQ_PD_WIDTH + 1;               // 17
-  localparam int LINE_W   = PA_WIDTH - L1I_OFFSET_BITS;     // 30
+  localparam int LINE_W   = PA_WIDTH - L1I_OFFSET_BITS;     // line addr
   localparam int CB       = $clog2(2 * LB_DEPTH + 1);       // refcount
 
   // The block a not-taken range is measured against (DCD-13).

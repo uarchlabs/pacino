@@ -34,8 +34,9 @@ RTL_DIR  := rtl
 BPU_DIR  := ../bpu/rtl
 # l1i_pkg is the pacino L1I's (rtl/core/frontend/icache, BP-123): the
 # cachegen emission copied into the tree under cachegen_decisions.md
-# CG-D1. Nothing under tools/ is compiled. Its l1i_pkg is unchanged
-# from the emission.
+# CG-D1. Nothing under tools/ is compiled. Its l1i_pkg differs from the
+# emission in the address width only (BP-147, icache_decisions.md
+# L1I-20).
 L1I_DIR  := ../icache/rtl
 VER_OUT  := obj
 
@@ -48,9 +49,15 @@ CHK_SRCS := \
   $(RTL_DIR)/l1i_param_chk.sv
 
 # lint_neg. The override and the message it must produce. The
-# message text is the one l1i_param_chk.sv prints for PA_WIDTH.
+# message text is the one l1i_param_chk.sv prints for PA_WIDTH. The
+# L1iPaBits value in it is read from l1i_pkg.sv, so the expected text
+# follows the width and names no value of its own (BP-147). An empty
+# read would let the text match any value, so lint_neg fails on it.
 NEG_OVERRIDE := -GPA_WIDTH=32
-NEG_MSG      := PA_WIDTH = 32 differs from l1i_pkg::L1iPaBits = 36
+L1I_PA_BITS  := $(shell sed -n \
+  's/^ *localparam int unsigned L1iPaBits *= *\([0-9][0-9]*\);.*/\1/p' \
+  $(L1I_DIR)/l1i_pkg.sv)
+NEG_MSG      := PA_WIDTH = 32 differs from l1i_pkg::L1iPaBits = $(L1I_PA_BITS)
 NEG_DIR      := $(VER_OUT)_lint_neg
 NEG_LOG      := $(NEG_DIR)/verilator.log
 
@@ -70,6 +77,10 @@ lint:
 lint_neg:
 	@echo "[linting]    l1i_param_chk $(NEG_OVERRIDE), must fail"
 	$(Q)mkdir -p $(NEG_DIR)
+	$(Q)if [ -z "$(L1I_PA_BITS)" ]; then \
+	  echo "lint_neg: FAIL - L1iPaBits not read from l1i_pkg.sv"; \
+	  exit 1; \
+	fi
 	$(Q)if $(VERILATOR) --lint-only $(VER_FLAGS) $(NEG_OVERRIDE) \
 	      --top-module l1i_param_chk \
 	      $(CHK_SRCS) > $(NEG_LOG) 2>&1; then \

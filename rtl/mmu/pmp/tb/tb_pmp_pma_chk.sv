@@ -62,6 +62,16 @@ module tb;
 
   localparam int AW = PA_WIDTH - 2;
 
+  // BP-147: every address is PA_WIDTH wide. A constant below is sized
+  // PW'(...), PW = PA_WIDTH (it was 36'h); the top of the physical space
+  // is formed from PA_WIDTH, not written out. Each region parameter of
+  // u2r is a whole pa_t, so the concatenation is PMA_REGIONS x PA_WIDTH
+  // bits at any width (it was two 36'h values).
+  localparam int PW = PA_WIDTH;
+  typedef logic [PW-1:0] pa_t;
+  localparam pa_t PA_TOP    = '1;                     // 2^PA_WIDTH - 1
+  localparam pa_t PA_TOP_PG = PA_TOP & ~pa_t'('hFFF); // its 4 KiB page
+
   // cfg encodings
   localparam logic [7:0] R    = 8'h01;
   localparam logic [7:0] W    = 8'h02;
@@ -123,9 +133,9 @@ module tb;
   // memory such as a boot ROM in an idempotent region.
   pmp_pma_chk #(
     .PMA_REGIONS (2),
-    .PMA_BASE    ({36'h0_8000_0000, 36'h0_1000_0000}),
-    .PMA_TOP     ({36'hF_FFFF_FFFF, 36'h0_1000_0FFF}),
-    .PMA_ATTR    ({4'b1111,         4'b1100})
+    .PMA_BASE    ({pa_t'('h8000_0000), pa_t'('h1000_0000)}),
+    .PMA_TOP     ({PA_TOP,             pa_t'('h1000_0FFF)}),
+    .PMA_ATTR    ({4'b1111,            4'b1100})
   ) u2r (
     .chk_pa (pa), .chk_acc (acc), .chk_priv (prv), .chk_pbmt (pbmt),
     .pmp_cfg (cfg2), .pmp_addr (adr2),
@@ -247,122 +257,122 @@ module tb;
 
     // ---- A: no match ------------------------------------------------
     // 16 entries implemented, all OFF. Main memory so PMA allows X.
-    chk("A1 M no match allowed",  16, 36'h0_8000_0000, PM, 1, 0, MM);
-    chk("A2 S no match denied",   16, 36'h0_8000_0000, PS, 0, 1, MM);
-    chk("A3 U no match denied",   16, 36'h0_8000_0000, PU, 0, 1, MM);
+    chk("A1 M no match allowed",  16, PW'('h8000_0000), PM, 1, 0, MM);
+    chk("A2 S no match denied",   16, PW'('h8000_0000), PS, 0, 1, MM);
+    chk("A3 U no match denied",   16, PW'('h8000_0000), PU, 0, 1, MM);
 
     // ---- B: NAPOT 64 KiB at 0x8000_0000, X only --------------------
     wr_cfg(0, NAP | X);
-    wr_adr(0, napot(36'h0_8000_0000, 64'h1_0000));
-    chk("B1 NAPOT low end",       16, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk("B2 NAPOT high page",     16, 36'h0_8000_F000, PS, 1, 0, MM);
-    chk("B3 NAPOT just above",    16, 36'h0_8001_0000, PS, 0, 1, MM);
-    chk("B4 NAPOT just below",    16, 36'h0_7FFF_F000, PS, 0, 1, NO);
-    chk("B5 NAPOT U mode",        16, 36'h0_8000_8000, PU, 1, 0, MM);
+    wr_adr(0, napot(PW'('h8000_0000), 64'h1_0000));
+    chk("B1 NAPOT low end",       16, PW'('h8000_0000), PS, 1, 0, MM);
+    chk("B2 NAPOT high page",     16, PW'('h8000_F000), PS, 1, 0, MM);
+    chk("B3 NAPOT just above",    16, PW'('h8001_0000), PS, 0, 1, MM);
+    chk("B4 NAPOT just below",    16, PW'('h7FFF_F000), PS, 0, 1, NO);
+    chk("B5 NAPOT U mode",        16, PW'('h8000_8000), PU, 1, 0, MM);
     acc = AR;
-    chk("B6 NAPOT read, R clear", 16, 36'h0_8000_0000, PS, 0, 1, MM);
+    chk("B6 NAPOT read, R clear", 16, PW'('h8000_0000), PS, 0, 1, MM);
     acc = AX;
     // the whole space: every pmpaddr bit set
     wr_adr(0, '1);
     wr_cfg(0, NAP | R | W | X);
-    chk("B7 NAPOT all, bottom",   16, 36'h0_0000_0000, PS, 1, 1, NO);
-    chk("B8 NAPOT all, top",      16, 36'hF_FFFF_F000, PS, 1, 0, MM);
+    chk("B7 NAPOT all, bottom",   16, PW'('h0000_0000), PS, 1, 1, NO);
+    chk("B8 NAPOT all, top",      16, PA_TOP_PG,        PS, 1, 0, MM);
 
     // ---- C: TOR -------------------------------------------------------
     clr();
     wr_cfg(0, TOR | X);
-    wr_adr(0, tora(36'h0_9000_0000));
-    chk("C1 TOR e0 base 0",       16, 36'h0_0000_0000, PS, 1, 1, NO);
-    chk("C2 TOR e0 last page",    16, 36'h0_8FFF_F000, PS, 1, 0, MM);
-    chk("C3 TOR e0 top excl",     16, 36'h0_9000_0000, PS, 0, 1, MM);
+    wr_adr(0, tora(PW'('h9000_0000)));
+    chk("C1 TOR e0 base 0",       16, PW'('h0000_0000), PS, 1, 1, NO);
+    chk("C2 TOR e0 last page",    16, PW'('h8FFF_F000), PS, 1, 0, MM);
+    chk("C3 TOR e0 top excl",     16, PW'('h9000_0000), PS, 0, 1, MM);
     clr();
     // entry 0 OFF still supplies entry 1's base
-    wr_adr(0, tora(36'h0_8000_2000));
+    wr_adr(0, tora(PW'('h8000_2000)));
     wr_cfg(1, TOR | X);
-    wr_adr(1, tora(36'h0_8000_4000));
-    chk("C4 TOR e1 base incl",    16, 36'h0_8000_2000, PS, 1, 0, MM);
-    chk("C5 TOR e1 last page",    16, 36'h0_8000_3000, PS, 1, 0, MM);
-    chk("C6 TOR e1 below base",   16, 36'h0_8000_1000, PS, 0, 1, MM);
-    chk("C7 TOR e1 top excl",     16, 36'h0_8000_4000, PS, 0, 1, MM);
+    wr_adr(1, tora(PW'('h8000_4000)));
+    chk("C4 TOR e1 base incl",    16, PW'('h8000_2000), PS, 1, 0, MM);
+    chk("C5 TOR e1 last page",    16, PW'('h8000_3000), PS, 1, 0, MM);
+    chk("C6 TOR e1 below base",   16, PW'('h8000_1000), PS, 0, 1, MM);
+    chk("C7 TOR e1 top excl",     16, PW'('h8000_4000), PS, 0, 1, MM);
     // top <= base matches nothing
-    wr_adr(1, tora(36'h0_8000_1000));
-    chk("C8 TOR empty range",     16, 36'h0_8000_1000, PS, 0, 1, MM);
+    wr_adr(1, tora(PW'('h8000_1000)));
+    chk("C8 TOR empty range",     16, PW'('h8000_1000), PS, 0, 1, MM);
 
     // ---- D: priority --------------------------------------------------
     clr();
     wr_cfg(0, NAP);                              // no permission
-    wr_adr(0, napot(36'h0_8000_0000, 64'h1000));
+    wr_adr(0, napot(PW'('h8000_0000), 64'h1000));
     wr_cfg(1, NAP | R | W | X);
     wr_adr(1, '1);
-    chk("D1 e0 decides, denies",  16, 36'h0_8000_0000, PS, 0, 1, MM);
-    chk("D2 e1 decides outside",  16, 36'h0_8000_1000, PS, 1, 0, MM);
+    chk("D1 e0 decides, denies",  16, PW'('h8000_0000), PS, 0, 1, MM);
+    chk("D2 e1 decides outside",  16, PW'('h8000_1000), PS, 1, 0, MM);
     clr();
     wr_cfg(0, NAP | R | W | X);
     wr_adr(0, '1);
     wr_cfg(1, NAP);
-    wr_adr(1, napot(36'h0_8000_0000, 64'h1000));
-    chk("D3 e0 decides, allows",  16, 36'h0_8000_0000, PS, 1, 0, MM);
+    wr_adr(1, napot(PW'('h8000_0000), 64'h1000));
+    chk("D3 e0 decides, allows",  16, PW'('h8000_0000), PS, 1, 0, MM);
     clr();
     // the match is at entry 15, the last implemented
     wr_cfg(15, NAP | X);
-    wr_adr(15, napot(36'h0_8000_0000, 64'h1000));
-    chk("D4 entry 15 matches",    16, 36'h0_8000_0000, PS, 1, 0, MM);
+    wr_adr(15, napot(PW'('h8000_0000), 64'h1000));
+    chk("D4 entry 15 matches",    16, PW'('h8000_0000), PS, 1, 0, MM);
 
     // ---- E: the L bit -------------------------------------------------
     clr();
     wr_cfg(0, NAP | R);                          // X clear
-    wr_adr(0, napot(36'h0_8000_0000, 64'h1000));
-    chk("E1 L clear, M bypass",   16, 36'h0_8000_0000, PM, 1, 0, MM);
-    chk("E2 L clear, S denied",   16, 36'h0_8000_0000, PS, 0, 1, MM);
+    wr_adr(0, napot(PW'('h8000_0000), 64'h1000));
+    chk("E1 L clear, M bypass",   16, PW'('h8000_0000), PM, 1, 0, MM);
+    chk("E2 L clear, S denied",   16, PW'('h8000_0000), PS, 0, 1, MM);
     wr_cfg(0, L | NAP | R);
-    chk("E3 L set, M denied",     16, 36'h0_8000_0000, PM, 0, 1, MM);
+    chk("E3 L set, M denied",     16, PW'('h8000_0000), PM, 0, 1, MM);
     // A locked entry is not written (CSR-5): reset, then lock it with X.
     clr();
-    wr_adr(0, napot(36'h0_8000_0000, 64'h1000));
+    wr_adr(0, napot(PW'('h8000_0000), 64'h1000));
     wr_cfg(0, L | NAP | X);
-    chk("E4 L set X, M allowed",  16, 36'h0_8000_0000, PM, 1, 0, MM);
-    chk("E5 L set X, S allowed",  16, 36'h0_8000_0000, PS, 1, 0, MM);
+    chk("E4 L set X, M allowed",  16, PW'('h8000_0000), PM, 1, 0, MM);
+    chk("E5 L set X, S allowed",  16, PW'('h8000_0000), PS, 1, 0, MM);
     // a locked entry that does not match leaves M no-match allowed
-    chk("E6 L set, M no match",   16, 36'h0_8000_1000, PM, 1, 0, MM);
+    chk("E6 L set, M no match",   16, PW'('h8000_1000), PM, 1, 0, MM);
 
     // ---- F: entry count ----------------------------------------------
     clr();
-    chk("F1 none impl, S ok",      0, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk("F2 none impl, U ok",      0, 36'h0_0000_0000, PU, 1, 1, NO);
-    chk("F3 four impl, S denied",  4, 36'h0_8000_0000, PS, 0, 1, MM);
+    chk("F1 none impl, S ok",      0, PW'('h8000_0000), PS, 1, 0, MM);
+    chk("F2 none impl, U ok",      0, PW'('h0000_0000), PU, 1, 1, NO);
+    chk("F3 four impl, S denied",  4, PW'('h8000_0000), PS, 0, 1, MM);
     wr_cfg(3, NAP | X);
-    wr_adr(3, napot(36'h0_8000_0000, 64'h1000));
-    chk("F4 four impl, e3",        4, 36'h0_8000_0000, PS, 1, 0, MM);
+    wr_adr(3, napot(PW'('h8000_0000), 64'h1000));
+    chk("F4 four impl, e3",        4, PW'('h8000_0000), PS, 1, 0, MM);
 
     // ---- G: the granule -----------------------------------------------
     clr();
     // G = 0: NA4 is exact.
     wr_cfg_g0(0, NA4 | X);
-    wr_adr_g0(0, tora(36'h0_8000_0004));
-    chk("G1 NA4 exact hit",        1, 36'h0_8000_0004, PS, 1, 0, MM);
-    chk("G2 NA4 below",            1, 36'h0_8000_0000, PS, 0, 1, MM);
-    chk("G3 NA4 above",            1, 36'h0_8000_0008, PS, 0, 1, MM);
+    wr_adr_g0(0, tora(PW'('h8000_0004)));
+    chk("G1 NA4 exact hit",        1, PW'('h8000_0004), PS, 1, 0, MM);
+    chk("G2 NA4 below",            1, PW'('h8000_0000), PS, 0, 1, MM);
+    chk("G3 NA4 above",            1, PW'('h8000_0008), PS, 0, 1, MM);
     // G = 0: a TOR top keeps its low bits.
     wr_cfg_g0(0, TOR | X);
-    wr_adr_g0(0, tora(36'h0_1000_0800));
-    chk("G4 G0 TOR top exact",     1, 36'h0_1000_0000, PS, 1, 1, NO);
+    wr_adr_g0(0, tora(PW'('h1000_0800)));
+    chk("G4 G0 TOR top exact",     1, PW'('h1000_0000), PS, 1, 1, NO);
     // G = 10: the same TOR top loses bits below 4 KiB, so 0x1000_0000
     // is at the top and excluded.
     wr_cfg(0, TOR | X);
-    wr_adr(0, tora(36'h0_1000_0800));
-    chk("G5 G10 TOR top cleared", 16, 36'h0_1000_0000, PS, 0, 1, NO);
+    wr_adr(0, tora(PW'('h1000_0800)));
+    chk("G5 G10 TOR top cleared", 16, PW'('h1000_0000), PS, 0, 1, NO);
     // G = 10: NA4 widens to one 4 KiB granule.
     wr_cfg(0, NA4 | X);
-    wr_adr(0, tora(36'h0_8000_0004));
-    chk("G6 G10 NA4 granule",     16, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk("G7 G10 NA4 next page",   16, 36'h0_8000_1000, PS, 0, 1, MM);
+    wr_adr(0, tora(PW'('h8000_0004)));
+    chk("G6 G10 NA4 granule",     16, PW'('h8000_0000), PS, 1, 0, MM);
+    chk("G7 G10 NA4 next page",   16, PW'('h8000_1000), PS, 0, 1, MM);
     // the granule's last word: not matched by an exact 4-byte NA4
-    chk("G7b G10 NA4 granule end",16, 36'h0_8000_0FFC, PS, 1, 0, MM);
+    chk("G7b G10 NA4 granule end",16, PW'('h8000_0FFC), PS, 1, 0, MM);
     // G = 10: an 8-byte NAPOT widens to the granule as well.
     wr_cfg(0, NAP | X);
-    wr_adr(0, napot(36'h0_8000_0008, 64'd8));
-    chk("G8 G10 NAPOT8 granule",  16, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk("G8b G10 NAPOT8 gran end",16, 36'h0_8000_0FF0, PS, 1, 0, MM);
+    wr_adr(0, napot(PW'('h8000_0008), 64'd8));
+    chk("G8 G10 NAPOT8 granule",  16, PW'('h8000_0000), PS, 1, 0, MM);
+    chk("G8b G10 NAPOT8 gran end",16, PW'('h8000_0FF0), PS, 1, 0, MM);
 
     // ---- G2: u16's own masking at G = 10 (SYS-002) -------------------
     // Written and packed at G = 0, so u16 gets pmpaddr and A as written.
@@ -370,71 +380,80 @@ module tb;
     // TOR top 0x1000_0800: u16 clears bits 9:0, so 0x1000_0000 is the
     // top and excluded.
     wr_cfg_g0(0, TOR | X);
-    wr_adr_g0(0, tora(36'h0_1000_0800));
-    chk_at("G9 G10 own TOR top clear", 16, 0, 36'h0_1000_0000, PS, 0, 1, NO);
-    chk_at("G9b G10 own TOR below top",16, 0, 36'h0_0FFF_F000, PS, 1, 1, NO);
+    wr_adr_g0(0, tora(PW'('h1000_0800)));
+    chk_at("G9 G10 own TOR top clear", 16, 0, PW'('h1000_0000), PS, 0, 1, NO);
+    chk_at("G9b G10 own TOR below top",16, 0, PW'('h0FFF_F000), PS, 1, 1, NO);
     // TOR base 0x8000_0800 (entry 0 OFF), top 0x8000_2000 (entry 1):
     // u16 clears the base's bits 9:0, so 0x8000_0000 is inside.
     clr();
-    wr_adr_g0(0, tora(36'h0_8000_0800));
+    wr_adr_g0(0, tora(PW'('h8000_0800)));
     wr_cfg_g0(1, TOR | X);
-    wr_adr_g0(1, tora(36'h0_8000_2000));
-    chk_at("G10 G10 own TOR base clear",16, 0, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk_at("G10b G10 own TOR top excl",16, 0, 36'h0_8000_2000, PS, 0, 1, MM);
+    wr_adr_g0(1, tora(PW'('h8000_2000)));
+    chk_at("G10 G10 own TOR base clear",16, 0, PW'('h8000_0000), PS, 1, 0, MM);
+    chk_at("G10b G10 own TOR top excl",16, 0, PW'('h8000_2000), PS, 0, 1, MM);
     // NA4 at 0x8000_0004, stored as NA4: u16 widens it to the granule.
     clr();
     wr_cfg_g0(0, NA4 | X);
-    wr_adr_g0(0, tora(36'h0_8000_0004));
-    chk_at("G11 G10 own NA4 granule", 16, 0, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk_at("G11b G10 own NA4 gran end",16, 0, 36'h0_8000_0FFC, PS, 1, 0, MM);
-    chk_at("G11c G10 own NA4 next pg",16, 0, 36'h0_8000_1000, PS, 0, 1, MM);
+    wr_adr_g0(0, tora(PW'('h8000_0004)));
+    chk_at("G11 G10 own NA4 granule", 16, 0, PW'('h8000_0000), PS, 1, 0, MM);
+    chk_at("G11b G10 own NA4 gran end",16, 0, PW'('h8000_0FFC), PS, 1, 0, MM);
+    chk_at("G11c G10 own NA4 next pg",16, 0, PW'('h8000_1000), PS, 0, 1, MM);
     // An 8-byte NAPOT at 0x8000_0008, bits 8:0 as written: u16 widens
     // it to the granule.
     wr_cfg_g0(0, NAP | X);
-    wr_adr_g0(0, napot(36'h0_8000_0008, 64'd8));
-    chk_at("G12 G10 own NAPOT8 gran", 16, 0, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk_at("G12b G10 own NAPOT8 end", 16, 0, 36'h0_8000_0FF0, PS, 1, 0, MM);
-    chk_at("G12c G10 own NAPOT8 next",16, 0, 36'h0_8000_1000, PS, 0, 1, MM);
+    wr_adr_g0(0, napot(PW'('h8000_0008), 64'd8));
+    chk_at("G12 G10 own NAPOT8 gran", 16, 0, PW'('h8000_0000), PS, 1, 0, MM);
+    chk_at("G12b G10 own NAPOT8 end", 16, 0, PW'('h8000_0FF0), PS, 1, 0, MM);
+    chk_at("G12c G10 own NAPOT8 next",16, 0, PW'('h8000_1000), PS, 0, 1, MM);
 
     // ---- H: the MMU-15a region table ---------------------------------
     // PMP allows everything; only the PMA decides.
     clr();
     wr_cfg(0, NAP | R | W | X);
     wr_adr(0, '1);
-    chk("H1 below main memory",   16, 36'h0_7FFF_F000, PS, 1, 1, NO);
-    chk("H2 main memory base",    16, 36'h0_8000_0000, PS, 1, 0, MM);
-    chk("H3 main memory top pg",  16, 36'hF_FFFF_F000, PS, 1, 0, MM);
-    chk("H4 main memory top B",   16, 36'hF_FFFF_FFFF, PS, 1, 0, MM);
-    chk("H5 address zero",        16, 36'h0_0000_0000, PS, 1, 1, NO);
-    chk("H6 M below main memory", 16, 36'h0_7FFF_FFFF, PM, 1, 1, NO);
+    chk("H1 below main memory",   16, PW'('h7FFF_F000), PS, 1, 1, NO);
+    chk("H2 main memory base",    16, PW'('h8000_0000), PS, 1, 0, MM);
+    chk("H3 main memory top pg",  16, PA_TOP_PG,        PS, 1, 0, MM);
+    chk("H4 main memory top B",   16, PA_TOP,           PS, 1, 0, MM);
+    chk("H5 address zero",        16, PW'('h0000_0000), PS, 1, 1, NO);
+    chk("H6 M below main memory", 16, PW'('h7FFF_FFFF), PM, 1, 1, NO);
+    // BP-147 (case a): bit PA_WIDTH - 1 alone is main memory. H4 is
+    // the last byte below 2^PA_WIDTH; the first byte at 2^PA_WIDTH
+    // cannot be presented, chk_pa being PA_WIDTH bits, and is the
+    // ITLB's range check (tb_itlb A4, W4).
+    chk("H7 PA bit PA_WIDTH - 1",  16, PW'(1) << (PW - 1), PS, 1, 0, MM);
 
     // ---- I: effective type, MMU-U6 ------------------------------------
     pbmt = 2'd1;  // NC
-    chk("I1 NC clears cacheable", 16, 36'h0_8000_0000, PS, 1, 0, 4'b1110);
+    chk("I1 NC clears cacheable", 16, PW'('h8000_0000), PS, 1, 0, 4'b1110);
     pbmt = 2'd2;  // IO
-    chk("I2 IO clears c and i",   16, 36'h0_8000_0000, PS, 1, 0, 4'b0110);
+    chk("I2 IO clears c and i",   16, PW'('h8000_0000), PS, 1, 0, 4'b0110);
     pbmt = 2'd3;  // reserved, taken as IO
-    chk("I3 rsvd as IO",          16, 36'h0_8000_0000, PS, 1, 0, 4'b0110);
+    chk("I3 rsvd as IO",          16, PW'('h8000_0000), PS, 1, 0, 4'b0110);
     pbmt = 2'd1;
-    chk("I4 NC outside memory",   16, 36'h0_0000_0000, PS, 1, 1, NO);
+    chk("I4 NC outside memory",   16, PW'('h0000_0000), PS, 1, 1, NO);
     pbmt = 2'd0;
 
     // ---- J: a two-region table ---------------------------------------
     wr_cfg(0, NAP | R | W | X);
     wr_adr(0, '1);
-    chk("J1 device base",          2, 36'h0_1000_0000, PS, 1, 0, 4'b1100);
-    chk("J2 device top byte",      2, 36'h0_1000_0FFF, PS, 1, 0, 4'b1100);
-    chk("J3 above device",         2, 36'h0_1000_1000, PS, 1, 1, NO);
-    chk("J4 main memory",          2, 36'h0_8000_0000, PS, 1, 0, MM);
+    chk("J1 device base",          2, PW'('h1000_0000), PS, 1, 0, 4'b1100);
+    chk("J2 device top byte",      2, PW'('h1000_0FFF), PS, 1, 0, 4'b1100);
+    chk("J3 above device",         2, PW'('h1000_1000), PS, 1, 1, NO);
+    chk("J4 main memory",          2, PW'('h8000_0000), PS, 1, 0, MM);
+    // BP-147: the main-memory region's top is PA_TOP, a whole PA_WIDTH
+    // value in the concatenation, so its last byte is main memory.
+    chk("J5 main memory top B",    2, PA_TOP,           PS, 1, 0, MM);
+    chk("J6 main memory top pg",   2, PA_TOP_PG,        PS, 1, 0, MM);
     pbmt = 2'd0;
 
     // ---- K: access types ----------------------------------------------
     acc = AR;
-    chk("K1 read non-exec region",16, 36'h0_0000_0000, PS, 1, 0, NO);
+    chk("K1 read non-exec region",16, PW'('h0000_0000), PS, 1, 0, NO);
     acc = AWR;
-    chk("K2 write non-exec",      16, 36'h0_0000_0000, PS, 1, 0, NO);
+    chk("K2 write non-exec",      16, PW'('h0000_0000), PS, 1, 0, NO);
     wr_cfg(0, NAP | R);
-    chk("K3 write, W clear",      16, 36'h0_8000_0000, PS, 0, 1, MM);
+    chk("K3 write, W clear",      16, PW'('h8000_0000), PS, 0, 1, MM);
     acc = AX;
 
     $display("tb_pmp_pma_chk: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);

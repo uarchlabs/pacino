@@ -64,6 +64,12 @@ L1I_SRCS := \
   $(RTL_DIR)/l1i_maint.sv \
   $(RTL_DIR)/l1i.sv
 
+# bp_defines_pkg for tb_l1i's PA_WIDTH (BP-147): the core interface's
+# width, read by scoped reference, against which the L1I's own address
+# width is checked. The L1I itself does not read it.
+BPU_DIR      := ../bpu/rtl
+TB_PKG_SRCS  := $(BPU_DIR)/bp_defines_pkg.sv
+
 EMIT_TB_SRCS := $(TB_DIR)/l1i_tb_mem.sv $(TB_DIR)/l1i_tb.sv
 ASSERT_SRCS  := $(TB_DIR)/l1i_assert.sv $(TB_DIR)/l1i_mshr_assert.sv
 EMIT_DIR     := $(VER_OUT)_l1i_emitted
@@ -96,7 +102,8 @@ sim_l1i:
 	@echo "[compiling]  tb_l1i"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) $(COMMON) \
 	  --top-module tb --Mdir $(VER_OUT)_l1i \
-	  $(L1I_SRCS) $(ASSERT_SRCS) $(TB_DIR)/tb_l1i.sv $(VSILENCE)
+	  $(TB_PKG_SRCS) $(L1I_SRCS) $(ASSERT_SRCS) $(TB_DIR)/tb_l1i.sv \
+	  $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_l1i/Vtb"
 	$(Q)./$(VER_OUT)_l1i/Vtb
 

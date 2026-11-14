@@ -16,6 +16,28 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-147 written.
+
+BP-147 WRITTEN: PA_WIDTH 48, a width-only task (l1i_ifu_interfaces.md
+  IF-1; icache_decisions.md L1I-20; mmu_decisions.md MMU-15a, MMU-28).
+  Every physical width and every "outside the physical space"
+  stimulus follows PA_WIDTH or PPN_WIDTH, checked at 36 on the
+  affected targets; then PA_WIDTH 48, with the pacino L1I edited to
+  it (L1iTagBits and L1iTagMsb derived from L1iPaBits, ports from
+  l1i_pkg; every change reported for TD#199). Rewritten by ruling:
+  tb_itlb A5 and W4, and tb_ptw case j, whose fault half cannot be
+  reached at PPN_WIDTH 36. Directed cases a to f; storage at 48
+  against BP-145's table. regress.sh once at the end; regress_demo.sh
+  not run (FDT-2a).
+FOUND (PA): tb_pmp_pma_chk passes its two-region PMA parameters as
+  concatenations of 36-bit constants, which at 48 would fill the
+  packed parameter from the low end and misplace both regions with no
+  error. BP-147 fixes it.
+
+Next free: BP-148, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#200.
+
+---
 ## Session-085, continued: PA_WIDTH 48, PF-U4, the next three tasks.
 
 RULED (Jeff):

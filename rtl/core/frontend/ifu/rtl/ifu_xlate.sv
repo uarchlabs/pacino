@@ -60,9 +60,10 @@
 // [VA_WIDTH-1:12], VA_WIDTH-12 bits (itlb_ifu_interfaces.md IT-16), on
 // both lookups of a crossing block. It is not the Sv39 VPN (27 bits):
 // with V=1 and vsatp.MODE=Bare the fetch PC is a VA_WIDTH-bit guest
-// physical address, and with V=0 and satp.MODE=Bare a
-// fetch address above bit 35 must reach the PMA check to fault
-// (FE-19). The ITLB, not the IFU, decides which bits a regime uses.
+// physical address, and with V=0 and satp.MODE=Bare a fetch address
+// with a bit set at or above PA_WIDTH must reach the PMA check to fault
+// (FE-19; BP-147, it said above bit 35). The ITLB, not the IFU, decides
+// which bits a regime uses.
 // Ruled session-074, TD#146, built BP-117; BP-116 drove VPN_WIDTH.
 //
 // PMA bit positions are not fixed by any document (IT-10 names the

@@ -26,6 +26,10 @@
 // run ends with $fatal when a check failed, so the simulator's exit
 // status carries the result (CLAUDE.md, Verification Expectations).
 // The BP-123 behaviour is tested by tb/tb_l1i.sv.
+//
+// PACINO CHANGES (BP-147, L1I-20): core_addr and mem_a_address are
+// l1i_addr_t and core_inv_addr is tied to '0; the emission writes
+// [35:0] and 36'h0.
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -54,7 +58,7 @@ module l1i_tb;
 
   // interface 'core', link 'pe_port_i'
   logic                 core_valid;
-  logic [35:0]          core_addr;
+  l1i_addr_t            core_addr;
   logic [3:0]           core_id;
   logic                 core_prefetch;
   logic [511:0]         core_rdata;
@@ -72,7 +76,7 @@ module l1i_tb;
   logic [2:0]           mem_a_param;
   logic [2:0]           mem_a_size;
   logic [3:0]           mem_a_source;
-  logic [35:0]          mem_a_address;
+  l1i_addr_t            mem_a_address;
   logic [31:0]          mem_a_mask;
   logic [255:0]         mem_a_data;
   logic                 mem_a_corrupt;
@@ -105,7 +109,7 @@ module l1i_tb;
     .core_inv_val        (1'b0),
     .core_inv_rdy        (core_inv_rdy),
     .core_inv_all        (1'b0),
-    .core_inv_addr       (36'h0),
+    .core_inv_addr       ('0),
     .core_inv_done       (core_inv_done),
     .mem_a_valid         (mem_a_valid),
     .mem_a_ready         (mem_a_ready),

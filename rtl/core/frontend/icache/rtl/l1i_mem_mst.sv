@@ -28,6 +28,9 @@
 // beats of two fills may interleave, and a fill issued later may
 // complete first. A line is announced upstream when ITS last
 // beat arrives.
+//
+// PACINO CHANGES (BP-147, L1I-20): mem_a_address is l1i_addr_t,
+// L1iPaBits wide; the emission writes it [35:0].
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -62,7 +65,7 @@ module l1i_mem_mst (
   output logic [2:0]           mem_a_param,         // op qualifier
   output logic [2:0]           mem_a_size,          // log2 beat bytes
   output logic [3:0]           mem_a_source,        // master txn id
-  output logic [35:0]          mem_a_address,       // byte address, R-7
+  output l1i_addr_t            mem_a_address,       // byte address, R-7
   output logic [31:0]          mem_a_mask,          // one bit a data byte
   output logic [255:0]         mem_a_data,          // the beat
   output logic                 mem_a_corrupt,       // the beat is bad

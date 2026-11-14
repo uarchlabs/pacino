@@ -29,6 +29,8 @@
 //
 // PACINO CHANGES (BP-123, CG-D1): core_uncached (l1i_ifu_interfaces.md
 // IF-44) passes to req_uncached like core_prefetch.
+// PACINO CHANGES (BP-147, L1I-20): core_addr is l1i_addr_t, L1iPaBits
+// wide; the emission writes it [35:0].
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -44,7 +46,7 @@ module l1i_core_slv (
 
   // the link
   input  logic                 core_valid,          // a request is live
-  input  logic [35:0]          core_addr,           // byte address, R-7
+  input  l1i_addr_t            core_addr,           // byte address, R-7
   input  logic [3:0]           core_id,             // request id
   input  logic                 core_prefetch,
   input  logic                 core_uncached,       // L1I-24, BP-123

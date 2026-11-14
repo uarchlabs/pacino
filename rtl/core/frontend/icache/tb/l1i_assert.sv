@@ -35,25 +35,29 @@ module l1i_assert (
   input logic        rstn,
   input logic        core_valid,
   input logic        core_ready,
-  input logic [35:0] core_addr,
+  input l1i_addr_t   core_addr,
   input logic [3:0]  core_id,
   input logic        core_rvalid,
   input logic [3:0]  core_rid,
   input logic        core_inv_val,
   input logic        core_inv_rdy,
   input logic        core_inv_all,
-  input logic [35:0] core_inv_addr,
+  input l1i_addr_t   core_inv_addr,
   input logic        core_inv_done
 );
 
   localparam int NID = 16;
 
+  // A line address: the byte address without its offset, L1iPaBits wide
+  // less the offset (BP-147; it was written [29:0]).
+  typedef logic [L1iPaBits-L1iOffsetBits-1:0] line_t;
+
   logic        r_pend;          // taken, done not yet seen
   logic        r_all;
-  logic [29:0] r_line;
+  line_t       r_line;
   logic        r_done_q;        // done last cycle
   logic        r_out  [NID];    // request outstanding, by id
-  logic [29:0] r_oline [NID];
+  line_t       r_oline [NID];
 
   wire w_take = core_inv_val && core_inv_rdy;
   wire w_acc  = core_valid && core_ready;
@@ -84,13 +88,13 @@ module l1i_assert (
       if (w_take) begin
         r_pend <= 1'b1;
         r_all  <= core_inv_all;
-        r_line <= core_inv_addr[35:6];
+        r_line <= core_inv_addr[L1iPaBits-1:L1iOffsetBits];
       end
       for (int i = 0; i < NID; i++) begin
         if (core_rvalid && (core_rid == 4'(i))) r_out[i] <= 1'b0;
         if (w_acc && (core_id == 4'(i))) begin
           r_out[i]   <= 1'b1;
-          r_oline[i] <= core_addr[35:6];
+          r_oline[i] <= core_addr[L1iPaBits-1:L1iOffsetBits];
         end
       end
     end
