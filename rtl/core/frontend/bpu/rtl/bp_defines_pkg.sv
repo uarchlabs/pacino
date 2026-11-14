@@ -631,11 +631,14 @@ package bp_defines_pkg;
   // ARCHITECTURAL BOUNDS OF THE MODES (BP-145, BP-146, session-085).
   // These are NOT implementation widths and are NOT derived from VA_WIDTH
   // or GPA_WIDTH; they keep their values when those change. The ITLB
-  // checks Sv39 only; its per-mode check is the next task
-  // (itlb_decisions.md ITLB-18). The walker bounds a GPA by the hgatp
-  // mode's width (mmu_decisions.md MMU-20, MMU-28, MMU-32; BP-146).
+  // checks a fetch address against the sign bit of the current satp or
+  // vsatp mode (itlb_decisions.md ITLB-18; BP-148). The walker bounds a
+  // GPA by the hgatp mode's width (mmu_decisions.md MMU-20, MMU-28,
+  // MMU-32; BP-146).
   //   SV39_SIGN_BIT     an Sv39 address is canonical when bits
   //                     VA_WIDTH-1 down to 38 are all equal (ITLB-18)
+  //   SV48_SIGN_BIT     an Sv48 address, bits VA_WIDTH-1 down to 47
+  //   SV57_SIGN_BIT     an Sv57 address, bits VA_WIDTH-1 down to 56
   //   SV39X4_GPA_WIDTH  an Sv39x4 G-stage translates a GPA of 41 bits,
   //   SV48X4_GPA_WIDTH  Sv48x4 one of 50 bits and Sv57x4 one of 59 bits:
   //   SV57X4_GPA_WIDTH  12 offset bits, nine VPN bits per level and two
@@ -643,6 +646,8 @@ package bp_defines_pkg;
   //                     width is a guest-page fault, cause 20 (MMU-20,
   //                     MMU-28)
   localparam int SV39_SIGN_BIT    = 38;
+  localparam int SV48_SIGN_BIT    = 47;   // BP-148
+  localparam int SV57_SIGN_BIT    = 56;   // BP-148
   localparam int SV39X4_GPA_WIDTH = 41;
   localparam int SV48X4_GPA_WIDTH = 50;
   localparam int SV57X4_GPA_WIDTH = 59;

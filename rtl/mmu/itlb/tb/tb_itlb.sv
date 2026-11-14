@@ -29,17 +29,22 @@
 //   D  hits continue while a walk is outstanding (ITLB-8)
 //   E  retry is asked again (IL-6)
 //   F  walk faults: 12, 20 with GPA, 1, unexpected cause, reserved
-//   G  page sizes: 64 KiB NAPOT, 2 MiB, 1 GiB, across their ranges
+//   G  page sizes: 64 KiB NAPOT, 2 MiB, 1 GiB, 512 GiB, 256 TiB, across
+//      their ranges (512 GiB and 256 TiB: BP-148)
 //   H  ASID, global, V and VMID matching
 //   I  ITLB-16 permission check against the current privilege
 //   J  effective PMA and PBMT; PMP and PMA faults on a hit
-//   K  invalidate: every ITLB-13, 13a and 13b form; during a walk
+//   K  invalidate: every ITLB-13, 13a and 13b form; during a walk; by
+//      an address inside and outside a 512 GiB and a 256 TiB page
 //   L  a page-crossing block, two tags, finals out of order
 //   M  two walks outstanding, responses out of order (depth 2 only)
 //   N  a held fault releases the tracker; an invalidate drops it
-//   P  the address check of Sv39 (bits VA_WIDTH-1:38 all equal)
-//   R  a reserved page-size code (IL-7 3'b1xx) handled as a reserved
-//      status (IT-4): fault cause 1, nothing installed (BP-119)
+//   P  the address check of ITLB-18: Sv39 (bits VA_WIDTH-1:38 all
+//      equal); from BP-148 Sv48 and Sv57 at V=0 and V=1, the mode read
+//      at lookup, and an unsupported MODE checked as Sv39 (MMU-33)
+//   R  a reserved page-size code (IL-7 3'b11x) handled as a reserved
+//      status (IT-4): fault cause 1, nothing installed (BP-119). Codes
+//      4 and 5 ran here until BP-148 made them sizes (group G)
 //   Q  a held fault records the privilege and V of its walk (ITLB-10b,
 //      BP-124): re-requested at the same privilege it is answered from
 //      the hold; at another privilege or V it is dropped and a new walk
@@ -71,11 +76,20 @@ module tb #(
                          ST_FAULT = 2'b10;
   localparam logic [1:0] L2_HIT = 2'b00, L2_FAULT = 2'b01,
                          L2_RETRY = 2'b10, L2_RSVD = 2'b11;
-  // l2t_itlb_size, IL-7 (ruled session-075): 3'b1xx reserved.
+  // l2t_itlb_size, IL-7 (ruled session-075, session-085): 3'b11x
+  // reserved; 3'b1xx until BP-148.
   localparam logic [2:0] SZ4K = 3'd0, SZ64K = 3'd1, SZ2M = 3'd2,
-                         SZ1G = 3'd3;
+                         SZ1G = 3'd3, SZ512G = 3'd4, SZ256T = 3'd5;
+  // The VPN bits the two largest sizes cover (ITLB-3): 512 GiB and
+  // 256 TiB pages, architectural.
+  localparam int B512G = 27, B256T = 36;
   localparam logic [1:0] PU = 2'd0, PS = 2'd1, PM = 2'd3;
-  localparam logic [3:0] BARE = 4'd0, SV39 = 4'd8;
+  // satp / vsatp MODE values (csr_pkg CSR_SATP_MODE_*).
+  localparam logic [3:0] BARE = 4'd0, SV39 = 4'd8, SV48 = 4'd9,
+                         SV57 = 4'd10;
+  // A MODE value that is none of the above (MMU-33). CSR-5 keeps it out
+  // of satp and vsatp, so the test drives it onto the CSR group directly.
+  localparam logic [3:0] MODE_UNSUP = 4'd11;
   localparam logic [1:0] OP_VMA = 2'd0, OP_VVMA = 2'd1, OP_GVMA = 2'd2;
 
   // PTE permission bytes: V R W X U G A D.
@@ -127,9 +141,12 @@ module tb #(
   logic [1:0]              l2_rsp_imp;
   logic [1:0]              rsp_imp;
 
-  // The CSR group (SYS-001, csr_decisions.md CSR-2): driven only by
-  // cs_sync() from csr_tb_pkg pack_fe_csr. The cs_* tasks below change
-  // one field through csr_tb_pkg and drive the group again.
+  // The CSR group (SYS-001, csr_decisions.md CSR-2): driven by cs_sync()
+  // from csr_tb_pkg pack_fe_csr. The cs_* tasks below change one field
+  // through csr_tb_pkg and drive the group again. The one exception is
+  // cs_raw_mode (BP-148, group P): it drives a MODE field of the group
+  // directly with a value CSR-5 keeps out of satp and vsatp, until the
+  // next cs_* call drives the group again.
   fe_csr_t                 fe_csr;
 
   logic                    inv_val;
@@ -232,6 +249,8 @@ module tb #(
       SZ64K:   return 16;
       SZ2M:    return 512;
       SZ1G:    return 262144;
+      SZ512G:  return longint'(1) << B512G;
+      SZ256T:  return longint'(1) << B256T;
       default: return 1;
     endcase
   endfunction
@@ -419,6 +438,23 @@ module tb #(
     hgatp_t r;
     r = hgatp_t'(csr_tb_pkg::csr_read(CSR_HGATP_ADDR)); r.mode = m;
     csr_tb_pkg::csr_write(CSR_HGATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  // A check name's regime (BP-148). An if, not ?: on two string
+  // literals, which pads the shorter one.
+  function automatic string pv_name(input int pass);
+    if (pass == 0) return "V=0 satp";
+    return "V=1 vsatp";
+  endfunction
+  // The MODE of the stage ITLB-18 reads: satp for V=0, vsatp for V=1.
+  task automatic cs_mode(input logic v1, input logic [3:0] m);
+    if (v1) cs_vsatp_mode(m);
+    else    cs_satp_mode(m);
+  endtask
+  // MMU-33: a MODE value presented on the CSR group directly, as
+  // debug_support would let it reach satp or vsatp (not built, TD#198).
+  task automatic cs_raw_mode(input logic v1, input logic [3:0] m);
+    if (v1) fe_csr.vsatp_mode = m;
+    else    fe_csr.satp_mode  = m;
   endtask
   task automatic cs_vmid(input logic [VMID_WIDTH-1:0] v);
     hgatp_t r;
@@ -734,6 +770,59 @@ module tb #(
     add_map(1'b0, '0, 16'd5, {VW{1'b1}}, SZ4K, PNW'('h080400), PX, 2'd0, 2);
     install({VW{1'b1}});
     expect_hit("G15 Sv39 top page", {VW{1'b1}}, PNW'('h080400));
+    // BP-148 (ITLB-3, IL-7): 512 GiB, 3'b100, masks VPN[26:0]. Under satp
+    // Sv48, so the VA (bits 46:39 used) passes ITLB-18. VA 3 << 39 to PA
+    // 2^39, main memory (MMU-15a). The output PPN over the masked bits
+    // is the request's VPN (ITLB-3): the stored PPN or the offset.
+    begin
+      logic [VW-1:0]  b5;
+      logic [PNW-1:0] p5;
+      longint         n5;
+      reset_all();
+      cs_satp_mode(SV48);
+      b5 = VW'(3) << B512G;
+      p5 = PNW'(1) << B512G;
+      n5 = pages(SZ512G);
+      add_map(1'b0, '0, 16'd5, b5, SZ512G, p5, PX, 2'd0, 2);
+      install(b5 + VW'('h123_4567));
+      n0 = l2_reqs;
+      expect_hit("G16 512G first page",  b5, p5);
+      expect_hit("G17 512G last page",   b5 + VW'(n5 - 1), p5 | PNW'(n5 - 1));
+      expect_hit("G18 512G page between", b5 + VW'('h123_4567),
+                 p5 | PNW'('h123_4567));
+      ok("G19 512G held once", l2_reqs == n0);
+      expect_miss("G20 512G just above", b5 + VW'(n5));
+      expect_miss("G21 512G just below", b5 - VW'(1));
+    end
+    // 256 TiB, 3'b101, masks VPN[35:0]. Under satp Sv57. VA 2 << 48 to
+    // PA 0, the only 256 TiB page at PA_WIDTH 48 (aligned to 2^48). Its
+    // first 4 KiB page is PA 0, outside main memory (MMU-15a): a lookup
+    // there matches the entry and is refused by the PMA check, cause 1,
+    // with no walk; a miss would be answered miss and walk. The hits are
+    // at the first main-memory page (PA 0x8000_0000), the last page and
+    // one between.
+    begin
+      logic [VW-1:0] b6;
+      longint        n6;
+      reset_all();
+      cs_satp_mode(SV57);
+      b6 = VW'(2) << B256T;
+      n6 = pages(SZ256T);
+      add_map(1'b0, '0, 16'd5, b6, SZ256T, PNW'(0), PX, 2'd0, 2);
+      install(b6 + VW'('h8_1234));
+      n0 = l2_reqs;
+      look(b6);
+      ok("G22 256T first page, PA 0: matched, the PMA refuses it, cause 1",
+         g_st == ST_FAULT && g_cause == 5'd1);
+      expect_hit("G23 256T first main-memory page", b6 + VW'('h8_0000),
+                 PNW'('h8_0000));
+      expect_hit("G24 256T last page", b6 + VW'(n6 - 1), PNW'(n6 - 1));
+      expect_hit("G25 256T page between", b6 + VW'('h8_1234),
+                 PNW'('h8_1234));
+      ok("G26 256T held once, G22 included", l2_reqs == n0);
+      expect_miss("G27 256T just above", b6 + VW'(n6));
+      expect_miss("G28 256T just below", b6 - VW'(1));
+    end
 
     // ---- H: tag matching --------------------------------------------------
     reset_all();
@@ -937,6 +1026,32 @@ module tb #(
     look(VA_B);
     ok("K16 invalidate with the response: no install", g_st == ST_MISS);
     idle(6);
+    // BP-148 (ITLB-13): SFENCE.VMA by an address. One just outside a
+    // 512 GiB or 256 TiB page keeps it; one at its last page, far from
+    // the page installed and looked up, drops it.
+    for (int s = 0; s < 2; s++) begin
+      logic [VW-1:0]  bb;
+      logic [2:0]     sz;
+      logic [PNW-1:0] pp;
+      string          sn;
+      sz = (s == 0) ? SZ512G : SZ256T;
+      sn = (s == 0) ? "512G" : "256T";
+      bb = (s == 0) ? (VW'(3) << B512G) : (VW'(2) << B256T);
+      pp = (s == 0) ? (PNW'(1) << B512G) : PNW'(0);
+      reset_all();
+      cs_satp_mode((s == 0) ? SV48 : SV57);
+      add_map(1'b0, '0, 16'd5, bb, sz, pp, PX, 2'd0, 2);
+      install(bb + VW'('h8_0000));
+      inval(OP_VMA, 1, 0, bb + VW'(pages(sz)), '0, '0);
+      expect_hit($sformatf("K17.%s address just outside: kept", sn),
+                 bb + VW'('h8_0000), pp | PNW'('h8_0000));
+      inval(OP_VMA, 1, 0, bb - VW'(1), '0, '0);
+      expect_hit($sformatf("K18.%s address just below: kept", sn),
+                 bb + VW'('h8_0000), pp | PNW'('h8_0000));
+      inval(OP_VMA, 1, 0, bb + VW'(pages(sz) - 1), '0, '0);
+      expect_miss($sformatf("K19.%s address at its last page: dropped", sn),
+                  bb + VW'('h8_0000));
+    end
 
     // ---- L: page-crossing block ------------------------------------------
     reset_all();
@@ -1159,14 +1274,152 @@ module tb #(
     ok("P8 with vsatp Sv39 a U page faults in VS-mode", g_st == ST_FAULT &&
        g_cause == 5'd12);
 
+    // ---- P, BP-148: ITLB-18 per mode ------------------------------------
+    // For each SvNN (sign bit NN-1: SV39_SIGN_BIT, SV48_SIGN_BIT,
+    // SV57_SIGN_BIT), at V=0 under satp and at V=1 under vsatp:
+    //   P9   bit NN-1 alone set: differs from bits above it, cause 12
+    //   P10  bit VA_WIDTH-1 alone set: cause 12
+    //   P11  no walk for either
+    //   P12  bits VA_WIDTH-1 down to NN-1 all set: canonical, a miss,
+    //        and a walk of the whole VPN
+    for (int pass = 0; pass < 2; pass++) begin
+      for (int md = 0; md < 3; md++) begin
+        logic [3:0]    mv;
+        int            sb;
+        string         pv;
+        logic [VW-1:0] va;
+        mv = (md == 0) ? SV39 : (md == 1) ? SV48 : SV57;
+        sb = (md == 0) ? SV39_SIGN_BIT : (md == 1) ? SV48_SIGN_BIT :
+                                                     SV57_SIGN_BIT;
+        pv = $sformatf("%s Sv%0d", pv_name(pass), sb + 1);
+        reset_all();
+        if (pass == 1) cs_v(1'b1);
+        cs_mode(pass == 1, mv);
+        n0 = l2_reqs;
+        look(VW'(1) << (sb - 12));
+        ok($sformatf("P9 %s, VA bit %0d alone: cause 12", pv, sb),
+           g_st == ST_FAULT && g_cause == 5'd12);
+        look(VW'(1) << (VW - 1));
+        ok($sformatf("P10 %s, VA bit %0d alone: cause 12", pv,
+                     VA_WIDTH - 1),
+           g_st == ST_FAULT && g_cause == 5'd12);
+        idle(2);
+        ok($sformatf("P11 %s: no walk for P9, P10", pv), l2_reqs == n0);
+        va = {VW{1'b1}} << (sb - 12);
+        look(va);
+        ok($sformatf("P12 %s, bits %0d:%0d set: a miss", pv, VA_WIDTH - 1,
+                     sb), g_st == ST_MISS);
+        idle(2);
+        ok($sformatf("P12 %s: one walk, the whole VPN", pv),
+           l2_reqs == n0 + 1 && last_vpn == va);
+        idle(6);
+      end
+    end
+    // Across modes, at V=0 and V=1: VA bit 40 alone is canonical under
+    // Sv48 and not under Sv39 (P13, P14); VA bit 50 alone is canonical
+    // under Sv57 and not under Sv48 (P15, P16).
+    for (int pass = 0; pass < 2; pass++) begin
+      string         pv;
+      logic [VW-1:0] a40;
+      logic [VW-1:0] a50;
+      pv  = pv_name(pass);
+      a40 = VW'(1) << (40 - 12);
+      a50 = VW'(1) << (50 - 12);
+      reset_all();
+      if (pass == 1) cs_v(1'b1);
+      cs_mode(pass == 1, SV48);
+      n0 = l2_reqs;
+      look(a40);
+      ok($sformatf("P13 %s Sv48, VA bit 40 alone: a miss", pv),
+         g_st == ST_MISS);
+      idle(2);
+      ok($sformatf("P13 %s Sv48: and a walk", pv), l2_reqs == n0 + 1);
+      idle(6);
+      cs_mode(pass == 1, SV39);
+      look(a40);
+      ok($sformatf("P14 %s Sv39, VA bit 40 alone: cause 12", pv),
+         g_st == ST_FAULT && g_cause == 5'd12);
+      cs_mode(pass == 1, SV57);
+      n0 = l2_reqs;
+      look(a50);
+      ok($sformatf("P15 %s Sv57, VA bit 50 alone: a miss", pv),
+         g_st == ST_MISS);
+      idle(2);
+      ok($sformatf("P15 %s Sv57: and a walk", pv), l2_reqs == n0 + 1);
+      idle(6);
+      cs_mode(pass == 1, SV48);
+      look(a50);
+      ok($sformatf("P16 %s Sv48, VA bit 50 alone: cause 12", pv),
+         g_st == ST_FAULT && g_cause == 5'd12);
+    end
+    // The mode is read at lookup (ITLB-18, ITLB-17): a page installed
+    // under Sv48 at VA bit 40 faults under Sv39 with no invalidate, and
+    // hits again under Sv48 with no new walk.
+    for (int pass = 0; pass < 2; pass++) begin
+      string         pv;
+      logic [VW-1:0] a40;
+      pv  = pv_name(pass);
+      a40 = VW'(1) << (40 - 12);
+      reset_all();
+      if (pass == 1) cs_v(1'b1);
+      cs_mode(pass == 1, SV48);
+      add_map(pass == 1, (pass == 1) ? 14'd3 : 14'd0, 16'd5, a40, SZ4K,
+              PNW'('h080700), PX, 2'd0, 2);
+      install(a40);
+      n0 = l2_reqs;
+      cs_mode(pass == 1, SV39);
+      look(a40);
+      ok($sformatf("P17 %s Sv48 -> Sv39, no invalidate: cause 12", pv),
+         g_st == ST_FAULT && g_cause == 5'd12);
+      cs_mode(pass == 1, SV48);
+      expect_hit($sformatf("P18 %s back to Sv48: the entry hits", pv), a40,
+                 PNW'('h080700));
+      ok($sformatf("P19 %s: no walk after the install", pv), l2_reqs == n0);
+    end
+    // MMU-33 (PROPOSED half, built by BP-148): an unsupported MODE value
+    // is checked as Sv39. MODE_UNSUP is driven onto the CSR group
+    // directly (cs_raw_mode): CSR-5 keeps it out of satp and vsatp, and
+    // the debug_support bits that let it in are not built (TD#198). VA
+    // bit 40 alone, canonical under Sv48 and Sv57, faults; bits
+    // VA_WIDTH-1:38 all set pass.
+    for (int pass = 0; pass < 2; pass++) begin
+      string         pv;
+      logic [VW-1:0] a39;
+      pv  = pv_name(pass);
+      a39 = {VW{1'b1}} << (SV39_SIGN_BIT - 12);
+      reset_all();
+      if (pass == 1) cs_v(1'b1);
+      cs_raw_mode(pass == 1, MODE_UNSUP);
+      n0 = l2_reqs;
+      look(VW'(1) << (40 - 12));
+      ok($sformatf("P20 %s MODE %0d, VA bit 40 alone: cause 12", pv,
+                   MODE_UNSUP), g_st == ST_FAULT && g_cause == 5'd12);
+      look(VW'(1) << (SV39_SIGN_BIT - 12));
+      ok($sformatf("P21 %s MODE %0d, VA bit 38 alone: cause 12", pv,
+                   MODE_UNSUP), g_st == ST_FAULT && g_cause == 5'd12);
+      idle(2);
+      ok($sformatf("P22 %s MODE %0d: no walk for P20, P21", pv, MODE_UNSUP),
+         l2_reqs == n0);
+      look(a39);
+      ok($sformatf("P23 %s MODE %0d, bits %0d:38 set: a miss and a walk",
+                   pv, MODE_UNSUP, VA_WIDTH - 1), g_st == ST_MISS);
+      idle(2);
+      ok($sformatf("P23 %s MODE %0d: one walk", pv, MODE_UNSUP),
+         l2_reqs == n0 + 1 && last_vpn == a39);
+      idle(6);
+    end
+
     // ---- R: reserved page-size codes (IL-7, IT-4) ------------------------
-    // Each of the four reserved codes, from reset, on a mapping that is
+    // BP-148: the reserved codes are 3'b11x, 6 and 7. Until BP-148 this
+    // loop ran 4 to 7; 4 and 5 are the 512 GiB and 256 TiB sizes now
+    // and are run as sizes in group G (G16 to G28).
+    // Each of the two reserved codes, from reset, on a mapping that is
     // otherwise a legal executable 4 KiB-aligned hit. A reserved size
     // is handled as a reserved status (F8): fault, cause 1, no GPA. The
     // fault is not cached (as F2, F3): the next lookup misses and
     // walks again. A 4 KiB neighbour mapped and installed first shows
     // the array still serves legal entries after the reserved answer.
-    for (int r = 4; r < 8; r++) begin
+    for (int r = 6; r < 8; r++) begin
       string tn;
       reset_all();
       add_map(1'b0, '0, 16'd5, VA_A, 3'(r), PNW'('h080010), PX, 2'd0, 3);

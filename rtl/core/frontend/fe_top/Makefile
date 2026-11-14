@@ -130,13 +130,14 @@ FE_PLUSARGS := $(FE_FAST_INIT)
 # BP-143 removed it: its case is not reached by construction (BP-142),
 # so its check could not fail, and tb_bp_cluster CB2-RP4 checks the
 # rule. BP-135 added t0_uaon (T0 updated as the use_alt_on_na
-# provider, CTR rows 19.1-19.8).
+# provider, CTR rows 19.1-19.8). BP-148 added sv48, sv57 and h57 (Sv48,
+# Sv57 and Sv57 / Sv57x4, the 512 GiB and 256 TiB pages, ITLB-18).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             recur t0_uaon deep indir region multistart cross rvc \
             misp_call jals fencei cboinval uc_nc uc_io pt_faults_s \
             pt_faults_h \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
-            zstar pt_gonly pt_vsonly pt_upriv
+            zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \

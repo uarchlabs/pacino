@@ -44,7 +44,11 @@ PKG_SRCS := \
   $(DEC_DIR)/decode_pkg.sv \
   $(CSR_DIR)/rtl/csr_pkg.sv
 
-TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv
+# pt_build_pkg (BP-146, rtl/mmu/ptw/tb), after csr_tb_pkg: the page-table
+# builder the program writer (fe_tb_writer.svh) builds every table with
+# (BP-148).
+TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv \
+               $(RVA_ROOT)/rtl/mmu/ptw/tb/pt_build_pkg.sv
 
 # The L1I, in the order of the emitted filelist (l1i.f), with the
 # BP-123 maintenance control. cgen_tl_pkg is the one shared emitted

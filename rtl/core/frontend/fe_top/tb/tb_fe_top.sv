@@ -2736,24 +2736,48 @@ module tb;
 
   // A two-stage mapping with chosen leaves: VA page -> GPA page by a
   // VS-stage leaf, GPA page -> SPA page by a G-stage leaf.
+  // BP-148: both leaves through the builder (pt_build_pkg).
   task automatic h_map(input logic [VA_WIDTH-1:0] va,
                        input logic [GPA_WIDTH-1:0] gpa,
                        input logic [PA_WIDTH-1:0] spa,
                        input logic [63:0] vs_leaf, input logic [63:0] g_leaf);
-    W.wr64(W.g_slot(gpa[GPA_WIDTH-1:12], 0), g_leaf);
-    W.gmap[gpa[GPA_WIDTH-1:12]] = spa[PA_WIDTH-1:12];
-    W.wr64(W.vs_slot(va, 0), vs_leaf);
+    W.g_map(gpa[GPA_WIDTH-1:12], spa, g_leaf);
+    void'(W.vs_map(va, 0, vs_leaf));
     W.vmap[va[VA_WIDTH-1:12]] = spa[PA_WIDTH-1:12];
   endtask
 
-  // The GPA of the VS-stage level-0 table that maps va, and the SPA of
-  // the G-stage leaf that maps that table page.
+  // The GPA of the VS-stage level-0 table that maps va: the pointer the
+  // builder placed at level 1.
   function automatic logic [GPA_WIDTH-1:0] vs_l0_gpa(
       input logic [VA_WIDTH-1:0] va);
     logic [63:0] p;
-    p = W.rd64(W.vs_slot(va, 1));
+    p = W.img.get(64'(W.vs_slot(va, 1)));
     return GPA_WIDTH'(p[53:10]) << 12;
   endfunction
+
+  // BP-148. h_map, with the G-stage leaf of the VS level-0 table page
+  // that the call places given the flags tf, where the builder's are
+  // U R W X A D (pt_build_pkg PT_F_BACK): the leaf is written by the
+  // builder, not changed after it. Until BP-148 the leaf was written
+  // U R W X A D and then overwritten at its slot. The leaf is checked
+  // to be there with tf, so the case's stimulus is what it says.
+  task automatic h_map_tf(input logic [VA_WIDTH-1:0] va,
+                          input logic [GPA_WIDTH-1:0] gpa,
+                          input logic [PA_WIDTH-1:0] spa,
+                          input logic [63:0] vs_leaf,
+                          input logic [63:0] g_leaf, input logic [7:0] tf);
+    logic [GPA_WIDTH-1:0] tg;
+    W.gs.back_f = tf;
+    W.plog($sformatf("backf %h", tf));
+    h_map(va, gpa, spa, vs_leaf, g_leaf);
+    W.gs.back_f = pt_build_pkg::PT_F_BACK;
+    W.plog($sformatf("backf %h", pt_build_pkg::PT_F_BACK));
+    tg = vs_l0_gpa(va);
+    if (W.img.get(64'(W.g_slot(tg[GPA_WIDTH-1:12], 0))) !=
+        W.mk_pte(44'(W.g2s(tg) >> 12), tf, 2'b00, 1'b0))
+      $fatal(1, "tb_fe_top: h_map_tf: the table page of %h is not %h", va,
+             tf);
+  endtask
 
   // A short body at a target, then an indirect jump to a handler.
   task automatic run_at(input logic [VA_WIDTH-1:0] at,
@@ -2776,42 +2800,45 @@ module tb;
     // 0 cause 12: nothing mapped.
     W.jr_fault(tgt(0), IFU_FAULT_PAGE, hnd(0));
     W.mixed(2);
-    // 1 cause 1: PMP denies the read of the level-0 table.
-    a = W.s_slot(tgt(1), 0);
-    W.wr64(a, W.mk_pte(44'h8_1400, PTE_LEAF, 2'b00, 1'b0));
+    // 1 cause 1: PMP denies the read of the level-0 table. BP-148: every
+    // PTE of this program is placed by the builder (W.s_map), and a
+    // table address an expected value or a check names is the one the
+    // builder returns.
+    a = W.s_map(tgt(1), 0, W.mk_pte(44'h8_1400, PTE_LEAF, 2'b00, 1'b0));
     pmp_page(0, a, 3'b000);
     W.jr_fault(tgt(1), IFU_FAULT_ACCESS, hnd(1));
     W.mixed(2);
     // 2 cause 1: PMP denies the Svadu write (the table page is R only).
-    a = W.s_slot(tgt(2), 0);
-    W.wr64(a, W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    a = W.s_map(tgt(2), 0, W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00,
+                                    1'b0));
     pmp_page(1, a, 3'b001);
     W.jr_fault(tgt(2), IFU_FAULT_ACCESS, hnd(2));
     W.mixed(2);
-    // 3 cause 1: a level-0 table outside cacheable coherent memory.
-    W.wr64(W.s_slot(tgt(3), 1), W.mk_pte(44'h4_0000, PTE_PTR, 2'b00, 1'b0));
-    W.wr64(PA_WIDTH'('h0_4000_0000) + PA_WIDTH'(8 * tgt(3)[20:12]),
-           W.mk_pte(44'h8_1420, PTE_LEAF, 2'b00, 1'b0));
+    // 3 cause 1: a level-0 table outside cacheable coherent memory. The
+    // builder follows the level-1 pointer to 0x4000_0000 and places the
+    // leaf in that table (it wrote 0x4000_0000 + 8 * VA[20:12] by hand
+    // until BP-148).
+    void'(W.s_map(tgt(3), 1, W.mk_pte(44'h4_0000, PTE_PTR, 2'b00, 1'b0)));
+    void'(W.s_map(tgt(3), 0, W.mk_pte(44'h8_1420, PTE_LEAF, 2'b00, 1'b0)));
     W.jr_fault(tgt(3), IFU_FAULT_ACCESS, hnd(3));
     W.mixed(2);
     // 4 cause 1: a leaf PPN with bit PPN_WIDTH set. BP-147: the bit is
     // PPN_WIDTH at any width (it was bit 24, PPN_WIDTH at PA_WIDTH 36
     // only, and main memory at 48). So are cases 5 and 6 and
     // p_pt_vsonly's case 1.
-    W.wr64(W.s_slot(tgt(4), 0),
-           W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8_1430, PTE_LEAF, 2'b00,
-                    1'b0));
+    void'(W.s_map(tgt(4), 0,
+                  W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8_1430, PTE_LEAF,
+                           2'b00, 1'b0)));
     W.jr_fault(tgt(4), IFU_FAULT_ACCESS, hnd(4));
     W.mixed(2);
     // 5 cause 1: a non-leaf PPN with bit PPN_WIDTH set.
-    W.wr64(W.s_slot(tgt(5), 1),
-           W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8_F100, PTE_PTR, 2'b00,
-                    1'b0));
+    void'(W.s_map(tgt(5), 1,
+                  W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8_F100, PTE_PTR,
+                           2'b00, 1'b0)));
     W.jr_fault(tgt(5), IFU_FAULT_ACCESS, hnd(5));
     W.mixed(2);
     // 6 cause 1: the memory port answers the leaf read with an error.
-    a = W.s_slot(tgt(6), 0);
-    W.wr64(a, W.mk_pte(44'h8_1440, PTE_LEAF, 2'b00, 1'b0));
+    a = W.s_map(tgt(6), 0, W.mk_pte(44'h8_1440, PTE_LEAF, 2'b00, 1'b0));
     err_pa  = a;
     err_arm = 1'b1;
     W.jr_fault(tgt(6), IFU_FAULT_ACCESS, hnd(6));
@@ -2838,26 +2865,25 @@ module tb;
     pmp_all(2);
     map_ch();
     // 0 kind 00: the final GPA is not mapped by the G-stage.
+    // BP-148: every PTE through the builder (W.vs_map, h_map, W.g_put).
     g = GPA_WIDTH'('h0_2000_0000);
-    W.wr64(W.vs_slot(tgt(0), 0), W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0));
+    void'(W.vs_map(tgt(0), 0, W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0)));
     W.jr_gfault(tgt(0), FAULT_GPA_WIDTH'(g | GPA_WIDTH'('h10)), 2'b00, hnd(0));
     W.mixed(2);
     // 1 kind 01: a VS-stage table page is not mapped by the G-stage.
     tg = GPA_WIDTH'('h0_2100_0000);
-    W.wr64(W.vs_slot(tgt(1), 1), W.mk_pte(44'(tg >> 12), PTE_PTR, 2'b00, 1'b0));
+    void'(W.vs_map(tgt(1), 1, W.mk_pte(44'(tg >> 12), PTE_PTR, 2'b00, 1'b0)));
     W.jr_gfault(tgt(1),
                 FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(1)[20:12])),
                 2'b01, hnd(1));
     W.mixed(2);
     // 2 kind 10: the VS leaf needs A; the G-stage leaf of its table page
-    // grants no write.
+    // grants no write (h_map_tf: placed with flags DB by the builder).
     g = GPA_WIDTH'('h0_2200_0000);
-    h_map(tgt(2), g, PA_WIDTH'('h0_8140_0000),
-          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
-          W.mk_pte(44'h8_1400, F_URWXAD, 2'b00, 1'b0));
+    h_map_tf(tgt(2), g, PA_WIDTH'('h0_8140_0000),
+             W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+             W.mk_pte(44'h8_1400, F_URWXAD, 2'b00, 1'b0), 8'hDB);
     tg = vs_l0_gpa(tgt(2));
-    W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
-           W.mk_pte(44'(W.g2s(tg) >> 12), 8'hDB, 2'b00, 1'b0));
     W.jr_gfault(tgt(2),
                 FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(2)[20:12])),
                 2'b10, hnd(2));
@@ -2865,22 +2891,21 @@ module tb;
     // 3 a VS leaf whose GPA has a bit above 40: the whole GPA, kind 00,
     //   the offset filled by the IFU (MMU-23, IFU-2a; BP-124: this was
     //   MMU-30's GPA 0). PPN bit 43 set, so GPA bit 55.
-    W.wr64(W.vs_slot(tgt(3), 0),
-           W.mk_pte(44'h800_0000_0123, PTE_LEAF, 2'b00, 1'b0));
+    void'(W.vs_map(tgt(3), 0,
+                   W.mk_pte(44'h800_0000_0123, PTE_LEAF, 2'b00, 1'b0)));
     W.jr_gfault(tgt(3),
                 FAULT_GPA_WIDTH'({44'h800_0000_0123, tgt(3)[11:0]}), 2'b00,
                 hnd(3));
     W.mixed(2);
     // 4 a VS non-leaf whose GPA has a bit above 40: the whole GPA of the
     //   VS PTE the next level reads, kind 01 (BP-124: was GPA 0).
-    W.wr64(W.vs_slot(tgt(4), 1),
-           W.mk_pte(44'h2000_0041, PTE_PTR, 2'b00, 1'b0));
+    void'(W.vs_map(tgt(4), 1,
+                   W.mk_pte(44'h2000_0041, PTE_PTR, 2'b00, 1'b0)));
     W.jr_gfault(tgt(4), FAULT_GPA_WIDTH'({44'h2000_0041, 12'h000}) +
                 FAULT_GPA_WIDTH'(8 * tgt(4)[20:12]), 2'b01, hnd(4));
     W.mixed(2);
     // 5 cause 12: a VS leaf with W and not R.
-    W.wr64(W.vs_slot(tgt(5), 0),
-           W.mk_pte(44'h1234, 8'hC5, 2'b00, 1'b0));
+    void'(W.vs_map(tgt(5), 0, W.mk_pte(44'h1234, 8'hC5, 2'b00, 1'b0)));
     W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(5));
     W.mixed(2);
     // 6 cause 1: a G-stage leaf PPN with bit PPN_WIDTH set.
@@ -2916,8 +2941,8 @@ module tb;
     begin
       logic [VA_WIDTH-1:0] t9;
       t9 = tgt(9) + VA_WIDTH'('h7A4);
-      W.wr64(W.g_slot('0, 0), 64'd0);
-      W.wr64(W.vs_slot(t9, 0), W.mk_pte(44'h0, PTE_LEAF, 2'b00, 1'b0));
+      void'(W.g_put('0, 0, 64'd0));
+      void'(W.vs_map(t9, 0, W.mk_pte(44'h0, PTE_LEAF, 2'b00, 1'b0)));
       W.jr_gfault(t9, FAULT_GPA_WIDTH'(t9[11:0]), 2'b00, hnd(9));
       W.mixed(2);
     end
@@ -2938,8 +2963,9 @@ module tb;
     n  = VA_WIDTH'('h0_8010_0000);
     pa = PA_WIDTH'('h0_8150_0000);
     for (int i = 0; i < 16; i++) begin
-      W.wr64(W.s_slot(n + VA_WIDTH'(i * 'h1000), 0),
-             W.mk_pte(napot(44'(pa[PA_WIDTH-1:12])), PTE_LEAF, 2'b00, 1'b1));
+      void'(W.s_map(n + VA_WIDTH'(i * 'h1000), 0,
+                    W.mk_pte(napot(44'(pa[PA_WIDTH-1:12])), PTE_LEAF, 2'b00,
+                             1'b1)));
       W.vmap[n[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
         pa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
     end
@@ -2969,12 +2995,15 @@ module tb;
     va = VA_WIDTH'('h0_8010_0000);
     ga = GPA_WIDTH'('h0_3000_0000);
     sa = PA_WIDTH'('h0_8150_0000);
+    // BP-148: every PTE through the builder (W.g_put, W.vs_map).
     for (int i = 0; i < 16; i++)
-      W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(i), 0),
-             W.mk_pte(napot(44'(sa[PA_WIDTH-1:12])), F_URWXAD, 2'b00, 1'b1));
+      void'(W.g_put(ga + GPA_WIDTH'(i * 'h1000), 0,
+                    W.mk_pte(napot(44'(sa[PA_WIDTH-1:12])), F_URWXAD, 2'b00,
+                             1'b1)));
     for (int i = 0; i < 16; i += 3) begin
-      W.wr64(W.vs_slot(va + VA_WIDTH'(i * 'h1000), 0),
-             W.mk_pte(44'(ga[GPA_WIDTH-1:12]) + 44'(i), PTE_LEAF, 2'b00, 1'b0));
+      void'(W.vs_map(va + VA_WIDTH'(i * 'h1000), 0,
+                     W.mk_pte(44'(ga[GPA_WIDTH-1:12]) + 44'(i), PTE_LEAF,
+                              2'b00, 1'b0)));
       W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
         sa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
     end
@@ -2987,10 +3016,12 @@ module tb;
     ga = GPA_WIDTH'('h0_3010_0000);
     sa = PA_WIDTH'('h0_8160_0000);
     for (int i = 0; i < 16; i++) begin
-      W.wr64(W.vs_slot(va + VA_WIDTH'(i * 'h1000), 0),
-             W.mk_pte(napot(44'(ga[GPA_WIDTH-1:12])), PTE_LEAF, 2'b00, 1'b1));
-      W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(i), 0),
-             W.mk_pte(44'(sa[PA_WIDTH-1:12]) + 44'(i), F_URWXAD, 2'b00, 1'b0));
+      void'(W.vs_map(va + VA_WIDTH'(i * 'h1000), 0,
+                     W.mk_pte(napot(44'(ga[GPA_WIDTH-1:12])), PTE_LEAF, 2'b00,
+                              1'b1)));
+      void'(W.g_put(ga + GPA_WIDTH'(i * 'h1000), 0,
+                    W.mk_pte(44'(sa[PA_WIDTH-1:12]) + 44'(i), F_URWXAD,
+                             2'b00, 1'b0)));
       W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
         sa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
     end
@@ -3003,10 +3034,12 @@ module tb;
     ga = GPA_WIDTH'('h0_3020_0000);
     sa = PA_WIDTH'('h0_8170_0000);
     for (int i = 0; i < 16; i++) begin
-      W.wr64(W.vs_slot(va + VA_WIDTH'(i * 'h1000), 0),
-             W.mk_pte(napot(44'(ga[GPA_WIDTH-1:12])), PTE_LEAF, 2'b00, 1'b1));
-      W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(i), 0),
-             W.mk_pte(napot(44'(sa[PA_WIDTH-1:12])), F_URWXAD, 2'b00, 1'b1));
+      void'(W.vs_map(va + VA_WIDTH'(i * 'h1000), 0,
+                     W.mk_pte(napot(44'(ga[GPA_WIDTH-1:12])), PTE_LEAF, 2'b00,
+                              1'b1)));
+      void'(W.g_put(ga + GPA_WIDTH'(i * 'h1000), 0,
+                    W.mk_pte(napot(44'(sa[PA_WIDTH-1:12])), F_URWXAD, 2'b00,
+                             1'b1)));
       W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
         sa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
     end
@@ -3016,18 +3049,18 @@ module tb;
     va = VA_WIDTH'('h0_8060_0000);
     ga = GPA_WIDTH'('h0_3040_0000);
     sa = PA_WIDTH'('h0_8180_3000);
-    W.wr64(W.vs_slot(va, 1), W.mk_pte(44'(ga >> 12), PTE_LEAF, 2'b00, 1'b0));
-    W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(5), 0),
-           W.mk_pte(44'(sa >> 12), F_URWXAD, 2'b00, 1'b0));
+    void'(W.vs_map(va, 1, W.mk_pte(44'(ga >> 12), PTE_LEAF, 2'b00, 1'b0)));
+    void'(W.g_put(ga + GPA_WIDTH'(5 * 'h1000), 0,
+                  W.mk_pte(44'(sa >> 12), F_URWXAD, 2'b00, 1'b0)));
     W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(5)] = sa[PA_WIDTH-1:12];
     run_at(va + VA_WIDTH'('h5010), PC_C + VA_WIDTH'('h280));
     // E: a VS 4 KiB leaf over a G-stage 2 MiB leaf.
     va = VA_WIDTH'('h0_8080_0000);
     ga = GPA_WIDTH'('h0_3080_7000);
     sa = PA_WIDTH'('h0_81A0_0000);
-    W.wr64(W.vs_slot(va, 0), W.mk_pte(44'(ga >> 12), PTE_LEAF, 2'b00, 1'b0));
-    W.wr64(W.g_slot(ga[GPA_WIDTH-1:12], 1),
-           W.mk_pte(44'(sa[PA_WIDTH-1:12]), F_URWXAD, 2'b00, 1'b0));
+    void'(W.vs_map(va, 0, W.mk_pte(44'(ga >> 12), PTE_LEAF, 2'b00, 1'b0)));
+    void'(W.g_put(ga, 1,
+                  W.mk_pte(44'(sa[PA_WIDTH-1:12]), F_URWXAD, 2'b00, 1'b0)));
     W.vmap[va[VA_WIDTH-1:12]] = sa[PA_WIDTH-1:12] + PPN_WIDTH'(7);
     run_at(va + VA_WIDTH'('h10), PC_C + VA_WIDTH'('h2C0));
     // The A region again: a second page of A walks again (4 KiB size),
@@ -3057,32 +3090,33 @@ module tb;
     for (int lo = 0; lo < 16; lo++) begin
       if (lo == 8) continue;
       t = VA_WIDTH'('h0_8040_0000) + VA_WIDTH'(lo * 'h1000) + VA_WIDTH'('h10);
-      W.wr64(W.s_slot(t, 0),
-             W.mk_pte({40'h0_0000_8142, 4'(lo)}, PTE_LEAF, 2'b00, 1'b1));
+      // BP-148: every PTE through the builder (W.s_map).
+      void'(W.s_map(t, 0, W.mk_pte({40'h0_0000_8142, 4'(lo)}, PTE_LEAF,
+                                   2'b00, 1'b1)));
       W.jr_fault(t, IFU_FAULT_PAGE, hnd(k));
       W.mixed(1);
       k++;
     end
     // N on a 2 MiB leaf.
-    W.wr64(W.s_slot(tgt(1), 1), W.mk_pte(44'h8_1608, PTE_LEAF, 2'b00, 1'b1));
+    void'(W.s_map(tgt(1), 1, W.mk_pte(44'h8_1608, PTE_LEAF, 2'b00, 1'b1)));
     W.jr_fault(tgt(1), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(1);
     // N on a non-leaf.
-    W.wr64(W.s_slot(tgt(2), 1), W.mk_pte(44'h8_F108, PTE_PTR, 2'b00, 1'b1));
+    void'(W.s_map(tgt(2), 1, W.mk_pte(44'h8_F108, PTE_PTR, 2'b00, 1'b1)));
     W.jr_fault(tgt(2), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(1);
     // PBMT 3 on a leaf.
-    W.wr64(W.s_slot(tgt(3), 0), W.mk_pte(44'h8_1430, PTE_LEAF, 2'd3, 1'b0));
+    void'(W.s_map(tgt(3), 0, W.mk_pte(44'h8_1430, PTE_LEAF, 2'd3, 1'b0)));
     W.jr_fault(tgt(3), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(1);
     // PBMT on a non-leaf.
-    W.wr64(W.s_slot(tgt(4), 1), W.mk_pte(44'h8_F110, PTE_PTR, 2'd1, 1'b0));
+    void'(W.s_map(tgt(4), 1, W.mk_pte(44'h8_F110, PTE_PTR, 2'd1, 1'b0)));
     W.jr_fault(tgt(4), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(1);
     // menvcfg.PBMTE cleared: PBMT NC on a leaf is reserved.
     W.csr_env(1'b0, 1'b0, 1'b0, 1'b1);
     W.mixed(1);
-    W.wr64(W.s_slot(tgt(5), 0), W.mk_pte(44'h8_1450, PTE_LEAF, 2'd1, 1'b0));
+    void'(W.s_map(tgt(5), 0, W.mk_pte(44'h8_1450, PTE_LEAF, 2'd1, 1'b0)));
     W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(2);
     warm_e = W.ne + 1;
@@ -3111,8 +3145,9 @@ module tb;
       if (lo == 8) continue;
       // VS-stage N reserved.
       t = VA_WIDTH'('h0_8040_0000) + VA_WIDTH'(lo * 'h1000) + VA_WIDTH'('h10);
-      W.wr64(W.vs_slot(t, 0),
-             W.mk_pte({40'h0_0000_0123, 4'(lo)}, PTE_LEAF, 2'b00, 1'b1));
+      // BP-148: every PTE through the builder (W.vs_map, h_map).
+      void'(W.vs_map(t, 0, W.mk_pte({40'h0_0000_0123, 4'(lo)}, PTE_LEAF,
+                                    2'b00, 1'b1)));
       W.jr_fault(t, IFU_FAULT_PAGE, hnd(k++));
       W.mixed(1);
       // G-stage N reserved.
@@ -3125,7 +3160,7 @@ module tb;
       W.mixed(1);
     end
     // VS PBMT 3.
-    W.wr64(W.vs_slot(tgt(3), 0), W.mk_pte(44'h0_0124, PTE_LEAF, 2'd3, 1'b0));
+    void'(W.vs_map(tgt(3), 0, W.mk_pte(44'h0_0124, PTE_LEAF, 2'd3, 1'b0)));
     W.jr_fault(tgt(3), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(1);
     // G PBMT 3.
@@ -3139,7 +3174,7 @@ module tb;
     // henvcfg.PBMTE clear: a VS PBMT NC is reserved, menvcfg's stays set.
     W.csr_env(1'b0, 1'b0, 1'b1, 1'b0);
     W.mixed(1);
-    W.wr64(W.vs_slot(tgt(5), 0), W.mk_pte(44'h0_0125, PTE_LEAF, 2'd1, 1'b0));
+    void'(W.vs_map(tgt(5), 0, W.mk_pte(44'h0_0125, PTE_LEAF, 2'd1, 1'b0)));
     W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(k++));
     W.mixed(1);
     // menvcfg.PBMTE clear: a G-stage PBMT NC is reserved.
@@ -3171,18 +3206,20 @@ module tb;
     $display("-- %s --", tname);
     reset_all(1'b1);
     map_ch();
-    W.wr64(W.s_slot(tgt(0), 0),
-           W.mk_pte(44'h8_1400, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    // BP-148: every PTE through the builder (W.s_map); a1 and a2 are the
+    // addresses it returns.
+    void'(W.s_map(tgt(0), 0,
+                  W.mk_pte(44'h8_1400, PTE_LEAF & 8'hBF, 2'b00, 1'b0)));
     W.jr_fault(tgt(0), IFU_FAULT_PAGE, hnd(0));
     W.mixed(1);
     W.csr_env(1'b1, 1'b0, 1'b1, 1'b1);
     W.mixed(1);
-    a1 = W.s_slot(tgt(1), 0);
-    W.wr64(a1, W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    a1 = W.s_map(tgt(1), 0,
+                 W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
     W.vmap[tgt(1)[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1410);
     run_at(tgt(1), hnd(1));
-    a2 = W.s_slot(tgt(2), 0);
-    W.wr64(a2, W.mk_pte(44'h8_1420, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    a2 = W.s_map(tgt(2), 0,
+                 W.mk_pte(44'h8_1420, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
     W.vmap[tgt(2)[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1420);
     chg_arm = 1'b1;
     chg_pa  = a2;
@@ -3217,24 +3254,24 @@ module tb;
     map_ch();
     // 1 (h 1, m 1): the VS update writes through the G-stage and sets
     // the G-stage D of the VS table page (MMU-8a), then executes.
+    // BP-148: every PTE through the builder. The G-stage leaf of a VS
+    // table page with D clear (5F) or no W (DB) is placed so by h_map_tf;
+    // gl1, vl1, gl5 and vl are the addresses the builder returns.
     g = GPA_WIDTH'('h0_2000_0000);
-    h_map(tgt(1), g, PA_WIDTH'('h0_8140_0000),
-          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
-          W.mk_pte(44'h8_1400, F_URWXAD, 2'b00, 1'b0));
+    h_map_tf(tgt(1), g, PA_WIDTH'('h0_8140_0000),
+             W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+             W.mk_pte(44'h8_1400, F_URWXAD, 2'b00, 1'b0), 8'h5F); // D clear
     tg  = vs_l0_gpa(tgt(1));
     gl1 = W.g_slot(tg[GPA_WIDTH-1:12], 0);
-    W.wr64(gl1, W.mk_pte(44'(W.g2s(tg) >> 12), 8'h5F, 2'b00, 1'b0)); // D clear
     vl1 = W.vs_slot(tgt(1), 0);
     run_at(tgt(1), hnd(1));
     // 2 (h 1, m 1): the G-stage leaf of the VS table page grants no
     // write: guest-page fault, kind 10.
     g = GPA_WIDTH'('h0_2200_0000);
-    h_map(tgt(2), g, PA_WIDTH'('h0_8141_0000),
-          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
-          W.mk_pte(44'h8_1410, F_URWXAD, 2'b00, 1'b0));
+    h_map_tf(tgt(2), g, PA_WIDTH'('h0_8141_0000),
+             W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+             W.mk_pte(44'h8_1410, F_URWXAD, 2'b00, 1'b0), 8'hDB);
     tg = vs_l0_gpa(tgt(2));
-    W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
-           W.mk_pte(44'(W.g2s(tg) >> 12), 8'hDB, 2'b00, 1'b0));
     W.jr_gfault(tgt(2),
                 FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(2)[20:12])),
                 2'b10, hnd(2));
@@ -3249,12 +3286,9 @@ module tb;
     W.csr_env(1'b0, 1'b1, 1'b1, 1'b1);
     W.mixed(1);
     g = GPA_WIDTH'('h0_2400_0000);
-    h_map(tgt(3), g, PA_WIDTH'('h0_8142_0000),
-          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
-          W.mk_pte(44'h8_1420, F_URWXAD, 2'b00, 1'b0));
-    tg = vs_l0_gpa(tgt(3));
-    W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
-           W.mk_pte(44'(W.g2s(tg) >> 12), 8'h5F, 2'b00, 1'b0));       // D clear
+    h_map_tf(tgt(3), g, PA_WIDTH'('h0_8142_0000),
+             W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+             W.mk_pte(44'h8_1420, F_URWXAD, 2'b00, 1'b0), 8'h5F); // D clear
     W.jr_fault(tgt(3), IFU_FAULT_PAGE, hnd(3));
     W.mixed(1);
     // 4, 5 (h 0, m 1): the VS-stage is Svade, the G-stage Svadu.
@@ -3476,30 +3510,29 @@ module tb;
     csr_tb_pkg::set_v(1'b1);
     csr_tb_pkg::set_priv(CSR_PRV_S);
     csr_satp_mode(CSR_SATP_MODE_BARE);
-    csr_wr_vsatp(CSR_SATP_MODE_SV39, ASID_WIDTH'(1),
-                 44'(W.vs_root >> 12));
+    // BP-148: the mode is the built VS-stage's (W.vs_mode, Sv39).
+    csr_wr_vsatp(W.vs.mode, ASID_WIDTH'(1), 44'(W.vs_root >> 12));
     // hgatp Bare with VMID 3; its PPN is left as it was (0).
     csr_hgatp_mode_vmid(CSR_HGATP_MODE_BARE, VMID_WIDTH'(3));
 
-    W.wr64(W.vs_slot(RESET_VECTOR, 0),
-           W.mk_pte(44'(RESET_VECTOR >> 12), PTE_LEAF, 2'b00, 1'b0));
+    // BP-148: every PTE through the builder (W.vs_map).
+    void'(W.vs_map(RESET_VECTOR, 0,
+                   W.mk_pte(44'(RESET_VECTOR >> 12), PTE_LEAF, 2'b00, 1'b0)));
     W.vmap[RESET_VECTOR[VA_WIDTH-1:12]] = PPN_WIDTH'(RESET_VECTOR >> 12);
-    W.wr64(W.vs_slot(PC_C, 0),
-           W.mk_pte(44'(PA_C >> 12), PTE_LEAF, 2'b00, 1'b0));
+    void'(W.vs_map(PC_C, 0, W.mk_pte(44'(PA_C >> 12), PTE_LEAF, 2'b00, 1'b0)));
     W.vmap[PC_C[VA_WIDTH-1:12]] = PA_C[PA_WIDTH-1:12];
-    W.wr64(W.vs_slot(PC_H, 0),
-           W.mk_pte(44'(PA_H >> 12), PTE_LEAF, 2'b00, 1'b0));
+    void'(W.vs_map(PC_H, 0, W.mk_pte(44'(PA_H >> 12), PTE_LEAF, 2'b00, 1'b0)));
     W.vmap[PC_H[VA_WIDTH-1:12]] = PA_H[PA_WIDTH-1:12];
     W.wp = RESET_VECTOR;
     W.mixed(3);
     W.jal(5'd0, PC_C);
     W.mixed(4);
-    W.wr64(W.vs_slot(tgt(1), 0),
-           W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8140, PTE_LEAF, 2'b00,
-                    1'b0));
+    void'(W.vs_map(tgt(1), 0,
+                   W.mk_pte((44'd1 << PPN_WIDTH) | 44'h8140, PTE_LEAF, 2'b00,
+                            1'b0)));
     W.jr_fault(tgt(1), IFU_FAULT_ACCESS, hnd(1));
     W.mixed(2);
-    W.wr64(W.vs_slot(tgt(2), 0), W.mk_pte(44'h8_1410, 8'hC5, 2'b00, 1'b0));
+    void'(W.vs_map(tgt(2), 0, W.mk_pte(44'h8_1410, 8'hC5, 2'b00, 1'b0)));
     W.jr_fault(tgt(2), IFU_FAULT_PAGE, hnd(2));
     W.mixed(2);
     warm_e = W.ne + 1;
@@ -3539,19 +3572,19 @@ module tb;
     reset_all(1'b1);
     csr_menv_adue(1'b1);                             // Svadu
     map_ch();
-    W.wr64(W.s_slot(PC_U, 0), W.mk_pte(44'(PA_U >> 12), PTE_LEAF | 8'h10,
-                                       2'b00, 1'b0));
+    // BP-148: every PTE through the builder (W.s_map); a0, a1 and a2 are
+    // the addresses it returns. The leaves are placed in the order the
+    // slots were taken until BP-148, so the tables sit where they did.
+    void'(W.s_map(PC_U, 0, W.mk_pte(44'(PA_U >> 12), PTE_LEAF | 8'h10,
+                                    2'b00, 1'b0)));
     W.vmap[PC_U[VA_WIDTH-1:12]] = PA_U[PA_WIDTH-1:12];
     p2 = PC_U + VA_WIDTH'('h1000);
-    a0 = W.s_slot(tgt(0), 0);
-    a1 = W.s_slot(tgt(1), 0);
-    a2 = W.s_slot(p2, 0);
     l0 = W.mk_pte(44'h8_1400, PTE_LEAF & 8'hBF, 2'b00, 1'b0);        // A
     l1 = W.mk_pte(44'h8_1410, (PTE_LEAF & 8'hBF) | 8'h10, 2'b00, 1'b0);
     l2 = W.mk_pte(44'h8_1420, PTE_LEAF & 8'hBF, 2'b00, 1'b0);
-    W.wr64(a0, l0);
-    W.wr64(a1, l1);
-    W.wr64(a2, l2);
+    a0 = W.s_map(tgt(0), 0, l0);
+    a1 = W.s_map(tgt(1), 0, l1);
+    a2 = W.s_map(p2, 0, l2);
     W.vmap[p2[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1420);
     up_vpn = p2[VA_WIDTH-1:12];
     // 0: to U, then a fetch from the U-clear page.
@@ -3588,6 +3621,249 @@ module tb;
     chk($sformatf("2: p2 was walked at S and hit (%0d)", n_up_ws_hit),
         n_up_ws_hit == 1);
     chk("2: the S walk set p2's A", W.rd64(a2) == (l2 | 64'h40));
+  endtask
+
+  // =================================================================
+  // BP-148: Sv48, Sv57, and the two-stage Sv57 / Sv57x4 regime
+  // (itlb_decisions.md ITLB-3, ITLB-18; mmu_decisions.md MMU-32). Each
+  // follows sv39: code over several pages, not physically contiguous, a
+  // taken conditional, a 32-bit instruction across a page boundary, two
+  // calls that return, then page faults at the end. The tables are the
+  // builder's (pt_build_pkg) in the program's modes.
+  // A TARGET A JAL CANNOT REACH (the reset vector to the high code, into
+  // a large page, a non-canonical address) is reached by an indirect
+  // jump, jalr x0, 0(t2) (W.jalr_to, W.jr_fault): the writer models no
+  // register file, and the backend redirects to the target the stream
+  // names, as the pt_* programs' targets are reached.
+  // =================================================================
+  // The code pages of the high region, as sv39's: b, b + 0x1000 and
+  // b + 0x2000 on three physical pages apart; handlers on b + 0x8000.
+  localparam logic [PA_WIDTH-1:0] PA_HB0 = PA_WIDTH'('h0_8100_0000);
+  localparam logic [PA_WIDTH-1:0] PA_HB1 = PA_WIDTH'('h0_8120_5000);
+  localparam logic [PA_WIDTH-1:0] PA_HB2 = PA_WIDTH'('h0_8100_7000);
+  localparam logic [PA_WIDTH-1:0] PA_HBH = PA_WIDTH'('h0_8130_0000);
+
+  // BP-148 monitors. m_pg: a physical page whose L1I Gets are counted
+  // (n_pg_get). n_sz[c]: L2 TLB hit answers with size code c (IL-7).
+  // m_pa[k]: a PTE address whose walker memory accesses are counted
+  // (n_pa_rd[k]). Each program sets the watched addresses from the
+  // writer's builder before reset is released.
+  logic [PA_WIDTH-13:0] m_pg;
+  int                   n_pg_get;
+  int                   n_sz [0:7];
+  logic [PA_WIDTH-1:0]  m_pa [0:1];
+  int                   n_pa_rd [0:1];
+
+  always @(posedge clk) begin
+    if (!rstn) begin
+      n_pg_get <= 0;
+      for (int c = 0; c < 8; c++) n_sz[c] <= 0;
+      for (int k = 0; k < 2; k++) n_pa_rd[k] <= 0;
+    end else begin
+      if (l1i_mem_a_valid && l1i_mem_a_ready &&
+          (l1i_mem_a_address[PA_WIDTH-1:12] == m_pg))
+        n_pg_get <= n_pg_get + 1;
+      if (l2t_itlb_rsp_val && (l2t_itlb_status == 2'b00))
+        n_sz[l2t_itlb_size] <= n_sz[l2t_itlb_size] + 1;
+      for (int k = 0; k < 2; k++)
+        if (ptw_mem_req_val && ptw_mem_req_rdy &&
+            (ptw_mem_req_paddr == m_pa[k]))
+          n_pa_rd[k] <= n_pa_rd[k] + 1;
+    end
+  end
+
+  // The sv39 body at b (wp at b on entry): mixed code, a taken
+  // conditional, a 32-bit instruction straddling b + 0x1000, and two
+  // calls of a function at b + 0x2100 that return.
+  task automatic hi_body(input logic [VA_WIDTH-1:0] b);
+    logic [VA_WIDTH-1:0] fn;
+    logic [VA_WIDTH-1:0] link;
+    W.mixed(10);
+    W.cond(1'b1, b + VA_WIDTH'('h200));
+    W.mixed(3);
+    W.jal(5'd0, b + VA_WIDTH'('hFF0));
+    while (W.wp != b + VA_WIDTH'('hFFE)) W.i16();
+    W.i32(ADDI_T0);
+    W.mixed(4);
+    fn = b + VA_WIDTH'('h2100);
+    for (int k = 0; k < 2; k++) begin
+      link = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, fn);
+      W.mixed(3);
+      W.ret(link);
+      W.mixed(2);
+    end
+  endtask
+
+  // The end of each: a fetch at a non-canonical address, cause 12 from
+  // the ITLB check (ITLB-18), to handler h; then a JAL to the unmapped
+  // page b + 0x4000, cause 12 from the walk, to handler h + 0x40.
+  task automatic hi_faults(input logic [VA_WIDTH-1:0] b,
+                           input logic [VA_WIDTH-1:0] nc,
+                           input logic [VA_WIDTH-1:0] h);
+    W.jr_fault(nc, IFU_FAULT_PAGE, h);
+    W.mixed(2);
+    W.jal_fault(b + VA_WIDTH'('h4000), IFU_FAULT_PAGE, h + VA_WIDTH'('h40));
+    W.mixed(6);
+  endtask
+
+  task automatic hi_checks(input string big);
+    chk($sformatf("the L2 TLB walked (%0d)", n_walks), n_walks > 0);
+    chk($sformatf("both page faults reached decode with cause and VA (%0d)",
+                  n_fault_ok), n_fault_ok == 2);
+    chk($sformatf("a backend mispredict occurred (%0d)", n_mispred),
+        n_mispred > 0);
+    if (big.len() > 0)
+      chk($sformatf("the L1I fetched the %s page's code page %h (%0d Gets)",
+                    big, {m_pg, 12'h000}, n_pg_get), n_pg_get > 0);
+  endtask
+
+  // ---- sv48: V=0, S-mode, satp Sv48 -----------------------------------
+  //   - code on 4 KiB pages at VA 0x7F80_0001_0000, VA[46:39] = 0xFF, so
+  //     the fourth level is used; canonical under Sv48 (bit 47 clear),
+  //     not under Sv39 (bits 58:38 not all equal): it runs
+  //   - code in a 512 GiB page (a level-3 leaf, 3'b100): VA 2 << 39 to
+  //     PA 2^39 (0x80_0000_0000, main memory, MMU-15a), at offset
+  //     0x12_3456_7000, so its PPN bits 26:0 come from the VPN
+  //   - a fetch at VA bit 47 set, bits 58:48 clear: cause 12
+  localparam logic [VA_WIDTH-1:0] SV48_B   = VA_WIDTH'('h0_7F80_0001_0000);
+  localparam logic [VA_WIDTH-1:0] SV48_G   = VA_WIDTH'(2) << 39;
+  localparam logic [PA_WIDTH-1:0] SV48_GPA = PA_WIDTH'(1) << 39;
+  localparam logic [VA_WIDTH-1:0] SV48_OFF = VA_WIDTH'('h12_3456_7000);
+
+  task automatic p_sv48();
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] gc;
+    logic [PA_WIDTH-1:0] gp;
+    tname = "sv48";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    use_smode(CSR_SATP_MODE_SV48);
+    b = SV48_B;
+    W.map4k(b,                     PA_HB0);
+    W.map4k(b + VA_WIDTH'('h1000), PA_HB1);
+    W.map4k(b + VA_WIDTH'('h2000), PA_HB2);
+    W.map4k(b + VA_WIDTH'('h8000), PA_HBH);
+    W.map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
+    void'(W.s_map(SV48_G, 3, W.mk_pte(44'(SV48_GPA >> 12), PTE_LEAF, 2'b00,
+                                      1'b0)));
+    gc = SV48_G + SV48_OFF;
+    gp = SV48_GPA + PA_WIDTH'(SV48_OFF);
+    W.vmap[gc[VA_WIDTH-1:12]] = gp[PA_WIDTH-1:12];
+    m_pg = gp[PA_WIDTH-1:12];
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jalr_to(5'd0, 5'd7, b);
+    hi_body(b);
+    W.jalr_to(5'd0, 5'd7, gc);                       // into the 512 GiB page
+    W.mixed(8);
+    hi_faults(b, (VA_WIDTH'(1) << SV48_SIGN_BIT) | VA_WIDTH'('h8001_0000),
+              b + VA_WIDTH'('h8000));
+    warm_e = W.ne + 1;
+    W.halt();
+    release_reset();
+    run_and_check(30000);
+    hi_checks("512 GiB");
+    chk($sformatf("the walker answered a 512 GiB leaf, size 3'b100 (%0d)",
+                  n_sz[4]), n_sz[4] > 0);
+  endtask
+
+  // ---- sv57: V=0, S-mode, satp Sv57 -----------------------------------
+  //   - code on 4 KiB pages at VA 0xFF_0000_8001_0000, VA[55:48] = 0xFF,
+  //     so the fifth level is used
+  //   - code in the 256 TiB page (a level-4 leaf, 3'b101) at PA 0, the
+  //     only one at PA_WIDTH 48: VA 1 << 48 to PA 0, the code at offset
+  //     0x8150_3000, so the PA is the VPN's bits 35:0 whole
+  //   - a fetch at VA bit 56 set, bits 58:57 clear: cause 12
+  localparam logic [VA_WIDTH-1:0] SV57_B   = VA_WIDTH'('h0_00FF_0000_8001_0000);
+  localparam logic [VA_WIDTH-1:0] SV57_G   = VA_WIDTH'(1) << 48;
+  localparam logic [VA_WIDTH-1:0] SV57_OFF = VA_WIDTH'('h8150_3000);
+
+  task automatic p_sv57();
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] gc;
+    tname = "sv57";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    use_smode(CSR_SATP_MODE_SV57);
+    b = SV57_B;
+    W.map4k(b,                     PA_HB0);
+    W.map4k(b + VA_WIDTH'('h1000), PA_HB1);
+    W.map4k(b + VA_WIDTH'('h2000), PA_HB2);
+    W.map4k(b + VA_WIDTH'('h8000), PA_HBH);
+    W.map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
+    void'(W.s_map(SV57_G, 4, W.mk_pte(44'h0, PTE_LEAF, 2'b00, 1'b0)));
+    gc = SV57_G + SV57_OFF;
+    W.vmap[gc[VA_WIDTH-1:12]] = PPN_WIDTH'(SV57_OFF >> 12);
+    m_pg = (PA_WIDTH-12)'(SV57_OFF >> 12);
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jalr_to(5'd0, 5'd7, b);
+    hi_body(b);
+    W.jalr_to(5'd0, 5'd7, gc);                       // into the 256 TiB page
+    W.mixed(8);
+    hi_faults(b, (VA_WIDTH'(1) << SV57_SIGN_BIT) | VA_WIDTH'('h8001_0000),
+              b + VA_WIDTH'('h8000));
+    warm_e = W.ne + 1;
+    W.halt();
+    release_reset();
+    run_and_check(30000);
+    hi_checks("256 TiB");
+    chk($sformatf("the walker answered a 256 TiB leaf, size 3'b101 (%0d)",
+                  n_sz[5]), n_sz[5] > 0);
+  endtask
+
+  // ---- h57: V=1, VS-mode, vsatp Sv57, hgatp Sv57x4 --------------------
+  //   - code at VA 0xAB_0000_8001_0000, VA[55:48] = 0xAB, so the fifth
+  //     VS-stage level is used, through GPAs from 0x20_0000_1001_0000:
+  //     GPA bit 53, at or above SV48X4_GPA_WIDTH (50), translated only
+  //     by Sv57x4, through its fifth G-stage level and x4 root entry
+  //     GPA[58:48] = 0x20
+  //   - the VS-stage tables at GPAs from 0x40_0000_C000_0000, GPA bit
+  //     54: x4 root entry 0x40
+  //   - a fetch at VA bit 56 set, bits 58:57 clear: cause 12
+  // A GPA a VS-stage PTE names is at most PTE_PPN_WIDTH + 12 = 56 bits,
+  // so through a VS-stage the x4 root index reaches GPA bit 55, entry
+  // 0xFF; entries 0x100 to 0x7FF (GPA bits 58:56) are reached only with
+  // vsatp Bare. Reported.
+  localparam logic [VA_WIDTH-1:0]  H57_B  = VA_WIDTH'('h0_00AB_0000_8001_0000);
+  localparam logic [GPA_WIDTH-1:0] H57_GB = GPA_WIDTH'('h0_0020_0000_1001_0000);
+  localparam logic [GPA_WIDTH-1:0] H57_GT = GPA_WIDTH'('h0_0040_0000_C000_0000);
+
+  task automatic p_h57();
+    logic [VA_WIDTH-1:0] b;
+    tname = "h57";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    set_h2_at(CSR_SATP_MODE_SV57, CSR_HGATP_MODE_SV57X4, H57_GT);
+    b = H57_B;
+    W.h_map4k(b,                     H57_GB,                       PA_HB0);
+    W.h_map4k(b + VA_WIDTH'('h1000), H57_GB + GPA_WIDTH'('h1000),  PA_HB1);
+    W.h_map4k(b + VA_WIDTH'('h2000), H57_GB + GPA_WIDTH'('h2000),  PA_HB2);
+    W.h_map4k(b + VA_WIDTH'('h8000), H57_GB + GPA_WIDTH'('h8000),  PA_HBH);
+    // The x4 root entries the walk must read, from the builder.
+    m_pa[0] = PA_WIDTH'(W.gs.pte_addr(64'(H57_GB), 4));
+    m_pa[1] = PA_WIDTH'(W.gs.pte_addr(64'(W.vs_root), 4));
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jalr_to(5'd0, 5'd7, b);
+    hi_body(b);
+    hi_faults(b, (VA_WIDTH'(1) << SV57_SIGN_BIT) | VA_WIDTH'('h8001_0000),
+              b + VA_WIDTH'('h8000));
+    warm_e = W.ne + 1;
+    W.halt();
+    release_reset();
+    run_and_check(40000);
+    hi_checks("");
+    chk($sformatf("vsatp Sv57, hgatp Sv57x4 (%0d, %0d)", W.vs.mode, W.gs.mode),
+        (W.vs.mode == CSR_SATP_MODE_SV57) &&
+        (W.gs.mode == CSR_HGATP_MODE_SV57X4));
+    chk($sformatf("the walker read x4 root entry 0x%0h for the code GPAs %s",
+                  H57_GB[58:48], $sformatf("(%0d)", n_pa_rd[0])),
+        n_pa_rd[0] > 0);
+    chk($sformatf("the walker read x4 root entry 0x%0h for the VS tables %s",
+                  W.vs_root[58:48], $sformatf("(%0d)", n_pa_rd[1])),
+        n_pa_rd[1] > 0);
   endtask
 
   // Program selection. +PROG=<name> runs one program; without it,
@@ -3633,6 +3909,9 @@ module tb;
       "pt_vsonly":  p_pt_vsonly();
       "pt_upriv":   p_pt_upriv();
       "init_walk":  p_init_walk();
+      "sv48":       p_sv48();                  // BP-148
+      "sv57":       p_sv57();                  // BP-148
+      "h57":        p_h57();                   // BP-148
       default: begin
         fail_cnt++;
         $display("FAIL: unknown program %s", nm);
@@ -3640,7 +3919,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:37] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:40] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
@@ -3650,7 +3929,8 @@ module tb;
                               "pt_napot_s", "pt_napot_h", "pt_rsv_s",
                               "pt_rsv_h", "pt_ad_s", "pt_ad_h", "pt_inv",
                               "zstar", "pt_gonly", "pt_vsonly",
-                              "pt_upriv", "init_walk"};
+                              "pt_upriv", "init_walk", "sv48", "sv57",
+                              "h57"};
 
   // =================================================================
   initial begin

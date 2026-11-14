@@ -27,7 +27,9 @@
 //                        outstanding (IL-1, IL-2)
 //   I5  a_rsvd_size_no_hit
 //                        a walk answered hit with a reserved page-size
-//                        code (IL-7, 3'b1xx) yields no hit: until an
+//                        code (IL-7, 3'b11x; 3'b1xx until BP-148 made
+//                        3'b100 and 3'b101 the 512 GiB and 256 TiB
+//                        sizes) yields no hit: until an
 //                        L2 hit with a legal size arrives for the same
 //                        VA and identity, a translated lookup of that
 //                        VA and identity is never answered hit (IL-7,
@@ -87,8 +89,9 @@ module itlb_assert (
 
   // ---- I5: VA and identity answered hit with a reserved size ----------
   // One record per tag, set from that tag's recorded request when its
-  // response is a hit with size 3'b1xx; every record of the same VA and
+  // response is a hit with size 3'b11x; every record of the same VA and
   // identity clears on a response that is a hit with a legal size.
+  // w_rsvd is the IL-7 reserved test, from the response port.
   logic                  r_rs_val  [0:3];
   logic [VW-1:0]         r_rs_vpn  [0:3];
   logic [ASID_WIDTH-1:0] r_rs_asid [0:3];
@@ -102,6 +105,7 @@ module itlb_assert (
   logic w_xlated;                        // a translated regime, FE-19
   logic [ASID_WIDTH-1:0] w_cur_asid;
   logic w_rs_match;                      // the lookup names a record
+  logic w_rsvd;                          // IL-7: the size is 3'b11x
 
   always_comb begin : model
     w_fire  = itlb_l2t_req_val && itlb_l2t_req_rdy;
@@ -123,6 +127,7 @@ module itlb_assert (
                                  (csr_itlb_hgatp_mode == 4'd0))
                              : (csr_itlb_satp_mode != 4'd0));
     w_cur_asid = csr_itlb_v ? csr_itlb_vsatp_asid : csr_itlb_satp_asid;
+    w_rsvd     = l2t_itlb_size[2] && l2t_itlb_size[1];
     w_rs_match = 1'b0;
     for (int t = 0; t < 4; t++) begin
       if (r_rs_val[t] && (r_rs_vpn[t] == r_lk_vpn) &&
@@ -157,14 +162,14 @@ module itlb_assert (
       // I5 records, from the request recorded for the responding tag.
       if (l2t_itlb_rsp_val && (l2t_itlb_status == 2'b00)) begin
         for (int t = 0; t < 4; t++) begin
-          if (!l2t_itlb_size[2] && r_rs_val[t] &&
+          if (!w_rsvd && r_rs_val[t] &&
               (r_rs_vpn[t]  == r_vpn[l2t_itlb_tag])  &&
               (r_rs_asid[t] == r_asid[l2t_itlb_tag]) &&
               (r_rs_vmid[t] == r_vmid[l2t_itlb_tag]) &&
               (r_rs_v[t]    == r_v[l2t_itlb_tag]))
             r_rs_val[t] <= 1'b0;
         end
-        if (l2t_itlb_size[2]) begin
+        if (w_rsvd) begin
           r_rs_val[l2t_itlb_tag]  <= 1'b1;
           r_rs_vpn[l2t_itlb_tag]  <= r_vpn[l2t_itlb_tag];
           r_rs_asid[l2t_itlb_tag] <= r_asid[l2t_itlb_tag];

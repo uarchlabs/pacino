@@ -16,6 +16,30 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-148 written.
+
+BP-148 WRITTEN: the ITLB in every mode (itlb_decisions.md ITLB-3,
+  ITLB-18; itlb_l2tlb_interfaces.md IL-7; mmu_decisions.md MMU-33).
+  The ITLB installs 512 GiB and 256 TiB pages (only 3'b11x reserved)
+  and checks the fetch address per mode, with SV48_SIGN_BIT and
+  SV57_SIGN_BIT new architectural constants; an unsupported MODE is
+  checked as Sv39 (MMU-33's PROPOSED half). tb_itlb: both sizes, every
+  mode at V=0 and V=1, the mode read at lookup; group R keeps 6 and 7
+  only, by ruling. tb_fe_top's writer builds every table with
+  pt_build_pkg, default still Sv39 and Sv39x4, roots and pools at
+  their addresses; every existing program gives its BP-147 result.
+  New programs sv48, sv57 and h57: regress.sh 279 targets. Commands
+  restated in Constraints: literal paths, no shell variables.
+  examples/fe_demo calls the writer's helpers and fields directly, so
+  they stay as wrappers over pt_build_pkg; pt_build_pkg goes into
+  fe_top_srcs.mk TB_PKG_SRCS; tb_fe_demo is built, not run (FDT-2a).
+OPEN, Jeff: MMU-33's ITLB half is PROPOSED. BP-148 builds it as
+  proposed unless ruled otherwise.
+
+Next free: BP-149, SYS-003, DOC-017, INFRA-014, TOOLS-007, PERF-002,
+TD#200.
+
+---
 ## Session-085, continued: BP-147 recorded.
 
 BP-147 COMPLETE (e03e542). regress.sh 273 targets, RESULT: PASS.

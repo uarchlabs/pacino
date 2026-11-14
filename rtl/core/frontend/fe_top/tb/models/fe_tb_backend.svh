@@ -577,6 +577,9 @@
     W.satp_root    = PA_WIDTH'('h0_8F00_0000);
     W.pt_next      = PA_WIDTH'('h0_8F00_1000);
     for (int i = 0; i < 512; i++) W.wr64(W.satp_root + PA_WIDTH'(8 * i), '0);
+    // BP-148: the builder's image and stages, the single stage at
+    // satp_root in W.s_mode (Sv39), its pool from pt_next.
+    W.pt_reset();
     for (int i = 0; i < FTQ_DEPTH; i++) fstart[i] = '0;
     // csr (SYS-001, csr_tb_pkg). Bare runs in M-mode; Sv39 runs in
     // S-mode with ASID 1. csr_reset gives the rest, the csr_pkg reset
@@ -589,7 +592,8 @@
     // (MMU-24a, BP-123) is packed from the same CSRs.
     csr_tb_pkg::csr_reset();
     csr_tb_pkg::set_priv(use_sv39 ? CSR_PRV_S : CSR_PRV_M);
-    csr_wr_satp(use_sv39 ? CSR_SATP_MODE_SV39 : CSR_SATP_MODE_BARE,
+    // The mode is the single stage's (BP-148), so the two agree.
+    csr_wr_satp(use_sv39 ? W.ss.mode : CSR_SATP_MODE_BARE,
                 use_sv39 ? ASID_WIDTH'(1) : '0,
                 44'(W.satp_root >> 12));
     // maintenance
@@ -603,6 +607,7 @@
   endtask
 
   task automatic release_reset();
+    W.plog("run");                     // BP-148, +PTLOG: setup ends
     repeat (4) @(posedge clk);
     #1;
     rstn   = 1'b1;

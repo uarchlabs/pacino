@@ -9,14 +9,16 @@
 //
 // ARRAY. ITLB_ENTRIES (64, ITLB-1) fully associative entries
 // (ITLB-2), one array for every page size (ITLB-3): 4 KiB, 64 KiB
-// Svnapot, 2 MiB, 1 GiB. An entry is matched on its VPN with the
-// bits its size covers masked out of the compare, VPN[3:0] for
-// 64 KiB, [8:0] for 2 MiB, [17:0] for 1 GiB, and on a hit those bits
-// of the output PPN are the request's VPN bits, not the stored ones.
-// For 64 KiB that is the MMU-U7 substitution: the stored PPN[3:0] is
-// the Svnapot size marker. For 2 MiB and 1 GiB the stored low bits
-// are zero on a legal PTE and the substitution is the usual
-// superpage offset.
+// Svnapot, 2 MiB, 1 GiB, 512 GiB (Sv48, Sv57) and 256 TiB (Sv57). An
+// entry is matched on its VPN with the bits its size covers masked out
+// of the compare, VPN[3:0] for 64 KiB, [8:0] for 2 MiB, [17:0] for
+// 1 GiB, [26:0] for 512 GiB and [35:0] for 256 TiB, and on a hit those
+// bits of the output PPN are the request's VPN bits, not the stored
+// ones. For 64 KiB that is the MMU-U7 substitution: the stored PPN[3:0]
+// is the Svnapot size marker. For the superpages the stored low bits
+// are zero on a legal PTE and the substitution is the usual superpage
+// offset. At PA_WIDTH 48 the 256 TiB mask covers the whole PPN, so the
+// output PPN is the request's VPN[35:0] (BP-148).
 //
 // TAG (ITLB-4, ITLB-4a). An entry holds V, VMID, ASID and the PTE G
 // bit. A hit needs V equal to the current V; for V=1 the VMID equal
@@ -37,11 +39,18 @@
 //               and hgatp both Bare. PPN = the request VPN. A VPN
 //               with any bit set above PPN_WIDTH is outside the
 //               implemented physical space and faults cause 1.
-//   Sv39        V=0 with satp in Sv39, or V=1 with vsatp in Sv39.
-//               Address bits VA_WIDTH-1 down to SV39_SIGN_BIT (38)
-//               must all be equal, else cause 12 before any lookup
-//               (ITLB-18). Every non-Bare MODE is checked as Sv39:
-//               the per-mode check is the next task's (BP-145).
+//   SvNN        V=0 with satp.MODE not Bare, or V=1 with vsatp.MODE
+//               not Bare: a single-stage or VS-stage translation.
+//               Address bits VA_WIDTH-1 down to NN-1 must all be
+//               equal, else cause 12 before any lookup (ITLB-18). The
+//               sign bit NN-1 follows the MODE of the stage, satp.MODE
+//               for V=0 and vsatp.MODE for V=1, read from the CSR group
+//               at lookup: SV39_SIGN_BIT (38) for Sv39, SV48_SIGN_BIT
+//               (47) for Sv48, SV57_SIGN_BIT (56) for Sv57. A MODE
+//               value that is none of Bare, Sv39, Sv48 or Sv57 is
+//               checked as Sv39, as the walker walks it (mmu_decisions.md
+//               MMU-33, built here to its PROPOSED half; BP-148). Until
+//               BP-148 every non-Bare MODE was checked as Sv39.
 //   G only      V=1, vsatp Bare, hgatp not Bare. Every VA_WIDTH-bit
 //               pattern is passed to the walker, which checks the
 //               bits the hgatp mode requires to be zero (MMU-28).
@@ -80,7 +89,8 @@
 // bit is the walker's (Svade faults it, Svadu sets it, MMU-7), and
 // G-stage permissions are the walker's too (MMU-26).
 // THE CHECK APPLIES ONLY WHEN THERE IS A SINGLE-STAGE OR VS-STAGE
-// LEAF: V=0 under satp Sv39, or V=1 under vsatp Sv39. With V=1 and
+// LEAF: the SvNN regime above, V=0 under a satp.MODE that is not Bare,
+// or V=1 under a vsatp.MODE that is not Bare. With V=1 and
 // vsatp Bare the translation is the G-stage alone, whose leaf always
 // has U set (every G-stage access is a user-mode one, MMU-26) and is
 // checked by the walker; ITLB-16's VS-level rule has no leaf to read
@@ -124,10 +134,13 @@
 // is not 1, 12 or 20 is passed on as cause 1: the IT-4 rule, applied
 // on this side.
 //
-// PAGE SIZE (IL-7, ruled session-075). l2t_itlb_size is three bits:
-// 000 4 KiB, 001 64 KiB, 010 2 MiB, 011 1 GiB, 1xx reserved. A hit
-// whose size is reserved names no page this ITLB can hold, so it is
-// handled as a reserved status is: nothing is installed and the walk
+// PAGE SIZE (IL-7, ruled session-075 and session-085). l2t_itlb_size
+// is three bits: 000 4 KiB, 001 64 KiB, 010 2 MiB, 011 1 GiB,
+// 100 512 GiB, 101 256 TiB, 11x reserved. The walker returns 100 for a
+// level-3 leaf and 101 for a level-4 leaf (BP-146); the ITLB installs
+// them from BP-148, which narrowed the reserved codes from 1xx to 11x.
+// A hit whose size is reserved names no page this ITLB can hold, so it
+// is handled as a reserved status is: nothing is installed and the walk
 // is held as a fault with cause 1, answered on the re-request (BP-119).
 //
 // INVALIDATE (ITLB-13, ITLB-13a, ITLB-13b, ITLB-14). One cycle, no
@@ -233,9 +246,12 @@ module itlb #(
   // Constants.
   // -----------------------------------------------------------------
   localparam int VW     = VA_WIDTH - 12;                  // the VPN
-  // The Sv39 sign bit as a VPN bit: VPN bits VW-1 down to SX_LO must
-  // all be equal (ITLB-18). SV39_SIGN_BIT is architectural (package).
-  localparam int SX_LO  = SV39_SIGN_BIT - 12;             // = 26
+  // The sign bit of each mode as a VPN bit: VPN bits VW-1 down to it
+  // must all be equal (ITLB-18). The sign bits are architectural
+  // (package); see sx_mask below.
+  localparam int SX_LO_39 = SV39_SIGN_BIT - 12;           // = 26
+  localparam int SX_LO_48 = SV48_SIGN_BIT - 12;           // = 35
+  localparam int SX_LO_57 = SV57_SIGN_BIT - 12;           // = 44
   localparam int EI     = (ITLB_ENTRIES > 1) ? $clog2(ITLB_ENTRIES) : 1;
   localparam int TI     = 2;                              // IL-1
   // The checker's entries, taken from fe_csr (SYS-001).
@@ -251,12 +267,15 @@ module itlb #(
   localparam logic [1:0] L2_FAULT = 2'b01;
   localparam logic [1:0] L2_RETRY = 2'b10;
 
-  // l2t_itlb_size, IL-7. 3'b1xx is reserved and never stored.
-  localparam logic [2:0] SZ_4K  = 3'b000;
-  localparam logic [2:0] SZ_64K = 3'b001;
-  localparam logic [2:0] SZ_2M  = 3'b010;
-  localparam logic [2:0] SZ_1G  = 3'b011;
-  localparam int         SZ_RSV = 2;       // the reserved-code bit
+  // l2t_itlb_size, IL-7. 3'b11x is reserved and never stored.
+  localparam logic [2:0] SZ_4K   = 3'b000;
+  localparam logic [2:0] SZ_64K  = 3'b001;
+  localparam logic [2:0] SZ_2M   = 3'b010;
+  localparam logic [2:0] SZ_1G   = 3'b011;
+  localparam logic [2:0] SZ_512G = 3'b100;
+  localparam logic [2:0] SZ_256T = 3'b101;
+  // The reserved codes, 3'b11x: bits 2 and 1 both set.
+  localparam logic [1:0] SZ_RSV_HI = 2'b11;
 
   // Exception codes, IT-6.
   localparam logic [CAUSE_WIDTH-1:0] CAUSE_ACCESS = CAUSE_WIDTH'(1);
@@ -266,7 +285,9 @@ module itlb #(
   localparam logic [1:0] PRV_U = 2'd0;
   localparam logic [1:0] PRV_S = 2'd1;
   localparam logic [1:0] PRV_M = 2'd3;
-  localparam logic [3:0] MODE_BARE = 4'd0;
+  localparam logic [3:0] MODE_BARE = CSR_SATP_MODE_BARE;
+  localparam logic [3:0] MODE_SV48 = CSR_SATP_MODE_SV48;
+  localparam logic [3:0] MODE_SV57 = CSR_SATP_MODE_SV57;
 
   // PTE permission byte, IL-8: V R W X U G A D.
   localparam int P_X = 3;
@@ -326,20 +347,46 @@ module itlb #(
   } trk_t;
 
   // The VPN bits a page size leaves out of the compare: 4 for 64 KiB,
-  // 9 for 2 MiB, 18 for 1 GiB. ARCHITECTURAL page sizes, the same in
-  // every mode; not address widths. A reserved code is never
-  // installed, so it cannot reach here from an entry; it masks nothing.
-  localparam int SZB_64K = 4;
-  localparam int SZB_2M  = 9;
-  localparam int SZB_1G  = 18;
+  // 9 for 2 MiB, 18 for 1 GiB, 27 for 512 GiB, 36 for 256 TiB (ITLB-3).
+  // ARCHITECTURAL page sizes, the same in every mode; not address
+  // widths. A reserved code is never installed, so it cannot reach here
+  // from an entry; it masks nothing.
+  localparam int SZB_64K  = 4;
+  localparam int SZB_2M   = 9;
+  localparam int SZB_1G   = 18;
+  localparam int SZB_512G = 27;
+  localparam int SZB_256T = 36;
   function automatic logic [VW-1:0] size_mask(input logic [2:0] sz);
     case (sz)
       SZ_4K:   return VW'(0);
-      SZ_64K:  return VW'((64'd1 << SZB_64K) - 64'd1);
-      SZ_2M:   return VW'((64'd1 << SZB_2M)  - 64'd1);
-      SZ_1G:   return VW'((64'd1 << SZB_1G)  - 64'd1);
+      SZ_64K:  return VW'((64'd1 << SZB_64K)  - 64'd1);
+      SZ_2M:   return VW'((64'd1 << SZB_2M)   - 64'd1);
+      SZ_1G:   return VW'((64'd1 << SZB_1G)   - 64'd1);
+      SZ_512G: return VW'((64'd1 << SZB_512G) - 64'd1);
+      SZ_256T: return VW'((64'd1 << SZB_256T) - 64'd1);
       default: return VW'(0);
     endcase
+  endfunction
+
+  // A reserved size code, IL-7: 3'b11x.
+  function automatic logic size_rsv(input logic [2:0] sz);
+    return sz[2:1] == SZ_RSV_HI;
+  endfunction
+
+  // ITLB-18: the VPN bits that must all be equal under a MODE, VW-1 down
+  // to the mode's sign bit. Sv48 and Sv57 by name; every other value is
+  // Sv39 (Sv39 itself, and an unsupported value by MMU-33). Bare never
+  // reaches the check (w_xlat). A sign bit at or above VA_WIDTH leaves
+  // no bit to check.
+  function automatic logic [VW-1:0] sx_mask(input logic [3:0] mode);
+    int lo;
+    case (mode)
+      MODE_SV48: lo = SX_LO_48;
+      MODE_SV57: lo = SX_LO_57;
+      default:   lo = SX_LO_39;
+    endcase
+    if (lo >= VW) return VW'(0);
+    return ~VW'((64'd1 << lo) - 64'd1);
   endfunction
 
   function automatic logic covers(input itlb_ent_t e,
@@ -365,7 +412,8 @@ module itlb #(
   // This cycle.
   // -----------------------------------------------------------------
   logic                  w_phys;      // physical regime
-  logic                  w_sv39;      // sign-extension check applies
+  logic                  w_xlat;      // SvNN: the ITLB-18 check applies
+  logic [VW-1:0]         w_sxm;       // the VPN bits ITLB-18 compares
   logic [ASID_WIDTH-1:0] w_asid;
   logic                  w_hit;
   logic [EI-1:0]         w_hit_idx;
@@ -404,8 +452,11 @@ module itlb #(
              (!fe_csr.v && (fe_csr.satp_mode == MODE_BARE)) ||
              (fe_csr.v && (fe_csr.vsatp_mode == MODE_BARE) &&
               (fe_csr.hgatp_mode == MODE_BARE));
-    w_sv39 = !w_phys &&
+    w_xlat = !w_phys &&
              (!fe_csr.v || (fe_csr.vsatp_mode != MODE_BARE));
+    // ITLB-18: the mode of the stage whose leaf the fetch reads, satp
+    // for V=0 and vsatp for V=1, read at lookup.
+    w_sxm  = sx_mask(fe_csr.v ? fe_csr.vsatp_mode : fe_csr.satp_mode);
     w_asid = fe_csr.v ? fe_csr.vsatp_asid : fe_csr.satp_asid;
 
     w_hit     = 1'b0;
@@ -492,15 +543,16 @@ module itlb #(
 
     // -- the IFU response ---------------------------------------------
     // ITLB-16 needs a single-stage or VS-stage leaf (see the header).
-    perm_bad = w_sv39 &&
+    perm_bad = w_xlat &&
                (!w_hit_ent.perm[P_X] ||
                 ((fe_csr.priv == PRV_U) && !w_hit_ent.perm[P_U]) ||
                 ((fe_csr.priv == PRV_S) &&  w_hit_ent.perm[P_U]));
-    // ITLB-18, Sv39: bits VA_WIDTH-1 down to 38 all equal. Until BP-145
-    // this compared VPN bits VW-1:VW-2 with VW-3, which is that check
-    // only at VA_WIDTH 41.
-    sx_bad   = w_sv39 &&
-               !((&r_rq_vpn[VW-1:SX_LO]) || !(|r_rq_vpn[VW-1:SX_LO]));
+    // ITLB-18: bits VA_WIDTH-1 down to the mode's sign bit all equal,
+    // all clear or all set under the mask. Until BP-145 this compared
+    // VPN bits VW-1:VW-2 with VW-3; until BP-148 it was the Sv39 check
+    // for every non-Bare MODE.
+    sx_bad   = w_xlat &&
+               !(((r_rq_vpn & w_sxm) == '0) || ((r_rq_vpn & w_sxm) == w_sxm));
     pa_bad   = |r_rq_vpn[VW-1:PA_HI];
 
     itlb_ifu_rsp_val = r_rq_val;
@@ -607,7 +659,7 @@ module itlb #(
     w_rsp_ok    = l2t_itlb_rsp_val && (32'(l2t_itlb_tag) < WALK_DEPTH) &&
                   (r_trk[l2t_itlb_tag].st == T_OUT);
     // A hit with a reserved size is not a hit (IL-7, IT-4).
-    w_l2_hit    = (l2t_itlb_status == L2_HIT) && !l2t_itlb_size[SZ_RSV];
+    w_l2_hit    = (l2t_itlb_status == L2_HIT) && !size_rsv(l2t_itlb_size);
     w_install   = w_rsp_ok && w_l2_hit &&
                   !r_trk[l2t_itlb_tag].kill && !bkend_itlb_inv_val;
     w_inst_ent      = '0;

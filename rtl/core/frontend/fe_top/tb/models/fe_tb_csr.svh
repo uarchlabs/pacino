@@ -14,7 +14,8 @@
 //
 // Holds: csr_sync, which drives fe_cfg, fe_csr and ptw_csr from the
 // csr_tb_pkg pack functions (csr_decisions.md CSR-2), and the write
-// helpers on it; set_h2, the two-stage regime; pmp_page and pmp_all.
+// helpers on it; set_h2, the two-stage regime (BP-148: set_h2_at in any
+// mode, use_smode for the single stage); pmp_page and pmp_all.
 // ===================================================================
 
   // ---- the CSR groups (SYS-001, csr_decisions.md CSR-2) -----------------
@@ -135,19 +136,36 @@
   // 0x8E00_0000; VS-stage tables take GPAs from 0xC000_0000. The reset
   // vector is mapped VA = GPA = SPA.
   task automatic set_h2();
+    set_h2_at(CSR_SATP_MODE_SV39, CSR_HGATP_MODE_SV39X4,
+              GPA_WIDTH'('h0_C000_0000));
+  endtask
+
+  // BP-148. set_h2 in any vsatp and hgatp mode, the VS-stage tables
+  // from GPA gpt. The writer builds the stages in those modes (W.vs_mode,
+  // W.hg_mode), and vsatp and hgatp are written from the built stages.
+  task automatic set_h2_at(input logic [3:0] vsm, input logic [3:0] hgm,
+                           input logic [GPA_WIDTH-1:0] gpt);
     W.h2       = 1'b1;
     W.hg_root  = PA_WIDTH'('h0_8E00_0000);
     for (int i = 0; i < 2048; i++) W.wr64(W.hg_root + PA_WIDTH'(8 * i), '0);
-    W.gpt_next = GPA_WIDTH'('h0_C000_0000);
+    W.gpt_next = gpt;
+    W.vs_mode  = vsm;
+    W.hg_mode  = hgm;
     W.vs_root  = W.vs_alloc();
     csr_tb_pkg::set_v(1'b1);
     csr_tb_pkg::set_priv(CSR_PRV_S);
     csr_satp_mode(CSR_SATP_MODE_BARE);
-    csr_wr_vsatp(CSR_SATP_MODE_SV39, ASID_WIDTH'(1),
-                 44'(W.vs_root >> 12));
-    csr_wr_hgatp(CSR_HGATP_MODE_SV39X4, VMID_WIDTH'(3),
-                 44'(W.hg_root >> 12));
+    csr_wr_vsatp(W.vs.mode, ASID_WIDTH'(1), 44'(W.vs_root >> 12));
+    csr_wr_hgatp(W.gs.mode, VMID_WIDTH'(3), 44'(W.hg_root >> 12));
     W.h_map4k(RESET_VECTOR, GPA_WIDTH'(RESET_VECTOR), PA_WIDTH'(RESET_VECTOR));
+  endtask
+
+  // BP-148. The single stage in mode m (satp), before any table word is
+  // placed: the writer rebuilds its stage, and satp.MODE is written from
+  // it.
+  task automatic use_smode(input logic [3:0] m);
+    W.set_smode(m);
+    csr_satp_mode(W.ss.mode);
   endtask
 
   // A PMP entry over one naturally aligned 4 KiB page (NAPOT), with the

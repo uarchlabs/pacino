@@ -62,6 +62,20 @@
 // into its model itself is not seen, so a test that mixes the two keeps
 // them apart.
 //
+// BP-148 ADDITIONS, for tb_fe_top's program writer (fe_tb_writer.svh).
+// tb_ptw does not call them, and the paths it takes are the ones before.
+//   pt_pool   a page pool several stages share. set_pool(p) makes a
+//             stage take its table pages (alloc), and for a G-stage the
+//             supervisor pages that back VS table pages (back), from p
+//             instead of its own pool, in the order they are asked for.
+//             tb_fe_top's writer has always placed every table page of
+//             every stage from one bump allocator; this keeps them where
+//             it placed them.
+//   path(a, lvl)  builds the path to level lvl as map does and returns
+//             the supervisor address of the slot at lvl, writing nothing
+//             there. For a VS-stage the slot's table page is mapped by
+//             the G-stage. map is path followed by the slot's write.
+//
 // Classes, not package functions, for the reason csr_tb_pkg gives: a
 // class method is compiled once. No method calls itself, directly or
 // through another object.
@@ -125,6 +139,21 @@ package pt_build_pkg;
   endclass : pt_image
 
   // ================================================================
+  // pt_pool (BP-148): a page pool shared by several stages.
+  // ================================================================
+  class pt_pool;
+    pt_addr_t nx;              // the next free page
+    pt_addr_t top;             // the end of the pool
+
+    function new(input pt_addr_t b, input pt_addr_t t);
+      if ((b[11:0] != '0) || (t < b))
+        $fatal(1, "pt_build_pkg: bad shared pool %016h to %016h", b, t);
+      nx  = b;
+      top = t;
+    endfunction
+  endclass : pt_pool
+
+  // ================================================================
   // pt_stage: one translation structure.
   // ================================================================
   class pt_stage;
@@ -143,6 +172,7 @@ package pt_build_pkg;
     logic [7:0] back_f;
     logic       cf_count;    // a conflict is counted, not fatal
     int         n_conflict;
+    pt_pool     shp;         // BP-148: a shared pool, or null
 
     function new(input string nm, input pt_image im, input logic [3:0] m,
                  input logic g, input pt_addr_t rt, input pt_addr_t pb,
@@ -160,6 +190,7 @@ package pt_build_pkg;
       back_f   = PT_F_BACK;
       cf_count = 1'b0;
       n_conflict = 0;
+      shp      = null;
       // MMU-32: 3, 4 or 5 levels. satp, vsatp and hgatp share the values.
       if (m == CSR_SATP_MODE_SV39)      levels = 3;
       else if (m == CSR_SATP_MODE_SV48) levels = 4;
@@ -200,6 +231,11 @@ package pt_build_pkg;
       cf_count = s;
     endfunction
 
+    // BP-148: table pages, and a G-stage's backing pages, from p.
+    function void set_pool(input pt_pool p);
+      shp = p;
+    endfunction
+
     // The index of addr at level l: nine bits, eleven at an x4 root.
     function int idx(input pt_addr_t a, input int l);
       int       nb;
@@ -211,6 +247,14 @@ package pt_build_pkg;
 
     function pt_addr_t alloc();
       pt_addr_t r;
+      if (shp != null) begin
+        if (shp.nx + PT_PAGE > shp.top)
+          $fatal(1, "pt_build_pkg %s: shared pool exhausted at %016h", name,
+                 shp.nx);
+        r      = shp.nx;
+        shp.nx = shp.nx + PT_PAGE;
+        return r;
+      end
       if (pool_nx + PT_PAGE > pool_top)
         $fatal(1, "pt_build_pkg %s: table pool exhausted at %016h", name,
                pool_nx);
@@ -262,10 +306,14 @@ package pt_build_pkg;
     // Called from a VS-stage's wr_t; it writes the image directly.
     function pt_addr_t back(input pt_addr_t ga);
       pt_addr_t sp;
-      if (back_nx + PT_PAGE > back_top)
-        $fatal(1, "pt_build_pkg %s: backing pool exhausted", name);
-      sp      = back_nx;
-      back_nx = back_nx + PT_PAGE;
+      if (shp != null) begin
+        sp = alloc();                          // BP-148, the shared pool
+      end else begin
+        if (back_nx + PT_PAGE > back_top)
+          $fatal(1, "pt_build_pkg %s: backing pool exhausted", name);
+        sp      = back_nx;
+        back_nx = back_nx + PT_PAGE;
+      end
       void'(map_phys(ga & ~64'hFFF, 0, pt_pte(44'(sp >> 12), back_f)));
       return sp;
     endfunction
@@ -288,11 +336,15 @@ package pt_build_pkg;
     // ---- the path -----------------------------------------------------
     // The path for a stage whose tables are in supervisor physical
     // memory (no G-stage). Used by map, and by back for a G-stage.
-    function pt_addr_t map_phys(input pt_addr_t a, input int lvl,
-                                input pt_word_t pte);
+    // The path above level lvl, built (BP-148: split out of map_phys);
+    // the address of the slot at lvl. ok is 0 on a conflict above lvl,
+    // and the address is then that of the conflicting word.
+    function pt_addr_t path_phys(input pt_addr_t a, input int lvl,
+                                 output logic ok);
       pt_addr_t t;
       pt_addr_t pa;
       pt_word_t e;
+      ok = 1'b0;
       chk_args(a, lvl);
       t = root;
       for (int l = levels - 1; l > lvl; l--) begin
@@ -310,7 +362,16 @@ package pt_build_pkg;
         end
         t = pt_addr_t'(e[53:10]) << 12;
       end
-      pa = t + pt_addr_t'(8 * idx(a, lvl));
+      ok = 1'b1;
+      return t + pt_addr_t'(8 * idx(a, lvl));
+    endfunction
+
+    function pt_addr_t map_phys(input pt_addr_t a, input int lvl,
+                                input pt_word_t pte);
+      pt_addr_t pa;
+      logic     ok;
+      pa = path_phys(a, lvl, ok);
+      if (!ok) return pa;
       if (img.has(pa)) begin
         if (img.get(pa) != pte)
           conflict($sformatf("level %0d holds %016h, not %016h", lvl,
@@ -323,18 +384,22 @@ package pt_build_pkg;
 
     // The path for a VS-stage: table addresses are guest physical and
     // each word is placed at its supervisor address through the G-stage.
-    function pt_addr_t map_guest(input pt_addr_t a, input int lvl,
-                                 input pt_word_t pte);
+    // The VS-stage path above level lvl, built (BP-148: split out of
+    // map_guest); the supervisor address of the slot at lvl, its table
+    // page mapped by the G-stage. ok as path_phys.
+    function pt_addr_t path_guest(input pt_addr_t a, input int lvl,
+                                  output logic ok);
       pt_addr_t t;
       pt_addr_t ta;
       pt_addr_t pa;
       pt_word_t e;
-      logic     ok;
+      logic     sok;
+      ok = 1'b0;
       chk_args(a, lvl);
       t = root;
       for (int l = levels - 1; l > lvl; l--) begin
         ta = t + pt_addr_t'(8 * idx(a, l));
-        pa = spa_of(ta, 1'b1, ok);
+        pa = spa_of(ta, 1'b1, sok);
         if (!img.has(pa)) begin
           e = pt_pte(44'(alloc() >> 12), PT_F_PTR);
           img.put(pa, e);
@@ -349,7 +414,16 @@ package pt_build_pkg;
         t = pt_addr_t'(e[53:10]) << 12;
       end
       ta = t + pt_addr_t'(8 * idx(a, lvl));
-      pa = spa_of(ta, 1'b1, ok);
+      ok = 1'b1;
+      return spa_of(ta, 1'b1, sok);
+    endfunction
+
+    function pt_addr_t map_guest(input pt_addr_t a, input int lvl,
+                                 input pt_word_t pte);
+      pt_addr_t pa;
+      logic     ok;
+      pa = path_guest(a, lvl, ok);
+      if (!ok) return pa;
       if (img.has(pa)) begin
         if (img.get(pa) != pte)
           conflict($sformatf("level %0d holds %016h, not %016h", lvl,
@@ -377,6 +451,16 @@ package pt_build_pkg;
                            input pt_word_t pte);
       if (gst == null) return map_phys(a, lvl, pte);
       else             return map_guest(a, lvl, pte);
+    endfunction
+
+    // BP-148: the path to level lvl for addr, built as map builds it,
+    // and the supervisor address of the slot at lvl; nothing is written
+    // at the slot. A caller that writes there itself does so outside
+    // the builder.
+    function pt_addr_t path(input pt_addr_t a, input int lvl);
+      logic ok;
+      if (gst == null) return path_phys(a, lvl, ok);
+      else             return path_guest(a, lvl, ok);
     endfunction
 
     // The supervisor address of the PTE at level lvl for addr, along

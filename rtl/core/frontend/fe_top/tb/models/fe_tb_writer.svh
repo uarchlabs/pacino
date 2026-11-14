@@ -17,6 +17,22 @@
 // the page table writer and the instruction emitters) and its one
 // object W. See tb_fe_top.sv for the method: the executed stream is
 // built by the writer, not computed by an instruction-set model.
+//
+// THE PAGE TABLES (BP-148) are built by pt_build_pkg (rtl/mmu/ptw/tb,
+// BP-146), every stage through one path, in any mode: the single stage
+// (ss, satp), the G-stage (gs, hgatp) and the VS-stage (vs, vsatp). No
+// table walk is written here. The builder puts each word in its image
+// and the writer drains the image into mem after every call (pt_post).
+// Every stage takes its table pages from one pool, pool, which follows
+// pt_next, so the tables sit where the hand-written walk of BP-123 put
+// them. The helpers examples/fe_demo calls keep their names, arguments
+// and meaning and are wrappers over the builder: map4k, map4k_pbmt,
+// s_slot, vs_slot, vs_alloc, h_map4k, g2s and mk_pte. s_slot and
+// vs_slot build the path to the level and return the slot's address
+// without writing it; a word a caller then writes there with wr64 is
+// outside the builder. The modes are s_mode, vs_mode and hg_mode, Sv39
+// and Sv39x4 unless a program sets them before the stage is built; the
+// CSR setup writes satp, vsatp and hgatp from the built stage's mode.
 // ===================================================================
 
   localparam int MAXE    = 32768;
@@ -86,12 +102,23 @@
       gpt_next  = '0;
       patching  = 1'b0;
       nowrite   = 1'b0;
+      pt_reset();
     endfunction
 
     // =================================================================
     // Memory: bytes, physical.
     // =================================================================
     logic [7:0] mem [logic [PA_WIDTH-1:0]];
+
+    // +PTLOG (BP-148): every builder call through this writer, its
+    // arguments and the address it returns, every word it drains, and
+    // every word written here otherwise, one line each ("PTL ..."), for
+    // a comparison of table layouts across versions.
+    logic       ptlog;
+
+    function void plog(input string s);
+      if (ptlog) $display("PTL %s", s);
+    endfunction
 
     function logic [7:0] rd8(input logic [PA_WIDTH-1:0] a);
       return mem.exists(a) ? mem[a] : 8'h00;
@@ -105,12 +132,14 @@
 
     function void wr64(input logic [PA_WIDTH-1:0] a,
                                  input logic [63:0] d);
+      plog($sformatf("direct %h %h", a, d));                  // +PTLOG
       for (int i = 0; i < 8; i++) mem[a + PA_WIDTH'(i)] = d[8*i +: 8];
     endfunction
 
     // =================================================================
-    // The address map the program writer uses. Bare: identity. Sv39:
-    // a table of 4 KiB pages this file also writes as PTEs.
+    // The address map the program writer uses. Bare: identity. Sv39 (or
+    // any translated mode): the pages this file maps through the
+    // builder, by vmap.
     // =================================================================
     logic                  sv39;
     logic [PA_WIDTH-1:0]   satp_root;
@@ -128,38 +157,87 @@
       return {vmap[v], va[11:0]};
     endfunction
 
-    // A page table page, zeroed, from the bump allocator.
-    function logic [PA_WIDTH-1:0] pt_alloc();
-      logic [PA_WIDTH-1:0] p;
-      p       = pt_next;
-      pt_next = pt_next + PA_WIDTH'('h1000);
-      for (int i = 0; i < 512; i++) wr64(p + PA_WIDTH'(8 * i), '0);
-      return p;
+    // =================================================================
+    // The builder (BP-148). One image for every stage; one pool for
+    // every stage's table pages (pt_next); the VS-stage's table GPAs
+    // from its own pool (gpt_next). pt_reset is called by models_reset
+    // after it sets satp_root and pt_next, and builds the single stage
+    // there in s_mode.
+    // =================================================================
+    pt_build_pkg::pt_image img;
+    pt_build_pkg::pt_pool  pool;
+    pt_build_pkg::pt_stage ss;
+    pt_build_pkg::pt_stage gs;
+    pt_build_pkg::pt_stage vs;
+    logic [3:0]            s_mode;
+    logic [3:0]            vs_mode;
+    logic [3:0]            hg_mode;
+    localparam logic [63:0] PT_TOP = 64'hFFFF_FFFF_FFFF_F000;
+
+    function void pt_reset();
+      ptlog   = $test$plusargs("PTLOG") ? 1'b1 : 1'b0;
+      img     = new;
+      pool    = new(64'(pt_next), PT_TOP);
+      gs      = null;
+      vs      = null;
+      s_mode  = CSR_SATP_MODE_SV39;
+      vs_mode = CSR_SATP_MODE_SV39;
+      hg_mode = CSR_HGATP_MODE_SV39X4;
+      ss      = new("ss", img, s_mode, 1'b0, 64'(satp_root), '0, '0);
+      ss.set_pool(pool);
+      plog($sformatf("reset %h %h", satp_root, pt_next));
+    endfunction
+
+    // The single stage in mode m, before any word is placed (BP-148).
+    function void set_smode(input logic [3:0] m);
+      if (img.w.size() != 0)
+        $fatal(1, "tb_fe_top: set_smode after a table word was placed");
+      s_mode = m;
+      ss     = new("ss", img, s_mode, 1'b0, 64'(satp_root), '0, '0);
+      ss.set_pool(pool);
+    endfunction
+
+    // Around every builder call: the pools follow pt_next and gpt_next,
+    // and every word written is drained into mem.
+    function void pt_pre();
+      pool.nx = 64'(pt_next);
+      if ((vs != null) && !g_bare) begin
+        vs.pool_nx  = 64'(gpt_next);
+        vs.pool_top = PT_TOP;
+      end
+    endfunction
+
+    function void pt_post();
+      logic [63:0] a;
+      logic [63:0] d;
+      pt_next = PA_WIDTH'(pool.nx);
+      if ((vs != null) && !g_bare) gpt_next = GPA_WIDTH'(vs.pool_nx);
+      // The bytes are written here, not by wr64, so +PTLOG logs a drained
+      // word once, as "word".
+      while (img.pop(a, d)) begin
+        plog($sformatf("word %h %h", a, d));
+        for (int i = 0; i < 8; i++)
+          mem[PA_WIDTH'(a) + PA_WIDTH'(i)] = d[8*i +: 8];
+      end
+    endfunction
+
+    // The single stage: pte at level lvl for va, the path built; the
+    // PTE's supervisor address.
+    function logic [PA_WIDTH-1:0] s_map(input logic [VA_WIDTH-1:0] va,
+                                        input int lvl,
+                                        input logic [63:0] pte);
+      logic [63:0] r;
+      pt_pre();
+      r = ss.map(64'(va), lvl, pte);
+      pt_post();
+      plog($sformatf("s_map %h %0d %h %h", va, lvl, pte, r));
+      return PA_WIDTH'(r);
     endfunction
 
     // Map one 4 KiB page, V R X A D, supervisor (U clear).
-
     task map4k(input logic [VA_WIDTH-1:0] va,
                          input logic [PA_WIDTH-1:0] pa);
-      logic [PA_WIDTH-1:0] t;
-      logic [63:0]         pte;
-      logic [8:0]          vpn [0:2];
-      vpn[2] = va[38:30];
-      vpn[1] = va[29:21];
-      vpn[0] = va[20:12];
-      t = satp_root;
-      for (int l = 2; l > 0; l--) begin
-        pte = rd64(t + PA_WIDTH'(8 * vpn[l]));
-        if (!pte[0]) begin
-          logic [PA_WIDTH-1:0] n;
-          n   = pt_alloc();
-          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
-          wr64(t + PA_WIDTH'(8 * vpn[l]), pte);
-        end
-        t = PA_WIDTH'(pte[53:10]) << 12;
-      end
-      wr64(t + PA_WIDTH'(8 * vpn[0]),
-           {10'd0, 44'(pa >> 12), 2'b00, PTE_LEAF});
+      void'(s_map(va, 0, {10'd0, 44'(pa >> 12), 2'b00, PTE_LEAF}));
       vmap[va[VA_WIDTH-1:12]] = pa[PA_WIDTH-1:12];
     endtask
 
@@ -695,27 +773,17 @@
       return {n, pbmt, 7'd0, ppn, 2'b00, f};
     endfunction
 
-    // The PA of the single-stage PTE for va at a level, creating the
-    // non-leaf tables above it. A non-leaf already present is followed.
+    // The PA of the single-stage PTE for va at a level, the non-leaf
+    // tables above it built by the builder (a non-leaf it placed is
+    // followed). Nothing is written at the slot.
     function logic [PA_WIDTH-1:0] s_slot(input logic [VA_WIDTH-1:0] va,
                                          input int lvl);
-      logic [PA_WIDTH-1:0] t;
-      logic [63:0]         pte;
-      logic [8:0]          vi;
-      t = satp_root;
-      for (int l = 2; l > lvl; l--) begin
-        vi  = va[12 + 9*l +: 9];
-        pte = rd64(t + PA_WIDTH'(8 * vi));
-        if (!pte[0]) begin
-          logic [PA_WIDTH-1:0] n;
-          n   = pt_alloc();
-          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
-          wr64(t + PA_WIDTH'(8 * vi), pte);
-        end
-        t = PA_WIDTH'(pte[53:10]) << 12;
-      end
-      vi = va[12 + 9*lvl +: 9];
-      return t + PA_WIDTH'(8 * vi);
+      logic [63:0] r;
+      pt_pre();
+      r = ss.path(64'(va), lvl);
+      pt_post();
+      plog($sformatf("s_slot %h %0d %h", va, lvl, r));
+      return PA_WIDTH'(r);
     endfunction
 
     // UNCACHED PAGES (PBMT NC or IO): their PPNs, for the allocation
@@ -726,7 +794,7 @@
     // A 4 KiB single-stage page with a PBMT.
     task map4k_pbmt(input logic [VA_WIDTH-1:0] va,
                     input logic [PA_WIDTH-1:0] pa, input logic [1:0] pbmt);
-      wr64(s_slot(va, 0), mk_pte(44'(pa >> 12), PTE_LEAF, pbmt, 1'b0));
+      void'(s_map(va, 0, mk_pte(44'(pa >> 12), PTE_LEAF, pbmt, 1'b0)));
       vmap[va[VA_WIDTH-1:12]] = pa[PA_WIDTH-1:12];
       if (pbmt != 2'b00) begin
         uc_ppn[pa[PA_WIDTH-1:12]]   = 1'b1;
@@ -734,44 +802,62 @@
       end
     endtask
 
-    // ---- two-stage (V=1, vsatp Sv39, hgatp Sv39x4) ---------------------
+    // ---- two-stage (V=1; vsatp vs_mode, hgatp hg_mode) ------------------
     // The G-stage root is 16 KiB at hg_root. VS-stage tables live in
     // guest physical memory: each has a GPA from gpt_next and an SPA
-    // from pt_alloc, mapped by a G-stage leaf. gmap is GPA page -> SPA
-    // page; vmap is VA page -> SPA page, for writing code.
+    // from the pool, mapped by a G-stage level-0 leaf, U R W X A D (the
+    // builder's back, PT_F_BACK). gmap is GPA page -> SPA page for the
+    // pages g_map and h_map4k name; vmap is VA page -> SPA page, for
+    // writing code. The stages are built by the first vs_alloc, from
+    // hg_root, gpt_next, g_bare and the two modes as the caller set them.
     logic                  h2;
     logic [PA_WIDTH-1:0]   hg_root;
     logic [GPA_WIDTH-1:0]  vs_root;       // GPA of the VS root
     logic [GPA_WIDTH-1:0]  gpt_next;
     logic [PPN_WIDTH-1:0]  gmap [logic [GPA_WIDTH-13:0]];
 
-    // The PA of the G-stage PTE for a guest page at a level.
+    function void need_gs();
+      if (gs == null)
+        $fatal(1, "tb_fe_top: a G-stage table before vs_alloc built it");
+    endfunction
+
+    function void need_vs();
+      if (vs == null)
+        $fatal(1, "tb_fe_top: a VS-stage table before vs_alloc built it");
+    endfunction
+
+    // The PA of the G-stage PTE for a guest page at a level, the path
+    // built; nothing is written at the slot.
     function logic [PA_WIDTH-1:0] g_slot(input logic [GPA_WIDTH-13:0] gp,
                                          input int lvl);
-      logic [PA_WIDTH-1:0] t;
-      logic [63:0]         pte;
-      logic [10:0]         gi;
-      t = hg_root;
-      for (int l = 2; l > lvl; l--) begin
-        gi  = (l == 2) ? gp[28:18] : {2'b00, gp[9*l +: 9]};
-        pte = rd64(t + PA_WIDTH'(8 * gi));
-        if (!pte[0]) begin
-          logic [PA_WIDTH-1:0] n;
-          n   = pt_alloc();
-          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
-          wr64(t + PA_WIDTH'(8 * gi), pte);
-        end
-        t = PA_WIDTH'(pte[53:10]) << 12;
-      end
-      gi = (lvl == 2) ? gp[28:18] : {2'b00, gp[9*lvl +: 9]};
-      return t + PA_WIDTH'(8 * gi);
+      logic [63:0] r;
+      need_gs();
+      pt_pre();
+      r = gs.path(64'(gp) << 12, lvl);
+      pt_post();
+      plog($sformatf("g_slot %h %0d %h", gp, lvl, r));
+      return PA_WIDTH'(r);
+    endfunction
+
+    // The G-stage: pte at level lvl for the guest page of gpa. Returns
+    // the PTE's supervisor address.
+    function logic [PA_WIDTH-1:0] g_put(input logic [GPA_WIDTH-1:0] gpa,
+                                        input int lvl,
+                                        input logic [63:0] pte);
+      logic [63:0] r;
+      need_gs();
+      pt_pre();
+      r = gs.map(64'(gpa) & ~64'hFFF, lvl, pte);
+      pt_post();
+      plog($sformatf("g_put %h %0d %h %h", gpa, lvl, pte, r));
+      return PA_WIDTH'(r);
     endfunction
 
     // A 4 KiB G-stage leaf, U R W X A D unless told otherwise.
     function void g_map(input logic [GPA_WIDTH-13:0] gp,
                         input logic [PA_WIDTH-1:0] spa,
                         input logic [63:0] leaf);
-      wr64(g_slot(gp, 0), leaf);
+      void'(g_put({gp, 12'h000}, 0, leaf));
       gmap[gp] = spa[PA_WIDTH-1:12];
     endfunction
 
@@ -779,47 +865,78 @@
     // leaf is written.
     logic                  g_bare;
 
-    // A VS-stage table page: a GPA, an SPA, and the G-stage leaf.
+    // A VS-stage table page. The first call builds the two stages (or,
+    // with g_bare, the VS-stage alone) and returns the VS root: with a
+    // G-stage, the GPA gpt_next, its page mapped by a G-stage leaf to a
+    // page from the pool; with g_bare, a page from the pool, GPA = SPA.
+    // A later call returns another table page the same way.
     function logic [GPA_WIDTH-1:0] vs_alloc();
-      logic [GPA_WIDTH-1:0] g;
-      logic [PA_WIDTH-1:0]  p;
-      if (g_bare) begin
-        p = pt_alloc();
-        gmap[(GPA_WIDTH-12)'(p[PA_WIDTH-1:12])] = p[PA_WIDTH-1:12];
-        return GPA_WIDTH'(p);
+      logic [63:0] g;
+      logic        ok;
+      plog($sformatf("h2 %h %h %0d %0d %0d", hg_root, gpt_next, g_bare,
+                     vs_mode, hg_mode));
+      pt_pre();
+      if (vs == null) begin
+        if (g_bare) begin
+          g  = pool.nx;
+          pool.nx = pool.nx + 64'h1000;
+          vs = new("vs", img, vs_mode, 1'b0, g, '0, '0);
+          vs.set_pool(pool);
+        end else begin
+          gs = new("gs", img, hg_mode, 1'b1, 64'(hg_root), '0, '0);
+          gs.set_pool(pool);
+          g  = 64'(gpt_next);
+          vs = new("vs", img, vs_mode, 1'b0, g, g + 64'h1000, PT_TOP);
+          vs.set_gstage(gs);
+          void'(vs.spa_of(g, 1'b1, ok));            // the root page
+        end
+      end else begin
+        g = vs.alloc();
+        if (!g_bare) void'(vs.spa_of(g, 1'b1, ok));
       end
-      g        = gpt_next;
-      gpt_next = gpt_next + GPA_WIDTH'('h1000);
-      p        = pt_alloc();
-      g_map(g[GPA_WIDTH-1:12], p,
-            mk_pte(44'(p >> 12), F_URWXAD, 2'b00, 1'b0));
-      return g;
+      pt_post();
+      gmap[(GPA_WIDTH-12)'(g >> 12)] = PPN_WIDTH'(g2s(GPA_WIDTH'(g)) >> 12);
+      plog($sformatf("vs_alloc %h", g));
+      return GPA_WIDTH'(g);
     endfunction
 
+    // The SPA of a GPA, through the G-stage tables as built (a GPA is
+    // the SPA with g_bare).
     function logic [PA_WIDTH-1:0] g2s(input logic [GPA_WIDTH-1:0] g);
-      return {gmap[g[GPA_WIDTH-1:12]], g[11:0]};
+      logic [63:0] s;
+      logic        ok;
+      if (g_bare) return PA_WIDTH'(g);
+      need_gs();
+      s = gs.xlate(64'(g), ok);
+      if (!ok) $display("tb_fe_top: g2s of a GPA the G-stage does not map %h",
+                        g);
+      return PA_WIDTH'(s);
     endfunction
 
-    // The SPA of the VS-stage PTE for va at a level.
+    // The SPA of the VS-stage PTE for va at a level, the path built;
+    // nothing is written at the slot.
     function logic [PA_WIDTH-1:0] vs_slot(input logic [VA_WIDTH-1:0] va,
                                           input int lvl);
-      logic [GPA_WIDTH-1:0] t;
-      logic [63:0]          pte;
-      logic [8:0]           vi;
-      t = vs_root;
-      for (int l = 2; l > lvl; l--) begin
-        vi  = va[12 + 9*l +: 9];
-        pte = rd64(g2s(t + GPA_WIDTH'(8 * vi)));
-        if (!pte[0]) begin
-          logic [GPA_WIDTH-1:0] n;
-          n   = vs_alloc();
-          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
-          wr64(g2s(t + GPA_WIDTH'(8 * vi)), pte);
-        end
-        t = GPA_WIDTH'(pte[53:10]) << 12;
-      end
-      vi = va[12 + 9*lvl +: 9];
-      return g2s(t + GPA_WIDTH'(8 * vi));
+      logic [63:0] r;
+      need_vs();
+      pt_pre();
+      r = vs.path(64'(va), lvl);
+      pt_post();
+      plog($sformatf("vs_slot %h %0d %h", va, lvl, r));
+      return PA_WIDTH'(r);
+    endfunction
+
+    // The VS-stage: pte at level lvl for va. Returns the PTE's SPA.
+    function logic [PA_WIDTH-1:0] vs_map(input logic [VA_WIDTH-1:0] va,
+                                         input int lvl,
+                                         input logic [63:0] pte);
+      logic [63:0] r;
+      need_vs();
+      pt_pre();
+      r = vs.map(64'(va), lvl, pte);
+      pt_post();
+      plog($sformatf("vs_map %h %0d %h %h", va, lvl, pte, r));
+      return PA_WIDTH'(r);
     endfunction
 
     // A two-stage 4 KiB mapping VA -> GPA -> SPA, both leaves ordinary.
@@ -828,7 +945,7 @@
                  input logic [PA_WIDTH-1:0] spa);
       g_map(gpa[GPA_WIDTH-1:12], spa,
             mk_pte(44'(spa >> 12), F_URWXAD, 2'b00, 1'b0));
-      wr64(vs_slot(va, 0), mk_pte(44'(gpa >> 12), PTE_LEAF, 2'b00, 1'b0));
+      void'(vs_map(va, 0, mk_pte(44'(gpa >> 12), PTE_LEAF, 2'b00, 1'b0)));
       vmap[va[VA_WIDTH-1:12]] = spa[PA_WIDTH-1:12];
     endtask
 
