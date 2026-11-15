@@ -16,6 +16,53 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-149 written.
+
+BP-149 WRITTEN: Sv57 by default (PROJECT_CORE.md translation modes;
+  perf_decisions.md PF-17). One knob, +PT_MODE=sv39|sv48|sv57 (default
+  sv57) from make PT_MODE, in tb_ptw, tb_itlb and tb_fe_top; the
+  G-stage is the x4 mode of the same depth. Named-mode tests (fe_top
+  sv39, sv48, sv57, h57; tb_ptw t_m_a to t_m_c; tb_itlb group P) set
+  their modes in every run: Jeff ruled this session-085, added to
+  PROJECT_CORE.md. tb_ptw's hand-built Sv39 tests move onto
+  pt_build_pkg. No test is skipped: a test of a mode's limit (the
+  Sv39x4 GPA bound) names its mode and runs in every run. The shared
+  defaults fe_demo compiles (models_reset, the writer) stay Sv39;
+  tb_fe_top selects the knob. A pt_gonly case named Sv57x4 reaches
+  the x4 root's entries 0x100 and above. Run times reported against
+  BP-148's (673s; fe_top 666s critical path). tools/regress_weekly.sh
+  runs every "weekly:" target under each mode, by hand. The trace
+  page-table generator (pt_gen.sv in rtl/mmu/ptw/tb) and an image
+  check by the real walker on a synthetic sample.
+OPEN, Jeff: PF-17's leaf flags, table placement and image format are
+  PROPOSED (PA) in perf_decisions.md; BP-149 builds them as written
+  unless ruled otherwise.
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-014, TOOLS-008, PERF-002,
+TD#201.
+
+---
+## Session-085, continued: TOOLS-007 recorded.
+
+TOOLS-007 COMPLETE (38aae93). Verilator 5.048's life optimization
+  removes a store to a class member when the same method then loops
+  over a call to a method of the same object and sets the member again
+  after the loop; every call reads the old value. -O0 and -fno-life
+  keep it; a handle to another object, one call with no loop, or the
+  loop inside the callee keep it; a read in the loop, even as the
+  call's argument, does not. Smallest form: f = 1; for (i < 2) b();
+  f = 0. The BP-148 code was not at fault; its workaround stands. No
+  site in the testbench classes has the shape (tb_sites, run). Rule
+  added to rtl/CLAUDE.md "Verilator work arounds" (PA, at Jeff's
+  direction), with what was not tested. Not tested: tasks, module
+  scope, static members. PA: csr_tb_pkg.sv and rtl/Vars.mk were not
+  in Context Loaded; Jeff granted the reads.
+TD#200 OPENED: the Verilator report, after manual review.
+
+Next free: BP-149, SYS-003, DOC-017, INFRA-014, TOOLS-008, PERF-002,
+TD#201.
+
+---
 ## Session-085, continued: TOOLS-007 written.
 
 TOOLS-007 WRITTEN: the Verilator class-member store seen in BP-148. A
@@ -7916,6 +7963,18 @@ numbers are issued from one sequence across both tables.
 |     |          | regenerate, and show the emission matches the pacino     |
 |     |          | copy, or record each difference. Opened session-085      |
 |     |          | (Jeff).                                                  |
+| 200 | tools    | OPEN. REPORT THE VERILATOR SELF-STORE LOOP DEFECT        |
+|     |          | (TOOLS-007; rtl/CLAUDE.md self-store loop rule). Review  |
+|     |          | by hand before filing: run tb_min.sv (TOOLS-007 Other    |
+|     |          | Notes 5, base form) on the newest Verilator release and  |
+|     |          | on master, since 5.042 lists a V3Life fix; read the      |
+|     |          | generated C++ and confirm the store is missing, not      |
+|     |          | reordered; reduce the flags to those the failure needs;  |
+|     |          | cite the IEEE 1800-2023 clause that makes the store      |
+|     |          | visible in the called method. Test the shapes TOOLS-007  |
+|     |          | did not: tasks, module scope, static members. Write up   |
+|     |          | what was checked by hand and add it to the report if the |
+|     |          | defect stands. Opened session-085 (Jeff).                |
 
 ---
 

@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-13
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -776,7 +776,9 @@ under Sv57, with Sv57x4 at the G-stage, and under no other mode: the
 fe_top programs and the unit tests whose subject is a mode (tb_ptw,
 tb_itlb) alike. tools/regress_weekly.sh, run by hand and gating
 nothing, runs the same tests under every mode, Sv39 and Sv48 and their
-x4 modes included. tools/regress_demo.sh runs the fe_demo scenarios
+x4 modes included. A test whose subject is a named mode, or a
+comparison of modes, sets its modes itself, in every run (Jeff,
+session-085). tools/regress_demo.sh runs the fe_demo scenarios
 under Sv39, the old default, until they move to Sv57. Tests that run
 untranslated (Bare) are unaffected. Both changes are BP-149's; until
 then the translated tests stay as they are.

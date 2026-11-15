@@ -217,6 +217,9 @@
 # Updated after BP-148, session-085 (PROJECT_STATUS.md,
 # itlb_decisions.md, itlb_l2tlb_interfaces.md, mmu_decisions.md).
 # Updated when TOOLS-007 was written, session-085 (PROJECT_STATUS.md).
+# Updated after TOOLS-007, session-085 (PROJECT_STATUS.md).
+# Updated when BP-149 was written, session-085 (PROJECT_STATUS.md,
+# PROJECT_CORE.md, perf_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -259,8 +262,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   2d8332507267
-PLAN  PROJECT_STATUS.md                 a4a0f2969e7e
+PLAN  PROJECT_CORE.md                   0444e417f71d
+PLAN  PROJECT_STATUS.md                 ed878ca18578
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 
@@ -335,7 +338,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               b96333f91372
+PERF  perf_decisions.md               3c9fb5f1473e
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

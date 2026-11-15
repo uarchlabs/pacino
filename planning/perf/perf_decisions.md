@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-13
+ UPDATED: 2026-11-14
  CONTACT: Jeff Nye
 ```
 
@@ -308,7 +308,12 @@ PF-17  THE TRACES RUN BEHIND PAGE TABLES (Jeff, session-085), so the
        mode is Sv57 (PF-16). A generator built on pt_build_pkg writes
        the tables as a memory image file; the gasket (PF-4) loads
        it. The generator is NOT YET BUILT (BP-149); the gasket is
-       PERF-002's.
+       PERF-002's. PROPOSED, PA (BP-149 Binding THE GENERATOR): each
+       leaf has V, R, X, A and U set, and W, D and G clear; the table
+       pages come from a pool after the last code page; the image is
+       text, a satp line, one map line per page in first-touch order,
+       and one word line per table word. The page list a trace
+       touches is extracted by PERF-002.
 
 ## 7. Process
 
@@ -390,4 +395,7 @@ PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
               pc_max alone.
   2026-11-13  session-085 (Jeff). PF-17: page tables, dense 4 KiB
               physical pages in first-touch order; PF-U4 closed.
+
+  2026-11-14  session-085 (PA). PF-17: the generator's leaf, table
+              placement and image format PROPOSED with BP-149.
 ```
