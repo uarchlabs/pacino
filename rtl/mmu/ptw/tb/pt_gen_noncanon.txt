@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# pt_gen_noncanon.txt -- an input tb/pt_gen.sv must reject (INFRA-014),
+# run by rtl/mmu/ptw sim_pt_gen_noncanon. Line 13 names an address that
+# is not canonical under Sv57: bit 56 set, bits 63:57 clear. pt_gen
+# stops there with its non-canonical error, naming this file and line
+# 13. The canonical lines around it are ordinary pages; the lowest
+# canonical high address is ff00000000000000.
+400000
+401000
+0100000000000000
+402000
+ff00000000000000

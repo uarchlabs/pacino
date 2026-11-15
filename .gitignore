@@ -240,6 +240,7 @@ rtl/core/frontend/bpu/obj1_ras/
 tools/tests/__pycache__/
 
 rtl/mmu/ptw/obj_gen/
+rtl/core/frontend/fe_top/slot1/obj_1slot_fe_top/
 # --------------------------------------------------------------------
 # docs
 site/

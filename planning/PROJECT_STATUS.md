@@ -16,6 +16,25 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: INFRA-014 written.
+
+INFRA-014 WRITTEN: regression time. regress.sh runs every target with
+  make -B, so each fe_top per-program target rebuilds tb_fe_top and
+  assert_labels re-runs every program. The task: tb_fe_top built once
+  per slot count in a run, the per-program targets and assert_labels
+  using that binary, and never a stale binary when run alone; the
+  1-slot half as its own Makefile (fe_top/slot1), run in parallel,
+  target names kept; CCACHE_BASEDIR in rtl/Vars.mk, kept only if a
+  scratch build hits the cache; two pt_gen error targets. No target or
+  check dropped; regress.sh, the hook, known_failures.txt and every
+  .sv file unchanged. Measured: a warm baseline run first, then a warm
+  and a cold (CCACHE_DISABLE=1) run, against 5 min warm and 12 cold.
+  The bpu split is reported for the next step.
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-015, TOOLS-008, PERF-002,
+TD#202.
+
+---
 ## Session-085, continued: BP-149 recorded. The paging modes are done.
 
 BP-149 COMPLETE (56a3dde). regress.sh 283 targets, RESULT: PASS;

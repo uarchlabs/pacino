@@ -22,8 +22,11 @@
 #                   ready. Not in FE_PROGS, which run with fast init
 #   assert_labels   every property label of every assertion file the
 #                   sim model compiles is present in it
-#   <t>_1slot       target <t> at NUM_PRED_SLOTS = 1, one per target
-#                   above (BP-128)
+#
+# <t>_1slot, target <t> at NUM_PRED_SLOTS = 1 (BP-128), one per target
+# above, is in slot1/Makefile (INFRA-014): its own Makefile, so that
+# tools/regress.sh runs the 1-slot half as a job of its own, in parallel
+# with this one. It runs this file's rules in its own directory.
 #
 # THE L1I IS THE PACINO COPY in rtl/core/frontend/icache (BP-123,
 # cachegen_decisions.md CG-D1): the cachegen emission copied into the
@@ -50,7 +53,9 @@ endif
 include $(RVA_ROOT)/rtl/core/frontend/fe_top/fe_top_srcs.mk
 
 RTL_DIR  := rtl
-TB_DIR   := tb
+# Absolute (INFRA-014), as fe_top_srcs.mk's paths, so the build's
+# dependency file (FE_VERD, below) names every file by its full path.
+TB_DIR   := $(FE_TOP)/tb
 BPU_TB   := $(FE_DIR)/bpu/tb
 FTQ_TB   := $(FE_DIR)/ftq/tb
 IFU_TB   := $(FE_DIR)/ifu/tb
@@ -62,16 +67,14 @@ VER_OUT  := obj
 
 # -- Slot count (BP-128, TD#1) -------------------------------------
 # NUM_PRED_SLOTS is set in bp_defines_pkg.sv from the macro
-# BP_NUM_PRED_SLOTS, 2 when it is not defined. SLOT_DEFS is empty for
-# every target below, so each builds at 2. Each <target>_1slot (end of
-# file) runs <target> in a sub-make with SLOT_DEFS = SLOT1_DEFS and
-# VER_OUT = $(VER_OUT)_1slot, so a 1-slot build never shares an object
-# directory with a 2-slot one. BP_EXPECT_PRED_SLOTS=1 makes the package
-# stop elaboration unless NUM_PRED_SLOTS is 1, so a 1-slot target fails
-# if BP_NUM_PRED_SLOTS does not reach it. To see that, build one with
-# the slot macro removed:
-#   make lint_fe_top_1slot SLOT1_DEFS=+define+BP_EXPECT_PRED_SLOTS=1
-SLOT1_DEFS := $(FE_SLOT1_DEFS)
+# BP_NUM_PRED_SLOTS, 2 when it is not defined. SLOT_DEFS is empty here,
+# so every target builds at 2. slot1/Makefile runs each target with
+# SLOT_DEFS = FE_SLOT1_DEFS and VER_OUT = obj_1slot, in slot1/, so a
+# 1-slot build never shares an object directory with a 2-slot one.
+# BP_EXPECT_PRED_SLOTS=1 makes the package stop elaboration unless
+# NUM_PRED_SLOTS is 1, so a 1-slot target fails if BP_NUM_PRED_SLOTS
+# does not reach it. To see that, build one with the slot macro removed:
+#   make -C slot1 lint_fe_top_1slot SLOT1_DEFS=+define+BP_EXPECT_PRED_SLOTS=1
 SLOT_DEFS  ?=
 
 VER_FLAGS       := $(FE_VER_FLAGS) $(SLOT_DEFS)
@@ -152,7 +155,11 @@ FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \
-        $(FE_PROG_TGTS) sim_fe_top_init_walk
+        fe_top_bin $(FE_PROG_TGTS) sim_fe_top_init_walk
+
+# The targets share one object directory: build_fe_top and fe_top_bin
+# must never run together under make -j.
+.NOTPARALLEL:
 
 all: lint_fe_top sim_fe_top assert_labels
 
@@ -165,24 +172,73 @@ lint_fe_top:
 # directory examples/fe_demo shares.
 TB_MODELS := $(TB_DIR)/models
 
+# -- The binary (INFRA-014) -----------------------------------------
+# ONE BUILD PER SLOT COUNT. tools/regress.sh runs every target with
+# make -B, which remakes every prerequisite, so a prerequisite that
+# compiles would compile once per target. Two targets get the binary:
+#   build_fe_top  always compiles. sim_fe_top runs it, so a regress.sh
+#                 run compiles tb_fe_top once at each slot count.
+#   fe_top_bin    compiles only when the binary is not current, and
+#                 otherwise uses it. The per-program targets,
+#                 sim_fe_top_init_walk and assert_labels run it.
+# NEVER A STALE BINARY. The test is in fe_top_bin's recipe, not in make's
+# prerequisites, so -B does not change it. The binary is current when
+# FE_STAMP, written after a build that succeeded, holds the flags of
+# this build (FE_BUILD_KEY) and no file is newer than it: no file
+# Verilator read for the build (its dependency file FE_VERD, which
+# lists every source, `include file and the Verilator binary), and no
+# Makefile this make read (MAKEFILE_LIST) or FE_EXTRA_MK (slot1/Makefile
+# names itself there). A missing file fails the test too. Run alone in
+# a clean object directory or after a source edit, a target compiles
+# first; it never runs a binary older than its sources.
+FE_OBJ       := $(VER_OUT)_fe_top
+FE_BIN       := $(FE_OBJ)/Vtb
+FE_VERD      := $(FE_OBJ)/Vtb__ver.d
+FE_STAMP     := $(FE_OBJ)/fe_top_bin.stamp
+FE_EXTRA_MK  ?=
+FE_MK_DEPS    = $(abspath $(MAKEFILE_LIST)) $(FE_EXTRA_MK)
+FE_BUILD_KEY := $(strip $(VERILATOR) $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+                  $(COMMON))
+
+# The compile, one shell command: the stamp is removed first and written
+# only when Verilator succeeds.
+FE_BUILD = rm -f $(FE_STAMP) && \
+  $(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+  $(COMMON) --top-module tb --Mdir $(FE_OBJ) \
+  +incdir+$(TB_MODELS) \
+  $(SIM_SRCS) $(TB_PKG_SRCS) $(TB_DIR)/tb_fe_top.sv \
+  $(VSILENCE) && echo '$(FE_BUILD_KEY)' > $(FE_STAMP)
+
+# The currency test, a shell condition. fe_new lists the newer files.
+FE_FRESH = test -x $(FE_BIN) && test -f $(FE_VERD) && test -f $(FE_STAMP) \
+  && test "$$(cat $(FE_STAMP))" = '$(FE_BUILD_KEY)' \
+  && fe_new=$$(find $$(sed -e 's/^.* : //' $(FE_VERD)) $(FE_MK_DEPS) \
+       -newer $(FE_STAMP) -print) && test -z "$$fe_new"
+
 build_fe_top:
 	@echo "[compiling]  tb_fe_top"
-	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_fe_top \
-	  +incdir+$(TB_MODELS) \
-	  $(SIM_SRCS) $(TB_PKG_SRCS) $(TB_DIR)/tb_fe_top.sv \
-	  $(VSILENCE)
+	$(Q)$(FE_BUILD)
+
+fe_top_bin:
+	$(Q)fe_new=; if $(FE_FRESH); then \
+	  echo "[reusing]    $(FE_BIN), current: no build"; \
+	else \
+	  echo "[compiling]  tb_fe_top: $(FE_BIN) missing, stale or built" \
+	    "with other flags"; \
+	  test -z "$$fe_new" || echo "  newer than the binary: $$fe_new"; \
+	  $(FE_BUILD); \
+	fi
 
 # Every program in its own simulation (BP-121): in one simulation the
 # predictor tables carry from one program into the next, so a program's
 # counts would depend on the programs before it. The totals line sums
 # the per-program check counts.
 sim_fe_top: build_fe_top
-	@echo "[simulating] $(VER_OUT)_fe_top/Vtb $(PT_ARG), each of $(FE_PROGS)"
+	@echo "[simulating] $(FE_BIN) $(PT_ARG), each of $(FE_PROGS)"
 	$(Q)tp=0; tf=0; bad=0; \
 	for g in $(FE_PROGS); do \
-	  log=$(VER_OUT)_fe_top/sim_$$g.log; \
-	  ./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) $(PT_ARG) +PROG=$$g \
+	  log=$(FE_OBJ)/sim_$$g.log; \
+	  ./$(FE_BIN) $(FE_PLUSARGS) $(PT_ARG) +PROG=$$g \
 	    > $$log 2>&1 || bad=1; \
 	  cat $$log; \
 	  m=$$(grep -oE 'PASS=[0-9]+ FAIL=[0-9]+' $$log | tail -1); \
@@ -194,15 +250,17 @@ sim_fe_top: build_fe_top
 	echo "tb_fe_top: PASS=$$tp FAIL=$$tf"; \
 	test $$bad -eq 0 && test $$tf -eq 0
 
-$(FE_PROG_TGTS): sim_fe_top_%: build_fe_top
-	@echo "[simulating] $(VER_OUT)_fe_top/Vtb $(PT_ARG) +PROG=$*"
-	$(Q)./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) $(PT_ARG) +PROG=$*
+# Each program alone, on sim_fe_top's binary when it is current
+# (fe_top_bin, INFRA-014).
+$(FE_PROG_TGTS): sim_fe_top_%: fe_top_bin
+	@echo "[simulating] $(FE_BIN) $(PT_ARG) +PROG=$*"
+	$(Q)./$(FE_BIN) $(FE_PLUSARGS) $(PT_ARG) +PROG=$*
 
 # BP-137: the one program run without FE_PLUSARGS, so the predictor
 # tables are initialised by their sram_init walks.
-sim_fe_top_init_walk: build_fe_top
-	@echo "[simulating] $(VER_OUT)_fe_top/Vtb +PROG=init_walk, no fast init"
-	$(Q)./$(VER_OUT)_fe_top/Vtb $(PT_ARG) +PROG=init_walk
+sim_fe_top_init_walk: fe_top_bin
+	@echo "[simulating] $(FE_BIN) +PROG=init_walk, no fast init"
+	$(Q)./$(FE_BIN) $(PT_ARG) +PROG=init_walk
 
 # Every label of every compiled assertion file must appear in the
 # generated model (the ifu Makefile's method, BP-116).
@@ -220,7 +278,10 @@ LABEL_1SLOT_GATED := a_ports_agree a_slot_ex_bounded_s1 \
   a_place_two_slots a_write_kills_above a_rsv_end_kills_above
 LABEL_SKIP := $(if $(strip $(SLOT_DEFS)),$(LABEL_1SLOT_GATED))
 
-assert_labels: sim_fe_top
+# The model only, not the programs (INFRA-014): fe_top_bin, not
+# sim_fe_top, so the labels are looked up in a current model and no
+# program runs.
+assert_labels: fe_top_bin
 	@echo "[checking]   assertion labels in the tb_fe_top model"
 	$(Q)n=0; m=0; \
 	for f in $(ASSERT_SRCS); do \
@@ -229,7 +290,7 @@ assert_labels: sim_fe_top
 	      echo "SKIP: $$l is not in a 1-slot tb_fe_top model"; \
 	      continue;; esac; \
 	    n=$$((n+1)); \
-	    if ! grep -qF ".$$l\"" $(VER_OUT)_fe_top/*.cpp; then \
+	    if ! grep -qF ".$$l\"" $(FE_OBJ)/*.cpp; then \
 	      echo "MISSING: $$l ($$f)"; m=$$((m+1)); \
 	    fi; \
 	  done; \
@@ -241,35 +302,26 @@ clean:
 	@echo "[cleaning]   fe_top"
 	$(Q)rm -rf $(VER_OUT)*
 
-# -- 1-slot targets (BP-128, TD#1) -----------------------------------
-# One per target of REGRESS_TARGETS, named <target>_1slot: the same
-# recipe at NUM_PRED_SLOTS = 1 (see SLOT1_DEFS at the top of the file).
-# sim_fe_top_<p>_1slot is program <p> at one slot.
-SLOT1_BASE := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
-              sim_fe_top_init_walk
-SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
-
-.PHONY: $(SLOT1_TGTS)
-$(SLOT1_TGTS): %_1slot:
-	$(Q)$(MAKE) $* SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT)_1slot \
-	  PT_MODE="$(PT_MODE)"
-
 # -- Regression plumbing (TOOLS-006) ----------------------------------
 # tools/regress.sh runs every REGRESS_TARGETS entry with its own make
 # call and fails if a target defined in this file is in neither list.
+# slot1/Makefile reads the test: line below and runs each entry at one
+# slot as <target>_1slot (INFRA-014).
 # Exclusions:
 #   all                 - aggregate.
-#   build_fe_top        - the compile step the sim targets run first.
+#   build_fe_top, fe_top_bin
+#                       - the compile steps the sim targets run first.
 #   clean, regress_list - housekeeping and this plumbing.
 REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
-                   sim_fe_top_init_walk $(SLOT1_TGTS)
-REGRESS_EXCLUDE := all build_fe_top clean regress_list
+                   sim_fe_top_init_walk
+REGRESS_EXCLUDE := all build_fe_top fe_top_bin clean regress_list
 # BP-149: the targets tools/regress_weekly.sh runs at every PT_MODE.
-# sim_fe_top and its 1-slot twin run every program, each in its own
-# simulation, so every translated program runs at each mode and both
-# slot counts; the per-program targets run the same programs one by
-# one. tools/regress.sh reads only the test: and exclude: lines.
-REGRESS_WEEKLY  := sim_fe_top sim_fe_top_1slot
+# sim_fe_top runs every program, each in its own simulation, so every
+# translated program runs at each mode; the per-program targets run the
+# same programs one by one. Its 1-slot twin is slot1/Makefile's weekly
+# target (INFRA-014). tools/regress.sh reads only the test: and exclude:
+# lines.
+REGRESS_WEEKLY  := sim_fe_top
 
 .PHONY: regress_list
 regress_list:

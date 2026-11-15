@@ -222,6 +222,7 @@
 # PROJECT_CORE.md, perf_decisions.md).
 # Updated after BP-149, session-085 (PROJECT_STATUS.md, PROJECT_CORE.md,
 # perf_decisions.md, mmu_decisions.md).
+# Updated when INFRA-014 was written, session-085 (PROJECT_STATUS.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -265,7 +266,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   b071032ae0d7
-PLAN  PROJECT_STATUS.md                 910823fbb23d
+PLAN  PROJECT_STATUS.md                 2f831cd218d6
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 
