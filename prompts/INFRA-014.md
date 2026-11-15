@@ -110,6 +110,112 @@ NTR worked as intended.
 
 ## Claude.ai Assessment
 
+INFRA-014 is complete and accepted. The mechanism works. The time
+figures were not shown, and the main reason is my task design, not the
+work.
+
+### What it achieved
+- **One build per slot count.** In the baseline run, 88 target logs
+  compiled tb_fe_top. In the final runs, 2 did. The other 86 reuse the
+  binary.
+  - The per-program, init_walk and assert_labels targets fell from
+    651s to 19s, across both slot counts together.
+  - assert_labels greps the model and no longer re-runs the programs.
+- **The freshness test is sound.** It runs inside the recipe, so
+  `make -B` cannot defeat it, and it compares three things:
+  - Verilator's own dependency file, so a new `include needs no
+    Makefile edit;
+  - the Makefiles;
+  - a stamp of the build flags.
+  A failed build leaves no stamp, so a broken binary is never reused.
+  Nine run-alone cases are shown. The one not shown is a change of
+  build flags alone; it is a small gap.
+- **slot1.** It reads its target list from fe_top's regress_list, so
+  the two lists cannot drift apart. Each half writes only under its own
+  object directory, shown with find -newer. slot1's output is already
+  in .gitignore.
+- **ccache base_dir was tried, measured and removed, as ruled.**
+  Verilator writes absolute source paths into the generated C++, 3,743
+  strings in one file, and base_dir does not rewrite file contents.
+  That ends the scratch-copy idea; nothing in the tree can fix it.
+- **The pt_gen error targets** match the message, not only the exit
+  code. The fail-first shows why that matters: with the checks
+  disabled, pt_gen still failed, but later and for a different reason,
+  and only the message match told the two apart.
+
+### The time figures, read correctly
+- **Warm.** The final "warm" run was cold for tb_fe_top, because
+  making TB_DIR absolute changed the generated C++. That is a one-time
+  cost.
+  - With a current cache, the IA measured sim_fe_top at 17-19s and
+    sim_fe_top_1slot at 14-16s, in the weekly run.
+  - The fe_top and slot1 jobs then come to about 35s and 30s, so bpu
+    (278s) becomes the critical path. A warm regress.sh should come to
+    about 5 minutes. That run was not made, because the task allowed
+    three, so I count the figure as likely but unmeasured.
+- **Cold.** My task file defined "cold" as CCACHE_DISABLE=1, which
+  disables the cache for every Makefile. That made bpu, 95 targets in
+  one job, take 3,437s. The figure Jeff cares about is cold after a
+  tb_fe_top edit, with everything else warm.
+  - In this layout, that is the fe_top and slot1 compiles running in
+    parallel. They took 699s and 651s with 15 jobs compiling at once;
+    alone, BP-149 measured 547s.
+  - So about 10-12 minutes, set by the tb_fe_top compile itself. That
+    is TD#201.
+  - The 3,445s figure is a no-cache worst case, not a regression
+    figure.
+
+### Problem 0 corrections (my errors)
+- **TB_DIR was relative.** RTL_DIR, VER_OUT, TB_DIR and TB_MODELS were
+  all relative to the Makefile's directory, not derived from RVA_ROOT.
+- **Line ranges.** Three were off by a line or more.
+- **The timing history does not fully carry over.** known_failures.txt
+  and .git/regress_times are keyed by directory as well as target
+  name. No waiver is lost, because known_failures.txt is empty. The
+  time history of the 1-slot targets starts again under slot1.
+
+### Findings for later
+- **A relative path in tb_fe_top.sv.** Line 3436 reads
+  `../ifu/tb/ifu_rvc_exp_oracle.hex` relative to the working
+  directory, so slot1 has to run make from fe_top/. It belongs with
+  TD#201, which edits tb_fe_top's files anyway.
+- **bpu is the next floor.** Two pieces dominate:
+  - sim_bp_cluster_init and its 1-slot twin take 72s;
+  - the seven cov targets take 88s.
+  Together they are 58% of the job. Splitting bpu's 1-slot half into
+  its own Makefile, as fe_top's was, would run the halves in parallel.
+  That would be INFRA-015, if the warm figure needs to go below about
+  5 minutes.
+- **Stale build output.** fe_top/obj_dir and fe_top/obj_1slot_fe_top
+  can be deleted by hand.
+
+### Process
+- No git command was run, and regress.sh ran three times as allowed.
+- The Grep fallback was used. Counting pipes into wc and sort were
+  disclosed, and no summary was cut.
+- rm -rf of the tree's obj_fe_top and one touch were disclosed. The
+  clean-directory test needed them.
+- Run time was 13m19s active.
+
+### Planning updates (PA)
+- PROJECT_CORE.md "The regression": add the IA's paragraph on one job
+  per Makefile and reuse of the model. It records why slot1 exists.
+- PROJECT_STATUS.md:
+  - the INFRA-014 COMPLETE entry, with the warm and cold figures read
+    as above;
+  - TD#201 gains tb_fe_top.sv:3436;
+  - INFRA-015 (the bpu split) noted as a candidate, not opened.
+- The closed-debt move is still uncommitted. I will carry it in the
+  same set, with CLOSED_TECH_DEBT.md, BLOG_GENERATION_PROCESS.md and
+  check_planning.sh at 74 files.
+
+### Follow-on Actions
+- [ ] Jeff: a warm regress.sh on the next push confirms about 5
+      minutes.
+- [ ] Jeff: delete fe_top/obj_dir and fe_top/obj_1slot_fe_top.
+- [ ] TD#201: the tb_fe_top cold compile, and tb_fe_top.sv:3436.
+- [ ] INFRA-015, if wanted: the bpu 1-slot split.
+
 ## Follow-on Actions
 Nothing required
 

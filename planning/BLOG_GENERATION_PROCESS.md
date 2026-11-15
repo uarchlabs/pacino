@@ -197,7 +197,8 @@ Headers are:
 ```
 
 The text for the Technical debt table entry is copied from PROJECT_STATUS.md
-or in CLOSED_TECH_DEBT.md.
+for an open item, or from CLOSED_TECH_DEBT.md for a closed one. A TD number
+is in exactly one of the two files.
 
 This section is not always relevant for a given blog.
 
@@ -405,10 +406,12 @@ context. But additional files are available. This is not a full list.
   extended at the PA's request.
 - Experiment files — supplied by the user at the PA's request.
 - session_handoff-NNN.md files — supplied by the user at the PA's request.
-- PROJECT_STATUS.md — project planning file tech debit list and current
-  design status
-- CLOSED_TECH_DEBT.md - previously closed TD migrated to reduce PROJECT_STATUS
-  size.
+- PROJECT_STATUS.md — project planning file: the open technical debt, in
+  its Technical Debt and Performance / Verification Debt tables, and the
+  current design status.
+- CLOSED_TECH_DEBT.md - every closed TD row, from both of PROJECT_STATUS's
+  debt tables, with its number. A row moves there in the planning update
+  that closes it (session-085).
 - PROJECT_CORE.md — project planning file giving scope and terminology.
 - Prior post in the series — for context and continuity.
 - Series name, series number, and short description — usually

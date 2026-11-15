@@ -749,7 +749,13 @@ on a non-zero exit or on any %Warning in its log.
 tools/known_failures.txt is the only waiver list; Jeff edits it,
 the IA never does. tools/hooks/pre-push refuses a push on a red
 run. CLAUDE.md Verification Expectations is the rule; this
-section is the rationale.
+section is the rationale. A Makefile's targets run in one job, one
+after another; separate Makefiles run in parallel. A target that needs
+a model another target of the same job builds reuses it when it is
+current, checked against Verilator's dependency file, the Makefiles and
+the build flags, so make -B rebuilds nothing twice (INFRA-014: fe_top's
+fe_top_bin). fe_top's 1-slot targets are a Makefile of their own,
+rtl/core/frontend/fe_top/slot1, for that reason.
 
 `make all` IS NOT A COMPLETE RUN, and is no longer the thing to
 run. The bpu `all` named 38 of 47 targets (TD#99). regress.sh
