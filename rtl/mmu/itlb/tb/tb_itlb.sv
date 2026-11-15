@@ -54,6 +54,21 @@
 // and F5b use GPAs above bit 40. Every L2 request is checked to present
 // execute on itlb_l2t_acc and the privilege of its miss on
 // itlb_l2t_priv (IL-3d, ITLB-17).
+//
+// BP-149. THE KNOB, +PT_MODE=sv39|sv48|sv57, sv57 when absent
+// (PROJECT_CORE.md, TRANSLATION MODES; the Makefile passes it from make
+// variable PT_MODE). reset_all writes satp and vsatp in the knob's mode
+// and hgatp in the x4 mode of the same depth (Sv39 and Sv39x4 until
+// BP-149), and every group that does not name its modes runs under it;
+// A6 takes the knob's mode for its translated satp. The groups that
+// name their modes, in every run:
+//   - P, every case: P1 to P8 the Sv39 check (satp Sv39 for P1, P2;
+//     vsatp Sv39 for P8), P9 to P23 each mode and their comparison;
+//   - W1 to W3: a canonical-address fault at Sv39's sign bit, a mode's
+//     limit (satp Sv39 at V=0, vsatp Sv39 at V=1);
+//   - G16 to G21 and K17 to K19 at 512 GiB, under Sv48, and G22 to G28
+//     and K17 to K19 at 256 TiB, under Sv57 (BP-148): those pages' VAs
+//     are canonical only from Sv48 and under Sv57, a mode's limit.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -474,20 +489,37 @@ module tb #(
     csr_tb_pkg::csr_write(CSR_PMPADDR0_ADDR + 12'(k), 64'(a)); cs_sync();
   endtask
 
+  // THE KNOB (BP-149): km, the satp and vsatp MODE; hgatp takes the
+  // same value, the x4 mode of the same depth. Read once, before the
+  // first group.
+  logic [3:0] km;
+
+  task automatic knob_read();
+    string s;
+    if (!$value$plusargs("PT_MODE=%s", s)) s = "sv57";
+    if (s == "sv39")      km = SV39;
+    else if (s == "sv48") km = SV48;
+    else if (s == "sv57") km = SV57;
+    else $fatal(1, "tb_itlb: +PT_MODE=%s is not sv39, sv48 or sv57", s);
+    $display("tb_itlb: PT_MODE %s: satp, vsatp MODE %0d, hgatp its x4", s,
+             km);
+  endtask
+
   task automatic reset_all();
     rstn         = 1'b0;
     req_val      = 1'b0; req_vpn = '0; req_tag = 1'b0;
     l2_req_rdy   = 1'b1;
     // CSRs from the csr_pkg reset values (CSR-7), then this
-    // testbench's: V 0 in S-mode, satp and vsatp Sv39 with ASID 5,
-    // hgatp Sv39x4 with VMID 3. PMP entry 0 (the reset value): NAPOT
-    // over the whole space, RWX, so the PMP passes unless a test says
-    // otherwise; every other entry OFF.
+    // testbench's: V 0 in S-mode, satp and vsatp in the knob's mode
+    // with ASID 5, hgatp its x4 mode with VMID 3 (Sv39 and Sv39x4 until
+    // BP-149). PMP entry 0 (the reset value): NAPOT over the whole
+    // space, RWX, so the PMP passes unless a test says otherwise; every
+    // other entry OFF.
     csr_tb_pkg::csr_reset();
     cs_v(1'b0); cs_priv(PS);
-    cs_satp_mode(SV39); cs_satp_asid(16'd5);
-    cs_vsatp_mode(SV39); cs_vsatp_asid(16'd5);
-    cs_hgatp_mode(SV39); cs_vmid(14'd3);
+    cs_satp_mode(km); cs_satp_asid(16'd5);
+    cs_vsatp_mode(km); cs_vsatp_asid(16'd5);
+    cs_hgatp_mode(km); cs_vmid(14'd3);
     inv_val = 1'b0; inv_op = '0; inv_rs1 = 1'b0; inv_rs2 = 1'b0;
     inv_vpn = '0; inv_asid = '0; inv_vmid = '0;
     maps.delete();
@@ -579,6 +611,7 @@ module tb #(
   initial begin
     inv_arm = 1'b0;
     inv_met = 1'b0;
+    knob_read();
 
     // ---- A: physical regimes ------------------------------------------
     reset_all();
@@ -607,7 +640,7 @@ module tb #(
     ok($sformatf("A5 Bare PA bit %0d (PA_WIDTH - 1) over main memory", PW - 1),
        g_st == ST_HIT && g_pma == MM &&
        g_ppn == (PNW'('h080000) | (PNW'(1) << (PNW - 1))));
-    cs_satp_mode(SV39);
+    cs_satp_mode(km);
     cs_priv(PM);
     look(VW'('h0080123));
     ok("A6 M-mode untranslated", g_st == ST_HIT && g_ppn == PNW'('h080123));
@@ -765,11 +798,12 @@ module tb #(
     expect_miss("G14 1G just above", VW'('h0100000));
     // Sv39 high half: bits VA_WIDTH-1 down to 38 all set. The top page
     // is all ones at any VA_WIDTH (it was 29'h1FFF_FFFF, that page only
-    // at VA_WIDTH 41; BP-145).
+    // at VA_WIDTH 41; BP-145). BP-149: under the knob; all ones is the
+    // top page of the high half in every mode.
     reset_all();
     add_map(1'b0, '0, 16'd5, {VW{1'b1}}, SZ4K, PNW'('h080400), PX, 2'd0, 2);
     install({VW{1'b1}});
-    expect_hit("G15 Sv39 top page", {VW{1'b1}}, PNW'('h080400));
+    expect_hit("G15 top page (all ones)", {VW{1'b1}}, PNW'('h080400));
     // BP-148 (ITLB-3, IL-7): 512 GiB, 3'b100, masks VPN[26:0]. Under satp
     // Sv48, so the VA (bits 46:39 used) passes ITLB-18. VA 3 << 39 to PA
     // 2^39, main memory (MMU-15a). The output PPN over the masked bits
@@ -1200,6 +1234,8 @@ module tb #(
         string pv;
         reset_all();
         pv = (pass == 0) ? "V=0 satp" : "V=1 vsatp";
+        // BP-149: Sv39 named at both passes (a mode's limit).
+        if (pass == 0) cs_satp_mode(SV39);
         if (pass == 1) begin cs_v(1'b1); cs_vsatp_mode(SV39); end
         n0 = l2_reqs;
         look(w1);
@@ -1239,7 +1275,9 @@ module tb #(
     end
 
     // ---- P: Sv39 address check --------------------------------------------
+    // BP-149: P1 to P8 name Sv39 (satp for P1 and P2, vsatp for P8).
     reset_all();
+    cs_satp_mode(SV39);
     look(VW'('h0800_0000));            // VA bit 39 set, bit 38 clear
     ok("P1 V=0 Sv39 bad sign: cause 12", g_st == ST_FAULT &&
        g_cause == 5'd12);
@@ -1268,7 +1306,7 @@ module tb #(
     ok("P7 and in VU-mode", g_st == ST_HIT && g_ppn == PNW'('h080600));
     // With a VS-stage the rule applies: a U page faults in VS-mode.
     reset_all();
-    cs_v(1'b1); cs_priv(2'd1);
+    cs_v(1'b1); cs_vsatp_mode(SV39); cs_priv(2'd1);
     add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, PNW'('h080600), PXU, 2'd0, 2);
     xlate(VA_A, m0);
     ok("P8 with vsatp Sv39 a U page faults in VS-mode", g_st == ST_FAULT &&

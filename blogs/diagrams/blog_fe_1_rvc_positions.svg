@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="990" height="380" viewBox="0 0 990 380">
+  <title>In-block branch positions, FTB_BR_POS_BITS 3 and 4</title>
+  <defs>
+    <style>
+      .t  { font-family: "DejaVu Sans", Helvetica, Arial, sans-serif; fill: #212529; }
+      .h  { font-size: 15px; font-weight: bold; }
+      .s  { font-size: 12px; }
+      .b  { font-size: 12px; font-weight: bold; }
+      .c  { font-size: 11px; }
+      .gy { fill: #868e96; }
+      .bad  { fill: #c92a2a; }
+      .good { fill: #2b8a3e; }
+      .ins  { fill: #ffffff; stroke: #868e96; stroke-width: 1; }
+      .br   { fill: #fff4e6; stroke: #d9480f; stroke-width: 1.5; }
+      .cell { fill: #f1f3f5; stroke: #343a40; stroke-width: 1; }
+      .cbad { fill: #ffe3e3; stroke: #c92a2a; stroke-width: 2; }
+      .cgood { fill: #ebfbee; stroke: #2b8a3e; stroke-width: 2; }
+      .tick { stroke: #868e96; stroke-width: 1; }
+      .guide { stroke: #d9480f; stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="990" height="380" fill="#ffffff"/>
+
+  <text class="t h" x="495" y="30" text-anchor="middle">In-block branch positions in a 32-byte fetch block</text>
+
+  <!-- byte scale: x = 190 + 24 * byte offset, bytes 0..32 -> x 190..958 -->
+
+  <!-- ===================== instruction row ===================== -->
+  <text class="t b" x="20" y="76">Instructions</text>
+
+  <rect class="ins" x="190" y="58" width="96" height="40"/>
+  <text class="t s" x="238" y="82" text-anchor="middle">32-bit</text>
+
+  <rect class="br" x="286" y="58" width="48" height="40"/>
+  <text class="t b" x="310" y="75" text-anchor="middle">RVC</text>
+  <text class="t b" x="310" y="91" text-anchor="middle">A</text>
+
+  <rect class="br" x="334" y="58" width="48" height="40"/>
+  <text class="t b" x="358" y="75" text-anchor="middle">RVC</text>
+  <text class="t b" x="358" y="91" text-anchor="middle">B</text>
+
+  <rect class="ins" x="382" y="58" width="96" height="40"/>
+  <text class="t s" x="430" y="82" text-anchor="middle">32-bit</text>
+
+  <rect class="ins" x="478" y="58" width="48" height="40"/>
+  <text class="t s" x="502" y="82" text-anchor="middle">RVC</text>
+
+  <rect class="ins" x="526" y="58" width="432" height="40" style="stroke-dasharray: 4 3"/>
+  <text class="t s gy" x="742" y="82" text-anchor="middle">rest of block</text>
+
+  <text class="t c gy" x="20" y="92">A, B: RVC branches</text>
+
+  <!-- byte ruler -->
+  <text class="t c gy" x="20" y="127">byte offset in block</text>
+  <line class="tick" x1="190" y1="108" x2="958" y2="108"/>
+  <g class="tick">
+    <line x1="190" y1="104" x2="190" y2="114"/><line x1="238" y1="106" x2="238" y2="110"/>
+    <line x1="286" y1="104" x2="286" y2="114"/><line x1="334" y1="106" x2="334" y2="110"/>
+    <line x1="382" y1="104" x2="382" y2="114"/><line x1="430" y1="106" x2="430" y2="110"/>
+    <line x1="478" y1="104" x2="478" y2="114"/><line x1="526" y1="106" x2="526" y2="110"/>
+    <line x1="574" y1="104" x2="574" y2="114"/><line x1="622" y1="106" x2="622" y2="110"/>
+    <line x1="670" y1="104" x2="670" y2="114"/><line x1="718" y1="106" x2="718" y2="110"/>
+    <line x1="766" y1="104" x2="766" y2="114"/><line x1="814" y1="106" x2="814" y2="110"/>
+    <line x1="862" y1="104" x2="862" y2="114"/><line x1="910" y1="106" x2="910" y2="110"/>
+    <line x1="958" y1="104" x2="958" y2="114"/>
+  </g>
+  <g class="t c gy" text-anchor="middle">
+    <text x="190" y="127">0</text><text x="286" y="127">4</text><text x="382" y="127">8</text>
+    <text x="478" y="127">12</text><text x="574" y="127">16</text><text x="670" y="127">20</text>
+    <text x="766" y="127">24</text><text x="862" y="127">28</text><text x="958" y="127">32</text>
+  </g>
+
+  <!-- guides from each RVC branch down through both rows -->
+  <line class="guide" x1="310" y1="98" x2="310" y2="272"/>
+  <line class="guide" x1="358" y1="98" x2="358" y2="272"/>
+
+  <!-- ===================== FTB_BR_POS_BITS = 3 ===================== -->
+  <text class="t b" x="20" y="162">FTB_BR_POS_BITS = 3</text>
+  <text class="t c gy" x="20" y="177">8 positions x 4 bytes</text>
+  <text class="t c gy" x="20" y="191">before BP-099</text>
+
+  <rect class="cell" x="190" y="145" width="96" height="40"/>
+  <rect class="cbad" x="286" y="145" width="96" height="40"/>
+  <rect class="cell" x="382" y="145" width="96" height="40"/>
+  <rect class="cell" x="478" y="145" width="96" height="40"/>
+  <rect class="cell" x="574" y="145" width="96" height="40"/>
+  <rect class="cell" x="670" y="145" width="96" height="40"/>
+  <rect class="cell" x="766" y="145" width="96" height="40"/>
+  <rect class="cell" x="862" y="145" width="96" height="40"/>
+  <g class="t s" text-anchor="middle">
+    <text x="238" y="170">0</text><text x="334" y="170" class="bad" style="font-weight:bold">1</text>
+    <text x="430" y="170">2</text><text x="526" y="170">3</text><text x="622" y="170">4</text>
+    <text x="718" y="170">5</text><text x="814" y="170">6</text><text x="910" y="170">7</text>
+  </g>
+  <text class="t s bad" x="190" y="205">A and B both map to position 1</text>
+
+  <!-- ===================== FTB_BR_POS_BITS = 4 ===================== -->
+  <text class="t b" x="20" y="247">FTB_BR_POS_BITS = 4</text>
+  <text class="t c gy" x="20" y="262">16 positions x 2 bytes</text>
+  <text class="t c gy" x="20" y="276">after BP-099</text>
+
+  <rect class="cell" x="190" y="230" width="48" height="40"/>
+  <rect class="cell" x="238" y="230" width="48" height="40"/>
+  <rect class="cgood" x="286" y="230" width="48" height="40"/>
+  <rect class="cgood" x="334" y="230" width="48" height="40"/>
+  <rect class="cell" x="382" y="230" width="48" height="40"/>
+  <rect class="cell" x="430" y="230" width="48" height="40"/>
+  <rect class="cell" x="478" y="230" width="48" height="40"/>
+  <rect class="cell" x="526" y="230" width="48" height="40"/>
+  <rect class="cell" x="574" y="230" width="48" height="40"/>
+  <rect class="cell" x="622" y="230" width="48" height="40"/>
+  <rect class="cell" x="670" y="230" width="48" height="40"/>
+  <rect class="cell" x="718" y="230" width="48" height="40"/>
+  <rect class="cell" x="766" y="230" width="48" height="40"/>
+  <rect class="cell" x="814" y="230" width="48" height="40"/>
+  <rect class="cell" x="862" y="230" width="48" height="40"/>
+  <rect class="cell" x="910" y="230" width="48" height="40"/>
+  <g class="t s" text-anchor="middle">
+    <text x="214" y="255">0</text><text x="262" y="255">1</text>
+    <text x="310" y="255" class="good" style="font-weight:bold">2</text>
+    <text x="358" y="255" class="good" style="font-weight:bold">3</text>
+    <text x="406" y="255">4</text><text x="454" y="255">5</text><text x="502" y="255">6</text>
+    <text x="550" y="255">7</text><text x="598" y="255">8</text><text x="646" y="255">9</text>
+    <text x="694" y="255">10</text><text x="742" y="255">11</text><text x="790" y="255">12</text>
+    <text x="838" y="255">13</text><text x="886" y="255">14</text><text x="934" y="255">15</text>
+  </g>
+  <text class="t s good" x="190" y="290">A at position 2, B at position 3</text>
+
+  <!-- ===================== notes ===================== -->
+  <text class="t s" x="20" y="325">Before: the FTB and uBTB describe one of A and B, train them as one branch, and contribute one path</text>
+  <text class="t s" x="20" y="341">history bit instead of two; the resolved position of either cannot be mapped to a single slot.</text>
+  <text class="t s gy" x="20" y="366">Unchanged: PC_HASH_SHIFT stays 2, so A and B still share a TAGE, ITTAGE and SC index.</text>
+</svg>

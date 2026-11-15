@@ -139,6 +139,17 @@
 // included below where its text stood. This file keeps the
 // predictor observation, the per-cycle uncached checks, the
 // report and the programs.
+//
+// BP-149. THE KNOB, +PT_MODE=sv39|sv48|sv57, sv57 when absent
+// (PROJECT_CORE.md, TRANSLATION MODES; the Makefile passes it from make
+// variable PT_MODE to every sim target). Every translated program that
+// does not name its modes runs under it: reset_all builds the single
+// stage and writes satp in its mode, set_h2k the two stages in it and
+// its x4 mode, and pt_vsonly builds its VS-stage in it. The shared
+// models keep their Sv39 / Sv39x4 defaults for examples/fe_demo. The
+// programs that name their modes, in every run: sv39, sv48, sv57, h57
+// and pt_gonly_x4 (G-stage only under Sv57x4, the x4 root's entries at
+// 0x100 and above).
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -1133,10 +1144,47 @@ module tb;
   // =================================================================
   // Scaffolding.
   // =================================================================
+  // THE KNOB (BP-149, PROJECT_CORE.md TRANSLATION MODES): +PT_MODE=sv39,
+  // sv48 or sv57, sv57 when absent; the Makefile passes it from make
+  // variable PT_MODE. kn_s is the satp and vsatp MODE of every program
+  // that does not name its modes, kn_g the hgatp mode, the x4 mode of
+  // the same depth. The shared models keep their own defaults, Sv39 and
+  // Sv39x4 (examples/fe_demo compiles them); tb_fe_top selects the
+  // knob's modes explicitly, in reset_all and set_h2k.
+  logic [3:0] kn_s;
+  logic [3:0] kn_g;
+
+  task automatic knob_read();
+    string s;
+    if (!$value$plusargs("PT_MODE=%s", s)) s = "sv57";
+    if (s == "sv39") begin
+      kn_s = CSR_SATP_MODE_SV39; kn_g = CSR_HGATP_MODE_SV39X4;
+    end else if (s == "sv48") begin
+      kn_s = CSR_SATP_MODE_SV48; kn_g = CSR_HGATP_MODE_SV48X4;
+    end else if (s == "sv57") begin
+      kn_s = CSR_SATP_MODE_SV57; kn_g = CSR_HGATP_MODE_SV57X4;
+    end else begin
+      $fatal(1, "tb_fe_top: +PT_MODE=%s is not sv39, sv48 or sv57", s);
+    end
+    $display("tb_fe_top: PT_MODE %s: satp, vsatp MODE %0d, hgatp MODE %0d",
+             s, kn_s, kn_g);
+  endtask
+
+  // set_h2 (fe_tb_csr.svh) in the knob's modes: the two-stage regime with
+  // the VS-stage tables from GPA 0xC000_0000, vsatp and hgatp written
+  // from the stages the writer builds. set_h2 itself stays Sv39 / Sv39x4
+  // for examples/fe_demo.
+  task automatic set_h2k();
+    set_h2_at(kn_s, kn_g, GPA_WIDTH'('h0_C000_0000));
+  endtask
+
   // Every model to its start (models_reset), and this file's own
-  // counters.
+  // counters. BP-149: a translated program's single stage and satp in
+  // the knob's mode (use_smode); models_reset leaves them Sv39. A program
+  // that names its mode sets it after this, as sv39, sv48 and sv57 do.
   task automatic reset_all(input logic use_sv39);
     models_reset(use_sv39);
+    if (use_sv39) use_smode(kn_s);
     n_use_ubtb   = 0;
     n_use_lp     = 0;
     n_use_lp2    = 0;
@@ -1468,6 +1516,7 @@ module tb;
     tname = "sv39";
     $display("-- %s --", tname);
     reset_all(1'b1);
+    use_smode(CSR_SATP_MODE_SV39);          // BP-149: a named mode
     // Three code pages, not physically contiguous, and a handler page.
     // b + 0x4000 is not mapped. All within JAL range of each other.
     b = VA_WIDTH'('h0_8001_0000);
@@ -2859,7 +2908,7 @@ module tb;
     tname = "pt_faults_h";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    set_h2();
+    set_h2k();
     csr_menv_adue(1'b1);
     csr_henv_adue(1'b1);
     pmp_all(2);
@@ -2988,7 +3037,7 @@ module tb;
     tname = "pt_napot_h";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    set_h2();
+    set_h2k();
     map_ch();
     // A: VS 4 KiB leaves into a G-stage 64 KiB NAPOT page. Each 4 KiB
     // page walks (the smaller size wins, MMU-27).
@@ -3138,7 +3187,7 @@ module tb;
     tname = "pt_rsv_h";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    set_h2();
+    set_h2k();
     map_ch();
     k = 0;
     for (int lo = 0; lo < 16; lo++) begin
@@ -3248,7 +3297,7 @@ module tb;
     tname = "pt_ad_h";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    set_h2();
+    set_h2k();
     csr_menv_adue(1'b1);
     csr_henv_adue(1'b1);
     map_ch();
@@ -3453,18 +3502,32 @@ module tb;
 
 
   // ---- the other two vsatp / hgatp combinations, end to end -------------
-  // G-stage only (vsatp Bare, hgatp Sv39x4): the fetch address is the
-  // GPA, VA_WIDTH bits, 41 of them legal under Sv39x4 (FE-19, MMU-20,
-  // MMU-28), and the walker returns the G-stage
-  // leaf; the ITLB's VS-level permission rule has no leaf to read
-  // (ITLB-16, fixed by BP-123). Code runs at a GPA with bit 40 set,
-  // and an unmapped GPA is a guest-page fault, kind 00.
-  task automatic p_pt_gonly();
+  // G-stage only (vsatp Bare, hgatp the knob's x4 mode; Sv39x4 until
+  // BP-149): the fetch address is the GPA, VA_WIDTH bits, as many of
+  // them legal as the mode's GPA width (FE-19, MMU-20, MMU-28), and the
+  // walker returns the G-stage leaf; the ITLB's VS-level permission rule
+  // has no leaf to read (ITLB-16, fixed by BP-123). Code runs at a GPA
+  // with bit 40 set, and an unmapped GPA is a guest-page fault, kind 00.
+  //
+  // BP-149, THE X4 ROOT (program pt_gonly_x4, x4top set): hgatp names
+  // Sv57x4 in every run, and code also runs at GPA X4_HI, bits 58:56
+  // set. Its x4 root index, GPA[58:48], is 0x700: an entry at 0x100 or
+  // above, which a VS-stage PTE's GPA (at most PTE_PPN_WIDTH + 12 = 56
+  // bits) never reaches, so only this regime uses it (h57 reports it).
+  // The walker must read that entry (n_pa_rd[0]), whose address the rule
+  // gives as hg_root + 8 * 0x700 (MMU-32).
+  localparam logic [VA_WIDTH-1:0] X4_HI   = VA_WIDTH'('h700_0000_8000_3000);
+  localparam logic [PA_WIDTH-1:0] X4_HI_P = PA_WIDTH'('h0_8146_0000);
+  localparam int                  X4_IDX  = 'h700;   // X4_HI[58:48]
+
+  task automatic p_pt_gonly(input logic x4top);
     logic [VA_WIDTH-1:0] hi;
-    tname = "pt_gonly";
+    tname = x4top ? "pt_gonly_x4" : "pt_gonly";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    set_h2();
+    if (x4top) set_h2_at(CSR_SATP_MODE_SV57, CSR_HGATP_MODE_SV57X4,
+                         GPA_WIDTH'('h0_C000_0000));
+    else       set_h2k();
     csr_vsatp_mode(CSR_SATP_MODE_BARE);
     W.vmap.delete();
 
@@ -3481,11 +3544,18 @@ module tb;
     W.g_map(hi[VA_WIDTH-1:12], PA_WIDTH'('h0_8145_0000),
             W.mk_pte(44'h8_1450, F_URWXAD, 2'b00, 1'b0));
     W.vmap[hi[VA_WIDTH-1:12]] = PPN_WIDTH'('h8_1450);
+    if (x4top) begin
+      W.g_map(X4_HI[VA_WIDTH-1:12], X4_HI_P,
+              W.mk_pte(44'(X4_HI_P >> 12), F_URWXAD, 2'b00, 1'b0));
+      W.vmap[X4_HI[VA_WIDTH-1:12]] = X4_HI_P[PA_WIDTH-1:12];
+      m_pa[0] = PA_WIDTH'(W.gs.pte_addr(64'(X4_HI), 4));
+    end
     W.wp = RESET_VECTOR;
     W.mixed(3);
     W.jal(5'd0, PC_C);
     W.mixed(4);
     run_at(hi + VA_WIDTH'('h20), PC_C + VA_WIDTH'('h100));
+    if (x4top) run_at(X4_HI + VA_WIDTH'('h20), PC_C + VA_WIDTH'('h180));
     W.jr_gfault(VA_WIDTH'('h0_8070_0010),
                 FAULT_GPA_WIDTH'(GPA_WIDTH'('h0_8070_0010)), 2'b00,
                 hnd(1));
@@ -3494,23 +3564,37 @@ module tb;
     end_prog(30000);
     chk($sformatf("the guest-page fault reached decode (%0d)", n_fault_ok),
         n_fault_ok == 1);
+    if (x4top) begin
+      // The stimulus, not the RTL: the G-stage is Sv57x4 and the builder
+      // placed X4_HI's root entry where the rule puts entry 0x700.
+      chk($sformatf("x4top: hgatp Sv57x4, X4_HI's root PTE at %h (%h)",
+                    W.hg_root + PA_WIDTH'(8 * X4_IDX), m_pa[0]),
+          (W.gs.mode == CSR_HGATP_MODE_SV57X4) &&
+          (m_pa[0] == W.hg_root + PA_WIDTH'(8 * X4_IDX)));
+      // The RTL: the walker read that entry (the code at X4_HI ran,
+      // which run_and_check compared).
+      chk($sformatf("the walker read x4 root entry 0x%0h (%0d)", X4_IDX,
+                    n_pa_rd[0]), n_pa_rd[0] > 0);
+    end
   endtask
 
-  // VS-stage only (vsatp Sv39, hgatp Bare): a GPA is the SPA. A VS leaf
-  // whose PPN names an address above PA_WIDTH is then an access fault
-  // (MMU-28 for a supervisor physical page; there is no G-stage to give
-  // a guest-page fault), and an invalid leaf a page fault.
+  // VS-stage only (vsatp the knob's mode, Sv39 until BP-149; hgatp
+  // Bare): a GPA is the SPA. A VS leaf whose PPN names an address above
+  // PA_WIDTH is then an access fault (MMU-28 for a supervisor physical
+  // page; there is no G-stage to give a guest-page fault), and an
+  // invalid leaf a page fault.
   task automatic p_pt_vsonly();
     tname = "pt_vsonly";
     $display("-- %s --", tname);
     reset_all(1'b1);
     W.h2     = 1'b1;
     W.g_bare = 1'b1;
+    W.vs_mode = kn_s;                          // BP-149, the knob
     W.vs_root = W.vs_alloc();
     csr_tb_pkg::set_v(1'b1);
     csr_tb_pkg::set_priv(CSR_PRV_S);
     csr_satp_mode(CSR_SATP_MODE_BARE);
-    // BP-148: the mode is the built VS-stage's (W.vs_mode, Sv39).
+    // BP-148: the mode is the built VS-stage's (W.vs_mode, the knob's).
     csr_wr_vsatp(W.vs.mode, ASID_WIDTH'(1), 44'(W.vs_root >> 12));
     // hgatp Bare with VMID 3; its PPN is left as it was (0).
     csr_hgatp_mode_vmid(CSR_HGATP_MODE_BARE, VMID_WIDTH'(3));
@@ -3905,7 +3989,8 @@ module tb;
       "pt_ad_h":    p_pt_ad_h();
       "pt_inv":     p_pt_inv();
       "zstar":      p_zstar();
-      "pt_gonly":   p_pt_gonly();
+      "pt_gonly":   p_pt_gonly(1'b0);
+      "pt_gonly_x4": p_pt_gonly(1'b1);        // BP-149
       "pt_vsonly":  p_pt_vsonly();
       "pt_upriv":   p_pt_upriv();
       "init_walk":  p_init_walk();
@@ -3919,7 +4004,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:40] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:41] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
@@ -3930,7 +4015,7 @@ module tb;
                               "pt_rsv_h", "pt_ad_s", "pt_ad_h", "pt_inv",
                               "zstar", "pt_gonly", "pt_vsonly",
                               "pt_upriv", "init_walk", "sv48", "sv57",
-                              "h57"};
+                              "h57", "pt_gonly_x4"};
 
   // =================================================================
   initial begin
@@ -3944,6 +4029,7 @@ module tb;
     // FAST_INIT plusargs every run uses. It is removed rather than given
     // a table reset, which the RTL does not have and the testbench would
     // have to force into every RAM. sim_fe_top runs each program alone.
+    knob_read();                               // BP-149
     if ($value$plusargs("PROG=%s", prog)) begin
       run_prog(prog);
     end else begin

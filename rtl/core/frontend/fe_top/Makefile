@@ -123,6 +123,15 @@ SIM_SRCS := $(TOP_SRCS) $(PTW_SRCS) $(ASSERT_SRCS)
 
 FE_PLUSARGS := $(FE_FAST_INIT)
 
+# THE KNOB (BP-149, PROJECT_CORE.md TRANSLATION MODES): PT_MODE=sv39,
+# sv48 or sv57 reaches tb_fe_top as +PT_MODE, on every sim target;
+# empty, the testbench's own default, sv57. tools/regress.sh passes
+# none; tools/regress_weekly.sh runs the weekly targets below at each
+# mode. A program that names its modes (sv39, sv48, sv57, h57,
+# pt_gonly_x4) ignores it.
+PT_MODE ?=
+PT_ARG  := $(if $(strip $(PT_MODE)),+PT_MODE=$(strip $(PT_MODE)))
+
 # The tb_fe_top programs (BP-121), each run alone by sim_fe_top_<p>.
 # BP-123 added fencei to pt_inv: maintenance, uncached fetch and the
 # page table walker in RTL. BP-124 added pt_upriv (MMU-8c, ITLB-10b).
@@ -132,12 +141,14 @@ FE_PLUSARGS := $(FE_FAST_INIT)
 # rule. BP-135 added t0_uaon (T0 updated as the use_alt_on_na
 # provider, CTR rows 19.1-19.8). BP-148 added sv48, sv57 and h57 (Sv48,
 # Sv57 and Sv57 / Sv57x4, the 512 GiB and 256 TiB pages, ITLB-18).
+# BP-149 added pt_gonly_x4 (G-stage only under Sv57x4, the x4 root's
+# entries at 0x100 and above).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             recur t0_uaon deep indir region multistart cross rvc \
             misp_call jals fencei cboinval uc_nc uc_io pt_faults_s \
             pt_faults_h \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
-            zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57
+            zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57 pt_gonly_x4
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \
@@ -167,12 +178,12 @@ build_fe_top:
 # counts would depend on the programs before it. The totals line sums
 # the per-program check counts.
 sim_fe_top: build_fe_top
-	@echo "[simulating] $(VER_OUT)_fe_top/Vtb, each of $(FE_PROGS)"
+	@echo "[simulating] $(VER_OUT)_fe_top/Vtb $(PT_ARG), each of $(FE_PROGS)"
 	$(Q)tp=0; tf=0; bad=0; \
 	for g in $(FE_PROGS); do \
 	  log=$(VER_OUT)_fe_top/sim_$$g.log; \
-	  ./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) +PROG=$$g > $$log 2>&1 \
-	    || bad=1; \
+	  ./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) $(PT_ARG) +PROG=$$g \
+	    > $$log 2>&1 || bad=1; \
 	  cat $$log; \
 	  m=$$(grep -oE 'PASS=[0-9]+ FAIL=[0-9]+' $$log | tail -1); \
 	  if [ -z "$$m" ]; then bad=1; continue; fi; \
@@ -184,14 +195,14 @@ sim_fe_top: build_fe_top
 	test $$bad -eq 0 && test $$tf -eq 0
 
 $(FE_PROG_TGTS): sim_fe_top_%: build_fe_top
-	@echo "[simulating] $(VER_OUT)_fe_top/Vtb +PROG=$*"
-	$(Q)./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) +PROG=$*
+	@echo "[simulating] $(VER_OUT)_fe_top/Vtb $(PT_ARG) +PROG=$*"
+	$(Q)./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) $(PT_ARG) +PROG=$*
 
 # BP-137: the one program run without FE_PLUSARGS, so the predictor
 # tables are initialised by their sram_init walks.
 sim_fe_top_init_walk: build_fe_top
 	@echo "[simulating] $(VER_OUT)_fe_top/Vtb +PROG=init_walk, no fast init"
-	$(Q)./$(VER_OUT)_fe_top/Vtb +PROG=init_walk
+	$(Q)./$(VER_OUT)_fe_top/Vtb $(PT_ARG) +PROG=init_walk
 
 # Every label of every compiled assertion file must appear in the
 # generated model (the ifu Makefile's method, BP-116).
@@ -240,7 +251,8 @@ SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
 
 .PHONY: $(SLOT1_TGTS)
 $(SLOT1_TGTS): %_1slot:
-	$(Q)$(MAKE) $* SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT)_1slot
+	$(Q)$(MAKE) $* SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT)_1slot \
+	  PT_MODE="$(PT_MODE)"
 
 # -- Regression plumbing (TOOLS-006) ----------------------------------
 # tools/regress.sh runs every REGRESS_TARGETS entry with its own make
@@ -252,8 +264,15 @@ $(SLOT1_TGTS): %_1slot:
 REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
                    sim_fe_top_init_walk $(SLOT1_TGTS)
 REGRESS_EXCLUDE := all build_fe_top clean regress_list
+# BP-149: the targets tools/regress_weekly.sh runs at every PT_MODE.
+# sim_fe_top and its 1-slot twin run every program, each in its own
+# simulation, so every translated program runs at each mode and both
+# slot counts; the per-program targets run the same programs one by
+# one. tools/regress.sh reads only the test: and exclude: lines.
+REGRESS_WEEKLY  := sim_fe_top sim_fe_top_1slot
 
 .PHONY: regress_list
 regress_list:
 	@echo "test: $(REGRESS_TARGETS)"
 	@echo "exclude: $(REGRESS_EXCLUDE)"
+	@echo "weekly: $(REGRESS_WEEKLY)"

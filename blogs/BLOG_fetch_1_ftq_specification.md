@@ -29,42 +29,41 @@ one entry per predicted fetch block, issues fetch requests, receives
 corrections from the predictors and the backend, and sends each resolved
 branch back to the predictors as training. At the start of this range the BPU
 was built and verified, and the FTQ directory held only placeholder files.
-
-Two interactive sessions with the implementation assistant (IA) wrote the FTQ
+In two interactive sessions, the implementation assistant (IA) wrote the FTQ
 specification: its behavior, its entry formats, and its interfaces to the
-IFU and the backend. The IA wrote the planning documents directly, under a
-one-time waiver of the project's rule that it does not.
+IFU and the backend.
 
-Writing down what the FTQ would have to drive found two gaps in BPU RTL that
-passed every test. The FTB's branch classification never left the cluster,
-so any block the uBTB missed trained no predictor. The cluster had no input
-by which a backend mispredict could restore global and path history. Both
-were fixed with new ports and tests that were shown to fail against the
-defect. Position granularity was widened to two bytes so that each RVC branch
-has its own position, at a measured storage cost of 3.0 percent. The first
-FTQ module, the FTB update scheduler, was built with the project's first
+Writing down what the FTQ would have to drive found two defects in BPU RTL
+that passed every test. The branch classification of the fetch target buffer
+(FTB) never left the cluster, so any block the micro branch target buffer
+(uBTB) missed trained no predictor. The cluster had no input by which a
+backend mispredict could restore global and path history. Both were fixed
+with new ports and tests that were shown to fail against the defect. Position
+granularity was widened to two bytes so that each compressed (RVC) branch has
+its own position, at a measured storage cost of 3.0 percent. The first FTQ
+module, the FTB update scheduler, was built with the project's first
 concurrent assertions; writing them exposed two properties in the
 specification that no implementation could satisfy together.
 
 The range closed two long-running items by decision rather than by new
-design. The RAS response to a flush had been specified since session 050
-while its registry entry read open. A flush is now defined as a redirect,
-which the cluster already implements, and six deferred flush items closed.
-The range ends with the FTQ fully specified and divided into eleven modules,
-one of them built.
+design. The return address stack (RAS) response to a flush had been
+specified since session 050 while its registry entry read open. A flush is
+now defined as a redirect, which the cluster already implements, and six
+deferred flush items closed. The range ends with the FTQ fully specified and
+divided into eleven modules, one of them built.
 
 ## Where the range starts
 
-The previous range ended with `bp_cluster` verified at its boundary and every
-unit test able to report a failure. The cluster testbench acted as the FTQ.
-The FTQ itself existed as `ftq_bpu_interfaces.md`, which specifies the
+The previous range [1] ended with `bp_cluster` verified at its boundary and
+every unit test able to report a failure. The cluster testbench acted as the
+FTQ. The FTQ itself existed as `ftq_bpu_interfaces.md`, which specifies the
 boundary between the two, and as sections 4 to 6 of `fe_decisions.md`. The
 IFU and backend sides were unwritten.
 
 This range ran as two interactive sessions with the IA, on consecutive days,
 recorded as IA-004 and IA-005 rather than as planning assistant (PA)
-sessions. The IA reads the repository and the XiangShan reference sources on
-disk directly. The IA was granted a one-time waiver to write planning
+sessions. The IA reads the repository and the XiangShan reference sources [2]
+on disk directly. The IA was granted a one-time waiver to write planning
 documents, which the project otherwise reserves to the PA and me. The waiver
 covered BP-098 to BP-105 and expired with BP-105.
 
@@ -72,6 +71,16 @@ Task numbers were allocated when each task file was written, not when the
 work was done. BP-101 was done before BP-098 and BP-099. BP-100, BP-103,
 BP-104 and BP-105 were written after the work, and each says that its prompt
 section is a reconstruction. This post follows the order of the work.
+
+The planning documents named here are in the repository [3] under
+`planning/`, and the task files are under `prompts/`. Project identifiers
+such as TD-FE-6 or FE-14 are listed with a description and their source
+document in the Identifiers section near the end of the post.
+
+![FTQ boundaries at the close of the range](diagrams/blog_fe_1_ftq_boundary.svg)
+
+*The FTQ's boundaries to the BPU, the IFU and the backend at the close of
+the range. Edges and fields drawn in orange were added in this range.*
 
 ## The specification documents
 
@@ -90,15 +99,16 @@ Sections 4, 5 and 6 of `fe_decisions.md` moved into the new documents, and
 rather than reused, so existing cross-references still resolve.
 
 Two items were deferred, and the documents record that they are different
-kinds. There is no FTQ-to-ICache interface; the fanout XiangShan handles with
-register replication is treated as a physical design problem. Instruction
-prefetch is also deferred, but prefetch needs the FTQ to run ahead of fetch,
-and physical design cannot add that later. `ftq_decisions.md` 6.1 lists what
-the deferral forecloses.
+kinds. There is no FTQ-to-ICache interface. XiangShan drives the ICache from
+five identical copies of the FTQ's fetch pointer and PC bundle, register
+replication against fanout and wire delay; that is treated here as a
+physical design problem. Instruction prefetch is also deferred, but prefetch
+needs the FTQ to run ahead of fetch, and physical design cannot add that
+later. `ftq_decisions.md` 6.1 lists what the deferral forecloses.
 
 ## What the FTQ would have to drive
 
-### Three gaps at the cluster boundary
+### What the cluster boundary lacked
 
 Writing the FTQ's behavior against the cluster's ports showed three things
 the tree did not provide. BP-101 added them.
@@ -138,7 +148,8 @@ Group I of `tb_bp_cluster` adds 24 checks. The first is built on the defining
 case: the uBTB misses, the FTB hits with a conditional, no redirect fires, and
 the slot group is valid and reports a conditional at the FTB's position. With
 the group's valid gated on the redirect, reproducing the defect, the run
-reported one failure.
+reported one failure. A second mutation reverted the entry width to 182 bits,
+and the struct-size check failed.
 
 ### The history rollback input
 
@@ -161,9 +172,10 @@ than joining their order.
 The task settled a conflict between documents. `ftq_decisions.md` 3.2
 specified that the FTQ present the two pointer values, while `fe_decisions.md`
 and `ftq_backend_interfaces.md` specified an index and recorded the choice as
-open. Both copies of the checkpoint are written by the same allocation, and
-the array has one slot per FTQ index, so the index selects the same pair at
-half the width with no change to `bp_history`.[F2] `ftq_decisions.md` 3.2 was
+open. The checkpoint array inside `bp_history` and the checkpoint field of
+the FTQ entry are written by the same allocation and are one to one against
+the FTQ index, so the index selects the same pointer pair in 6 bits rather
+than 13, with no change to `bp_history`.[F2] `ftq_decisions.md` 3.2 was
 corrected, and the correction is called out in the document.
 
 Group J adds 30 checks, starting with a rollback raised by the FTQ with no
@@ -172,29 +184,35 @@ priority test is paired with the same construction minus the FTQ input, so
 the two halves differ in one signal. Removing the FTQ term reproduced
 TD-FE-7 with seven failures; inverting the priority gave three; reading the
 wrong index gave eight. A fourth mutation removed a fixture that clears the
-TAGE tables, and the group still passed. That fixture is not needed by
-today's tests and is kept because the general reset does not clear those
-tables.
+tables of the tagged geometric history length (TAGE) predictor, and the group
+still passed. That fixture is not needed by today's tests and is kept because
+the general reset does not clear those tables.
 
 ## Position granularity and the C extension
 
 ### One name, two quantities
 
 `FTB_BR_POS_BITS` of 3 gives eight 4-byte positions in a 32-byte block. RVA23
-mandates the C extension [2], so a branch can begin at any 2-byte boundary,
+mandates the C extension [4], so a branch can begin at any 2-byte boundary,
 and two RVC branches in one aligned word shared a position. The FTB and uBTB
-could describe only one of them and trained them as one branch, they
+could describe only one of them and trained them as one branch, the pair
 contributed one path history bit instead of two, and the backend's position
 at resolution could not be mapped to a single slot. `ftq_ifu_interfaces.md`
 recorded the gap and costed the fix.
 
+![In-block branch positions, 3-bit and 4-bit](diagrams/blog_fe_1_rvc_positions.svg)
+
+*Two RVC branches in one aligned 4-byte word. With 4-byte positions they
+share position 1; with 2-byte positions, after BP-099, each has its own.*
+
 The fix was blocked by a parameter. `INST_OFFSET` was used by two groups of
 modules for unrelated quantities. The FTB and uBTB used it as the byte size
-of one position. TAGE, ITTAGE and the SC used it as the number of low PC bits
-dropped before hashing. Widening the position had to change the first and
-not the second, since changing the hash shift rehashes every table.
-`tage_table.sv` also declared its own copy, set to 2 and commented as 4-byte
-instructions, which would have ignored a change to the package.
+of one position. TAGE, the indirect target TAGE predictor (ITTAGE) and the SC
+used it as the number of low PC bits dropped before hashing. Widening the
+position had to change the first and not the second, since changing the hash
+shift rehashes every table. `tage_table.sv` also declared its own copy, set
+to 2 and commented as 4-byte instructions, which would have ignored a change
+to the package.
 
 BP-098 replaced `INST_OFFSET` with `PC_HASH_SHIFT` and a derived
 `POS_OFFSET_BITS`, retargeting 41 sites in 15 files and 9 in planning
@@ -220,8 +238,8 @@ is the only count that moved.
 BP-098 and BP-099 were kept separate so that each has a checkable claim: the
 first by every count staying the same, the second by one count moving for a
 stated reason. `PC_HASH_SHIFT` remains 2 and discards PC bit 1, so two RVC
-instructions two bytes apart share a TAGE, ITTAGE and SC index. Whether 1
-predicts better cannot be measured in the repository today.
+instructions two bytes apart share a TAGE, ITTAGE and SC index. Whether a
+shift of 1 predicts better cannot be measured in the repository today.
 
 ## The first FTQ module
 
@@ -259,20 +277,18 @@ The testbench runs 67 checks in five groups, including a case where a
 high-value update on channel 1 issues before a low-value one on channel 0,
 which a scheduler ranking by index alone would fail. Each property was then
 broken by a separate mutation, and each failed the build. The P4 mutation was
-chosen so that it did not also break P3, so each property is shown to fire
-independently. The scheduler has no consumer yet.
-
-The task file had carried a completed status while its own summary read not
-run and no RTL existed. The task's first requirement now checks the tree
-before writing anything, and the project rule is that a status checkbox is
-not evidence that a task ran.
+chosen so that it did not also break P3, the property that the one-deep skid
+never overflows, so each property is shown to fire independently. The
+scheduler has no consumer yet.
 
 ## Entry status and the module decomposition
 
-BP-103 settled the last three items blocking FTQ RTL. The IFU interface had
-deferred three per-entry fetch fields, request issued, writeback received and
-fault, until the allocation policy was decided. That policy is now in
-`ftq_decisions.md` 5: entries are freed by commit only.
+BP-103 settled the last three items blocking FTQ RTL: the per-entry fetch
+status fields, the stale writeback problem that opened TD-FE-8, and the
+module decomposition. The IFU interface had deferred three status fields,
+request issued, writeback received and fault, until the allocation policy
+was decided. That policy is now in `ftq_decisions.md` 5: entries are freed
+by commit only.
 
 The hypothesis was that these fields do not belong in the entry. The
 writeback arrives at an arbitrary time relative to the fetch read, so a bit in
@@ -280,27 +296,58 @@ the fast-path SRAM would be a read-modify-write of an array already read
 every cycle. The commit walk tests the bits across entries. A redirect
 squashes every entry after an index and must clear their status in one cycle,
 which in SRAM would be a walk that has to finish before those indices can be
-reused. The fields are therefore flop vectors outside both SRAMs, 192 bits,
-and the entry sizes did not change. Request issued was rejected, because
-`fetch_ptr` already records which entries have been issued.
+reused. The fields are therefore flop vectors outside both SRAMs, and the
+entry sizes did not change. Request issued was rejected, because `fetch_ptr`
+already records which entries have been issued. Writeback received and fault
+remain, joined by the generation bit described below: three bits per entry,
+192 bits in all.
 
 Specifying the clear rule for those bits opened TD-FE-8. A predecode
 writeback in flight when its entry is squashed and the index reallocated
-would set status on the new use of that index. The stale-response shadow of
-`ftq_decisions.md` 5.6 cannot cover this, because IFU latency is not bounded.
-One generation bit goes out with each request and returns with each
-writeback, and it toggles on each allocation. A mismatched writeback is
-dropped. One bit is enough because the IFU flush bounds stale writebacks to
-those already presented in the flush cycle. The document records that
-condition, so that a change to the flush contract prompts a review of the
-width.
+would set status on the new use of that index. The FTQ already solves the
+same problem for the cluster with the stale-response shadow of
+`ftq_decisions.md` 5.6. The response indices the cluster returns carry no
+wrap bit, so a rewind can reallocate an index while a response for the
+squashed use of it is still in flight. The shadow records, for each cluster
+pipeline stage, whether that stage holds a live FTQ request and which entry
+it names; a redirect clears the stages it squashes, and a response is
+accepted only if its stage is live and its index matches. That works because
+the cluster's latency is fixed by its stages. IFU latency is not bounded, so
+the shadow cannot cover the IFU.
+
+BP-103 closed it with one generation bit, which goes out with each request
+and returns with each writeback, and toggles on each allocation. A
+mismatched writeback is dropped. One bit is enough because the IFU flush
+bounds stale writebacks to those already presented in the flush cycle. The
+document records that condition, so that a change to the flush contract
+prompts a review of the width.
 
 `ftq_decisions.md` 7 divides the FTQ into eleven modules by one rule: each
 piece of state has exactly one owner module, and others read it through a
-port. The top, `ftq.sv`, holds no state and no logic. Pointer state is split
-between `ftq_ptr` and `ftq_commit`, because the commit pointer is the only one
-whose advance depends on the RAS commit port and on redirect restores. Redirect
-arbitration is in `ftq_npc`, since the winning redirect is the next-PC source.
+port. The top, `ftq.sv`, holds no state and no logic. The eleven, as
+decided at the close of this range:
+
+| Module | Owns | Specified in |
+|---|---|---|
+| `ftq` | Structural top: instantiation and wiring only | ftq_decisions.md 7 |
+| `ftq_ptr` | alloc_ptr, fetch_ptr | ftq_decisions.md 5.1, 5.2, 5.5 |
+| `ftq_commit` | commit_ptr and the commit walk | ftq_decisions.md 5.3, 5.4 |
+| `ftq_npc` | The next-PC register and the redirect arbitration that feeds it | ftq_decisions.md 4 |
+| `ftq_entry` | The fast-path entry array | ftq_entry_formats.md 1, 2 |
+| `ftq_meta` | The slow-path metadata array | ftq_entry_formats.md 3 |
+| `ftq_status` | Per-entry status flops: writeback received, fault, generation | ftq_entry_formats.md 4 |
+| `ftq_shadow` | The stale-response shadow | ftq_decisions.md 5.6 |
+| `ftq_ifu` | IFU request, flush, writeback and predecode redirect ports | ftq_ifu_interfaces.md |
+| `ftq_resolve` | Resolution intake and update fan-out | ftq_backend_interfaces.md 4 |
+| `ftq_ftb_sched` | The FTB update scheduler; built in BP-100 | ftq_decisions.md 5.7 |
+
+A later range added a twelfth, `ftq_upd_conv`, which forms the
+per-predictor update payloads (BP-119).
+
+Pointer state is split between `ftq_ptr` and `ftq_commit`, because the commit
+pointer is the only one whose advance depends on the RAS commit port and on
+redirect restores. Redirect arbitration is in `ftq_npc`, since the winning
+redirect is the next-PC source.
 
 ## Flush
 
@@ -309,7 +356,7 @@ arbitration is in `ftq_npc`, since the winning redirect is the next-PC source.
 The RAS response to a flush had been raised and answered across many
 sessions. BP-104 found it specified in `ras_decisions.md` 4.4 since session
 050: a flush restores the RAS pointers from the FTQ snapshot, as a
-mispredict does. The IA checked the RTL rather than the documents. The
+mispredict does. The IA checked the RTL against the documents. The
 restore path is built and tested in `ras.sv` and `tb_ras.sv`. The same
 module declares `ras_flush_val` and `ras_flush_snapshot`, which nothing
 reads, and sites in seven documents described the behavior as undefined.
@@ -325,18 +372,18 @@ task file records them as declined proposals.
 
 ### A flush is a redirect
 
-The FTB half remained under six identifiers: TD #96, G24, IC-FTB-07,
-IC-SC-06, IC-SCT-03 and an item in `bp_arb_spec.md`. Flush ports existed on
-three modules and were driven by nothing. Every deferral assumed a flush
-protocol had to be written.
+The rest of the flush question remained under six identifiers: TD #96, G24,
+IC-FTB-07, IC-SC-06, IC-SCT-03 and item E in `bp_arb_spec.md`. Flush ports
+existed on three modules and were driven by nothing. Every deferral assumed
+a flush protocol had to be written.
 
 BP-105's hypothesis was that no flush event exists. The evidence is in the
-XiangShan sources [1]: the common interface every predictor implements has no
-flush port, and none of the predictor source files contains the word. The
-BPU's internal flush signals clear its stage valids, so a predictor is cleared
-by not being fired. The cluster already gates every predictor on its stage
-valids and derives its redirects, so the mechanism was built and only the
-decision was missing.
+XiangShan sources [2]: the common interface every predictor implements has no
+flush port, and none of the predictor source files contains the word flush.
+The BPU's internal flush signals clear its stage valids, so a predictor is
+cleared by not being fired. The cluster already gates every predictor on its
+stage valids and derives its redirects, so the mechanism was built and only
+the decision was missing.
 
 FE-14 records that a flush is a redirect. The six items closed citing it.
 `ftb_cntrl.sv` gates its prediction outputs on a flush port that
@@ -348,43 +395,48 @@ each was rejected, are in the task file.
 
 The first sweep of the planning tree fixed six sites and was reported as
 complete. A grep of the whole tree then found five more. A later audit found
-seven further stale items unrelated to flush, six of them a document
-restating a fact owned by another.
+seven further stale items unrelated to flush, six of them cases where one
+document restated a fact owned by another.
 
 ## Experiment Summary
 
-| Experiment | Description | Status | Checks | Runtime | Context |
-|---|---|---|---|---|---|
-| BP-101 | pft_addr, TD-FE-6 slot groups, RESET_VECTOR | PASS | sim 28 to 29; sim_bp_cluster 973 to 997 (group I, 24); 2 mutations | interactive | not recorded |
-| BP-098 | INST_OFFSET split into PC_HASH_SHIFT and POS_OFFSET_BITS | PASS | 47/47, every count unchanged; 41 RTL and 9 planning sites | interactive | 42% |
-| BP-099 | FTB_BR_POS_BITS 3 to 4 | PASS | 47/47; sim_bp_cluster 997 to 1765; 177 literals; +9,472 bits | interactive | not recorded |
-| BP-102 | TD-FE-7 history rollback input | PASS | sim_bp_cluster 1765 to 1795 (group J, 30); 4 mutations, 1 negative | interactive | not recorded |
-| BP-100 | ftq_ftb_sched, first FTQ module and first concurrent SVA | PASS | 67/0; 5 properties, each mutated; bpu 47/47 unchanged | interactive | 69% cumulative |
-| BP-103 | Entry status, TD-FE-8, eleven-module decomposition | COMPLETE | specification only; both units rerun, unchanged | interactive | not recorded |
-| BP-104 | RAS-3 closed | COMPLETE | documentation only; both units rerun, unchanged | interactive | not recorded |
-| BP-105 | FE-14, flush is a redirect; RC_UNSPEC | COMPLETE | documentation only; both units rerun, unchanged | interactive | not recorded |
+Every task in this range was run interactively: I worked each one with the
+IA in a live session, and no task was handed to an unattended run from a
+PA-written task file. The PA contribution section below gives the reason.
+Status reads PASS for a task whose claim rests on simulation counts, and
+COMPLETE for a specification or documentation task, which reran the bpu and
+ftq units to show that no count moved. Rows are in the order the work was
+done, as in the rest of the post.
+
+| Experiment | Description | Status | Checks |
+|---|---|---|---|
+| BP-101 | pft_addr, TD-FE-6 slot groups, RESET_VECTOR | PASS | sim 28 to 29 (one pft_addr width check); sim_bp_cluster 973 to 997 (group I, 24); 2 mutations |
+| BP-098 | INST_OFFSET split into PC_HASH_SHIFT and POS_OFFSET_BITS | PASS | 47/47, every count unchanged; 41 RTL and 9 planning sites |
+| BP-099 | FTB_BR_POS_BITS 3 to 4 | PASS | 47/47; sim_bp_cluster 997 to 1765; 177 literals; +9,472 bits |
+| BP-102 | TD-FE-7 history rollback input | PASS | sim_bp_cluster 1765 to 1795 (group J, 30); 4 mutations, 3 detected, 1 not detected (fixture not needed) |
+| BP-100 | ftq_ftb_sched, first FTQ module and first concurrent assertions | PASS | sim_ftq_ftb_sched 67 checks, 0 failures; 5 properties, each mutated; bpu 47/47 unchanged |
+| BP-103 | Entry status, TD-FE-8, eleven-module decomposition | COMPLETE | specification only; bpu and ftq rerun, unchanged |
+| BP-104 | RAS-3 closed | COMPLETE | documentation only; bpu and ftq rerun, unchanged |
+| BP-105 | FE-14, flush is a redirect; RC_UNSPEC | COMPLETE | documentation only; bpu and ftq rerun, unchanged |
 
 ## Design Process Notes
 
 ### The IA contribution
 
 The IA wrote the four specification documents and made every change in the
-range. It found both BPU gaps by writing what the FTQ would have to drive,
+range. It found both BPU defects by writing what the FTQ would have to drive,
 not by running a test. It checked claims against the tree before acting on
-them: the RAS restore path in RTL rather than in documents, and the flush
-question against XiangShan sources with the counts recorded, since the
-evidence was an absence.
+them: the RAS restore path against the RTL, and the flush question against
+the XiangShan sources, where the finding was that no predictor has a flush
+port.
 
 It proved each change the way its claim required. BP-098 is proven by
 identical counts and BP-099 by one count moving for a stated reason. BP-101,
 BP-102 and BP-100 each include a mutation that reproduces the defect or
-breaks the property, and BP-102 reported its negative mutation as one. It
-reported where it was wrong: the first flush sweep, and a mutation run it
-first read as a hang that was a command timeout expiring during compilation.
-
-It wrote BP-100, BP-103, BP-104 and BP-105 after the work and marked each
-prompt as a reconstruction, so a reader can tell them from tasks specified
-in advance.
+breaks the property, and BP-102 reported the mutation that did not fail as a
+result rather than as a defect in the test. It reported where it was wrong:
+the first flush sweep, and a mutation run it first read as a hang that was a
+command timeout expiring during compilation.
 
 ### The PA contribution
 
@@ -407,18 +459,20 @@ topic is closed before raising it, and avoid unnecessary jargon.
 
 ### The generalization
 
-Four defects in this range were found by specification rather than by
-simulation: the unrouted FTB classification, the missing rollback input, the
-two contradictory properties, and the stale IFU writeback. The first two were
-in RTL that passed every test, because no test can check an output a module
-does not have. Writing down, port by port, what the next unit must drive and
-receive tested the cluster's boundary in a way its own testbench could not.
+Six gaps in this range were found by specification rather than by
+simulation: the missing fall-through field, the missing reset PC, the
+unrouted FTB classification, the missing rollback input, the two
+contradictory properties, and the stale IFU writeback. The unrouted
+classification and the missing rollback input were in RTL that passed every
+test, because no test can check an output a module does not have. Writing
+down, port by port, what the next unit must drive and receive tested the
+cluster's boundary in a way its own testbench could not.
 
-The other result is about documents. Eight sites restated the RAS flush
-decision and seven had drifted; the flush sweep missed five sites on its
-first pass; the later audit found six restatements out of date. In this
-project a decision has one home, other documents point to it, and a sweep of
-the tree is done with a search whose output is recorded.
+The other result is about documents. Sites in seven documents restated the
+RAS flush decision and had drifted from it; the flush sweep missed five sites
+on its first pass; the later audit found six restatements out of date. In
+this project a decision has one home, other documents point to it, and a
+sweep of the tree is done with a search whose output is recorded.
 
 ## What comes next
 
@@ -434,29 +488,63 @@ FTQ-to-ICache interface remain deferred.
 
 ## Technical Debt Referenced
 
-The table below reports status as of the close of this range. Later
-experiments outside the range have since changed the state of some items.
+The table reports status as of the close of this range. Later experiments
+outside the range have since changed the state of some items. TD #96 is
+tracked in the Technical Debt table of `planning/PROJECT_STATUS.md`. The
+TD-FE items are owned by `planning/arch/fe_decisions.md`, are collected for
+the FTQ in `planning/arch/ftq_decisions.md` 6, and are summarized in the
+PROJECT_STATUS session log for this range.
 
-| # | Item | Resolution path |
-|---|---|---|
-| 96 | Flush behavior. | CLOSED BP-105. A flush is a redirect, FE-14. The flush ports are redundant and retained; read ras_decisions.md 4.4.2 before re-raising. |
-| TD-FE-1 | IFU interface unspecified. | CLOSED in full: ftq_ifu_interfaces.md, and the entry status fields in BP-103. |
-| TD-FE-3 | pc and per-slot target at 40 bits. | Open. 39 suffice under C, 35 with block alignment. A width optimization. |
-| TD-FE-4 | pred_src has no functional consumer. | Open. Diagnostic; populated only where the information is already available. |
-| TD-FE-6 | FTB classification and positions reach no FTQ port. | CLOSED BP-101. Slot correction groups at p2 and p3, valid on every FTB answer. |
-| TD-FE-7 | No history rollback trigger input on bp_cluster. | CLOSED BP-102. ftq_rollback_val and ftq_rollback_idx, priority over the cluster's own arms. |
-| TD-FE-8 | Stale IFU writeback sets status on a reallocated index. | Opened and CLOSED BP-103. One generation bit toggled per allocation. |
-| G10 | TAGE and ITTAGE metadata overload. | Open. To be decided at implementation. |
+| # | Item | Status at close of range | Source |
+|---|---|---|---|
+| TD #96 | Flush behavior: define it, implement it, update all references. | CLOSED BP-105. A flush is a redirect, FE-14. The flush ports are redundant and retained; read ras_decisions.md 4.4.2 before re-raising. | PROJECT_STATUS.md, Technical Debt |
+| TD-FE-1 | IFU interface unspecified. | CLOSED in full: ftq_ifu_interfaces.md, and the entry status fields in BP-103. | fe_decisions.md; ftq_decisions.md 6 |
+| TD-FE-3 | pc and per-slot target at 40 bits. | Open. 39 suffice under C, 35 with block alignment. A width optimization.[F4] | fe_decisions.md; ftq_decisions.md 6 |
+| TD-FE-4 | pred_src has no functional consumer. | Open. Diagnostic; populated only where the information is already available. | fe_decisions.md; ftq_decisions.md 6 |
+| TD-FE-6 | FTB classification and positions reach no FTQ port. | CLOSED BP-101. Slot correction groups at p2 and p3, valid on every FTB answer. | fe_decisions.md; ftq_bpu_interfaces.md |
+| TD-FE-7 | No history rollback trigger input on bp_cluster. | CLOSED BP-102. ftq_rollback_val and ftq_rollback_idx, priority over the cluster's own arms. | fe_decisions.md; ftq_backend_interfaces.md 8 |
+| TD-FE-8 | Stale IFU writeback sets status on a reallocated index. | Opened and CLOSED BP-103. One generation bit toggled per allocation. | fe_decisions.md; ftq_entry_formats.md 4.4; ftq_ifu_interfaces.md 6.1 |
+
+## Identifiers
+
+The project tracks open questions, decisions and debt in registries spread
+across the planning documents. This table lists every identifier used in
+the post, with the document that owns it. Paths are relative to the
+repository root.
+
+| Identifier | Kind | Description | Source document |
+|---|---|---|---|
+| BP-nnn | Task file | One file per task; this range is BP-098 to BP-105, and BP-106 and BP-119 are later tasks cited here | prompts/BP-nnn.md |
+| IA-004, IA-005 | Interactive session | The two IA sessions of this range, recorded in each task file's header | prompts/BP-098.md to prompts/BP-105.md |
+| Session 050, session 072 | PA session | Planning sessions, cited for when a decision or correction was recorded | planning/PROJECT_STATUS.md, session log |
+| TD #96 | Technical debt | Flush behavior. CLOSED BP-105 | planning/PROJECT_STATUS.md, Technical Debt |
+| TD-FE-1 to TD-FE-8 | Front-end technical debt | See Technical Debt Referenced above | planning/arch/fe_decisions.md |
+| FE-5 | Front-end decision | No prediction or update is dropped except as FE-5a permits | planning/arch/fe_decisions.md |
+| FE-5a | Front-end decision | An FTB update may be dropped on collision, and only when it is low value | planning/arch/fe_decisions.md |
+| FE-14 | Front-end decision | A flush is a redirect; the front end has no flush event | planning/arch/fe_decisions.md |
+| G10 | BP cluster open TBD | TAGE and ITTAGE metadata overload scheme. Open | planning/PROJECT_STATUS.md, BP Cluster Open TBDs |
+| G24 | BP cluster open TBD | FTB flush protocol, ftb_flush_px. CLOSED BP-105 | planning/PROJECT_STATUS.md, BP Cluster Open TBDs |
+| G25 | BP cluster open TBD | Source of the FTB fast-path enable, ftb_fastpath_en. Open | planning/PROJECT_STATUS.md, BP Cluster Open TBDs |
+| IC-FTB-07 | FTB interface item | Do not implement flush logic until specified. CLOSED BP-105 | planning/interfaces/ftb_interfaces.md |
+| IC-SC-06 | SC interface item | SC flush port definitions (_px signals). CLOSED BP-105 | planning/interfaces/sc_interfaces.md |
+| IC-SCT-03 | SC table interface item | SC table flush port definitions (_px signals). CLOSED BP-105 | planning/interfaces/sc_table_interfaces.md |
+| bp_arb_spec.md item E | Arbiter open item | Prediction and update queue behavior on flush. CLOSED BP-105 | planning/arch/bp_arb_spec.md |
+| RAS-3 | RAS open item | RAS recovery on flush. CLOSED BP-104 as a label correction | planning/arch/ras_decisions.md 4.4 |
+| P1 to P5 | Scheduler property | The five FTB update scheduler properties; P4 corrected in BP-100 | planning/arch/ftq_decisions.md 5.7.4 |
 
 ## References
 
-[1] XiangShan, open-source high-performance RISC-V processor,
+[1] Branch Prediction Cluster Simulation and Mutation-Based Verification
+(BLOG_bpu_20), for the cluster boundary this range extends,
+https://uarchlabs.github.io/blog/branch-prediction-cluster-simulation-and-mutation-based-verification/
+
+[2] XiangShan, open-source high-performance RISC-V processor,
 https://github.com/OpenXiangShan/XiangShan
 
-[2] RISC-V Profiles, RVA23 Profile, https://github.com/riscv/riscv-profiles
+[3] Pacino, https://github.com/uarchlabs/pacino. The planning documents and
+task files cited in this post are in planning/ and prompts/.
 
-- Branch Prediction Cluster Simulation and Mutation-Based Verification
-  (BLOG_bpu_20), for the cluster boundary this range extends.
+[4] RISC-V Profiles, RVA23 Profile, https://github.com/riscv/riscv-profiles
 
 ## Footnotes
 
@@ -471,14 +559,22 @@ The fix was specified and not built at the close of that range.
 
 [F3] The planning-document rule is in CLAUDE.md's fixed constants and
 applies from BP-106.
+
+[F4] The TD-FE-3 resolution path shown here was subsequently changed in
+later sessions.
 <!-- ticfinder_on -->
 
 ---
 <!-- ticfinder_off -->
-*Jeff Nye is a microprocessor architect with 35 years of industry experience 
-spanning performance modeling, RTL implementation, and architecture for 
-high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,  TI C6x and RISC-V designs, and recently served as sole architect and full-stack implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in an 8-issue RVA23 RISC-V processor — from research through timing closure at 2.75 GHz. He holds +20 issued patents in processor design, architecture, and hardware 
-virtualization. He is the author of Pacino and the uarchlabs methodology documented here.*
+*Jeff Nye is a microprocessor architect with 35 years of industry experience
+spanning performance modeling, RTL implementation, and architecture for
+high-performance out-of-order processors. He has contributed RTL to Pentium 4,
+ARMv7, TI C6x and RISC-V designs, and recently served as sole architect and
+full-stack implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in
+an 8-issue RVA23 RISC-V processor, from research through timing closure at
+2.75 GHz. He holds more than 20 issued patents in processor design,
+architecture, and hardware virtualization. He is the author of Pacino and the
+uarchlabs methodology documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
 <!-- ticfinder_on -->

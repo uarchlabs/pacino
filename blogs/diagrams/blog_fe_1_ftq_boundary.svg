@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <title>FTQ boundaries at the close of BP-098 to BP-105</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#343a40"/>
+    </marker>
+    <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d9480f"/>
+    </marker>
+    <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#868e96"/>
+    </marker>
+    <style>
+      .t  { font-family: "DejaVu Sans", Helvetica, Arial, sans-serif; fill: #212529; }
+      .h  { font-size: 15px; font-weight: bold; }
+      .s  { font-size: 12px; }
+      .l  { font-size: 13px; }
+      .b  { font-size: 12px; font-weight: bold; }
+      .nw { fill: #d9480f; }
+      .gy { fill: #868e96; }
+      .box  { fill: #f1f3f5; stroke: #343a40; stroke-width: 1.5; }
+      .sub  { fill: #ffffff; stroke: #868e96; stroke-width: 1; }
+      .subn { fill: #fff4e6; stroke: #d9480f; stroke-width: 1.5; }
+      .e  { stroke: #343a40; stroke-width: 1.5; fill: none; }
+      .en { stroke: #d9480f; stroke-width: 2.5; fill: none; }
+      .ed { stroke: #868e96; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="700" fill="#ffffff"/>
+
+  <text class="t h" x="600" y="32" text-anchor="middle">FTQ boundaries at the close of BP-098 to BP-105</text>
+
+  <!-- ============================ bp_cluster ============================ -->
+  <rect class="box" x="20" y="60" width="240" height="560" rx="6"/>
+  <text class="t h" x="140" y="82" text-anchor="middle">bp_cluster (BPU)</text>
+
+  <rect class="sub" x="40" y="95"  width="200" height="40" rx="4"/>
+  <text class="t b" x="140" y="113" text-anchor="middle">uBTB</text>
+  <text class="t s" x="140" y="128" text-anchor="middle">p1</text>
+
+  <rect class="sub" x="40" y="145" width="200" height="40" rx="4"/>
+  <text class="t b" x="140" y="163" text-anchor="middle">FTB</text>
+  <text class="t s" x="140" y="178" text-anchor="middle">p2</text>
+
+  <rect class="sub" x="40" y="195" width="200" height="40" rx="4"/>
+  <text class="t b" x="140" y="213" text-anchor="middle">TAGE, ITTAGE</text>
+  <text class="t s" x="140" y="228" text-anchor="middle">p2, p3</text>
+
+  <rect class="sub" x="40" y="245" width="200" height="40" rx="4"/>
+  <text class="t b" x="140" y="263" text-anchor="middle">SC</text>
+  <text class="t s" x="140" y="278" text-anchor="middle">p3, direction only</text>
+
+  <rect class="sub" x="40" y="385" width="200" height="45" rx="4"/>
+  <text class="t b" x="140" y="404" text-anchor="middle">bp_history</text>
+  <text class="t s" x="140" y="421" text-anchor="middle">GHR/PHR pointer checkpoints</text>
+
+  <rect class="sub" x="40" y="442" width="200" height="45" rx="4"/>
+  <text class="t b" x="140" y="461" text-anchor="middle">RAS</text>
+  <text class="t s" x="140" y="478" text-anchor="middle">restore, commit</text>
+
+  <rect class="sub" x="40" y="500" width="200" height="100" rx="4"/>
+  <text class="t b" x="140" y="520" text-anchor="middle">Update ports</text>
+  <text class="t s" x="140" y="540" text-anchor="middle">uBTB, TAGE, ITTAGE, SC:</text>
+  <text class="t s" x="140" y="556" text-anchor="middle">two per cycle</text>
+  <text class="t s" x="140" y="576" text-anchor="middle">FTB: one per cycle,</text>
+  <text class="t s" x="140" y="592" text-anchor="middle">no slot dimension, no ready</text>
+
+  <!-- ================================ FTQ ================================ -->
+  <rect class="box" x="500" y="60" width="200" height="560" rx="6"/>
+  <text class="t h" x="600" y="82" text-anchor="middle">FTQ (ftq.sv)</text>
+
+  <rect class="sub" x="512" y="92" width="176" height="48" rx="4"/>
+  <text class="t b" x="600" y="108" text-anchor="middle">ftq_npc</text>
+  <text class="t s" x="600" y="122" text-anchor="middle">next PC, redirect arbitration</text>
+  <text class="t s nw" x="600" y="135" text-anchor="middle">RESET_VECTOR (BP-101)</text>
+
+  <rect class="sub" x="512" y="148" width="176" height="48" rx="4"/>
+  <text class="t b" x="600" y="164" text-anchor="middle">ftq_entry, ftq_meta</text>
+  <text class="t s" x="600" y="178" text-anchor="middle">fast-path, slow-path arrays</text>
+  <text class="t s nw" x="600" y="191" text-anchor="middle">+ pft_addr (BP-101)</text>
+
+  <rect class="sub" x="512" y="204" width="176" height="40" rx="4"/>
+  <text class="t b" x="600" y="221" text-anchor="middle">ftq_ptr, ftq_commit</text>
+  <text class="t s" x="600" y="236" text-anchor="middle">pointers, commit walk</text>
+
+  <rect class="sub" x="512" y="252" width="176" height="40" rx="4"/>
+  <text class="t b" x="600" y="269" text-anchor="middle">ftq_shadow</text>
+  <text class="t s" x="600" y="284" text-anchor="middle">stale-response shadow</text>
+
+  <rect class="subn" x="512" y="300" width="176" height="48" rx="4"/>
+  <text class="t b" x="600" y="316" text-anchor="middle">ftq_status</text>
+  <text class="t s" x="600" y="330" text-anchor="middle">flops: wb_rcvd, fault, gen</text>
+  <text class="t s nw" x="600" y="343" text-anchor="middle">192 b, TD-FE-8 (BP-103)</text>
+
+  <rect class="sub" x="512" y="356" width="176" height="40" rx="4"/>
+  <text class="t b" x="600" y="373" text-anchor="middle">ftq_ifu</text>
+  <text class="t s" x="600" y="388" text-anchor="middle">IFU ports</text>
+
+  <rect class="sub" x="512" y="430" width="176" height="48" rx="4"/>
+  <text class="t b" x="600" y="447" text-anchor="middle">ftq_resolve</text>
+  <text class="t s" x="600" y="462" text-anchor="middle">resolution intake,</text>
+  <text class="t s" x="600" y="474" text-anchor="middle">update fan-out</text>
+
+  <rect class="subn" x="512" y="548" width="176" height="52" rx="4"/>
+  <text class="t b" x="600" y="566" text-anchor="middle">ftq_ftb_sched</text>
+  <text class="t s" x="600" y="581" text-anchor="middle">FE-5a, P1 to P5</text>
+  <text class="t s nw" x="600" y="594" text-anchor="middle">BUILT, BP-100</text>
+
+  <!-- ===================== bp_cluster <-> FTQ edges ===================== -->
+  <line class="e" x1="500" y1="115" x2="260" y2="115" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="108" text-anchor="middle">Prediction request (p0)</text>
+
+  <line class="e" x1="260" y1="170" x2="500" y2="170" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="163" text-anchor="middle">p1 prediction</text>
+
+  <line class="e" x1="260" y1="230" x2="500" y2="230" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="223" text-anchor="middle">p2, p3 redirects</text>
+
+  <line class="en" x1="260" y1="285" x2="500" y2="285" marker-end="url(#n)"/>
+  <text class="t l nw" x="380" y="278" text-anchor="middle">Slot correction groups (BP-101)</text>
+
+  <line class="e" x1="260" y1="345" x2="500" y2="345" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="338" text-anchor="middle">Block and metadata (p2, p3)</text>
+
+  <line class="en" x1="500" y1="407" x2="260" y2="407" marker-end="url(#n)"/>
+  <text class="t l nw" x="380" y="400" text-anchor="middle">History rollback (BP-102)</text>
+
+  <line class="e" x1="500" y1="464" x2="260" y2="464" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="457" text-anchor="middle">RAS restore and commit</text>
+
+  <line class="e" x1="500" y1="525" x2="260" y2="525" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="518" text-anchor="middle">Predictor updates, two channels</text>
+
+  <line class="e" x1="500" y1="580" x2="260" y2="580" marker-end="url(#a)"/>
+  <text class="t l" x="380" y="573" text-anchor="middle">FTB update, one per cycle</text>
+
+  <!-- ================================ IFU ================================ -->
+  <rect class="box" x="940" y="60" width="240" height="245" rx="6"/>
+  <text class="t h" x="1060" y="82" text-anchor="middle">IFU</text>
+  <text class="t s" x="1060" y="100" text-anchor="middle">fetch, predecode</text>
+
+  <line class="e" x1="700" y1="120" x2="940" y2="120" marker-end="url(#a)"/>
+  <text class="t l" x="820" y="113" text-anchor="middle">Fetch request</text>
+
+  <line class="en" x1="700" y1="175" x2="940" y2="175" marker-end="url(#n)"/>
+  <text class="t l nw" x="820" y="168" text-anchor="middle">Generation bit (BP-103)</text>
+
+  <line class="e" x1="700" y1="225" x2="940" y2="225" marker-end="url(#a)"/>
+  <text class="t l" x="820" y="218" text-anchor="middle">Flush</text>
+
+  <line class="e" x1="940" y1="275" x2="700" y2="275" marker-end="url(#a)"/>
+  <text class="t l" x="820" y="268" text-anchor="middle">Predecode writeback, redirect</text>
+  <text class="t s nw" x="820" y="291" text-anchor="middle">returns the generation bit</text>
+
+  <!-- ============================== ICache ============================== -->
+  <rect class="sub" x="940" y="325" width="240" height="50" rx="6" style="stroke-dasharray: 6 4"/>
+  <text class="t b" x="1060" y="346" text-anchor="middle">ICache</text>
+  <text class="t s" x="1060" y="363" text-anchor="middle">no FTQ interface</text>
+  <line class="ed" x1="700" y1="350" x2="940" y2="350" marker-end="url(#d)"/>
+  <text class="t l gy" x="820" y="343" text-anchor="middle">FTQ to ICache, deferred</text>
+
+  <!-- ============================== Backend ============================== -->
+  <rect class="box" x="940" y="395" width="240" height="225" rx="6"/>
+  <text class="t h" x="1060" y="417" text-anchor="middle">Backend</text>
+  <text class="t s" x="1060" y="435" text-anchor="middle">resolution, redirect, commit</text>
+
+  <line class="e" x1="940" y1="465" x2="700" y2="465" marker-end="url(#a)"/>
+  <text class="t l" x="820" y="458" text-anchor="middle">Resolution</text>
+
+  <line class="e" x1="940" y1="525" x2="700" y2="525" marker-end="url(#a)"/>
+  <text class="t l" x="820" y="518" text-anchor="middle">Backend redirect</text>
+
+  <line class="e" x1="940" y1="585" x2="700" y2="585" marker-end="url(#a)"/>
+  <text class="t l" x="820" y="578" text-anchor="middle">Commit</text>
+
+  <!-- =============================== legend =============================== -->
+  <line class="e"  x1="40"  y1="660" x2="90"  y2="660" marker-end="url(#a)"/>
+  <text class="t s" x="100" y="664">existing at start of range</text>
+  <line class="en" x1="300" y1="660" x2="350" y2="660" marker-end="url(#n)"/>
+  <text class="t s nw" x="360" y="664">added in this range (BP-101, BP-102, BP-103); new module or field</text>
+  <line class="ed" x1="820" y1="660" x2="870" y2="660" marker-end="url(#d)"/>
+  <text class="t s gy" x="880" y="664">deferred</text>
+  <text class="t s gy" x="40" y="688">Eleven FTQ modules; shown grouped where they share a box. p0 to p3 are the BPU prediction stages.</text>
+</svg>

@@ -66,6 +66,13 @@ lint_itlb:
 	$(Q)$(VERILATOR) --lint-only $(VER_FLAGS) $(COMMON) \
 	  --top-module itlb $(SIM_SRCS) $(VSILENCE)
 
+# THE KNOB (BP-149, PROJECT_CORE.md TRANSLATION MODES): PT_MODE=sv39,
+# sv48 or sv57 reaches tb_itlb as +PT_MODE; empty, the testbench's own
+# default, sv57. tools/regress.sh passes none; tools/regress_weekly.sh
+# runs the weekly targets below at each mode.
+PT_MODE ?=
+PT_ARG  := $(if $(strip $(PT_MODE)),+PT_MODE=$(strip $(PT_MODE)))
+
 # $(1) target suffix, $(2) WALK_DEPTH.
 define sim_rule
 sim_itlb$(1):
@@ -74,8 +81,8 @@ sim_itlb$(1):
 	  $$(COMMON) --top-module tb -GWALK_DEPTH=$(2) \
 	  --Mdir $$(VER_OUT)_itlb$(1) \
 	  $$(SIM_SRCS) $$(TB_PKG_SRCS) $$(TB_DIR)/tb_itlb.sv $$(VSILENCE)
-	@echo "[simulating] $$(VER_OUT)_itlb$(1)/Vtb"
-	$$(Q)./$$(VER_OUT)_itlb$(1)/Vtb
+	@echo "[simulating] $$(VER_OUT)_itlb$(1)/Vtb $$(PT_ARG)"
+	$$(Q)./$$(VER_OUT)_itlb$(1)/Vtb $$(PT_ARG)
 endef
 
 $(eval $(call sim_rule,,1))
@@ -112,8 +119,13 @@ clean:
 #   clean, regress_list - housekeeping and this plumbing.
 REGRESS_TARGETS := lint_itlb sim_itlb sim_itlb_d2 assert_labels
 REGRESS_EXCLUDE := all clean regress_list
+# BP-149: the targets that translate under the knob, which
+# tools/regress_weekly.sh runs at every PT_MODE. tools/regress.sh reads
+# only the test: and exclude: lines.
+REGRESS_WEEKLY  := sim_itlb sim_itlb_d2
 
 .PHONY: regress_list
 regress_list:
 	@echo "test: $(REGRESS_TARGETS)"
 	@echo "exclude: $(REGRESS_EXCLUDE)"
+	@echo "weekly: $(REGRESS_WEEKLY)"
