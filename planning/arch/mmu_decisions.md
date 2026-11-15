@@ -191,7 +191,9 @@ MMU-32 THE WALK FOLLOWS THE MODE. LEVELS is 3 for Sv39 and Sv39x4,
        Sv57x4 G-stage. RULED session-085 (Jeff) with MMU-20. BUILT in
        the walker by BP-146: each stage's root level is sampled with
        the CSR group. The ITLB's sizes 3'b100 and 3'b101 and its
-       per-mode address check are BUILT by BP-148.
+       per-mode address check are BUILT by BP-148. The x4 root's
+       entries at 0x100 and above, used only with vsatp Bare, are run
+       end to end by tb_fe_top pt_gonly_x4 (BP-149).
 
 MMU-33 AN UNSUPPORTED MODE IS WALKED AS SV39. The CSR-5 write rules
        keep an unsupported value out of satp, vsatp and hgatp, so in
@@ -1174,4 +1176,7 @@ TD#118    No longer bounds the walker, which has its own port
 
   2026-11-14  session-085, after BP-148. MMU-32: the ITLB half built.
               MMU-33: the ITLB half ruled and built.
+
+  2026-11-15  session-085, after BP-149. MMU-32: pt_gonly_x4 runs the
+              x4 root's top entries.
 ```

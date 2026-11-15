@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-14
+ UPDATED: 2026-11-15
  CONTACT: Jeff Nye
 ```
 
@@ -780,8 +780,16 @@ x4 modes included. A test whose subject is a named mode, or a
 comparison of modes, sets its modes itself, in every run (Jeff,
 session-085). tools/regress_demo.sh runs the fe_demo scenarios
 under Sv39, the old default, until they move to Sv57. Tests that run
-untranslated (Bare) are unaffected. Both changes are BP-149's; until
-then the translated tests stay as they are.
+untranslated (Bare) are unaffected. BUILT by BP-149: tb_ptw, tb_itlb
+and tb_fe_top read +PT_MODE=sv39|sv48|sv57 (sv57 when absent), passed
+from the make variable PT_MODE to every sim target; the G-stage takes
+the x4 mode of the same depth. Each Makefile with translating targets
+prints a third regress_list line, "weekly: <targets>", which
+regress_weekly.sh runs under each mode; regress.sh reads only test:
+and exclude:. A test whose stimulus exists only in some modes tests
+that mode's limit and names its mode; prompts/BP-149.md lists them.
+The shared fe_top models keep their Sv39 and Sv39x4 defaults for
+fe_demo.
 
 ### A package edit is a cross-unit change
 EVERY TARGET IN THE bpu AND ftq UNITS COMPILES bp_defines_pkg.sv

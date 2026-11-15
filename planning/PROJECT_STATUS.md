@@ -16,6 +16,44 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: BP-149 recorded. The paging modes are done.
+
+BP-149 COMPLETE (56a3dde). regress.sh 283 targets, RESULT: PASS;
+  regress_weekly.sh 15 runs, RESULT: PASS. tb_ptw, tb_itlb and
+  tb_fe_top run their translated tests under +PT_MODE, sv57 by
+  default; every check count is the same at sv39, sv48 and sv57:
+  sim_ptw 1564, sim_itlb 228, sim_itlb_d2 231, sim_fe_top 808 -> 829
+  and sim_fe_top_1slot 806 -> 827 (pt_gonly_x4). tb_ptw is on
+  pt_build_pkg, every check kept, one PTE written directly
+  (h_gpf_read). Tests that relied on the old Sv39 default now name
+  it (tb_itlb P1, P2, P8, W pass 0; fe_top sv39). pt_gonly_x4 reaches
+  x4 root entry 0x700. The generator (pt_gen.sv) and sim_ptw_img: 607
+  pages, 24 table pages, 630 words, 5465 checks. tb_ptw's cold compile
+  cut from over 30 min to 2 min 15 s by moving its CSR tasks into
+  classes. PF-17's details RULED (Jeff).
+PA CORRECTIONS (Problem 0): exp_gpf41 is not a Sv39x4 bound test; the
+  tb_itlb "12 sites" were three; the baseline was f9b09bd (dirty), not
+  40afd69; BP-148's fe_top times were ccache hits.
+RUN TIME: regress.sh 1913s against 673s, nearly all two cold compiles
+  of tb_fe_top (547s, 702s). Warm, the IA expects about BP-148's time;
+  either is too long for an hourly push pipeline (Jeff).
+PAGING MODES DONE (BP-145 to BP-149): VA_WIDTH 59, PA_WIDTH 48, the
+  walker and the ITLB in every mode of MMU-20, Sv57 the test default.
+  Open from this flow: TD#198 (debug_support), TD#199 (cachegen
+  PA_WIDTH), TD#200 (the Verilator report).
+INFRA-014 OPENED: regression time. The fe_top per-program targets run
+  the binary sim_fe_top built, keeping a line per program (BP-121's
+  intent); the 2-slot and 1-slot halves run in parallel (a slot1/
+  Makefile including fe_top's, its own object directory); ccache
+  base_dir covers the repo and the scratchpad; regression targets for
+  pt_gen's two error paths. Expected: about 5 min warm, 12 cold, bpu
+  (293s) the critical path.
+TD#201 OPENED: the tb_fe_top cold compile.
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-015, TOOLS-008, PERF-002,
+TD#202.
+
+---
 ## Session-085, continued: BP-149 written.
 
 BP-149 WRITTEN: Sv57 by default (PROJECT_CORE.md translation modes;
@@ -7975,6 +8013,14 @@ numbers are issued from one sequence across both tables.
 |     |          | did not: tasks, module scope, static members. Write up   |
 |     |          | what was checked by hand and add it to the report if the |
 |     |          | defect stands. Opened session-085 (Jeff).                |
+| 201 | tb       | OPEN. TB_FE_TOP COLD COMPILE (BP-149). A cold compile of |
+|     |          | tb_fe_top takes 9 to 12 minutes per slot count: the CSR  |
+|     |          | tasks of fe_tb_csr.svh, and the other module tasks the   |
+|     |          | writer calls, are inlined at every call. Move them into  |
+|     |          | classes, as BP-149 did for tb_ptw (over 30 minutes to    |
+|     |          | 2 min 15 s). fe_tb_csr.svh is shared with examples/      |
+|     |          | fe_demo, so the task builds tb_fe_demo and keeps its     |
+|     |          | callers working. Opened session-085 (Jeff).              |
 
 ---
 

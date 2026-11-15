@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-14
+ UPDATED: 2026-11-15
  CONTACT: Jeff Nye
 ```
 
@@ -307,13 +307,18 @@ PF-17  THE TRACES RUN BEHIND PAGE TABLES (Jeff, session-085), so the
        from the start of main memory (mmu_decisions.md MMU-15a). The
        mode is Sv57 (PF-16). A generator built on pt_build_pkg writes
        the tables as a memory image file; the gasket (PF-4) loads
-       it. The generator is NOT YET BUILT (BP-149); the gasket is
-       PERF-002's. PROPOSED, PA (BP-149 Binding THE GENERATOR): each
-       leaf has V, R, X, A and U set, and W, D and G clear; the table
-       pages come from a pool after the last code page; the image is
-       text, a satp line, one map line per page in first-touch order,
-       and one word line per table word. The page list a trace
-       touches is extracted by PERF-002.
+       it. Each leaf has V, R, X, A and U set, and W, D and G clear;
+       the root is the first page after the last code page and the
+       other table pages follow it; the image is text, every value
+       hexadecimal with no prefix: header comments, a satp line
+       (MODE Sv57, ASID 0, the root's PPN), one map line per page in
+       first-touch order, and one word line per table word. RULED
+       session-085 (Jeff). A non-canonical input address, or an input
+       that does not fit main memory, stops the generator. BUILT by
+       BP-149: rtl/mmu/ptw/tb/pt_gen.sv (+IN page list, +OUT image);
+       rtl/mmu/ptw sim_ptw_img walks every page of a checked-in
+       sample's image with the walker. The page list a trace touches
+       is extracted by PERF-002, and the gasket is PERF-002's.
 
 ## 7. Process
 
@@ -398,4 +403,7 @@ PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
 
   2026-11-14  session-085 (PA). PF-17: the generator's leaf, table
               placement and image format PROPOSED with BP-149.
+
+  2026-11-15  session-085, after BP-149. PF-17: the generator's details
+              RULED (Jeff) and BUILT.
 ```
