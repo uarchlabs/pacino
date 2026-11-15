@@ -16,6 +16,46 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: INFRA-015 written.
+
+INFRA-015 WRITTEN: closes TD#201, the tb_fe_top cold compile (9 to 12
+  minutes per slot count) and the relative path at tb_fe_top.sv:3436.
+  Measure first: a cold build (CCACHE_DISABLE=1) at each slot count,
+  with the time of each C++ compile, the largest files and functions
+  and what is inlined there. Then the cheapest means that work, in
+  order: Verilator build options (--build-jobs, --output-split,
+  --output-split-cfuncs); stopping the inlining (no_inline_task or
+  the BP-149 class treatment); the run_prog dispatch only if one
+  function still dominates. Goal under 3 minutes per slot count, not
+  a gate. Nothing checked changes; the shared models keep every task
+  fe_demo calls; tb_fe_demo built, not run. The oracle file read by a
+  path that works from any directory, and slot1 then runs make in
+  slot1/ if the rules allow it. One regress.sh at the end, which is
+  the after-an-edit figure.
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-004,
+TD#203.
+
+---
+## Session-085, continued: front-end delivery bandwidth.
+
+JEFF, session-085: pacino needs two taken branches per cycle and a
+  64-byte prediction block; without them the front end cannot keep
+  the 8-wide midcore fed. "Fetch" is the L1I read, already 64 bytes
+  (two lines from the line's upper half); the prediction block, what
+  the predictors cover and the IFU delivers per cycle, is 32 bytes.
+  Recorded as TD#202, with TD#133 pointing to it.
+PERF-003 TO BE WRITTEN: size the gap from the CBP traces, with no RTL.
+  Bytes and instructions between taken branches, and the average
+  delivered per cycle for a 32-byte block with one taken branch
+  (today), a 64-byte block with one, and a 64-byte block with two;
+  each against 8 per cycle. PERF-002 stays the trace gasket
+  (perf_decisions.md PF-17).
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-015, TOOLS-008, PERF-004,
+TD#203.
+
+---
 ## Session-085, continued: INFRA-014 recorded.
 
 INFRA-014 COMPLETE (999eaec). regress.sh 285 targets (283 plus
@@ -39,7 +79,8 @@ TIMES: warm baseline 708s. The final "warm" run (608s) was cold for
   (TD#201). PA: the task's "cold" definition was the error.
 PA CORRECTIONS (Problem 0): the fe_top Makefile's TB_DIR and other
   paths were relative, not from RVA_ROOT; three line ranges.
-CANDIDATE, not opened: INFRA-015, bpu's 1-slot half as its own
+CANDIDATE, not opened: INFRA-016 (renumbered from INFRA-015 when
+  INFRA-015 was given to TD#201), bpu's 1-slot half as its own
   Makefile. sim_bp_cluster_init and its twin (72s) and the seven cov
   targets (88s) are 58% of bpu's warm 278s.
 JEFF: stale build output fe_top/obj_dir and fe_top/obj_1slot_fe_top
@@ -6338,7 +6379,9 @@ moves there in the planning update that closes it.
 |     |          |                                                          |
 |     |          | Assess with the same harness as TD#128, once the IFU is  |
 |     |          | complete and something can drive it. Gate any two-block  |
-|     |          | commitment on this.                                      |
+|     |          | commitment on this. Session-085 (Jeff): pacino needs two |
+|     |          | taken branches per cycle and a 64-byte prediction block  |
+|     |          | to keep the 8-wide midcore fed; see TD#202 and PERF-003. |
 | 149 | bpu, ftq | OPEN, MEASURED by BP-121. The p3 RAS repair: after SC    |
 |     |          | reverses a slot at p3 the entry holds the pre-repair     |
 |     |          | snapshot. Repairs: recur 14, rvc 9, misp_call 16;        |
@@ -6744,6 +6787,23 @@ moves there in the planning update that closes it.
 |     |          | ../ifu/tb/ifu_rvc_exp_oracle.hex relative to the working |
 |     |          | directory, so slot1's targets run make in fe_top/        |
 |     |          | (INFRA-014). Opened session-085 (Jeff).                  |
+| 202 | frontend | OPEN, PERFORMANCE, REQUIREMENT. FRONT-END DELIVERY       |
+|     |          | CANNOT KEEP THE MIDCORE FED AT 8 PER CYCLE. Jeff,        |
+|     |          | session-085:                                             |
+|     |          | pacino needs two taken branches per cycle and a 64-byte  |
+|     |          | prediction block. Today one 32-byte block is delivered   |
+|     |          | per cycle, from any 2-byte start, ending at the first    |
+|     |          | taken branch (IFU-6 to IFU-8, ftq_ifu_interfaces.md 8    |
+|     |          | item 2); the L1I already reads a 64-byte line, two when  |
+|     |          | the start is in the line's upper half (IFU-7). One taken |
+|     |          | branch per cycle bounds delivery by the run to it, well  |
+|     |          | under 8 before bubbles, while the ibuf reads 8 (IBUF-9). |
+|     |          | Sized first by PERF-003; then a planning note covering   |
+|     |          | the uBTB and FTB entries, the predictors and history     |
+|     |          | update with two taken per cycle, the RAS, the FTQ entry, |
+|     |          | the IFU, the L1I reads per cycle and the ibuf write, and |
+|     |          | the rulings it reverses (session-073 one block per       |
+|     |          | cycle, FTB_BLOCK_BYTES 32). Opened session-085 (Jeff).   |
 
 ---
 
