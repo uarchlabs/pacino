@@ -16,6 +16,23 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: TOOLS-007 written.
+
+TOOLS-007 WRITTEN: the Verilator class-member store seen in BP-148. A
+  minimal test in the scratchpad with variants (a direct loop or a pop
+  loop with output arguments, a $display, the flag in the same object
+  or another, -O0, the declaration order), built with the fe_top sim
+  flags. If it reproduces: the smallest form, the dropped store in the
+  generated C++, a rule proposed for rtl/CLAUDE.md "Verilator work
+  arounds", and every site in the testbench classes. If not: the
+  BP-148 code re-created in a scratch copy, pt_faults_h run with
+  +PTLOG and the "direct" lines counted. No file in the tree changes;
+  regress.sh not run. Runs before BP-149.
+
+Next free: BP-149, SYS-003, DOC-017, INFRA-014, TOOLS-008, PERF-002,
+TD#200.
+
+---
 ## Session-085, continued: BP-148 recorded. TOOLS-007 opened.
 
 BP-148 COMPLETE (40afd69). regress.sh 279 targets, RESULT: PASS.

@@ -216,6 +216,7 @@
 # Updated when BP-148 was written, session-085 (PROJECT_STATUS.md).
 # Updated after BP-148, session-085 (PROJECT_STATUS.md,
 # itlb_decisions.md, itlb_l2tlb_interfaces.md, mmu_decisions.md).
+# Updated when TOOLS-007 was written, session-085 (PROJECT_STATUS.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -259,7 +260,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   2d8332507267
-PLAN  PROJECT_STATUS.md                 7ea0a0b7815a
+PLAN  PROJECT_STATUS.md                 a4a0f2969e7e
 
 UNKN  CLAUDE.md                         b6bf34c0b981
 
