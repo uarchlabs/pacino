@@ -161,16 +161,39 @@ module tb;
   `include "fe_tb_dut.svh"
 
   // ---- bookkeeping ----------------------------------------------------
-  int    pass_cnt;
-  int    fail_cnt;
+  // INFRA-015: chk is one call to ck_c::chk. Verilator inlines a module
+  // task at every call, and chk had 866 copies in the one C++ function of
+  // the initial block that runs the programs; a class method is compiled
+  // once.
+  // THE COUNTS ARE MEMBERS OF CK (CK.pass_cnt, CK.fail_cnt), read through
+  // the handle. As module variables written only by the method, they
+  // were not seen by the initial block that zeroed them: Verilator 5.048
+  // folded pass_cnt to 0 in the totals line (PASS=0 for every program),
+  // and fail_cnt was kept only because run_prog also wrote it. Every
+  // count and every failure goes through CK.
+  class ck_c;
+    int pass_cnt;
+    int fail_cnt;
+
+    function void chk(input string nm, input logic ok);
+      if (ok) begin
+        pass_cnt++;
+      end else begin
+        fail_cnt++;
+        $display("FAIL: [%s] %s", tname, nm);
+      end
+    endfunction
+
+    // A failure outside a check (run_prog, the main initial block).
+    function void fail();
+      fail_cnt++;
+    endfunction
+  endclass
+
+  ck_c CK = new;
 
   task automatic chk(input string nm, input logic ok);
-    if (ok) begin
-      pass_cnt++;
-    end else begin
-      fail_cnt++;
-      $display("FAIL: [%s] %s", tname, nm);
-    end
+    CK.chk(nm, ok);
   endtask
 
   `include "fe_tb_writer.svh"
@@ -1258,118 +1281,138 @@ module tb;
     n_uc_dlv_bad  = 0;
   endtask
 
-  // Run until the whole stream has retired, then stop taking decode's
-  // output so the front end backs up and nothing more retires, and
-  // check that the FTQ commits through the watermark.
+  // INFRA-015: run_and_check is one call to prg_c::run_and_check, which
+  // holds its body. A module task is inlined at every call, so the body,
+  // with report, c131_close and its checks inlined into it, was compiled
+  // once per program (42 times) into the one C++ function of the initial
+  // block that runs the program. The class has no members: its method
+  // reads and writes this module's variables, as the task did, so the
+  // TOOLS-007 self-store loop rule (rtl/CLAUDE.md) does not arise.
+  // reset_all stays a module task: a class method may not make the
+  // blocking writes it makes to counters that always blocks update by
+  // nonblocking assignment (Verilator 5.048, BLKANDNBLK).
   int cyc_run;
 
-  task automatic run_and_check(input int max_cyc);
-    int c;
-    c = 0;
-    while ((ep < W.ne) && (c < max_cyc) && (n_err < 20)) begin
-      @(posedge clk);
+  class prg_c;
+    // Run until the whole stream has retired, then stop taking decode's
+    // output so the front end backs up and nothing more retires, and
+    // check that the FTQ commits through the watermark.
+    task run_and_check(input int max_cyc);
+      int c;
+      c = 0;
+      while ((ep < W.ne) && (c < max_cyc) && (n_err < 20)) begin
+        @(posedge clk);
+        #1;
+        c++;
+      end
+      cyc_run = c;
+      run_be = 1'b0;
+      repeat (200) @(posedge clk);
       #1;
-      c++;
-    end
-    cyc_run = c;
-    run_be = 1'b0;
-    repeat (200) @(posedge clk);
-    #1;
-    chk($sformatf("the whole stream retired: %0d of %0d in %0d cycles",
-                  ep, W.ne, c), ep == W.ne);
-    chk($sformatf("no stream, decode or index error (%0d)", n_err),
-        n_err == 0);
-    chk("every retired instruction is the executed stream, in order",
-        n_retired == W.ne);
-    chk($sformatf("the FTQ committed through the watermark: ptr %0d wm %0d",
-                  dut.u_ftq.w_commit_ptr, wm),
-        wm_val && (dut.u_ftq.w_commit_ptr == wm + FTQ_PTR_BITS'(1)));
-    chk("every resolution was accepted", rq_hd == rq_tl);
-    // BP-123, Problem 4, every program.
-    chk($sformatf({"no uncached request before older commits or off ",
-                   "the path (%0d of %0d)"}, n_uc_bad, n_uc_req),
-        n_uc_bad == 0);
-    chk($sformatf("no uncached line written into the L1I (%0d)", n_uc_fill_bad),
-        n_uc_fill_bad == 0);
-    chk($sformatf({"uncached instructions delivered one at a time ",
-                   "(%0d bad of %0d)"}, n_uc_dlv_bad, n_uc_dlv),
-        n_uc_dlv_bad == 0);
-    chk($sformatf("the walker's memory port kept WM-1 and WM-3 (%0d)",
-                  n_pw_bad), n_pw_bad == 0);
-    $display("%s", $sformatf(
-      {"   BP123 %s: uncached requests %0d, uncached deliveries %0d; ",
-       "maintenance %0d (drained %0d); walks %0d, walker accesses %0d, ",
-       "CAS %0d, changed %0d, errors %0d; eager resolutions %0d, ",
-       "CSR writes %0d, faults checked %0d"}, tname, n_uc_req, n_uc_dlv,
-      n_maint, n_maint_drain, n_walks, n_pw_acc, n_pw_cas, n_pw_chg,
-      n_pw_err, n_eager_res, n_csrw, n_fault_ok));
-    $display("%s", $sformatf(
-             {"   %s: %0d retired in %0d cycles, %0d mispredicts, %0d ",
-              "traps, %0d predecode redirects, %0d resolutions, %0d L1I ",
-              "fills, %0d walks, commit ptr %0d"}, tname, n_retired, c,
-             n_mispred, n_trap, n_pd_redir, rq_tl, n_fills, n_walks,
-             dut.u_ftq.w_commit_ptr));
-    $display("%s", $sformatf(
-             {"   %s: redirects p2 %0d p3 %0d, unmapped resolutions %0d; ",
-              "updates received uBTB %0d ",
-              "LP %0d TAGE %0d SC %0d ITTAGE %0d, RAS commits %0d; ",
-              "RETURN_CALL at p2 %0d, committed %0d"}, tname, n_redir_p2,
-             n_redir_p3, n_nomap, n_u_ubtb, n_u_lp, n_u_tage, n_u_sc,
-             n_u_ittage, n_u_ras, n_rc_p2, n_rc_commit));
-    $display("%s", $sformatf(
-             {"   %s: RAS mispredicts %0d; FTB jump field trained by a ",
-              "jump at another position %0d"}, tname, n_mis_ras,
-             n_jmp_swap));
-    // BP-139: item C occasions, and those that trained a table predictor.
-    $display("%s", $sformatf(
-             {"   ITEMC %s placed in an occupied slot %0d, of them ",
-              "trained TAGE/SC/LP/ITTAGE %0d"}, tname, n_plc_occ,
-             n_plc_tbl));
-    // BP-140: capacity, the cut and the BP-131 contention count. The
-    // valid entries are counted at the end of the run.
-    c131_close();
-    rn_v = 1'b0;
-    begin
-      int nfv;
-      int nuv;
-      nfv = 0;
-      nuv = 0;
-      for (int i = 0; i < FTB_SETS; i++)
-        for (int w = 0; w < FTB_WAYS; w++)
-          if (dut.u_bpu.u_ftb.u_ftb_plru.valid_mem[i][w]) nfv++;
-      for (int i = 0; i < UBTB_SETS; i++)
-        for (int w = 0; w < UBTB_WAYS; w++)
-          if (dut.u_bpu.u_ubtb.mem[i][w].valid) nuv++;
+      chk($sformatf("the whole stream retired: %0d of %0d in %0d cycles",
+                    ep, W.ne, c), ep == W.ne);
+      chk($sformatf("no stream, decode or index error (%0d)", n_err),
+          n_err == 0);
+      chk("every retired instruction is the executed stream, in order",
+          n_retired == W.ne);
+      chk($sformatf("the FTQ committed through the watermark: ptr %0d wm %0d",
+                    dut.u_ftq.w_commit_ptr, wm),
+          wm_val && (dut.u_ftq.w_commit_ptr == wm + FTQ_PTR_BITS'(1)));
+      chk("every resolution was accepted", rq_hd == rq_tl);
+      // BP-123, Problem 4, every program.
+      chk($sformatf({"no uncached request before older commits or off ",
+                     "the path (%0d of %0d)"}, n_uc_bad, n_uc_req),
+          n_uc_bad == 0);
+      chk($sformatf("no uncached line written into the L1I (%0d)",
+                    n_uc_fill_bad), n_uc_fill_bad == 0);
+      chk($sformatf({"uncached instructions delivered one at a time ",
+                     "(%0d bad of %0d)"}, n_uc_dlv_bad, n_uc_dlv),
+          n_uc_dlv_bad == 0);
+      chk($sformatf("the walker's memory port kept WM-1 and WM-3 (%0d)",
+                    n_pw_bad), n_pw_bad == 0);
       $display("%s", $sformatf(
-               {"   BP140 %s: FTB valid %0d evict %0d; uBTB valid %0d ",
-                "evict %0d; cut blocks %0d, cut p2 redirects %0d; over ",
-                "%0d, other start %0d, split end differs %0d; jump swap %0d"},
-               tname, nfv, n_ftb_ev, nuv, n_ubtb_ev, n_cut_blk, n_cut_rd,
-               n_ovr, n_ovr_oth, n_ovr_conf, n_jmp_swap));
-    end
-    // BP-121.
-    chk($sformatf("every RAS commit is the retired stream's (%0d ok, %0d bad)",
-                  n_ras_ok, n_ras_bad), n_ras_bad == 0);
-    chk($sformatf("every retired RAS operation committed (%0d left)",
-                  ras_exp.size()), ras_exp.size() == 0);
-    chk($sformatf("no late TAGE / ITTAGE / SC response (%0d %0d %0d)",
-                  n_tage_late, n_it_late, n_sc_late),
-        (n_tage_late == 0) && (n_it_late == 0) && (n_sc_late == 0));
-    chk($sformatf("no FTB lookup dropped by an FTB update (%0d)",
-                  n_ftb_drop), n_ftb_drop == 0);
-    chk($sformatf("no RAS operation by a squashed block (%0d)", n_ras_sq),
-        n_ras_sq == 0);
-    chk($sformatf("no p3 slot write without the p2 slot group (%0d)",
-                  n_p3_no_p2), n_p3_no_p2 == 0);
-    chk($sformatf({"a p2 redirect keeps its block's RAS operation ",
-                   "(%0d ok, %0d bad)"}, n_own_ok, n_own_bad),
-        n_own_bad == 0);
-    chk($sformatf({"an LP direction at p2 is kept at p3 (%0d ok, %0d bad)"},
-                  n_lp_kept, n_lp_bad), n_lp_bad == 0);
-    chk($sformatf({"after a conditional's mispredict the newest history ",
-                   "bit is its resolved direction (%0d ok, %0d bad)"},
-                  n_hist_ok, n_hist_bad), n_hist_bad == 0);
-    report();
+        {"   BP123 %s: uncached requests %0d, uncached deliveries %0d; ",
+         "maintenance %0d (drained %0d); walks %0d, walker accesses %0d, ",
+         "CAS %0d, changed %0d, errors %0d; eager resolutions %0d, ",
+         "CSR writes %0d, faults checked %0d"}, tname, n_uc_req, n_uc_dlv,
+        n_maint, n_maint_drain, n_walks, n_pw_acc, n_pw_cas, n_pw_chg,
+        n_pw_err, n_eager_res, n_csrw, n_fault_ok));
+      $display("%s", $sformatf(
+               {"   %s: %0d retired in %0d cycles, %0d mispredicts, %0d ",
+                "traps, %0d predecode redirects, %0d resolutions, %0d L1I ",
+                "fills, %0d walks, commit ptr %0d"}, tname, n_retired, c,
+               n_mispred, n_trap, n_pd_redir, rq_tl, n_fills, n_walks,
+               dut.u_ftq.w_commit_ptr));
+      $display("%s", $sformatf(
+               {"   %s: redirects p2 %0d p3 %0d, unmapped resolutions %0d; ",
+                "updates received uBTB %0d ",
+                "LP %0d TAGE %0d SC %0d ITTAGE %0d, RAS commits %0d; ",
+                "RETURN_CALL at p2 %0d, committed %0d"}, tname, n_redir_p2,
+               n_redir_p3, n_nomap, n_u_ubtb, n_u_lp, n_u_tage, n_u_sc,
+               n_u_ittage, n_u_ras, n_rc_p2, n_rc_commit));
+      $display("%s", $sformatf(
+               {"   %s: RAS mispredicts %0d; FTB jump field trained by a ",
+                "jump at another position %0d"}, tname, n_mis_ras,
+               n_jmp_swap));
+      // BP-139: item C occasions, and those that trained a table
+      // predictor.
+      $display("%s", $sformatf(
+               {"   ITEMC %s placed in an occupied slot %0d, of them ",
+                "trained TAGE/SC/LP/ITTAGE %0d"}, tname, n_plc_occ,
+               n_plc_tbl));
+      // BP-140: capacity, the cut and the BP-131 contention count. The
+      // valid entries are counted at the end of the run.
+      c131_close();
+      rn_v = 1'b0;
+      begin
+        int nfv;
+        int nuv;
+        nfv = 0;
+        nuv = 0;
+        for (int i = 0; i < FTB_SETS; i++)
+          for (int w = 0; w < FTB_WAYS; w++)
+            if (dut.u_bpu.u_ftb.u_ftb_plru.valid_mem[i][w]) nfv++;
+        for (int i = 0; i < UBTB_SETS; i++)
+          for (int w = 0; w < UBTB_WAYS; w++)
+            if (dut.u_bpu.u_ubtb.mem[i][w].valid) nuv++;
+        $display("%s", $sformatf(
+                 {"   BP140 %s: FTB valid %0d evict %0d; uBTB valid %0d ",
+                  "evict %0d; cut blocks %0d, cut p2 redirects %0d; over ",
+                  "%0d, other start %0d, split end differs %0d; jump swap ",
+                  "%0d"},
+                 tname, nfv, n_ftb_ev, nuv, n_ubtb_ev, n_cut_blk, n_cut_rd,
+                 n_ovr, n_ovr_oth, n_ovr_conf, n_jmp_swap));
+      end
+      // BP-121.
+      chk($sformatf({"every RAS commit is the retired stream's (%0d ok, ",
+                     "%0d bad)"}, n_ras_ok, n_ras_bad), n_ras_bad == 0);
+      chk($sformatf("every retired RAS operation committed (%0d left)",
+                    ras_exp.size()), ras_exp.size() == 0);
+      chk($sformatf("no late TAGE / ITTAGE / SC response (%0d %0d %0d)",
+                    n_tage_late, n_it_late, n_sc_late),
+          (n_tage_late == 0) && (n_it_late == 0) && (n_sc_late == 0));
+      chk($sformatf("no FTB lookup dropped by an FTB update (%0d)",
+                    n_ftb_drop), n_ftb_drop == 0);
+      chk($sformatf("no RAS operation by a squashed block (%0d)", n_ras_sq),
+          n_ras_sq == 0);
+      chk($sformatf("no p3 slot write without the p2 slot group (%0d)",
+                    n_p3_no_p2), n_p3_no_p2 == 0);
+      chk($sformatf({"a p2 redirect keeps its block's RAS operation ",
+                     "(%0d ok, %0d bad)"}, n_own_ok, n_own_bad),
+          n_own_bad == 0);
+      chk($sformatf({"an LP direction at p2 is kept at p3 (%0d ok, %0d ",
+                     "bad)"}, n_lp_kept, n_lp_bad), n_lp_bad == 0);
+      chk($sformatf({"after a conditional's mispredict the newest history ",
+                     "bit is its resolved direction (%0d ok, %0d bad)"},
+                    n_hist_ok, n_hist_bad), n_hist_bad == 0);
+      report();
+    endtask
+  endclass
+
+  prg_c PRG = new;
+
+  task automatic run_and_check(input int max_cyc);
+    PRG.run_and_check(max_cyc);
   endtask
 
   // The BP-121 report: the program line the Results Capture table is
@@ -3433,7 +3476,9 @@ module tb;
     int n_zcb;
     int n_cls;
     begin_prog("zstar");
-    $readmemh("../ifu/tb/ifu_rvc_exp_oracle.hex", rvc_orc);
+    // INFRA-015: by the absolute path the Makefile defines, from any
+    // working directory.
+    $readmemh(`FE_RVC_ORACLE, rvc_orc);
     W.mixed(2);
     n_zcb = 0;
     n_cls = 0;
@@ -3998,7 +4043,7 @@ module tb;
       "sv57":       p_sv57();                  // BP-148
       "h57":        p_h57();                   // BP-148
       default: begin
-        fail_cnt++;
+        CK.fail();
         $display("FAIL: unknown program %s", nm);
       end
     endcase
@@ -4020,8 +4065,8 @@ module tb;
   // =================================================================
   initial begin
     string prog;
-    pass_cnt = 0;
-    fail_cnt = 0;
+    // INFRA-015: the counts start at 0 in CK, the int members' initial
+    // value, and are read from it below.
     // BP-122: one program per simulation. The mode that ran every
     // program in one simulation carried the RAM predictor tables from
     // one program into the next: the FTB array has no reset, and the
@@ -4033,13 +4078,13 @@ module tb;
     if ($value$plusargs("PROG=%s", prog)) begin
       run_prog(prog);
     end else begin
-      fail_cnt++;
+      CK.fail();
       $display("FAIL: +PROG=<name> is required; programs:");
       foreach (all_progs[i]) $display("  %s", all_progs[i]);
     end
-    $display("tb_fe_top: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
-    if (fail_cnt != 0) begin
-      $fatal(1, "tb_fe_top: %0d checks failed", fail_cnt);
+    $display("tb_fe_top: PASS=%0d FAIL=%0d", CK.pass_cnt, CK.fail_cnt);
+    if (CK.fail_cnt != 0) begin
+      $fatal(1, "tb_fe_top: %0d checks failed", CK.fail_cnt);
     end else begin
       $display("ALL TESTS PASSED");
       $finish;

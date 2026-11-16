@@ -78,7 +78,21 @@ VER_OUT  := obj
 SLOT_DEFS  ?=
 
 VER_FLAGS       := $(FE_VER_FLAGS) $(SLOT_DEFS)
-SIM_EXTRA_FLAGS := $(FE_SIM_FLAGS)
+
+# THE BUILD JOBS (INFRA-015): the C++ of tb_fe_top is compiled with one
+# job per hardware thread (--build-jobs 0); without it the compiles run
+# one at a time. Here, not in fe_top_srcs.mk: it was measured on
+# tb_fe_top only, and the examples/fe_demo build does not need it.
+FE_BUILD_JOBS := --build-jobs 0
+
+# THE RVC ORACLE (INFRA-015): program zstar reads the LLVM expansion
+# oracle by the absolute path in FE_RVC_ORACLE, so tb_fe_top runs from
+# any directory. Before, it read ../ifu/tb/ifu_rvc_exp_oracle.hex, from
+# fe_top/ only.
+FE_RVC_ORACLE := $(IFU_TB)/ifu_rvc_exp_oracle.hex
+FE_TB_DEFS    := +define+FE_RVC_ORACLE=\"$(FE_RVC_ORACLE)\"
+
+SIM_EXTRA_FLAGS := $(FE_SIM_FLAGS) $(FE_BUILD_JOBS) $(FE_TB_DEFS)
 
 # FE_WAIVERS (fe_top_srcs.mk): VARHIDDEN for the loop_pred.sv
 # parameters, SYNCASYNCNET for the bound properties and sram_init. Until

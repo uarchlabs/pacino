@@ -19,13 +19,15 @@
 # after the 2-slot ones in the same job. Here they are a job of their
 # own. Each keeps its name.
 #
-# THE RULES ARE ../Makefile's. Each <t>_1slot runs `make -C .. <t>`
-# with SLOT_DEFS = SLOT1_DEFS and VER_OUT = slot1/obj_1slot, so it
-# builds and runs in slot1/obj_1slot_fe_top and writes nothing outside
-# this directory. The make runs in ../, not here, because tb_fe_top
-# reads the RVC oracle by a path relative to the directory it runs in,
-# ../ifu/tb/ifu_rvc_exp_oracle.hex (tb_fe_top.sv, program zstar); run
-# from here it finds no file and zstar fails (INFRA-014). As in ../,
+# THE RULES ARE ../Makefile's. Each <t>_1slot runs
+# `make -f ../Makefile <t>` in this directory (INFRA-015), with
+# SLOT_DEFS = SLOT1_DEFS and VER_OUT = obj_1slot, so it builds and runs
+# in slot1/obj_1slot_fe_top and writes nothing outside this directory.
+# Until INFRA-015 the make ran in ../ (make -C .., VER_OUT =
+# slot1/obj_1slot), because tb_fe_top read the RVC oracle by a path
+# relative to the directory it ran in; it now reads it by the absolute
+# path ../Makefile defines (FE_RVC_ORACLE), and every other path in
+# ../Makefile is absolute or under VER_OUT. As in ../,
 # sim_fe_top_1slot compiles and the other targets use its binary while
 # it is current. This file is passed as FE_EXTRA_MK, so an edit here
 # makes the binary stale.
@@ -71,8 +73,8 @@ SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
 all: lint_fe_top_1slot sim_fe_top_1slot assert_labels_1slot
 
 $(SLOT1_TGTS): %_1slot:
-	$(Q)$(MAKE) -C $(FE_TOP) $* RVA_ROOT=$(RVA_ROOT) \
-	  SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=slot1/$(VER_OUT) \
+	$(Q)$(MAKE) -f $(FE_MAKEFILE) $* RVA_ROOT=$(RVA_ROOT) \
+	  SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT) \
 	  FE_EXTRA_MK=$(THIS_MK) PT_MODE="$(PT_MODE)"
 
 clean:
