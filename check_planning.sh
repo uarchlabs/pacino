@@ -229,6 +229,8 @@
 # Updated after INFRA-014, session-085 (PROJECT_STATUS.md, PROJECT_CORE.md).
 # Updated for TD#202 and PERF-003, session-085 (PROJECT_STATUS.md).
 # Updated when INFRA-015 was written, session-085 (PROJECT_STATUS.md).
+# Updated after INFRA-015, session-085 (PROJECT_STATUS.md,
+# CLOSED_TECH_DEBT.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -272,8 +274,8 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   5c101e88a24c
-PLAN  PROJECT_STATUS.md                 0b995ac89815
-PLAN  CLOSED_TECH_DEBT.md               83592e4814fb
+PLAN  PROJECT_STATUS.md                 3f6d1c7e2823
+PLAN  CLOSED_TECH_DEBT.md               e760ff431abb
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
 UNKN  CLAUDE.md                         b6bf34c0b981

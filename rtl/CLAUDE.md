@@ -55,18 +55,18 @@ important. It must be defines first then structs
   always_comb blocks are classified stl_sequent and will not see
   signal changes after simulation start. Gate prediction scan blocks
   on a registered valid signal to force nba_sequent.
-- self-store loop rule (TOOLS-007): in a class method, do not set a
-  member of the same object before a loop whose body calls a method of
-  that object when the method sets the member again after the loop (to
-  a constant or to a saved copy). Verilator v5.048's life optimization
-  removes the store before the loop as dead, so every call in the loop
-  reads the old value (-O0 or -fno-life keeps it). A read of the member
-  inside the loop, even as the call's argument, does not keep it. Keep
-  such a flag in another object and write it through a handle, or do
-  the loop's work in its body without calling a method of the same
-  object, as pt_post does (BP-148). One call with no loop, and a loop
-  inside the called method, keep the store. Shown with functions; not
-  tested with tasks, at module scope, or with static members (TD#200).
+- In a class method, do not set a member, loop over calls to a method
+  of the same object that reads it, then set it again after the loop.
+  Keep such a flag in another object, or do the loop's work without
+  calling a method of the same object.
+- Put testbench code called from many places in a class method, not a
+  module task.
+- Do not use no_inline_task on a task that references a module
+  variable.
+- In a class method, do not use a blocking assignment to a variable
+  that an always block assigns by nonblocking assignment.
+- Keep state that a class method updates in the object, and read it
+  through the handle, not from a module variable.
 
 ## Verilator Makefile Conventions
 

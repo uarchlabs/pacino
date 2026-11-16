@@ -16,6 +16,39 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-085, continued: INFRA-015 recorded.
+
+INFRA-015 COMPLETE (2c34748). regress.sh 285 targets, RESULT: PASS,
+  289s, no count changed; regress_weekly.sh PASS at every mode. Cold
+  build of tb_fe_top 711s -> 54.6s (2 slots), 675s -> 53.2s (1 slot).
+  The cause was module tasks inlined into one 10 MB initial-block
+  coroutine, not package functions (PA's hypothesis, corrected). Kept:
+  --build-jobs 0 in the fe_top Makefile; chk, the fe_tb_csr.svh tasks
+  and run_and_check as class methods, the check counts members of CK.
+  Found and fixed: with the counts left as module variables Verilator
+  folded pass_cnt to 0. Equivalence: all 84 program logs identical,
+  and a deliberate failure still counted. The oracle file by
+  FE_RVC_ORACLE (from RVA_ROOT); slot1 runs make in slot1/. TD#201
+  CLOSED and moved to CLOSED_TECH_DEBT.md. bpu (282s) sets the run
+  time; INFRA-016 stays a candidate.
+NOT MEASURED: a regress.sh with a cold tb_fe_top inside it (the IA's
+  own builds had filled ccache). fe_demo ran on the new CSR model only
+  as a build; the next regress_demo.sh (at the next tag move) is its
+  check.
+TD#203 OPENED: tb_fe_demo's cold build, about 420s, likely the same
+  cause.
+rtl/CLAUDE.md (Jeff, PA's text), Verilator work arounds: the
+  self-store loop rule restated as a rule, and four rules on class
+  methods: testbench code called from many places goes in a
+  class method; no no_inline_task on a task that references a module
+  variable; no blocking write in a method to a variable an always
+  block assigns nonblocking; state a method updates kept in the
+  object.
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-004,
+TD#204.
+
+---
 ## Session-085, continued: INFRA-015 written.
 
 INFRA-015 WRITTEN: closes TD#201, the tb_fe_top cold compile (9 to 12
@@ -6776,17 +6809,6 @@ moves there in the planning update that closes it.
 |     |          | did not: tasks, module scope, static members. Write up   |
 |     |          | what was checked by hand and add it to the report if the |
 |     |          | defect stands. Opened session-085 (Jeff).                |
-| 201 | tb       | OPEN. TB_FE_TOP COLD COMPILE (BP-149). A cold compile of |
-|     |          | tb_fe_top takes 9 to 12 minutes per slot count: the CSR  |
-|     |          | tasks of fe_tb_csr.svh, and the other module tasks the   |
-|     |          | writer calls, are inlined at every call. Move them into  |
-|     |          | classes, as BP-149 did for tb_ptw (over 30 minutes to    |
-|     |          | 2 min 15 s). fe_tb_csr.svh is shared with examples/      |
-|     |          | fe_demo, so the task builds tb_fe_demo and keeps its     |
-|     |          | callers working. Also tb_fe_top.sv:3436, which reads     |
-|     |          | ../ifu/tb/ifu_rvc_exp_oracle.hex relative to the working |
-|     |          | directory, so slot1's targets run make in fe_top/        |
-|     |          | (INFRA-014). Opened session-085 (Jeff).                  |
 | 202 | frontend | OPEN, PERFORMANCE, REQUIREMENT. FRONT-END DELIVERY       |
 |     |          | CANNOT KEEP THE MIDCORE FED AT 8 PER CYCLE. Jeff,        |
 |     |          | session-085:                                             |
@@ -6804,6 +6826,13 @@ moves there in the planning update that closes it.
 |     |          | the IFU, the L1I reads per cycle and the ibuf write, and |
 |     |          | the rulings it reverses (session-073 one block per       |
 |     |          | cycle, FTB_BLOCK_BYTES 32). Opened session-085 (Jeff).   |
+| 203 | demo     | OPEN. TB_FE_DEMO COLD COMPILE. A cold build of           |
+|     |          | tb_fe_demo takes about 420 s, unchanged by INFRA-015.    |
+|     |          | Its scenarios call the shared models from module tasks,  |
+|     |          | so the cause measured for tb_fe_top (module tasks        |
+|     |          | inlined at every call into one initial-block coroutine)  |
+|     |          | is likely; not measured. The fix is in examples/fe_demo. |
+|     |          | Opened session-085 (Jeff).                               |
 
 ---
 

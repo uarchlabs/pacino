@@ -1481,6 +1481,21 @@
 |     |          | "Simple circular buffer" (linked since BP-120). For the  |
 |     |          | next BP task that edits those files. Opened session-082  |
 |     |          | (Jeff).                                                  |
+| 201 | tb       | CLOSED by INFRA-015 (session-085). TB_FE_TOP COLD        |
+|     |          | COMPILE. Cause measured: tb_fe_top's program-running     |
+|     |          | initial block was one C++ coroutine of 10.06 MB, with    |
+|     |          | module tasks inlined at every call (chk 866 copies;      |
+|     |          | reset_all, run_and_check, report and others 42 each);    |
+|     |          | gcc took 530 s on it, and the 58 compiles ran one at a   |
+|     |          | time. Fix: --build-jobs 0 on the tb_fe_top build (fe_top |
+|     |          | Makefile); chk, the fe_tb_csr.svh tasks and              |
+|     |          | run_and_check are one call each to a class method (ck_c, |
+|     |          | csr_hlp_c, prg_c), with the check counts as members of   |
+|     |          | CK. Cold build 711 s -> 54.6 s (2 slots), 675 s -> 53.2  |
+|     |          | s (1 slot). Every program's log is unchanged.            |
+|     |          | tb_fe_top.sv:3436 reads the oracle by FE_RVC_ORACLE, an  |
+|     |          | absolute path the Makefile defines, and slot1 runs make  |
+|     |          | in slot1/. Opened session-085 (Jeff).                    |
 
 | 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
 |    | missing trx_type   | Add trx_type input port (logic type) to          |
