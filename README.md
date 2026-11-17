@@ -264,7 +264,10 @@ end, and its MPKI, overall and per predictor, is compared with CBP's
 reference results, to judge whether the predictor configuration
 performs compatibly with the SPEC targets by extrapolation. It does
 not measure the backend. The rules are in
-`planning/perf/perf_decisions.md`; the scripts are in `perf/`.
+`planning/perf/perf_decisions.md`. The scripts are in `tools/`
+(`scan_traces.py`, `perf_traces.py`, `perf_rerun.py`, `perf_study.py`);
+the data, the harness wrapper and its C++ are in `perf/`. A performance
+run gates no push: nothing here is part of `tools/regress.sh`.
 
 ### Traces
 
@@ -332,7 +335,188 @@ The traces are Arm's. The `readme.txt` beside them reads:
 
 Optional, for Claude Code users who restrict reads outside the
 repository: add the trace directory with `--add-dir` or in your own
-settings (`additionalDirectories`).
+settings (`additionalDirectories`), and the `CBP_TRACES_RV` directory
+below as well.
+
+### Building the tools and the harness
+
+From the repo root, with the tools of `rtl/Vars.mk` (Verilator from
+`tools/bin`) and the system C++ compiler and zlib:
+
+```bash
+make -C perf                 # trace tools, pt_gen, the harness at head
+make -C perf harness SRC_ROOT=/path/to/tree NAME=mytag   # a revision
+make -C perf harness SLOTS=1                             # 1 pred slot
+```
+
+The harness is `perf/build/<NAME>_s<SLOTS>/perf_fe`. `SRC_ROOT` is the
+source tree whose RTL it is built from (default: this repo, named
+`head`); the build records that tree's git sha, or `unversioned`.
+
+### CBP_TRACES_RV: the changed traces
+
+RISC-V cannot reach every traced branch target directly, so each far
+branch goes through a veneer stub (`perf_decisions.md` PF-15). The
+changed traces are written in CBP's format to the directory named by
+`CBP_TRACES_RV`, default `../cbp_traces_rv` relative to the repo root,
+about 15 GB, not in git:
+
+```
+<CBP_TRACES_RV>/training_traces/<group>/<trace>.gz   changed trace
+<CBP_TRACES_RV>/pages/<group>/<trace>.pages          page list (PF-17)
+<CBP_TRACES_RV>/pages/<group>/<trace>.img            pt_gen image
+<CBP_TRACES_RV>/pages/<group>/<trace>.stubs          the veneer stubs
+```
+
+```bash
+export CBP_TRACES_RV=/path/to/cbp_traces_rv   # only when not the default
+python3 tools/perf_traces.py      # about 15 minutes on 32 cores
+```
+
+It writes the changed traces (each read back against its original), the
+images, `perf/cbp2025_rv_veneers.csv` (the veneer counts per trace),
+`perf/cbp2025_rv_counts.csv` (their instruction and branch counts) and
+the checksum lists `perf/cbp2025_rv.sha256` (the traces) and
+`perf/cbp2025_rv_aux.sha256` (pages, images, stubs). Every tool checks
+its files against these lists before reading them and stops with a
+message naming this section when one is missing or differs. To check
+the reader against the reference counts:
+
+```bash
+perf/build/trace_count            # the training set, reference results
+perf/build/trace_count --rv       # the changed set, its counts CSV
+```
+
+### The reference reruns
+
+Changing a trace invalidates CBP's published results, so every CBP
+predictor is rerun on the changed traces through `tools/cbp2025`'s own
+binaries and runner:
+
+```bash
+make -C tools/cbp2025 all ENTRIES="behrendt cai cbp2016 fan jimenez \
+  koizumi man mose ros seznec tage192"
+python3 tools/perf_rerun.py --plan full     # about 180 core-hours
+python3 tools/perf_rerun.py                 # the shorter fallback plan
+```
+
+The table is `perf/cbp2025_rv_rerun.csv`; the logs go under
+`<CBP_TRACES_RV>/rerun/`.
+
+### Running the harness
+
+```bash
+perf/build/head_s2/perf_fe --trace int/int_6_trace --max-instr 2000000 \
+  --out results.csv
+perf/build/head_s2/perf_fe --help           # every run parameter
+```
+
+The run parameters are the backend timing (`--resolve-lat`,
+`--resolve-commit`, `--take-rate` as `fixed:V`, `uniform:MIN:MAX`,
+`geometric:MIN:MAX:MEAN` or `table:FILE`; `--window`), `--seed`,
+`--icache real|preload|perfect`, `--max-instr`, the predictor enables
+(`--cfg key=value`, with `--config <tag>/<name>` when they differ from
+PF-5) and the configuration name. Each run appends one CSV row: the
+trace, configuration, revision sha, seed, every parameter and every
+count. A study runs a list of traces under a list of parameter sets in
+parallel and gathers one CSV:
+
+```bash
+python3 tools/perf_study.py --traces int/int_6_trace,web/web_11_trace \
+  --sets perf/studies/p5.sets --out study.csv -j 8
+```
+
+### Running a study
+
+A study is every trace of a trace list run under every parameter set of
+a parameter-set list, in parallel, gathered into one CSV. Before the
+first study: build (`make -C perf`) and make the changed traces
+(`python3 tools/perf_traces.py`), as above.
+
+1. Write a parameter-set file, one set per line: a name, then the
+   harness arguments it runs with (`perf_fe --help`). Blank lines and
+   lines starting with `#` are skipped. A set runs the build named by
+   `bin=<path>` when that is its first argument, else `--bin` (default
+   `perf/build/head_s2/perf_fe`). For example `perf/studies/my.sets`:
+
+   ```
+   # immediate backend against a backend with latency, 2e6 instructions
+   immediate  --max-instr 2000000
+   latency    --max-instr 2000000 --resolve-lat uniform:4:12 \
+              --resolve-commit uniform:2:8 --seed 1
+   ftb512     bin=perf/build/ftb512_s2/perf_fe --max-instr 2000000
+   ```
+
+   One line per set; the `\` above is for width here only, the file has
+   no continuation lines. `ftb512` runs a build made with
+   `make -C perf harness SRC_ROOT=<tree> NAME=ftb512`. The seed is part
+   of a set (default 1): a set with a random distribution gives the same
+   result every time it runs.
+   A set whose `--cfg` values differ from PF-5 must name its
+   configuration `--config <tag>/<name>`.
+
+2. Name the traces, as `<group>/<trace>` separated by commas, or in a
+   file with one per line (`#` comments allowed).
+
+3. Run it, with `-j` set to the processes you want to give it (one run
+   is one process, single threaded; default: every core):
+
+   ```bash
+   python3 tools/perf_study.py --traces traces.txt \
+     --sets perf/studies/my.sets --out perf/studies/my.csv -j 8
+   ```
+
+   Each run's own row goes to `<out>_work/<set>__<group>_<trace>.csv`
+   (deleted and rewritten when the run is repeated); the gathered CSV
+   puts the set name first, in `study_set`. The runner prints each run's
+   exit and time, and exits 1 when any run exits non-zero.
+
+4. Check every row before using it. `status` must be `ok`; a run exits 0
+   only then. Other values: `check_errors` (a hard check failed), or
+   `stalled: ...` and `stopped at --max-cycles`. The hard checks, all
+   0 in an `ok` row: `err_word` (a fetched word is not the image's),
+   `err_fault`, `err_illegal`, `err_ftq_idx`, `err_tl_opcode`,
+   `err_entry_reopen`, `err_unspec_repair`. Two diagnostics may be
+   non-zero and do not fail a run: `err_stream` (fetch left the path
+   after a correctly predicted instruction, and the backend repaired
+   it) and `err_predict` (the FTQ slot's reading and the fetched stream
+   disagree). `decided_by_slot` counts branches decided by that reading
+   when fetch delivered nothing; a high count makes that trace's MPKI
+   less certain.
+
+5. Read the counts. Every row carries the trace, the configuration
+   name, `revision`, `sha` and `src_root`, the seed and every run
+   parameter, and `fe_cfg_seen` (the predictor enables as fe_top got
+   them). The counts:
+
+   | columns | meaning |
+   |---|---|
+   | `instr`, `cycles`, `ipc` | committed instructions, cycles from the path's start |
+   | `NumBr`, `cond` | conditional branch pieces (CBP's NumBr), conditional records |
+   | `mispred`, `mpki`; `mispred_cond`, `mpki_cond` | mispredicts and MPKI, all and conditional only; `mpki_cond` is the one comparable with CBP's MPKI |
+   | `mispred_direct`, `_indirect`, `_return` | mispredicts by branch class |
+   | `mis_<src>`, `mpki_<src>`, `pred_<src>` | mispredicts, MPKI and committed branches by the predictor that supplied the final prediction (`pred_src`: ubtb, loop, ftb, tage, sc, ittage, ras, none) |
+   | `50Perc...` | the same over CBP's trailing-epoch window (bp.cc's rule) |
+   | `taken`, `taken_per_cycle`, `taken_wrong_path` | instructions the backend took, wrong path included |
+   | `ftq_full_cycles`, `redirects`, `trap_redirects` | FTQ-full cycles; backend redirects, and those for traps the trace records |
+   | `pd_redirects`, `p2_overrides`, `p3_overrides` | predecode redirects, BPU overrides |
+   | `l1i_gets`, `l1i_gets_mask0`, `icache_installs` | L1I fills (every Get has mask 0, TD#196), lines the I-cache switch wrote |
+   | `walks`, `ptw_reads`, `ptw_cas` | ITLB walks and the walker's memory accesses |
+   | `resolve_lat_sum`, `commit_delay_sum`, `commit_wait_sum`, `resolve_wait_sum` | the drawn latencies, and the cycles waited for the FTQ or for fetch |
+   | `class_conflict_*`, `static_pcs`, `stubs`, `pages` | about the trace and its image |
+   | `host_seconds`, `sim_seconds`, `instr_per_sec`, `cycles_per_sec` | speed |
+
+6. Compare with the reference. `perf/cbp2025_rv_rerun.csv` holds each
+   CBP predictor's MPKI on the changed traces it was run on (TAGE192,
+   R, on every changed trace; see The reference reruns). Join on the
+   group and trace (the study's `trace` column is `<group>/<trace>`)
+   and compare `mpki_cond` with its `MPKI`, over the same instructions:
+   a run limited by `--max-instr` covers only a prefix, while the
+   reruns cover whole traces.
+
+The examples in `perf/studies/` are the PERF-002 studies:
+`p4_params.sets` (every run parameter), `p5.sets` (the checks) and
+`p5_speed.sets` (the speed), each with its CSV.
 
 ## Push
 

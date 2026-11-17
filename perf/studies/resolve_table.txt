@@ -1,0 +1,5 @@
+# A table distribution for --resolve-lat table:<this file> (PF-18): one
+# "value weight" line per value. PERF-002 Problem 4.
+2 6
+6 3
+20 1

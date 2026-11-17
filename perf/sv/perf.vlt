@@ -1,0 +1,17 @@
+`verilator_config
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+//
+// perf.vlt -- the harness build's configuration file (PERF-002). No RTL
+// file is changed.
+//
+// THE I-CACHE SWITCH (PF-19). The preloaded and perfect L1I write lines
+// into the L1I's arrays from the gasket (perf/src/harness/icache.h). The
+// three arrays, and nothing else, are made public read-write here, so
+// that the gasket reaches them without --public-flat-rw over the design
+// (PF-3). They are state the gasket writes, not signals it counts, so
+// they are not wrapper ports.
+public_flat_rw -module "l1i_meta_array" -var "tag_mem"
+public_flat_rw -module "l1i_meta_array" -var "val_mem"
+public_flat_rw -module "l1i_data_array" -var "data_mem"

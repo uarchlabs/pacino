@@ -9,8 +9,9 @@ scan_traces.py -- characterize the CBP2025 training traces (PERF-001).
 Reads every training trace through the CBP trace record format and
 writes one CSV row per trace: instruction and branch counts, code
 footprint, and the branches a RISC-V code image cannot encode directly
-(PF-U1). The record format is the one documented in the CBP2025
-repository, tools/cbp2025/lib/trace_reader.h; this reader is pacino's
+(perf_decisions.md PF-15, the veneers). The record format is the one
+documented in the CBP2025 repository, tools/cbp2025/lib/trace_reader.h;
+this reader is pacino's
 own and no CBP code is used (PF-1).
 
 Record, little endian:
@@ -39,7 +40,7 @@ Branch reach, RISC-V (unprivileged ISA, B-type and J-type immediates):
 A taken conditional branch or a direct jump or call whose traced
 displacement is outside that range is counted as far.
 
-Address modes (BP-145, perf_decisions.md PF-16). A 64-bit PC is
+Address modes (BP-145, perf_decisions.md PF-15). A 64-bit PC is
 canonical under SvNN when bits 63 down to NN-1 are all equal. Over
 every distinct PC of the trace (every record's PC, not only pc_min and
 pc_max):
@@ -55,9 +56,9 @@ file is checked against perf/cbp2025_training.sha256 before it is
 read. Setup notes: README.md, section Performance analysis.
 
 Usage, from the repository root:
-  python3 perf/scan_traces.py              training set -> perf CSV
-  python3 perf/scan_traces.py -j 8         8 processes (default: all)
-  python3 perf/scan_traces.py --dir tools/cbp2025/sample_traces
+  python3 tools/scan_traces.py             training set -> perf CSV
+  python3 tools/scan_traces.py -j 8        8 processes (default: all)
+  python3 tools/scan_traces.py --dir tools/cbp2025/sample_traces
                                            any <dir>/<group>/*.gz, not
                                            checksum checked, printed
                                            only unless --out is given

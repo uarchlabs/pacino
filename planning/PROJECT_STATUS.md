@@ -16,6 +16,40 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-086: PERF-002 is the gasket; perf_decisions.md rulings.
+
+RULED (Jeff), recorded in perf_decisions.md:
+  1. PERF-002 is the gasket and the infrastructure to run studies,
+     as PF-17 already said. The delivery-bandwidth trace scan
+     ("PERF-003 TO BE WRITTEN", session-085) is dropped, and handoff
+     086's PERF renumbering is not applied. TD#133 and TD#202 no
+     longer name PERF-003.
+  2. PF-16 removed: the RISC-V ISA cannot reach every traced target,
+     so the traces are changed and PF-15 applies. A branch beyond
+     its reach goes through a veneer, its original PC kept (PF-15);
+     PF-U11 closed. The trace address counts moved to PF-15; PF-17
+     takes Sv57 from MMU-20.
+  3. PF-18, the C++ backend's timing: resolve latency, resolve to
+     commit (resolve never after commit) and take rate (at most 8),
+     each a range with a distribution; min = max is fixed, 0 = 0
+     immediate; and a window limit, none by default. PF-U5 closed.
+     The distribution set is PROPOSED (PA).
+  4. PF-19, the I-cache switch, real, preloaded or perfect, as PF-U6
+     wrote it; PF-U6 closed.
+  5. PF-20: bp_defines_pkg.sv is the input to the standalone model's
+     parameter file, which may be edited directly. PF-U10 closed;
+     PF-U9 later.
+  6. PF-10: A is a run parameter, a release tag or head. fe-1.0.0
+     cannot be measured (Sv39 only, PA 36); runs use head. B is not
+     built: TD#204, TAGE192 support, opened. PF-U7 closed.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, perf_decisions.md.
+
+Next free: BP-150, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-003,
+TD#205.
+
+---
 ## Session-085, continued: INFRA-015 recorded.
 
 INFRA-015 COMPLETE (2c34748). regress.sh 285 targets, RESULT: PASS,
@@ -6414,7 +6448,7 @@ moves there in the planning update that closes it.
 |     |          | complete and something can drive it. Gate any two-block  |
 |     |          | commitment on this. Session-085 (Jeff): pacino needs two |
 |     |          | taken branches per cycle and a 64-byte prediction block  |
-|     |          | to keep the 8-wide midcore fed; see TD#202 and PERF-003. |
+|     |          | to keep the 8-wide midcore fed; see TD#202.              |
 | 149 | bpu, ftq | OPEN, MEASURED by BP-121. The p3 RAS repair: after SC    |
 |     |          | reverses a slot at p3 the entry holds the pre-repair     |
 |     |          | snapshot. Repairs: recur 14, rvc 9, misp_call 16;        |
@@ -6820,12 +6854,13 @@ moves there in the planning update that closes it.
 |     |          | the start is in the line's upper half (IFU-7). One taken |
 |     |          | branch per cycle bounds delivery by the run to it, well  |
 |     |          | under 8 before bubbles, while the ibuf reads 8 (IBUF-9). |
-|     |          | Sized first by PERF-003; then a planning note covering   |
-|     |          | the uBTB and FTB entries, the predictors and history     |
-|     |          | update with two taken per cycle, the RAS, the FTQ entry, |
-|     |          | the IFU, the L1I reads per cycle and the ibuf write, and |
-|     |          | the rulings it reverses (session-073 one block per       |
-|     |          | cycle, FTB_BLOCK_BYTES 32). Opened session-085 (Jeff).   |
+|     |          | Sized by a study on the PERF-002 infrastructure; then a  |
+|     |          | planning note covering the uBTB and FTB entries, the     |
+|     |          | predictors and history update with two taken per cycle,  |
+|     |          | the RAS, the FTQ entry, the IFU, the L1I reads per cycle |
+|     |          | and the ibuf write, and the rulings it reverses          |
+|     |          | (session-073 one block per cycle, FTB_BLOCK_BYTES 32).   |
+|     |          | Opened session-085 (Jeff).                               |
 | 203 | demo     | OPEN. TB_FE_DEMO COLD COMPILE. A cold build of           |
 |     |          | tb_fe_demo takes about 420 s, unchanged by INFRA-015.    |
 |     |          | Its scenarios call the shared models from module tasks,  |
@@ -6833,6 +6868,12 @@ moves there in the planning update that closes it.
 |     |          | inlined at every call into one initial-block coroutine)  |
 |     |          | is likely; not measured. The fix is in examples/fe_demo. |
 |     |          | Opened session-085 (Jeff).                               |
+| 204 | perf     | OPEN, PERFORMANCE. TAGE192 SUPPORT. Whether pacino's     |
+|     |          | predictor parameters can express TAGE192's layout (table |
+|     |          | count, history lengths, tag widths, storage) has not     |
+|     |          | been tested. Needed for B, pacino matched to R           |
+|     |          | (perf_decisions.md PF-10), which is not built until this |
+|     |          | closes. Was PF-U7. Opened session-086 (Jeff).            |
 
 ---
 

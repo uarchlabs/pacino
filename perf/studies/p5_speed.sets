@@ -1,0 +1,3 @@
+# PERF-002 Problem 5: the speed, on an otherwise idle machine, six runs
+# at once on 32 cores; the immediate backend of p5.sets.
+immediate  --max-instr 2000000

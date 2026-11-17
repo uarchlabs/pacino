@@ -20,9 +20,10 @@
 // the order they first appear; a repeated page is ignored. Blank lines
 // and lines whose first character is # are skipped.
 //
-// MAPPING. The mode is Sv57 (PF-16). Each page gets a 4 KiB leaf, V R X
-// A U set, W D G clear (PF_LEAF). Its physical page is allocated densely
-// in first-touch order from MEM_BASE, the start of main memory
+// MAPPING. The mode is Sv57 (mmu_decisions.md MMU-20). Each page gets a
+// 4 KiB leaf, V R X A U set, W D G clear (PF_LEAF). Its physical page is
+// allocated densely in first-touch order from MEM_BASE, the start of
+// main memory
 // (mmu_decisions.md MMU-15a). The table pages come from a pool that
 // starts at the first page after the last code page: the root first,
 // then each table in the order the builder asks for it.

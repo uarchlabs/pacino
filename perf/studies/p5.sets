@@ -1,0 +1,5 @@
+# PERF-002 Problem 5: the first 2e6 instructions of a trace, at
+# NUM_PRED_SLOTS 2 (the head_s2 build), under two backends: every PF-18
+# event immediate, and a backend with resolve and commit latency.
+immediate  --max-instr 2000000
+latency    --max-instr 2000000 --resolve-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1

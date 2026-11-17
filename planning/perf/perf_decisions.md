@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-15
+ UPDATED: 2026-11-16
  CONTACT: Jeff Nye
 ```
 
@@ -130,8 +130,8 @@ PF-4   The gasket cuts in at fe_top, not at bp_cluster (Jeff,
        Cost: the trace carries no instruction bytes, so the gasket
        builds a code image, one RISC-V instruction of the trace
        record's class at each traced PC, with its traced target.
-       Far conditional branches are PF-U11 (PF-U1 until
-       session-085). The fe_top build is slower per simulated
+       A branch beyond its RISC-V reach goes through a veneer
+       (PF-15). The fe_top build is slower per simulated
        instruction than bp_cluster alone.
 
 PF-13  Instructions reach a timing model through one interface,
@@ -159,17 +159,64 @@ PF-13  Instructions reach a timing model through one interface,
        added to ChampSim after the fact: a new trace format, traces
        1.53x to 3.25x larger, and changes to the simulator core).
 
+PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
+       session-086), each given per run:
+         resolve latency     cycles from the cycle the backend takes
+                             an instruction from the ibuf to its
+                             resolve
+         resolve to commit   cycles from resolve to commit. Resolve is
+                             before commit or in the same cycle, never
+                             after it
+         take rate           instructions the backend takes from the
+                             ibuf per cycle, at most 8
+         window              instructions the backend holds, taken
+                             from the ibuf and not yet committed; at
+                             the limit it takes nothing more. No limit
+                             by default; FTQ_DEPTH bounds the blocks
+                             in flight either way
+       The first three have a minimum, a maximum and a distribution.
+       When minimum equals maximum the value is fixed and not
+       randomized; when both are 0 the event is immediate, resolve in
+       the cycle the backend takes the instruction, or commit in the
+       resolve cycle.
+       Commit stays in order, and an FTQ entry commits only after
+       every resolution naming it (ftq_backend_interfaces.md A7), so
+       an instruction commits at its resolve plus the drawn delay or
+       at the commit before it, whichever is later.
+       PROPOSED (PA), the distributions, named with the range:
+         fixed       one value; minimum equals maximum
+         uniform     every value in [minimum, maximum] equally likely
+         geometric   a mean; mostly short with a long tail, clipped to
+                     [minimum, maximum]
+         normal      a mean and a standard deviation, clipped
+         triangular  a mode, clipped
+         table       a file of value and weight lines, for a
+                     distribution measured elsewhere
+       for example --resolve-lat=uniform:4:20. One seed per run,
+       recorded with the result (PF-9). Optionally a distribution per
+       branch class (conditional, indirect, return). Built first:
+       fixed, uniform, geometric and table.
+       Replaces PF-U5.
+
+PF-19  THE I-CACHE SWITCH (PF-U6 as written): a run parameter selects
+       a real, a preloaded or a perfect I-cache, so that predictor
+       effects separate from miss effects and scenarios can be set up
+       from software. Built by PERF-002.
+
+PF-20  ONE PARAMETER SOURCE, IN ONE DIRECTION (Jeff, session-086).
+       bp_defines_pkg.sv is the input: a utility reads it and writes
+       the standalone model's parameter file (PF-U9). The model's
+       file may then be edited directly for a study, without changing
+       the RTL. Nothing generates bp_defines_pkg.sv. Applies when the
+       standalone model is built. Replaces PF-U10.
+
 ## 3. Configurations
 
 PF-5   A measured configuration is named by a release tag, <tag>, for
        the RTL and parameters as tagged; a variant of it is named
-       <tag>/<name> (Jeff, session-084). The first, and the one B
-       would be named for if built (PF-10):
-         fe-1.0.0             A, the baseline: pacino as tagged
-         fe-1.0.0/tage192     B, the matched: pacino's predictor
-                              parameters set to match R's layout and
-                              total storage; built only if needed
-       The RTL is tweaked between tags; a result on an untagged tree
+       <tag>/<name> (Jeff, session-084). The revision a run measures
+       is a parameter, a release tag or head (PF-10). The RTL is
+       tweaked between tags; a result on head or on an untagged tree
        is keyed by the sha (PF-9) until the next tag.
        The predictor enables are custom CSRs 0x7C0 and 0x7C1
        (csr_pkg.sv:121-133, 204-205). Their reset values are
@@ -236,7 +283,8 @@ PF-9   A result is keyed by its configuration name (PF-5) and the
 PF-10  Three are compared (Jeff, session-084):
          R  the reference: TAGE192, run from tools/cbp2025, with the
             other CBP predictors beside it (PF-1)
-         A  pacino as built (fe-1.0.0)
+         A  pacino as built, at the revision a run parameter names:
+            a release tag or head (Jeff, session-086)
          B  pacino matched to R's layout and storage, a <tag>/<name>
             configuration (PF-5)
        A against R is the question this work answers. B is built only
@@ -244,6 +292,12 @@ PF-10  Three are compared (Jeff, session-084):
        A against B is then the effect of pacino's table sizing, and B
        against R the effect of pacino's microarchitecture (block
        prediction, the overrides, training at resolve, the FTQ).
+       fe-1.0.0 cannot be measured: it supports Sv39 only, with a
+       36-bit physical address, and the traces need Sv57 (PF-15).
+       Runs use head until the next tag (Jeff, session-086).
+       B IS NOT BUILT. Whether pacino's predictor parameters can
+       express TAGE192's layout has not been tested; TD#204 (Jeff,
+       session-086).
        The CBP predictors' MPKI counts conditional branches only
        (PF-1); pacino's ITTAGE and RAS are measured but have no
        counterpart in R.
@@ -263,8 +317,10 @@ PF-11  The harness is checked three ways, and a result is not used
        until all three pass (Jeff, session-084):
        - exact counts against the reference results: the instruction
          and branch counts of each trace, full and second half, equal
-         the reference results' Instr and NumBr columns. This checks
-         the trace reader and the committed stream.
+         the reference results' Instr and NumBr columns, from the
+         published results for an unchanged trace and from the reruns
+         for a changed one (PF-15). This checks the trace reader and
+         the committed stream.
        - an oracle mode, in which every prediction is correct: zero
          mispredictions, and the fetched committed stream equals the
          trace.
@@ -273,44 +329,58 @@ PF-11  The harness is checked three ways, and a result is not used
        check of it: one predictor's mispredictions are not checked
        against another's.
 
-PF-15  Changing the traces' addresses invalidates the published
-       reference results, which describe the original traces (Jeff,
-       session-084). So, if any trace is changed:
+PF-15  Changing a trace invalidates the published reference results,
+       which describe the original traces (Jeff, session-084). So, for
+       every changed trace:
        - every CBP predictor of PF-1 is rerun on the changed traces,
          and pacino is compared with those runs, not with the
          published results;
        - the change's effect is measured by each predictor's MPKI on
          the changed traces against its golden results on the
          original ones;
-       - the traces whose addresses fit pacino unchanged are also run
-         as they are, and checked against the published results.
-       A direct jump or call whose target is beyond the +-1 MB of a
-       RISC-V jal becomes an auipc and jalr pair, as a RISC-V linker
-       emits it, in the code image and in the changed trace alike, so
-       that pacino and the CBP predictors see one stream (Jeff,
-       session-084). PERF-001 counted 11.76e6 of them, in 89 traces.
-       Which addresses are changed, and how, was PF-U1; PF-16
-       changes none.
+       - the traces that need no change are also run as they are, and
+         checked against the published results.
+       THE TRACES ARE CHANGED: the RISC-V ISA cannot reach every
+       traced target directly (Jeff, session-086). A conditional
+       branch reaches +-4 KiB and a jal +-1 MiB (tools/scan_traces.py
+       BR_MIN to JAL_MAX). PERF-001 counted 11.76e6 direct jumps and
+       calls beyond a jal's reach, in 89 traces, and 0.99e6 taken
+       conditional branches beyond a branch's reach.
+       A BRANCH BEYOND ITS REACH GOES THROUGH A VENEER, as Arm's
+       linkers do (Jeff, session-086): the branch keeps its PC and its
+       condition and targets a stub within its reach; the stub jumps
+       to the traced target with auipc and jalr. Every original PC and
+       address is kept; a changed trace gains the stub's records on
+       each taken pass through a stub. The code image and the changed
+       trace carry the same stubs, so that pacino and the CBP
+       predictors see one stream. Where a stub is placed and how its
+       records are classed are proposed by PERF-002 and recorded as
+       provisional until ruled.
+       Because the addresses are kept, every PC must be canonical under
+       a mode pacino supports. Every PC of every trace
+       (perf/cbp2025_training_scan.csv pc_mode_min, BP-145): 24 traces
+       are canonical under Sv39, 18 more under Sv48, and the other 63
+       only under Sv57; none needs more than Sv57
+       (pc_noncanon_sv57_static is 0 in every trace). Pacino supports
+       Sv57 (mmu_decisions.md MMU-20).
 
-PF-16  THE TRACES RUN UNCHANGED, UNDER SV57 (Jeff, session-085).
-       Pacino supports Sv57 (mmu_decisions.md MMU-20), so every trace
-       address is used as recorded and PF-15 does not apply. Every PC
-       of every trace (BP-145; perf/cbp2025_training_scan.csv
-       pc_mode_min): 24 traces are canonical under Sv39, 18 more
-       under Sv48, and the other 63 only under Sv57. No PC needs more
-       than Sv57 (pc_noncanon_sv57_static is 0 in every trace).
+PF-16  REMOVED, session-086 (Jeff). It read "the traces run unchanged,
+       under Sv57", which does not account for the reach of RISC-V
+       branches. Its trace address counts are in PF-15. The number is
+       not reused.
 
 PF-17  THE TRACES RUN BEHIND PAGE TABLES (Jeff, session-085), so the
        ITLB and the walker are in the measurement. Each code page a
        trace touches is mapped by a 4 KiB leaf to a physical page
        allocated densely, in the order the trace first touches it,
        from the start of main memory (mmu_decisions.md MMU-15a). The
-       mode is Sv57 (PF-16). A generator built on pt_build_pkg writes
-       the tables as a memory image file; the gasket (PF-4) loads
-       it. Each leaf has V, R, X, A and U set, and W, D and G clear;
-       the root is the first page after the last code page and the
-       other table pages follow it; the image is text, every value
-       hexadecimal with no prefix: header comments, a satp line
+       mode is Sv57 (mmu_decisions.md MMU-20; PF-15). A generator
+       built on pt_build_pkg writes the tables as a memory image file;
+       the gasket (PF-4) loads it. Each leaf has V, R, X, A and U set,
+       and W, D and G clear; the root is the first page after the
+       last code page and the other table pages follow it; the image
+       is text, every value hexadecimal with no prefix: header
+       comments, a satp line
        (MODE Sv57, ASID 0, the root's PPN), one map line per page in
        first-touch order, and one word line per table word. RULED
        session-085 (Jeff). A non-canonical input address, or an input
@@ -343,14 +413,15 @@ PF-U3  Closed by PF-14.
 PF-U4  CLOSED session-085 (Jeff) by PF-17. It read: "Memory: run
        bare with a sparse memory model, or build page tables so the
        ITLB and walker are in the measurement."
-PF-U5  The C++ backend: the resolve latency, and the order of resolve
-       and commit returned to fe_top.
-PF-U6  I-cache control: a switch for a real, preloaded or perfect
-       I-cache, so that predictor effects separate from miss effects
-       and scenarios can be set up from software.
-PF-U7  Whether pacino's predictor parameters can express R's layout
-       (table count, history lengths, tag widths, storage), needed
-       only if B is built (PF-10). Pacino's storage is settled: all
+PF-U5  CLOSED session-086 (Jeff) by PF-18. It read: "The C++
+       backend: the resolve latency, and the order of resolve and
+       commit returned to fe_top."
+PF-U6  CLOSED session-086 by PF-19, which states it as written.
+PF-U7  CLOSED session-086 (Jeff): B is not built; whether pacino's
+       parameters can express TAGE192's layout is TD#204 (PF-10). It
+       read: "Whether pacino's predictor parameters can express R's
+       layout (table count, history lengths, tag widths, storage),
+       needed only if B is built." Pacino's storage is settled: all
        predictors 102.48 KB as built (DOC-016; PERF-001's 67.29 KB
        counted one copy of the per-slot tables).
 PF-U8  Closed: R is TAGE192 (PF-10).
@@ -359,16 +430,17 @@ PF-U9  A standalone performance model, leading the RTL and in time
        with the gasket on the same traces and counters. Discussed in
        session-084: built for pacino rather than adopted (an adopted
        model brings its own microarchitecture, which makes
-       correlation harder), trace-driven first, front end first. Not
-       yet ruled. Its language, Rust or C++, follows; the gasket
-       stays C++, since Verilator generates C++.
-PF-U10 One parameter source for the RTL and the model, from which
-       bp_defines_pkg and the model's configuration are both
-       generated, so that a configuration name (PF-5) names one
-       parameter set. Not yet ruled.
-PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
-       training set (PERF-001). The linker form is an inverted branch
-       over a jal. Moved from PF-U1, session-085.
+       correlation harder), trace-driven first, front end first.
+       Later (Jeff, session-086). Its language, Rust or C++, follows;
+       the gasket stays C++, since Verilator generates C++. Its
+       parameters: PF-20.
+PF-U10 CLOSED session-086 (Jeff) by PF-20. It read: "One parameter
+       source for the RTL and the model, from which bp_defines_pkg and
+       the model's configuration are both generated."
+PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
+       conditional branches, beyond +-4 KB: 0.99e6 in the training set
+       (PERF-001). The linker form is an inverted branch over a
+       jal."
 
 ---
 
@@ -406,4 +478,12 @@ PF-U11 Far conditional branches, beyond +-4 KB: 0.99e6 in the
 
   2026-11-15  session-085, after BP-149. PF-17: the generator's details
               RULED (Jeff) and BUILT.
+  2026-11-16  session-086 (Jeff). PF-16 removed: the traces are
+              changed, far branches through veneers (PF-15); PF-4,
+              PF-11 and PF-17 follow. PF-10: A at a tag or head,
+              fe-1.0.0 not measurable, B not built (TD#204). PF-18 the
+              backend timing parameters, PF-19 the I-cache switch,
+              PF-20 the parameter direction; the window limit a
+              PF-18 parameter. PF-U5, PF-U6, PF-U7,
+              PF-U10 and PF-U11 closed; PF-U9 later.
 ```

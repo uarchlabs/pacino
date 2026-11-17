@@ -1,0 +1,26 @@
+# PERF-002 Problem 4: every run parameter at two values (or more), one
+# set per line, for tools/perf_study.py. Each runs the first 3e5
+# instructions. The table file path is relative to the repository root.
+base          --max-instr 300000
+rlat_fixed8   --max-instr 300000 --resolve-lat fixed:8
+rlat_unif     --max-instr 300000 --resolve-lat uniform:2:12
+rlat_geom     --max-instr 300000 --resolve-lat geometric:1:40:6
+rlat_table    --max-instr 300000 --resolve-lat table:perf/studies/resolve_table.txt
+r2c_fixed8    --max-instr 300000 --resolve-commit fixed:8
+r2c_unif      --max-instr 300000 --resolve-commit uniform:0:16
+take_2        --max-instr 300000 --take-rate fixed:2
+take_unif     --max-instr 300000 --take-rate uniform:1:8
+window_16     --max-instr 300000 --window 16
+window_16_r2c8 --max-instr 300000 --window 16 --resolve-commit fixed:8
+unif_seed1    --max-instr 300000 --resolve-lat uniform:2:12 --seed 1
+unif_seed2    --max-instr 300000 --resolve-lat uniform:2:12 --seed 2
+fixed4_seed1  --max-instr 300000 --resolve-lat uniform:4:4 --resolve-commit uniform:3:3 --take-rate uniform:6:6 --seed 1
+fixed4_seed2  --max-instr 300000 --resolve-lat uniform:4:4 --resolve-commit uniform:3:3 --take-rate uniform:6:6 --seed 2
+icache_pre    --max-instr 300000 --icache preload
+icache_perf   --max-instr 300000 --icache perfect
+cfg_sc_off    --max-instr 300000 --config head/sc_off --cfg sc_enable=0
+cfg_noage     --max-instr 300000 --config head/noaging --cfg tage_enable_aging=0 --cfg ittage_enable_aging=0
+cfg_age1k     --max-instr 300000 --config head/age1k --cfg tage_aging_interval=1024 --cfg ittage_aging_interval=1024
+limit_100k    --max-instr 100000
+memlat_30     --max-instr 300000 --mem-lat 30
+rev_ftb512    bin=perf/build/ftb512_s2/perf_fe --max-instr 300000
