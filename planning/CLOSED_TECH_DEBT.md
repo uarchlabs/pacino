@@ -1416,6 +1416,20 @@
 |     |          | tage_prm_ctr and tage_alt_ctr stay zero-padded (BP-134   |
 |     |          | D1). tb_tage pred_t0_conf_tst; tb_bp_cluster G3 had      |
 |     |          | encoded the defect and was reseeded.                     |
+| 205 | bpu, ftq | CLOSED by BP-150 (8e55744), session-086. bp_cluster      |
+|     |          | raises a p3 redirect only when the block's successor     |
+|     |          | changes; SC can move the taken position without changing |
+|     |          | it (a conditional taken to its fall-through, or a later  |
+|     |          | slot taken to the same target). No flush fired, and the  |
+|     |          | request presented in that p3 cycle read the stored p2    |
+|     |          | slots, so the IFU truncated on the p2 view.              |
+|     |          | ftq_entry.sv's fetch read port now writes through the p3 |
+|     |          | slot write of the same cycle (ftq_decisions.md 1,        |
+|     |          | ftq_ifu_interfaces.md 4). tb_fe_top sc_nored fails       |
+|     |          | before and passes after at both slot counts; harness     |
+|     |          | skips 3,823 -> 0 over 12 runs. Was: OPEN, CORRECTNESS.   |
+|     |          | An SC p3 reversal to not-taken skips 4 to 580 bytes past |
+|     |          | the branch's pc + 4. Found by PERF-002.                  |
 
 ## Performance / Verification Debt
 

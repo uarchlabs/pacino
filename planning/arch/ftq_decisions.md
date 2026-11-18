@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -94,6 +94,17 @@ sixth, pc only, for the translation request of xlate_ptr (7.5):
                  NUM_RESOLVE_PORTS per cycle and the two channels may
                  name DIFFERENT entries, so one port cannot serve both
 ```
+
+THE FETCH PORT WRITES THROUGH THE p3 SLOT WRITE. When p3 writes the
+slots of the entry the fetch port reads in the same cycle, the fetch
+port returns the slots being written, not the stored ones. That cycle
+is the entry's first presentable one, and a p3 correction that leaves
+the block successor unchanged raises no redirect to flush a stale
+request (ftq_ifu_interfaces.md 4). No other port writes through.
+BP-150, TD#205. It adds a path from SC's p3 prediction through the
+fetch read mux to the IFU's F0; the p3 redirect's flush has the same
+source. If it is too long at physical design, the fallback is to hold
+the request for one cycle.
 
 The commit payload of 5.4 reads the entry at commit_ptr as well;
 BP-107 formed it inside `ftq_entry` from `commit_step_val` rather than
@@ -1567,4 +1578,7 @@ Section 1 counts six, since session-074.
               7.5: the three init readies.
 
   2026-11-12  session-085, after BP-145. TD-FE-3: stated by VA_WIDTH.
+
+  2026-11-18  session-086, after BP-150. Section 1: the fetch port
+              writes through the p3 slot write (TD#205).
 ```

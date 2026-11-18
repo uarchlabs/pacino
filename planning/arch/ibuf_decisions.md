@@ -6,7 +6,7 @@
  FILE:    ibuf_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -188,6 +188,11 @@ IBUF-8b A p2 or p3 redirect does NOT clear the buffer. It fires
         named entry at or near alloc_ptr. Nothing at or after it
         has been fetched, so nothing at or after it can be in the
         buffer.
+        The entry's first fetch request is presented in its p3
+        cycle, and a p3 redirect's flush discards it. A p3
+        correction that raises no redirect is carried by that
+        request (BP-150, TD#205), so the buffer never holds a block
+        truncated on the p2 view. Session-086.
 
 AN EARLIER REVISION OF IBUF-8 had every redirect clear the buffer,
 justified by everything it holds having been fetched after the

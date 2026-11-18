@@ -235,6 +235,9 @@
 # perf_decisions.md).
 # Updated after PERF-002, session-086 (PROJECT_STATUS.md,
 # CLOSED_TECH_DEBT.md, perf_decisions.md).
+# Updated after BP-150, session-086 (PROJECT_STATUS.md,
+# CLOSED_TECH_DEBT.md, ftq_decisions.md, ibuf_decisions.md,
+# ftq_ifu_interfaces.md, ifu_ibuf_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -278,8 +281,8 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   5c101e88a24c
-PLAN  PROJECT_STATUS.md                 4c191f9775b5
-PLAN  CLOSED_TECH_DEBT.md               dbcaacaef7a6
+PLAN  PROJECT_STATUS.md                 455441caa344
+PLAN  CLOSED_TECH_DEBT.md               805021a07a9c
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
 UNKN  CLAUDE.md                         b6bf34c0b981
@@ -292,9 +295,9 @@ ARCH  csr_decisions.md                  484fe6279bb8
 ARCH  dcd_decisions.md                  8232e5fdf27f
 ARCH  fe_decisions.md                   af2411c071bc
 ARCH  ftb_decisions.md            00f15664c751
-ARCH  ftq_decisions.md            a628dacf4b9a
+ARCH  ftq_decisions.md            cb29531c597a
 ARCH  ftq_entry_formats.md        968ae67e193f
-ARCH  ibuf_decisions.md                 34f9eb23bd4f
+ARCH  ibuf_decisions.md                 36a96982352e
 ARCH  icache_decisions.md               0e18fe32a823
 ARCH  ifu_decisions.md            cbd1867428ab
 ARCH  itlb_decisions.md                 d97092555525
@@ -336,8 +339,8 @@ INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           c13ff7e4368c
 INTF  ftq_backend_interfaces.md   1c425156a6e7
 INTF  ftq_bpu_interfaces.md       46b0a0c6b0a1
-INTF  ftq_ifu_interfaces.md       554f219f72bd
-INTF  ifu_ibuf_interfaces.md      5079031d7d75
+INTF  ftq_ifu_interfaces.md       645800d09bdb
+INTF  ifu_ibuf_interfaces.md      b2843b8060e2
 INTF  itlb_ifu_interfaces.md      32dc29fae399
 INTF  itlb_l2tlb_interfaces.md    11a4dbe0981d
 INTF  ptw_mem_interfaces.md       a7bb1b8e3253

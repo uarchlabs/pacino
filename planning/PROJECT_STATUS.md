@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-01
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,55 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-086, continued: BP-150 recorded.
+
+BP-150 COMPLETE (8e55744). TD#205 fixed. regress.sh: 287 targets,
+RESULT: PASS, 278 s, on a dirty tree; rerun on the committed tree to
+record the pass.
+- THE CAUSE. bp_cluster raises a p3 redirect only when the block's
+  successor changes. SC can move the taken position without changing
+  it: a conditional whose taken target is the fall-through, or a later
+  slot taken to the same target. No flush fires, and the fetch request
+  presented in that p3 cycle read the stored p2 slots.
+- THE FIX. ftq_entry.sv's fetch read port writes through the p3 slot
+  write of the same cycle. No port, cycle or rule changed.
+- THE CHECKS. New tb_fe_top program sc_nored, in FE_PROGS: fails
+  before, passes after, both slot counts. 2-slot: the other 41
+  programs identical. 1-slot: twocond, indir, misp_call change, each
+  shown to hit the defect. Harness: skips 3,823 -> 0 over 12 runs;
+  every hard err_* 0.
+PA assessment: accept. THE PA'S HYPOTHESIS (fetch before p3) WAS
+WRONG; the IA disproved it with p2redir_iss and p3redir_iss 0 in all
+12 runs. W3, IB-12, IB-13 and IBUF-8b are not false; they assumed
+every p3 correction arrives as a redirect. TD#205 was a correctness
+defect, not only a performance loss: a real backend resolves against
+the stored prediction, so the skipped instructions would never run.
+
+TECHNICAL DEBT. Closed: TD#205, moved to CLOSED_TECH_DEBT.md. Opened:
+TD#208 (MPKI and mis_sc rise on some traces after the fix; after
+PERF-003's harness fix), TD#209 (tb_fe_top's backend hides fetch
+defects).
+
+PERF-003 SCOPE ADDS: the not-taken resolution target in perf_fe.cc
+(pc + 8, perf_fe.cc:631-634), fixed first, before the fetch rule's
+observe step, since both change what the FTB learns.
+
+Module Status: ftq_entry.sv gains the write-through and its PD path
+note; the perf harness row notes perf/build/head_s2 predates BP-150.
+
+Planning text (the IA's, accurate, no rule changed):
+ftq_ifu_interfaces.md 4 and 7 W3, ifu_ibuf_interfaces.md IB-12,
+ibuf_decisions.md IBUF-8b. The PA adds the write-through to
+ftq_decisions.md 1.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, ftq_decisions.md,
+ftq_ifu_interfaces.md, ifu_ibuf_interfaces.md, ibuf_decisions.md.
+
+Next free: BP-151, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-003,
+TD#210.
 
 ---
 ## Session-086, continued: PERF-002 recorded; BP-150 written.
@@ -5925,6 +5974,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | these (TD#170).                  |
 |                         |             |                   | BP-142: 232b x 64 = 14,848b (the |
 |                         |             |                   | snapshot rctr).                  |
+|                         |             |                   | BP-150: the fetch read port      |
+|                         |             |                   | writes through the same-cycle p3 |
+|                         |             |                   | slot write (TD#205). PD: a path  |
+|                         |             |                   | from SC's p3 prediction through  |
+|                         |             |                   | the fetch read mux to IFU F0;    |
+|                         |             |                   | the p3 flush has the same        |
+|                         |             |                   | source. Fallback if too long: a  |
+|                         |             |                   | one-cycle request hold.          |
 | ftq_meta.sv             | Complete    | tb_ftq_meta       | BP-107. Slow path, 421b x 2 slots|
 |                         |             |                   | x 64, UNPACKED; TD-FE-2 still    |
 |                         |             |                   | deferred. Two disjoint write     |
@@ -6355,6 +6412,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (PF-18); PERF-003. Found TD#205,  |
 |                         |             |                   | 206, 207, and the TD#197 aging    |
 |                         |             |                   | note.                             |
+|                         |             |                   | perf/build/head_s2 predates       |
+|                         |             |                   | BP-150; rebuild before a study.   |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -6961,19 +7020,6 @@ moves there in the planning update that closes it.
 |     |          | been tested. Needed for B, pacino matched to R           |
 |     |          | (perf_decisions.md PF-10), which is not built until this |
 |     |          | closes. Was PF-U7. Opened session-086 (Jeff).            |
-| 205 | bpu, ftq | OPEN, CORRECTNESS. AN SC p3 REVERSAL TO NOT-TAKEN SKIPS  |
-|     |          | INSTRUCTIONS. Found by PERF-002 (Other Notes 1): after   |
-|     |          | SC reverses at p3 a conditional predicted taken at p2,   |
-|     |          | fetch resumes 4 to 580 bytes past the branch's pc + 4;   |
-|     |          | 20 of 20 stream errors in two 3e5-instruction runs       |
-|     |          | (media_3, web_11) followed an SC-predicted conditional.  |
-|     |          | bp_cluster.sv's p3 successor (1332-1347) follows         |
-|     |          | ftq_bpu_interfaces.md 6. ftq_ifu_interfaces.md 7 W3 and  |
-|     |          | ifu_ibuf_interfaces.md IB-13 take it that entry K is not |
-|     |          | yet fetched when a p2 or p3 redirect for it arrives; the |
-|     |          | harness may be producing the case where it is. No        |
-|     |          | tb_fe_top program shows it. The harness counts it as an  |
-|     |          | SC mispredict. BP-150. Opened session-086 (Jeff).        |
 | 206 | ftq, ifu | OPEN, CORRECTNESS (forward progress) until shown         |
 |     |          | otherwise. WITH THE FTQ FULL, FETCH DELIVERS NOTHING     |
 |     |          | UNTIL ITS OLDEST ENTRY COMMITS: the ibuf stayed empty    |
@@ -6994,6 +7040,25 @@ moves there in the planning update that closes it.
 |     |          | ras_decisions.md 4.5) or the harness: not known. Sets    |
 |     |          | PF-18's default backend (PERF-003). Next to TD#149.      |
 |     |          | Opened session-086 (Jeff).                               |
+| 208 | perf     | OPEN, PERFORMANCE, INVESTIGATE. MPKI AND mis_sc RISE ON  |
+|     |          | SOME TRACES AFTER BP-150. The fix should lower mis_sc    |
+|     |          | and does on fp_1 (-1,097, immediate backend), but it     |
+|     |          | rises on web_11 (+37 immediate, +166 latency),           |
+|     |          | compress_1 (+45 latency), int_6 (+21 latency); tb_fe_top |
+|     |          | 1-slot indir mispredicts 44 -> 53, cycles 1056 -> 1139.  |
+|     |          | Investigate after PERF-003 fixes the harness's not-taken |
+|     |          | resolution target (perf_fe.cc:631-634 sends pc + 8),     |
+|     |          | which trains false FTB targets on the same path. Opened  |
+|     |          | session-086 (PA).                                        |
+| 209 | fe tb    | OPEN, VERIFICATION. TB_FE_TOP'S BACKEND HIDES FETCH      |
+|     |          | DEFECTS. It counts a wrong PC after a conditional as a   |
+|     |          | mispredict by design (fe_tb_backend.svh:210-235), so a   |
+|     |          | fetch that disagrees with the FTQ's own stored           |
+|     |          | prediction passes every check; TD#205 needed sc_nored to |
+|     |          | read the ibuf write port. Proposed: the tb backend also  |
+|     |          | checks each branch against the entry's stored prediction |
+|     |          | and fails a disagreement, the tb_fe_top counterpart of   |
+|     |          | PERF-003's observe step. Opened session-086 (PA).        |
 
 ---
 

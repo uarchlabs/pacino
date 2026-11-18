@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -162,6 +162,16 @@ reading the prediction, and so a prefetcher can walk ahead.
 `ftq_ifu_taken_val` and `ftq_ifu_taken_pos` name the predicted taken
 branch, so the IFU truncates the bundle there and does not present
 instructions after it. Not valid means fetch the whole block.
+
+A REQUEST PRESENTED IN ITS ENTRY'S p3 CYCLE CARRIES THE p3 SLOTS. The
+request for an entry is first presented in the entry's p3 cycle. A p3
+redirect flushes that request (section 5). A p3 slot correction that
+moves the taken position without changing the block successor raises
+no redirect: a conditional whose taken target is the fall-through, or
+a later slot taken to the same target. ftq_entry's fetch read port
+therefore writes through the p3 slot write of the same cycle, so the
+request carries the corrected taken_val and taken_pos. BP-150,
+TD#205.
 
 `ftq_ifu_gen` is an OPAQUE TAG. The IFU stores it with the request
 and returns it unchanged on the writeback; it has no meaning inside
@@ -518,7 +528,11 @@ On `ifu_ftq_mis_val`, the FTQ:
       K: K is not yet fetched and including it is required, since
       the correction changes taken_val and taken_pos, which is what
       the IFU truncates the bundle on, so a fetch issued against
-      the old prediction would truncate in the wrong place. For a
+      the old prediction would truncate in the wrong place. A p3
+      correction that changes taken_val or taken_pos but not the
+      successor is not a redirect and has no flush; the request
+      presented in its cycle carries it instead (section 4,
+      BP-150). For a
       PREDECODE redirect it is K+1: K is already fetched, and its
       positions up to mis_pos are already in the ibuf (IB-2,
       IBUF-8a), which a predecode redirect does not clear (IB-12).
@@ -824,4 +838,9 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 
   2026-11-11  session-084, after BP-141. 7 W1: the target arm is
               always taken; a JALR never raises mis_val.
+
+  2026-11-18  session-086, after BP-150. Section 4: a request
+              presented in its entry's p3 cycle carries the p3 slots
+              (the fetch read writes through). 7 W3: a p3 correction
+              without a redirect. TD#205 closed.
 ```

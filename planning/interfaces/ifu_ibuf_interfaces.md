@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -184,7 +184,10 @@ work:
                        stage as the write, so the bad instructions
                        never arrive. IBUF-8a
   p2 / p3 redirect     fires before the named entry is fetched,
-                       FQ-1. IBUF-8b
+                       FQ-1. IBUF-8b. A p3 slot correction without
+                       a redirect reaches the request of its own
+                       cycle (ftq_ifu_interfaces.md 4, BP-150), so
+                       nothing wrong is fetched
   backend redirect     the only one that can. IBUF-8
 ```
 
@@ -230,6 +233,8 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-11-18  session-086, after BP-150. IB-12: the p2 / p3 row
+              covers a p3 slot correction without a redirect.
   2026-11-12  session-085, after BP-145. Section 4: fault_gpa is
               FAULT_GPA_WIDTH bits, named, not its value.
   2026-10-10  session-077, after BP-125. Section 4: the removal
