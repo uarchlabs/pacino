@@ -16,6 +16,67 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-086, continued: PERF-003 recorded; BP-151 written.
+
+PERF-003 COMPLETE (a6bcf8d). regress.sh: 287 targets, RESULT: PASS.
+The harness is a measuring instrument:
+- THE CPU CAP. The perf tools, veneer, trace_count and the perf
+  Makefile default to 75% of the hardware threads (PF-22).
+- THE RESOLUTION TARGET. A conditional resolves with its encoded taken
+  target; PERF-002's pc + 8 trained false FTB targets that predecode
+  repaired. Predecode redirects fell by up to 99.5% (fp_1 120,121 ->
+  598), cycles by up to 7.0%, MPKI by at most 1.1%.
+- THE FETCH RULE. Observed: 0 disagreements with the stream rule in 35
+  runs, no case added. Now the default; the stream is a check. Dropping
+  the stream rule's wait saves up to 150,154 cycles (web_11). err_predict
+  was predecode corrections landing after the take; it and the
+  take-time slot reading are removed.
+- THE ORACLE (PF-11), by force, no RTL change; perf.vlt keeps six
+  predictor modules out of inlining. 0 mispredicts on slot-held
+  branches in 18 runs, apart from a trap after a branch. What
+  prediction costs: up to 503,021 cycles (fp_1 latency, IPC 1.70
+  against 2.97).
+- THE STAGES. --decode-lat, --rename-lat, --dispatch-lat, --execute-lat;
+  --resolve-lat removed.
+- THE SWEEP. Return mispredicts do not settle on five of six traces;
+  no near-perfect default exists in the grid.
+PA assessment: accept. My hypothesis on err_predict was wrong as
+worded: the slots change between the take and the correction, not
+between the request and the take. TWO BACKGROUND FACTS WERE WRONG
+(PA): p4_params.sets uses --resolve-lat in eight sets, not seven; the
+scan_traces.py comment is at line 128, not 127. Process: the IA wrote
+Problem 6's code before Problem 5 was done, against THE ORDER (no
+effect: the oracle-off counts are unchanged); it deleted one acceptance
+CSV after rerunning it; it used tail, awk, mv and rm against CLAUDE.md;
+all disclosed. The first push was refused: the regress pass was not
+recorded on the dirty tree.
+
+RULINGS (Jeff, session-086):
+- THE DEFAULT BACKEND stays immediate; TD#207 is investigated first.
+- A TRAP AFTER A BRANCH: the branch is judged on its own outcome, and
+  the trap is a separate RC_TRAP redirect, as for a non-branch. PERF-004.
+
+TECHNICAL DEBT. TD#207 updated with the sweep: the oracle clears the
+harness, so a RAS defect is suspected; BP-151. TD#208 updated: after
+TD#207. Opened: TD#210 (the build's sha can be stale).
+
+BP-151 WRITTEN: TD#207. Classify every mispredicted slot-held return
+at chosen sweep points by cause, against a trace-driven architectural
+return stack; locate the cause; reproduce it in a tb_ras or tb_fe_top
+test that fails on the current RTL; fix it if the fix keeps every
+rule, otherwise set out the options. Then the sweep reruns.
+
+PERF-004 (later): the trap-after-branch ruling; TD#210; the no_inline
+speed on an idle machine; the full CBP rerun under the fetch rule; the
+TD#202 study.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, perf_decisions.md.
+
+Next free: BP-152, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-004,
+TD#211.
+
+---
 ## Session-086, continued: PERF-003 written.
 
 PERF-003 WRITTEN: make the harness a measuring instrument (PF-11,
@@ -6425,25 +6486,28 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | monitor removed. sim_fe_top       |
 |                         |             |                   | 736/0, 734/0 at 1 slot;           |
 |                         |             |                   | assert_labels 168, 160.           |
-| perf harness            | Working     | perf studies      | Built PERF-002 (767eab8):         |
+| perf harness            | Working     | perf studies      | Built PERF-002 (767eab8) and      |
+|                         |             |                   | PERF-003 (a6bcf8d):               |
 |                         |             |                   | perf/sv/perf_top.sv around fe_top |
 |                         |             |                   | and the walker, the C++ gasket    |
 |                         |             |                   | perf/src/harness, the trace tools |
 |                         |             |                   | perf/src, tools/perf_traces.py,   |
 |                         |             |                   | perf_rerun.py, perf_study.py;     |
 |                         |             |                   | make -C perf. Not in regress.sh   |
-|                         |             |                   | (PF-9). Reader 105/105 equal to   |
-|                         |             |                   | the reference results; 105        |
-|                         |             |                   | changed traces read back; 25k to  |
-|                         |             |                   | 95k instructions/s. Not yet a     |
-|                         |             |                   | measuring instrument: the PF-11   |
-|                         |             |                   | oracle is not built, and the      |
-|                         |             |                   | mispredict rule is provisional    |
-|                         |             |                   | (PF-18); PERF-003. Found TD#205,  |
-|                         |             |                   | 206, 207, and the TD#197 aging    |
-|                         |             |                   | note.                             |
-|                         |             |                   | perf/build/head_s2 predates       |
-|                         |             |                   | BP-150; rebuild before a study.   |
+|                         |             |                   | (PF-9). A measuring instrument    |
+|                         |             |                   | since PERF-003: the fetch rule    |
+|                         |             |                   | decides mispredicts (PF-18), the  |
+|                         |             |                   | stream is a check, the PF-11      |
+|                         |             |                   | oracle is built, every hard check |
+|                         |             |                   | 0. Backend: four stages and       |
+|                         |             |                   | resolve to commit; the default is |
+|                         |             |                   | immediate (Jeff), the             |
+|                         |             |                   | near-perfect default waits on     |
+|                         |             |                   | TD#207. Tools default to 75% of   |
+|                         |             |                   | the threads (PF-22). Open:        |
+|                         |             |                   | TD#206, 207, 208, 210; a trap     |
+|                         |             |                   | after a branch to be judged apart |
+|                         |             |                   | (PERF-004).                       |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -7059,27 +7123,34 @@ moves there in the planning update that closes it.
 |     |          | Suspected at ftq_ifu.sv:256-258, a request only for an   |
 |     |          | entry whose translation has been presented. Opened       |
 |     |          | session-086 (Jeff).                                      |
-| 207 | bpu, ftq | OPEN, INVESTIGATE. RETURN MISPREDICTS DEPEND ON HOW SOON |
-|     |          | THE BACKEND COMMITS. media_2, 3e5 instructions (PERF-002 |
-|     |          | Other Notes 2): 723 return mispredicts, 710 attributed   |
-|     |          | to the RAS, with resolve and commit immediate; 111 with  |
-|     |          | resolve latency 8; 21 with resolve to commit 8; MPKI     |
-|     |          | 4.04 against 1.74. Conditional and indirect mispredicts  |
-|     |          | unchanged. The RTL (the RAS commit or restore when an    |
-|     |          | entry commits right after its prediction,                |
-|     |          | ras_decisions.md 4.5) or the harness: not known. Sets    |
-|     |          | PF-18's default backend (PERF-003). Next to TD#149.      |
-|     |          | Opened session-086 (Jeff).                               |
-| 208 | perf     | OPEN, PERFORMANCE, INVESTIGATE. MPKI AND mis_sc RISE ON  |
-|     |          | SOME TRACES AFTER BP-150. The fix should lower mis_sc    |
-|     |          | and does on fp_1 (-1,097, immediate backend), but it     |
-|     |          | rises on web_11 (+37 immediate, +166 latency),           |
-|     |          | compress_1 (+45 latency), int_6 (+21 latency); tb_fe_top |
-|     |          | 1-slot indir mispredicts 44 -> 53, cycles 1056 -> 1139.  |
-|     |          | Investigate after PERF-003 fixes the harness's not-taken |
-|     |          | resolution target (perf_fe.cc:631-634 sends pc + 8),     |
-|     |          | which trains false FTB targets on the same path. Opened  |
-|     |          | session-086 (PA).                                        |
+| 207 | bpu, ras | OPEN, CORRECTNESS SUSPECTED, BP-151. RETURN MISPREDICTS  |
+|     |          | DEPEND ON BACKEND TIMING. PERF-003's sweep (execute S    |
+|     |          | 0..8 by resolve to commit C 0..8, fetch rule, 2e6;       |
+|     |          | perf/studies/perf003_p6_sweep_table.csv): media_2 4,815  |
+|     |          | at (0, 0), 84 at (5, 5), about 600 at S 7 and 8, a 57x   |
+|     |          | swing; compress_1, infra_1 and int_6 rise with C at      |
+|     |          | fixed S (infra_1 S 0: 14,707 to 20,044); web_11 varies   |
+|     |          | 14,064 to 17,007 with no trend; fp_1 17 throughout. Not  |
+|     |          | the harness: under the PF-11 oracle, which forces the    |
+|     |          | RAS outputs, every return mispredict is a miss (infra_1  |
+|     |          | 2,533 of about 14,700 at immediate). Candidates, from    |
+|     |          | ras_decisions.md: the 16-entry speculative stack         |
+|     |          | wrapping while commit lags (12.9 RE7), the restore's BOS |
+|     |          | from an old snapshot (4.3, CO11), the p3 repair missing  |
+|     |          | from the snapshot (TD#149), true commit-stack depth.     |
+|     |          | Sets PF-18's default (Jeff: immediate until this is      |
+|     |          | settled). Opened session-086 (Jeff); updated after       |
+|     |          | PERF-003.                                                |
+| 208 | perf     | OPEN, PERFORMANCE, INVESTIGATE, AFTER TD#207. MPKI AND   |
+|     |          | mis_sc RISE ON SOME TRACES AFTER BP-150 (web_11 +37      |
+|     |          | immediate, +166 latency; compress_1 +45; int_6 +21;      |
+|     |          | tb_fe_top 1-slot indir mispredicts 44 -> 53). PERF-003   |
+|     |          | fixed the harness's not-taken resolution target: mis_sc  |
+|     |          | moves both ways again (infra_1 +147 and +47, compress_1  |
+|     |          | +23 and +19, int_6 +10 and +56; fp_1 -254, web_11 -52    |
+|     |          | and -62). Investigate after TD#207: a RAS defect changes |
+|     |          | the global history SC and TAGE see. Opened session-086   |
+|     |          | (PA).                                                    |
 | 209 | fe tb    | OPEN, VERIFICATION. TB_FE_TOP'S BACKEND HIDES FETCH      |
 |     |          | DEFECTS. It counts a wrong PC after a conditional as a   |
 |     |          | mispredict by design (fe_tb_backend.svh:210-235), so a   |
@@ -7090,6 +7161,16 @@ moves there in the planning update that closes it.
 |     |          | and fails a disagreement, the tb_fe_top counterpart of   |
 |     |          | PERF-003's observe step. Opened session-086 (PA).        |
 
+| 210 | perf     | OPEN, PROVENANCE. THE BUILD'S SHA CAN BE STALE.          |
+|     |          | perf/Makefile:104-116 compiles the sha into the binary   |
+|     |          | (-DPERF_SRC_SHA), but the binary does not depend on it:  |
+|     |          | a commit that changes no source leaves the old sha on    |
+|     |          | every new result row, and a dirty tree is not marked.    |
+|     |          | Found by PERF-003 (head_s2 carried 2fe4b61 at 7c61093).  |
+|     |          | Proposed: the build writes the sha, with a -dirty mark,  |
+|     |          | to a stamp file rewritten only when the value changes,   |
+|     |          | and the binary depends on the stamp. PERF-004. Opened    |
+|     |          | session-086 (PA).                                        |
 ---
 
 ## Open Items

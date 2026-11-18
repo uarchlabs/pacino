@@ -18,3 +18,13 @@ These are the explicit steps, in order :
    .claude/tmp/current-prompt.md
 
 5. Execute the prompt exactly as written.
+
+6. When the whole task is finished, end the final summary with this
+   line on its own, where <ID> is the argument given:
+
+   /run <ID> complete
+
+   tools/run_time.py ends the task's run time at this line. Write it
+   once, only at the real end. Do not write it when stopping to ask the
+   user a question, between phases that wait for a commit, or when
+   stopping on an error.

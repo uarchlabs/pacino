@@ -47,6 +47,15 @@
 //                the IFU's request on the L1I core link,
 //                dut.ifu_l1i_req_val, _paddr, _rdy (the I-cache switch,
 //                PF-19, reads them)
+//   rc_*         THE RAS CLASSIFICATION (BP-151): the RAS state
+//                (dut.u_bpu.u_ras tosr, tosw, bos, csp, c_cnt and both
+//                arrays), its p2 inputs, pop outputs, op codes and pre-op
+//                state (p2_op, p2_push_inc, p2_push_sat, p2_pre_tosr,
+//                p2_pre_empty), its p3 view and registered op, its write
+//                ports (sp_we, sp_waddr), the restore and the commit as
+//                it receives them, the FTQ commit index, the rollback
+//                index and the predecode redirect's position
+//                (perf/src/harness/ras_class.h reads them)
 //
 // THE CSR GROUPS (PF-5). csr_load, sampled at a rising edge, resets the
 // csr_tb_pkg shadow (csr_pkg reset values, CSR-7), sets U-mode (every
@@ -242,7 +251,57 @@ module perf_top (
   input  logic                        orc_p2_jten,
   input  logic [VA_WIDTH-1:0]         orc_p2_jtgt,
   input  logic [NUM_PRED_SLOTS-1:0]   orc_p3_den,
-  input  logic [NUM_PRED_SLOTS-1:0]   orc_p3_dir
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p3_dir,
+
+  // ---- THE RAS CLASSIFICATION (BP-151), by hierarchical reference ----
+  // Observation only: the RAS state (dut.u_bpu.u_ras), its p2 and p3
+  // operations as the scan forms them, its array write ports, and the
+  // restore and commit groups as the RAS receives them.
+  output logic [RAS_PTR_BITS-1:0]        rc_tosr,
+  output logic [RAS_PTR_BITS-1:0]        rc_tosw,
+  output logic [RAS_PTR_BITS-1:0]        rc_bos,
+  output logic [RAS_COMMIT_PTR_BITS-1:0] rc_csp,
+  output logic [RAS_COMMIT_PTR_BITS:0]   rc_ccnt,
+  output logic [VA_WIDTH-1:0]            rc_spec_addr [RAS_SPEC_ENTRIES],
+  output logic [RAS_PTR_BITS-1:0]        rc_spec_nos  [RAS_SPEC_ENTRIES],
+  output logic [RAS_RCTR_WIDTH-1:0]      rc_spec_rctr [RAS_SPEC_ENTRIES],
+  output logic [RAS_SPEC_ENTRIES-1:0]    rc_spec_bot,
+  output logic [VA_WIDTH-1:0]            rc_cmt_addr  [RAS_COMMIT_ENTRIES],
+  // p2: the inputs, the pop outputs, the op and the pre-op state per slot
+  output logic [NUM_PRED_SLOTS-1:0]      rc_p2_val,
+  output logic [2:0]                     rc_p2_type   [NUM_PRED_SLOTS],
+  output logic [VA_WIDTH-1:0]            rc_p2_ft     [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]      rc_p2_popv,
+  output logic [VA_WIDTH-1:0]            rc_p2_popa   [NUM_PRED_SLOTS],
+  output logic [1:0]                     rc_p2_op     [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]      rc_p2_inc,
+  output logic [NUM_PRED_SLOTS-1:0]      rc_p2_sat,
+  output logic [RAS_PTR_BITS-1:0]        rc_p2_pre    [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]      rc_p2_pre_empty,
+  output logic                           rc_keep,
+  output logic                           rc_ftb_p2,
+  // p3: the view and the registered p2 op per slot
+  output logic [NUM_PRED_SLOTS-1:0]      rc_p3_val,
+  output logic [2:0]                     rc_p3_type   [NUM_PRED_SLOTS],
+  output logic [1:0]                     rc_p3_op     [NUM_PRED_SLOTS],
+  output logic [VA_WIDTH-1:0]            rc_p3_ft     [NUM_PRED_SLOTS],
+  // the speculative array write ports (ras.sv RAS_WR_PORTS)
+  output logic [4*NUM_PRED_SLOTS-1:0]    rc_we,
+  output logic [RAS_PTR_BITS-1:0]        rc_waddr     [4*NUM_PRED_SLOTS],
+  // the restore and the commit, as the RAS receives them
+  output logic                           rc_rs_val,
+  output logic [RAS_PTR_BITS-1:0]        rc_rs_tosr,
+  output logic [RAS_PTR_BITS-1:0]        rc_rs_tosw,
+  output logic [RAS_PTR_BITS-1:0]        rc_rs_bos,
+  output logic                           rc_cm_val,
+  output logic [2:0]                     rc_cm_type,
+  output logic [VA_WIDTH-1:0]            rc_cm_addr,
+  output logic [RAS_PTR_BITS-1:0]        rc_cm_tosr,
+  output logic [RAS_PTR_BITS-1:0]        rc_cm_bos,
+  output logic [FTQ_IDX_BITS-1:0]        rc_cm_idx,
+  // the entry a restore names, and the predecode redirect's position
+  output logic [FTQ_IDX_BITS-1:0]        rc_rs_idx,
+  output logic [FTQ_PD_POS_BITS-1:0]     rc_pd_pos
 );
 
   // ---- every fe_top port, the names fe_tb_dut.svh gives them -------
@@ -646,6 +705,60 @@ module perf_top (
   end
   initial begin : oracle_jump
     force dut.u_bpu.w_ftb_jmp_target_p2 = o_p2_jt;
+  end
+
+  // ---- THE RAS CLASSIFICATION (BP-151), by hierarchical reference ----
+  // Read only: nothing here drives the design. The RAS is not inlined
+  // (perf.vlt), so its ports and internal variables are its own.
+  always_comb begin : ras_class
+    rc_tosr   = dut.u_bpu.u_ras.tosr;
+    rc_tosw   = dut.u_bpu.u_ras.tosw;
+    rc_bos    = dut.u_bpu.u_ras.bos;
+    rc_csp    = dut.u_bpu.u_ras.csp;
+    rc_ccnt   = dut.u_bpu.u_ras.c_cnt;
+    for (int i = 0; i < RAS_SPEC_ENTRIES; i++) begin
+      rc_spec_addr[i] = dut.u_bpu.u_ras.spec_ret_addr[i];
+      rc_spec_nos[i]  = dut.u_bpu.u_ras.spec_nos[i];
+      rc_spec_rctr[i] = dut.u_bpu.u_ras.spec_rctr[i];
+      rc_spec_bot[i]  = dut.u_bpu.u_ras.spec_bot[i];
+    end
+    for (int i = 0; i < RAS_COMMIT_ENTRIES; i++) begin
+      rc_cmt_addr[i] = dut.u_bpu.u_ras.commit_ret_addr[i];
+    end
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      rc_p2_val[s]       = dut.u_bpu.u_ras.ras_pred_val_p2[s];
+      rc_p2_type[s]      = 3'(dut.u_bpu.u_ras.ras_br_type_p2[s]);
+      rc_p2_ft[s]        = dut.u_bpu.u_ras.ras_fall_through_p2[s];
+      rc_p2_popv[s]      = dut.u_bpu.u_ras.ras_pop_valid_p2[s];
+      rc_p2_popa[s]      = dut.u_bpu.u_ras.ras_pop_addr_p2[s];
+      rc_p2_op[s]        = dut.u_bpu.u_ras.p2_op[s];
+      rc_p2_inc[s]       = dut.u_bpu.u_ras.p2_push_inc[s];
+      rc_p2_sat[s]       = dut.u_bpu.u_ras.p2_push_sat[s];
+      rc_p2_pre[s]       = dut.u_bpu.u_ras.p2_pre_tosr[s];
+      rc_p2_pre_empty[s] = dut.u_bpu.u_ras.p2_pre_empty[s];
+      rc_p3_val[s]       = dut.u_bpu.u_ras.ras_pred_val_p3[s];
+      rc_p3_type[s]      = 3'(dut.u_bpu.u_ras.ras_br_type_p3[s]);
+      rc_p3_op[s]        = dut.u_bpu.u_ras.p3_op_q[s];
+      rc_p3_ft[s]        = dut.u_bpu.u_ras.p3_fallthr_q[s];
+    end
+    for (int p = 0; p < 4 * NUM_PRED_SLOTS; p++) begin
+      rc_we[p]    = dut.u_bpu.u_ras.sp_we[p];
+      rc_waddr[p] = dut.u_bpu.u_ras.sp_waddr[p];
+    end
+    rc_keep    = dut.u_bpu.u_ras.ras_p2_keep;
+    rc_ftb_p2  = dut.u_bpu.w_ftb_valid_p2;
+    rc_rs_val  = dut.u_bpu.u_ras.ras_restore_val;
+    rc_rs_tosr = dut.u_bpu.u_ras.ras_restore_snapshot.tosr;
+    rc_rs_tosw = dut.u_bpu.u_ras.ras_restore_snapshot.tosw;
+    rc_rs_bos  = dut.u_bpu.u_ras.ras_restore_snapshot.bos;
+    rc_cm_val  = dut.u_bpu.u_ras.ras_commit_val;
+    rc_cm_type = 3'(dut.u_bpu.u_ras.ras_commit_br_type);
+    rc_cm_addr = dut.u_bpu.u_ras.ras_commit_ret_addr;
+    rc_cm_tosr = dut.u_bpu.u_ras.ras_commit_snapshot.tosr;
+    rc_cm_bos  = dut.u_bpu.u_ras.ras_commit_snapshot.bos;
+    rc_cm_idx  = dut.u_ftq.u_entry.commit_rd_idx;
+    rc_rs_idx  = dut.u_ftq.ftq_rollback_idx;
+    rc_pd_pos  = dut.u_ftq.u_ifu.ifu_ftq_mis_pos;
   end
 
 endmodule : perf_top

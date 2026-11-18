@@ -1,0 +1,11 @@
+# BP-151 Problem 2: THE CLASSIFIED RUNS. The PERF-003 sweep's backend
+# (perf003_p6_sweep.sets): execute latency S, resolve to commit C, the
+# other stages 0, take rate fixed:8, no window, the real I-cache, the
+# fetch rule, 2e6 instructions. The points the task names: (0, 0),
+# (5, 5), (8, 8), (0, 8) and (8, 0); each trace runs at every point and
+# the task's subset is reported. Every value is named, as in the sweep.
+sw_s0_c0 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+sw_s5_c5 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:5 --resolve-commit fixed:5 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+sw_s8_c8 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:8 --resolve-commit fixed:8 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+sw_s0_c8 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:8 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+sw_s8_c0 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:8 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch

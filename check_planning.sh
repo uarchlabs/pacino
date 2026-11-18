@@ -239,6 +239,8 @@
 # CLOSED_TECH_DEBT.md, ftq_decisions.md, ibuf_decisions.md,
 # ftq_ifu_interfaces.md, ifu_ibuf_interfaces.md).
 # Updated when PERF-003 was written, session-086 (PROJECT_STATUS.md).
+# Updated after PERF-003, BP-151 written, session-086
+# (PROJECT_STATUS.md, perf_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -282,7 +284,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   5c101e88a24c
-PLAN  PROJECT_STATUS.md                 69a7025e9daa
+PLAN  PROJECT_STATUS.md                 cd3f8c9e5a02
 PLAN  CLOSED_TECH_DEBT.md               805021a07a9c
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
@@ -359,7 +361,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               3816d14458b8
+PERF  perf_decisions.md               205d3e7b6e69
 
 MISC  ras_theory_of_operation.md      75158ae995ed
 EOF

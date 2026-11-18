@@ -8,13 +8,20 @@
 # Run time of the LAST /run task in a Claude Code session, active and
 # wall clock.
 #   start: the user entry holding <command-name>/run</command-name>
-#   end:   the last assistant entry before the next prompt the user
-#          typed. Background-task notifications, system reminders,
-#          scheduled-wakeup prompts (turnOrigin "scheduled", written by
-#          the model's own ScheduleWakeup) and the /run expansion (same
-#          timestamp as start) are not prompts, so time spent waiting on
-#          a regression is counted.
-#          An interrupted /run (a rejected tool call or Esc writes a user
+#   end:   the turn whose assistant text has the end marker, a line of
+#          its own reading "/run <ID> complete" (.claude/commands/run.md
+#          step 6). With a marker, typed prompts do not end the task, so a
+#          task that stops to ask the user a question is counted to its
+#          real end. The marker turn's turn_duration is included.
+#          Without a marker: the last assistant entry before the next
+#          prompt the user typed. Background-task notifications, system
+#          reminders, scheduled-wakeup prompts (turnOrigin "scheduled",
+#          written by the model's own ScheduleWakeup) and meta entries
+#          (isMeta, such as the /run expansion, which can be written a
+#          millisecond after the command) are not prompts, so time spent
+#          waiting on a regression is counted.
+#          An interrupted /run with no marker (a rejected tool call or Esc
+#          writes a user
 #          entry "[Request interrupted ...") is usually resumed by typed
 #          follow-ups, so after an interrupt a typed prompt does not end the
 #          task. It ends at the next slash command (/context, /cntx) or at
@@ -34,6 +41,7 @@
 #   wall:  end - start, as before. It never stands in for active.
 # Prints: Run time: <active> active, <wall> wall (<start> -> <end>,
 #         /run <ID>[, <note>])
+# The notes say whether the end marker was used.
 # The first field is the header's Run time.
 # Exits 1 when the file is unreadable, holds no /run, or the /run has no
 # assistant reply: nothing was run to measure.
@@ -71,6 +79,12 @@ if start is None:
 
 m = re.search(r'<command-args>(.*?)</command-args>', text(E[start]))
 task = m.group(1).strip() if m else '?'
+END_RE = re.compile(r'^\W*/run\s+%s\s+complete\W*$' % re.escape(task),
+                    re.M)
+end_i = next((i for i in range(start + 1, len(E))
+              if E[i].get('type') == 'assistant'
+              and END_RE.search(text(E[i]))), None)
+done = False
 t0 = E[start]['timestamp']
 t1 = None
 active_ms = 0
@@ -100,9 +114,12 @@ def settle():
     pend_ms = 0
 
 
-for e in E[start + 1:]:
-    if e.get('type') == 'user' and e.get('timestamp') != t0:
+for i, e in enumerate(E[start + 1:], start + 1):
+    if e.get('type') == 'user' and e.get('timestamp') != t0 \
+            and not e.get('isMeta'):
         t = text(e).lstrip()
+        if done and t:
+            break           # the marker turn had no turn_duration
         if e.get('turnOrigin') == 'scheduled' or 'scheduledTaskId' in e:
             t = '<task-notification>'
         if t.startswith('[Request interrupted'):
@@ -112,18 +129,21 @@ for e in E[start + 1:]:
             cut()
             open_t = e['timestamp']
         elif t:
-            if not interrupted or t.startswith(('<command-',
-                                                '<local-command-')):
+            if end_i is None and (not interrupted or t.startswith(
+                    ('<command-', '<local-command-'))):
                 break
             settle()
             open_t = e['timestamp']
-    if e.get('type') == 'assistant':
+    if e.get('type') == 'assistant' and not done:
         t1 = last_a = e['timestamp']
         open_t = open_t or last_a
+        done = i == end_i
     if e.get('type') == 'system' and e.get('subtype') == 'turn_duration':
         active_ms += int(e.get('durationMs') or 0)
         open_t = last_a = None
         pend_ms = 0
+        if done:
+            break
 settle()
 if t1 is None:
     sys.exit('run_time: /run %s has no assistant reply' % task)
@@ -143,7 +163,9 @@ def clock(s):
 
 d = int((ts(t1) - ts(t0)).total_seconds())
 notes = ''
-if interrupted:
+if end_i is not None:
+    notes += ', ended at the end marker'
+elif interrupted:
     notes += ', interrupted, counted to the next slash command'
 if estimated:
     notes += ', active partly estimated, a turn has no turn_duration'

@@ -14,3 +14,7 @@
 # TOOLS-006 changed their end-of-run code. The baseline passes for those
 # four sim targets were confirmed from the printed counts (all FAIL=0),
 # not from the exit status alone.
+rtl/core/frontend/fe_top sim_fe_top_ras_fbstale TD#207 BP-151 expected fail until ruled: the commit-stack fallback reads a frame an uncommitted return popped (ras_decisions.md 3.3, PO3, PO5)
+rtl/core/frontend/fe_top/slot1 sim_fe_top_ras_fbstale_1slot TD#207 BP-151 expected fail until ruled: as sim_fe_top_ras_fbstale, one slot
+rtl/core/frontend/fe_top sim_fe_top_ras_pdcall TD#207 BP-151 expected fail until ruled: a call only predecode finds is not pushed (ras_decisions.md 7, CB1)
+rtl/core/frontend/fe_top/slot1 sim_fe_top_ras_pdcall_1slot TD#207 BP-151 expected fail until ruled: as sim_fe_top_ras_pdcall, one slot

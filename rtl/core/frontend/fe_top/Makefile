@@ -168,9 +168,19 @@ FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
             zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57 pt_gonly_x4
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
+# BP-151: programs EXPECTED TO FAIL until their cause is ruled (TD#207;
+# tools/known_failures.txt waives each, at both slot counts). Each runs
+# as its own target only: sim_fe_top does not run them, so it stays a
+# gate for FE_PROGS.
+#   ras_fbstale  the commit-stack fallback reads a frame whose return
+#                has popped speculatively and not committed
+#   ras_pdcall   a call only predecode finds is not pushed, and its
+#                commit pushes pft_addr
+FE_XPROGS     := ras_fbstale ras_pdcall
+FE_XPROG_TGTS := $(addprefix sim_fe_top_,$(FE_XPROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \
-        fe_top_bin $(FE_PROG_TGTS) sim_fe_top_init_walk
+        fe_top_bin $(FE_PROG_TGTS) $(FE_XPROG_TGTS) sim_fe_top_init_walk
 
 # The targets share one object directory: build_fe_top and fe_top_bin
 # must never run together under make -j.
@@ -267,7 +277,7 @@ sim_fe_top: build_fe_top
 
 # Each program alone, on sim_fe_top's binary when it is current
 # (fe_top_bin, INFRA-014).
-$(FE_PROG_TGTS): sim_fe_top_%: fe_top_bin
+$(FE_PROG_TGTS) $(FE_XPROG_TGTS): sim_fe_top_%: fe_top_bin
 	@echo "[simulating] $(FE_BIN) $(PT_ARG) +PROG=$*"
 	$(Q)./$(FE_BIN) $(FE_PLUSARGS) $(PT_ARG) +PROG=$*
 
@@ -328,7 +338,7 @@ clean:
 #                       - the compile steps the sim targets run first.
 #   clean, regress_list - housekeeping and this plumbing.
 REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
-                   sim_fe_top_init_walk
+                   sim_fe_top_init_walk $(FE_XPROG_TGTS)
 REGRESS_EXCLUDE := all build_fe_top fe_top_bin clean regress_list
 # BP-149: the targets tools/regress_weekly.sh runs at every PT_MODE.
 # sim_fe_top runs every program, each in its own simulation, so every

@@ -2844,6 +2844,135 @@ module tb;
         n_pd_redir > 0);
   endtask
 
+  // =================================================================
+  // BP-151 programs: return mispredicts the RAS rules allow (TD#207).
+  // Each is EXPECTED TO FAIL on the current RTL, which meets every rule
+  // of ras_decisions.md here, until the cause is ruled; each runs as its
+  // own target (the fe_top Makefile FE_XPROGS, not in FE_PROGS) and
+  // tools/known_failures.txt waives it at both slot counts.
+  // =================================================================
+
+  // -----------------------------------------------------------------
+  // ras_fbstale: THE COMMIT-STACK FALLBACK READS A POPPED FRAME
+  // (BP-151 cause fb_stale_top, 85 to 99 percent of the slot-held
+  // return mispredicts at most sweep points). main calls a; a jumps to
+  // code new in each iteration, a taken conditional the predictors have
+  // never seen, which mispredicts: its redirect comes after everything
+  // older has retired, a's call included, so BOS moves to a's entry and
+  // the speculative stack reads empty (TOSR == BOS, 3.3, CO5, CO6); a
+  // calls b, whose push lands on the empty stack, so b's entry is
+  // bottom (PU1); b drains the same way, so b's call commits (BOS moves
+  // to b's entry); b returns, and its pop of the bottom entry sets TOSR
+  // to BOS, empty again (PO3); a returns at once. a's return pops an
+  // empty speculative stack and reads the commit stack's top (PO5),
+  // which is still b's entry: b's return has popped speculatively but
+  // has not committed (CO3). a's return mispredicts to b's link though
+  // a's entry is resident in the speculative array, one slot below BOS.
+  // The drain stands for what empties the window in the traces: a
+  // mispredict. A FENCE.I does not serve: it invalidates the L1I, and
+  // the slow refetch after it lets b's return commit first.
+  // -----------------------------------------------------------------
+  // A drain: an indirect jump (jalr x0, 0(x7)) to fresh code at t, a
+  // target no predictor has seen, so it mispredicts; then jal x0 back.
+  // The jump's word is the same in every iteration (no code is
+  // rewritten); only its target, the writer's, differs.
+  task automatic drain_at(input logic [VA_WIDTH-1:0] t);
+    logic [VA_WIDTH-1:0] back;
+    back = W.wp + VA_WIDTH'(4);
+    W.jalr_to(5'd0, 5'd7, t);
+    W.jal(5'd0, back);
+  endtask
+
+  task automatic p_ras_fbstale();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] a;
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] la;
+    logic [VA_WIDTH-1:0] lb;
+    logic [VA_WIDTH-1:0] aret;
+    begin_prog("ras_fbstale");
+    a = RESET_VECTOR + VA_WIDTH'('h800);
+    b = RESET_VECTOR + VA_WIDTH'('hC00);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 12; it++) begin
+      if (it == 4) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      la = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, a);                          // main calls a
+      drain_at(RESET_VECTOR + VA_WIDTH'('h2000 + it * 'h40));
+      W.mixed(2);                              // a's call has committed
+      lb = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, b);                          // a calls b
+      drain_at(RESET_VECTOR + VA_WIDTH'('h3000 + it * 'h40));
+      W.mixed(2);                              // b's call has committed
+      W.ret(lb);                               // b returns
+      aret = W.wp;
+      W.ret(la);                               // a returns at once
+      W.mixed(1);
+      W.bcc(it != 11, top);
+    end
+    W.mixed(3);
+    watch_pc = aret;
+    end_prog(120000);
+    chk($sformatf({"ras_fbstale: a's return, right after b's, is ",
+                   "predicted after warm-up (mispredicted %0d of 8)"},
+                  mis_pc.exists(aret) ? mis_pc[aret] : 0),
+        !mis_pc.exists(aret));
+  endtask
+
+  // -----------------------------------------------------------------
+  // ras_pdcall: A CALL ONLY PREDECODE FINDS (BP-151 cause call_pd, H4).
+  // f is called six times from site A, at a block end, so the FTB holds
+  // f's return and the call. Then site B calls f from new code, in the
+  // middle of a block: the FTB has no entry, so the call is found by
+  // predecode (ftq_ifu.sv W1) and is never pushed (the speculative push
+  // is made at p2 from the FTB's type only, ras_decisions.md 7, 12.14
+  // CB1). f's return, held by the FTB, is predicted by the RAS and
+  // mispredicts. The call's commit pushes the entry's pft_addr, which
+  // the predecode correction does not rewrite (ftq_entry.sv
+  // ras_commit_payload); here that equals the call's pc + 4 (the RAS
+  // commit check passes), so this program tests the missing push.
+  // -----------------------------------------------------------------
+  task automatic p_ras_pdcall();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] la;
+    logic [VA_WIDTH-1:0] lb;
+    logic [VA_WIDTH-1:0] fret;
+    begin_prog("ras_pdcall");
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 6; it++) begin
+      W.wp = top;
+      W.mixed(2);
+      while (W.wp != top + VA_WIDTH'('h1C)) W.i16();
+      la = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, f);                          // site A, at a block end
+      W.mixed(3);
+      fret = W.wp;
+      W.ret(la);
+      W.mixed(1);
+      W.bcc(it != 5, top);
+    end
+    W.mixed(24);
+    W.mixed(3);
+    warm_e = W.ne;
+    lb = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, f);                            // site B, new code
+    W.mixed(3);
+    W.ret(lb);                                 // f's return, FTB-held
+    W.mixed(3);
+    watch_pc = fret;
+    end_prog(80000);
+    chk($sformatf({"ras_pdcall: f's return after the call predecode ",
+                   "found is predicted (mispredicted %0d)"},
+                  mis_pc.exists(fret) ? mis_pc[fret] : 0),
+        !mis_pc.exists(fret));
+  endtask
+
 
   // =================================================================
   // BP-123 programs: maintenance (Problem 4).
@@ -4226,6 +4355,8 @@ module tb;
       "misp_call":  p_misp_call();
       "sc_nored":   p_sc_nored();              // BP-150
       "jals":       p_jals();
+      "ras_fbstale": p_ras_fbstale();          // BP-151, expected fail
+      "ras_pdcall": p_ras_pdcall();            // BP-151, expected fail
       "fencei":     p_smc(1);
       "cboinval":   p_smc(2);
       "uc_nc":      p_uc(2'd1);
@@ -4255,7 +4386,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:42] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:44] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
@@ -4267,7 +4398,8 @@ module tb;
                               "pt_rsv_h", "pt_ad_s", "pt_ad_h", "pt_inv",
                               "zstar", "pt_gonly", "pt_vsonly",
                               "pt_upriv", "init_walk", "sv48", "sv57",
-                              "h57", "pt_gonly_x4"};
+                              "h57", "pt_gonly_x4", "ras_fbstale",
+                              "ras_pdcall"};
 
   // =================================================================
   initial begin

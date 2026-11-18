@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-16
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -212,16 +212,23 @@ PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
        instructions presented. The take cycle is the cycle after the
        ibuf handshake. As built, every event defaults to immediate,
        the take rate to fixed:8 and the window to none.
-       RULED session-086 (Jeff), to be built by PERF-003:
+       RULED session-086 (Jeff), BUILT by PERF-003:
        - RESOLVE LATENCY IS A SUM OF STAGES: decode, rename, dispatch
          and execute, each a parameter with a range and distribution
          as above. Resolve to commit stays its own parameter.
-       - THE DEFAULT IS A NEAR-PERFECT BACKEND: the smallest stage and
-         commit values beyond which return mispredicts stop changing
-         (the commit race, TD#207), found by a sweep in PERF-003. It
-         is the nearest pacino comes to CBP's scoring, which corrects
-         branch history at once with the actual outcome and trains
-         the tables later.
+       - THE DEFAULT WAS TO BE A NEAR-PERFECT BACKEND: the smallest
+         stage and commit values beyond which return mispredicts stop
+         changing (the commit race, TD#207), found by a sweep in
+         PERF-003; the nearest pacino comes to CBP's scoring, which
+         corrects branch history at once with the actual outcome and
+         trains the tables later. NOT SET. In the sweep (execute 0..8
+         by resolve to commit 0..8, six traces, 2e6;
+         perf/studies/perf003_p6_sweep_table.csv) only (8, 8) meets
+         the rule: return mispredicts do not settle on five traces
+         (media_2 4,815 at (0, 0), 84 at (5, 5), about 600 at execute
+         7 and 8; compress_1, infra_1 and int_6 rise with resolve to
+         commit). RULED session-086 (Jeff): the default stays
+         immediate, and TD#207 is investigated first.
        - THE MISPREDICT RULE. PERF-002 decides a mispredict by the
          fetched stream: a branch mispredicts when the next
          instruction fetch delivers is not the trace's next PC, and a
@@ -239,6 +246,36 @@ PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
          before the step runs. (2) Drive: the fetch rule drives the
          redirects, and its MPKI is the measurement. It is not
          compared with the stream rule's MPKI.
+       - THE STAGES ARE BUILT: --decode-lat, --rename-lat,
+         --dispatch-lat and --execute-lat, each its own random stream
+         (execute keeps --resolve-lat's, so moved study sets reproduce
+         their rows); --resolve-lat is removed and stops a run with a
+         message.
+       - THE FETCH RULE IS BUILT AND IS THE DEFAULT (--mispredict-rule
+         fetch). The record is written at each accepted request (not in
+         a flush cycle) and at each predecode correction (the corrected
+         slots and w_corr_succ). The verdict is read in the branch's
+         resolve cycle, with that cycle's correction applied. The
+         fetched stream stays a check (err_stream, err_fetch_rule).
+         Observed: 0 disagreements with the stream rule outside the
+         written cases in 35 runs; no case was added. The path's last
+         branch is not judged. pred_src comes from the record; a
+         predecode-corrected slot carries PRED_NONE.
+       - THE RESOLUTION TARGET: a conditional resolves with the taken
+         target its B-type word encodes, whatever its direction
+         (ftb_decisions.md 5.5); a veneered one with its stub. PERF-002
+         sent pc + 8 when not taken, which trained false FTB targets
+         that predecode repaired: predecode redirects fell by up to
+         99.5% and cycles by up to 7.0% with the fix. err_predict was
+         those repairs landing after the take; it and the take-time slot
+         reading are removed.
+       - A TRAP AFTER A BRANCH (the trace's next record an exception
+         entry). PERF-003 counts it as the branch's mispredict under
+         both rules (mispred_trap_after, 0 to 9 per 2e6 run). RULED
+         session-086 (Jeff): the branch is judged on its own outcome,
+         and the trap is a separate RC_TRAP redirect, as for a
+         non-branch. To be built by PERF-004; orc_slot_trap goes with
+         it.
 
 PF-19  THE I-CACHE SWITCH (PF-U6 as written): a run parameter selects
        a real, a preloaded or a perfect I-cache, so that predictor
@@ -266,10 +303,19 @@ PF-21  WHAT PERF-002 BUILT: the trace tools (perf/src); the changed
        outstanding); the harness (perf/sv/perf_top.sv,
        perf/src/harness); and the study runner (tools/perf_study.py).
        Build: make -C perf. The oracle check of PF-11 is not built.
+       WHAT PERF-003 BUILT: the CPU cap (PF-22); the resolution target,
+       the fetch record and the fetch rule, and the backend stages
+       (PF-18); the oracle (PF-11); the backend sweep,
+       perf/studies/perf003_p6_sweep_table.csv. The take-time slot
+       reading (pq_*) and err_predict are removed.
 
 PF-22  THE PERF TOOLS USE AT MOST 75% OF THE MACHINE'S HARDWARE THREADS
        BY DEFAULT, with -j to use fewer or more (Jeff, session-086:
-       PERF-002's runs made the machine unusable). Built by PERF-003.
+       PERF-002's runs made the machine unusable). BUILT by PERF-003:
+       tools/perf_study.py, perf_rerun.py and perf_traces.py, the
+       veneer and trace_count tools (perf/src/perf_util.h) and the perf
+       Makefile's JOBS default to max(1, floor(0.75 x hardware
+       threads)); -j N (JOBS=N) sets N; each prints the count it uses.
        Spreading runs over several machines, the three on the local
        network, is wanted later, as an INFRA task of its own.
 
@@ -410,10 +456,41 @@ PF-11  The harness is checked three ways, and a result is not used
          its own and is expected to be non-zero. The same run's cycles
          are the front end's ceiling with direction and target
          perfect: the design's cycles minus the oracle's are what
-         prediction costs. Not built by PERF-002 (it stated the gap);
-         built by PERF-003. It read: "an oracle mode, in which every
+         prediction costs. It read: "an oracle mode, in which every
          prediction is correct: zero mispredictions, and the fetched
          committed stream equals the trace."
+         BUILT BY PERF-003 (--oracle). Each FTQ entry allocated at p1 is
+         aligned with the trace: it is on the path when its PC is where
+         a backend redirect sent fetch, or where the trace goes after
+         its predecessor's predicted block (the predecessor's fetch
+         record once fetched, its entry before that; realigned at p2 and
+         p3). For an entry on the path, perf_top forces bp_cluster's
+         predictor outputs to the trace's direction and target: at p1
+         the uBTB prediction, the loop predictor and the RAS top of
+         stack; at p2 the loop predictor, TAGE, the FTB direction, the
+         conditional and jump targets, the RAS pop and ITTAGE's targets;
+         at p3 SC. Each force is a mux of the trace's value with the
+         predictor's own, of a whole variable or element.
+         perf/sv/perf.vlt keeps loop_pred, ftb, tage, ittage, sc and ras
+         out of inlining so that their ports read unforced; this applies
+         to every harness run, and the counts are unchanged. No file
+         under rtl/ changes.
+         MEASURED (six traces, 2e6 instructions, 18 runs): 0 mispredicts
+         on slot-held branches, apart from a branch whose next trace
+         record is an exception entry (orc_slot_trap, 0 to 8 per run;
+         PF-18). Misses are conditional, indirect and return; direct
+         misses are 0, since predecode corrects every jal. THE CEILING
+         IS DIRECTION AND TARGET PERFECT, NOT A PERFECT FRONT END: slot
+         presence stays the predictors' own, so it still includes the
+         FTB's misses (web_11: 67,057 conditional misses) and the p2
+         overrides where p1 lacks a slot the FTB has (infra_1: 110,310).
+         VERILATOR 5.048, AS FOUND BY PERF-003, for any change to the
+         forces: a force through an inlined port is circular (UNOPTFLAT,
+         VlForceVec unsupported); a released variable keeps its forced
+         value until its driver re-evaluates; a force inside always_comb
+         does nothing; of two member forces on one struct element only
+         one applies, with no warning; a comment line in a .vlt file
+         that starts with a pragma word is read as the pragma.
        - every committed PC equals the trace's next PC.
        The reference results are a yardstick for pacino's MPKI, not a
        check of it: one predictor's mispredictions are not checked
@@ -606,4 +683,11 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               built as recorded; stage latencies, the near-perfect
               default, the fetch rule and its two-step acceptance
               ruled (Jeff), for PERF-003. PF-22 the CPU cap.
+  2026-11-18  session-086, PERF-003 recorded. PF-11: the oracle as
+              built, what its ceiling includes, the Verilator force
+              findings. PF-18: the stages, the fetch rule and the
+              resolution target built; the near-perfect default not
+              set, the default immediate until TD#207 (Jeff); a trap
+              after a branch judged apart (Jeff), for PERF-004. PF-21,
+              PF-22: built.
 ```

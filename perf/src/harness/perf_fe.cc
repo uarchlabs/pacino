@@ -102,6 +102,7 @@
 #include "../perf_util.h"
 #include "dist.h"
 #include "icache.h"
+#include "ras_class.h"
 #include "rv_encode.h"
 #include "supply.h"
 
@@ -273,6 +274,9 @@ struct Ro {
   int64_t  take_c, res_c, commit_c;
   bool     res_sent = false, res_done = false;
   Ent*     ent;
+  // THE RAS CLASSIFICATION (BP-151): a call's or a return's FTQ instance
+  // and its RAS observation, at the take.
+  rcls::IObs rco;
 };
 // One FTQ entry on the committed path.
 struct Ent {
@@ -581,6 +585,16 @@ int main(int argc, char** argv) {
 
   Counts c;
   std::vector<FRec> frec(64);          // THE RECORD, by FTQ index
+  // THE RAS CLASSIFICATION (BP-151): observation only. RC_DUMP=n prints
+  // the first n returns of each cause to stderr.
+  rcls::RasClass rcl;
+  if (const char* dv = std::getenv("RC_DUMP")) rcl.dump = std::atoi(dv);
+  if (const char* tv = std::getenv("RC_TRACE")) {
+    // RC_TRACE=from:to, the RAS events of those cycles on stderr
+    rcl.tr_from = std::strtoull(tv, nullptr, 0);
+    if (const char* co = std::strchr(tv, ':'))
+      rcl.tr_to = std::strtoull(co + 1, nullptr, 0);
+  }
 
   // ---- THE ORACLE (PF-11): the predicted path, followed in the trace ----
   // Each entry allocated at p1 is aligned with the trace: on the path, at
@@ -710,6 +724,7 @@ int main(int argc, char** argv) {
   struct LastCopy {                   // the same, kept past its commit
     bool v = false; uint8_t idx = 0, pos = 0; uint32_t ptr = 0;
     uint64_t pc = 0;
+    uint8_t cls = 0;                  // BP-151: its class, for rd.ty
   } lc;
   uint64_t expect_next = 0;           // the PC fetch should give next
   bool     pred_mis_last = false;     // the last branch was predicted bad
@@ -724,6 +739,9 @@ int main(int argc, char** argv) {
     bool v = false; int64_t at = 0; uint8_t idx = 0, pos = 0;
     uint64_t pc = 0; bool self = false; uint8_t cause = 0; bool taken = false;
     uint64_t next_k = 0; uint32_t ptr = 0; bool unspec = false;
+    // BP-151, observation only: the named instruction's type (its class
+    // by rv::br_type_of), which THE RAS CLASSIFICATION reads.
+    uint8_t ty = rv::BT_NO_BRANCH;
   } rd;
   bool     redir_now = false;
   bool     started = false;           // the path's first redirect fired
@@ -797,6 +815,7 @@ int main(int argc, char** argv) {
     if (mis) {
       wrong = true;
       rd.v = true; rd.at = b->res_c; rd.idx = b->idx; rd.pos = b->pos;
+      rd.ty = rv::br_type_of(b->in.cls);
       rd.pc = expect_next; rd.self = false; rd.cause = 0;
       rd.taken = b->in.taken; rd.next_k = b->k + 1; rd.ptr = b->ptr;
       rd.unspec = false;
@@ -1057,7 +1076,7 @@ int main(int argc, char** argv) {
           rd.v = true; rd.at = cyc; rd.idx = b->idx; rd.pos = b->pos;
           rd.pc = tnext; rd.self = false; rd.cause = 0;
           rd.taken = b->in.taken; rd.next_k = b->k + 1; rd.ptr = b->ptr;
-          rd.unspec = false;
+          rd.unspec = false; rd.ty = rv::br_type_of(b->in.cls);
         } else if (b->nxt_seen && !b->nxt_ok) {
           // Fetch left the path after a branch the record says correct
           // (err_stream): repaired by RC_REPLAY naming the branch.
@@ -1068,6 +1087,7 @@ int main(int argc, char** argv) {
           rd.v = true; rd.at = cyc; rd.idx = b->idx; rd.pos = b->pos;
           rd.pc = tnext; rd.self = false; rd.cause = 2; rd.taken = false;
           rd.next_k = b->k + 1; rd.ptr = b->ptr; rd.unspec = false;
+          rd.ty = rv::br_type_of(b->in.cls);
         }
         logf("VERDICT k %" PRIu64 " mis %d nxt %d/%d", b->k, int(b->mis),
              int(b->nxt_seen), int(b->nxt_ok));
@@ -1138,6 +1158,9 @@ int main(int argc, char** argv) {
     top->clk = 0;
     top->eval();
     ic.before_edge(cyc);
+    // THE RAS CLASSIFICATION: this cycle's RAS events, before the edge.
+    rcl.observe(top.get(), uint64_t(cyc), redir_now, uint8_t(top->redir_pos),
+                rd.ty, rd.cause);
 
     // =============== (B) the handshakes of this cycle ===============
     if (top->l1i_a_valid && top->l1i_a_ready) {
@@ -1299,6 +1322,7 @@ int main(int argc, char** argv) {
             rd.idx = last->idx; rd.pos = last->pos; rd.pc = in.pc;
             rd.self = false; rd.cause = 0; rd.taken = last->in.taken;
             rd.next_k = tp; rd.ptr = last->ptr; rd.unspec = false;
+            rd.ty = rv::br_type_of(last->in.cls);
           } else {
             // After a PC whose record's class is not the image's
             // (rewritten code, supply.h conflict), fetch follows the
@@ -1316,6 +1340,7 @@ int main(int argc, char** argv) {
               rd.pos = lc.pos; rd.pc = in.pc; rd.self = false;
               rd.cause = 2; rd.taken = false; rd.next_k = tp;
               rd.ptr = lc.ptr; rd.unspec = false;
+              rd.ty = rv::br_type_of(lc.cls);
             } else {
               rd.v = true; rd.at = hold_c; rd.pc = in.pc; rd.cause = 3;
               rd.unspec = true; rd.next_k = tp;
@@ -1366,6 +1391,13 @@ int main(int argc, char** argv) {
         r.idx = idx;
         r.pos = top->pd_pos[i];
         r.is_br = cbp::is_branch(in.cls);
+        if (in.cls == cbp::C_CALL_DIR || in.cls == cbp::C_CALL_IND ||
+            in.cls == cbp::C_RET) {
+          r.rco = rcl.cur(idx);
+          if (in.cls != cbp::C_RET) rcl.path_call(r.rco.inst, r.pos, tp);
+          else rcl.path_ret(r.rco.inst, tp);
+        }
+        if (sup.conflict(in.pc)) rcl.path_conflict(rcl.cur(idx).inst);
         // THE RESOLUTION TARGET (ftb_decisions.md 5.5, fe_tb_backend.svh
         // br_target): a conditional resolves with its taken target whatever
         // its direction, the target the image's B-type word at its PC
@@ -1430,6 +1462,7 @@ int main(int argc, char** argv) {
         have_last = true;
         lc.v = true; lc.idx = idx; lc.pos = rp->pos; lc.ptr = ptr;
         lc.pc = in.pc;
+        lc.cls = in.cls;
         expect_next = next_pc;
         last_take_c = cyc;
         logf("TAKE k %" PRIu64 " pc %" PRIx64 " cls %d idx %d pos %d ptr %u "
@@ -1446,7 +1479,7 @@ int main(int argc, char** argv) {
           rd.v = true; rd.at = rp->res_c; rd.idx = idx; rd.pos = rp->pos;
           rd.pc = next_pc; rd.self = false; rd.cause = 0;
           rd.taken = in.taken; rd.next_k = tp; rd.ptr = ptr;
-          rd.unspec = false;
+          rd.unspec = false; rd.ty = rv::br_type_of(in.cls);
         } else if (!rp->is_br && tp < path_len &&
                    (next_pc & VA_MASK) != ((in.pc + 4) & VA_MASK)) {
           // A trace discontinuity after a non-branch: a trap or an
@@ -1458,6 +1491,7 @@ int main(int argc, char** argv) {
           rd.v = true; rd.at = rp->res_c; rd.idx = idx; rd.pos = rp->pos;
           rd.pc = next_pc; rd.self = false; rd.cause = 1; rd.taken = false;
           rd.next_k = tp; rd.ptr = ptr; rd.unspec = false;
+          rd.ty = rv::BT_NO_BRANCH;
         }
       }
       credit -= ntake;
@@ -1559,6 +1593,13 @@ int main(int argc, char** argv) {
           if (r.mis) c.miss_mis[mc]++;
         }
         if (o.oracle && !r.orc_forced) c.orc_path_unforced++;
+        // THE RAS CLASSIFICATION (BP-151): the reference stack, in trace
+        // order, and the cause of each mispredicted slot-held return.
+        if (r.in.cls == cbp::C_CALL_DIR || r.in.cls == cbp::C_CALL_IND)
+          rcl.commit_call(r.in.pc, r.k, r.pos, r.src, r.in_slot, r.rco);
+        else if (r.in.cls == cbp::C_RET)
+          rcl.commit_ret(r.k, r.in.pc, r.in.target, r.pos, r.src,
+                         r.mis && r.in_slot, trap_after, r.rco, 0);
       }
       if (r.is_br && drive && r.fr_mis) c.fr_mis++;
       if (r.is_br && !drive) {
@@ -1799,6 +1840,29 @@ int main(int argc, char** argv) {
                                                       sim_s : 0)},
   };
   row.insert(row.end(), tail.begin(), tail.end());
+  // THE RAS CLASSIFICATION (BP-151), after every PERF-003 column: the
+  // returns, the slot-held mispredicted ones, one column per cause (each
+  // such return has exactly one), and the depths seen.
+  row.push_back({"rc_returns", std::to_string(rcl.n_ret)});
+  row.push_back({"rc_slot_mispred_ret", std::to_string(rcl.n_slot_mis)});
+  for (int k = 0; k < rcls::C_N; k++)
+    row.push_back({std::string("rc_") + rcls::cause_name(k),
+                   std::to_string(rcl.cnt[k])});
+  row.push_back({"rc_max_spec_depth", std::to_string(rcl.max_spec)});
+  row.push_back({"rc_max_commit_count", std::to_string(rcl.max_cmt)});
+  row.push_back({"rc_max_ref_depth", std::to_string(rcl.max_ref)});
+  row.push_back({"rc_restores", std::to_string(rcl.n_restores)});
+  row.push_back({"rc_commit_unexecuted_trap",
+                 std::to_string(rcl.n_cmt_unexec_trap)});
+  row.push_back({"rc_sentinel_skips", std::to_string(rcl.n_wrap_skip)});
+  // THE OPTIONS (Problem 4): of the returns of a cause, those the commit
+  // stack's top (ctop) or its first open frame (cskip) would predict.
+  for (int k : {int(rcls::C_FB_STALE), int(rcls::C_STALE), int(rcls::C_WRAP)}) {
+    row.push_back({std::string("rc_opt_ctop_") + rcls::cause_name(k),
+                   std::to_string(rcl.opt_ctop[k])});
+    row.push_back({std::string("rc_opt_cskip_") + rcls::cause_name(k),
+                   std::to_string(rcl.opt_cskip[k])});
+  }
   for (auto& kv : row)
     std::printf("%-22s %s\n", kv.first.c_str(), kv.second.c_str());
   if (!o.out.empty()) {
