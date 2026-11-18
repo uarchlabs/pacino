@@ -150,6 +150,11 @@
 // programs that name their modes, in every run: sv39, sv48, sv57, h57
 // and pt_gonly_x4 (G-stage only under Sv57x4, the x4 root's entries at
 // 0x100 and above).
+//
+// BP-150. Program sc_nored (TD#205): SC reverses a conditional to not
+// taken at p3 with no p3 redirect (its taken target is the block's
+// fall-through), by a testbench force of SC's p3 prediction, and the
+// instruction after the branch must still be delivered.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -401,6 +406,106 @@ module tb;
         mc_pend <= ours;
         mc_tgt  <= dut.bkend_ftq_redir_pc;
         if (ours) n_mc_ev <= n_mc_ev + 1;
+      end
+    end
+  end
+
+  // BP-150 (TD#205), program sc_nored: an SC reversal at p3 that raises
+  // no p3 redirect. Block K holds one conditional B whose taken target
+  // is K's fall-through, so SC turning B not taken at p3 leaves the
+  // block successor unchanged and bp_cluster raises no redirect; only
+  // the p3 slot write changes the entry. The program reaches K on its
+  // last pass through a backend redirect to block P2, so fetch has
+  // caught up with allocation and K's fetch request is presented in K's
+  // p3 cycle.
+  //   sc_nored_force  after the backend redirect to P2 (scn_arm), at the
+  //                   next p3 of K: SC's slot 0 prediction forced to
+  //                   ready, this entry, not taken, for that one cycle
+  //   sc_nored_log    the forced cycle: whether a p3 redirect fired, the
+  //                   p2 and p3 views of slot 0, and whether K's fetch
+  //                   request was accepted; then the ibuf write port:
+  //                   the first instruction written after B, B being the
+  //                   copy written from entry K (scn_next)
+  logic                    scn_on;
+  logic                    scn_arm;
+  logic                    scn_fon;
+  logic [VA_WIDTH-1:0]     scn_p2;
+  logic [VA_WIDTH-1:0]     scn_k;
+  logic [VA_WIDTH-1:0]     scn_b;
+  logic [FTQ_IDX_BITS-1:0] scn_kidx;
+  logic                    scn_seen;
+  logic                    scn_done;
+  logic [VA_WIDTH-1:0]     scn_next;
+  sc_pred_meta_t           scn_meta;
+  int                      n_scn_force;
+  int                      n_scn_redir;
+  int                      n_scn_p2tkn;
+  int                      n_scn_p3ntk;
+  int                      n_scn_req;
+  // The forced value: this p3 entry, not taken. The force holds for the
+  // one cycle, while r_idx_p3 is K's.
+  always_comb begin : sc_nored_meta
+    scn_meta             = '0;
+    scn_meta.branch_id   = dut.u_bpu.r_idx_p3;
+    scn_meta.sc_pred_tkn = 1'b0;
+  end
+
+  always @(negedge clk) begin : sc_nored_force
+    if (rstn && scn_on && scn_arm && !scn_fon && dut.u_bpu.r_val_p3 &&
+        (dut.u_bpu.r_pc_p3 == scn_k)) begin
+      force dut.u_bpu.w_sc_pred_meta_p3[0] = scn_meta;
+      force dut.u_bpu.w_sc_pred_rdy_p3[0]  = 1'b1;
+      scn_kidx    <= dut.u_bpu.r_idx_p3;
+      scn_fon     <= 1'b1;
+      n_scn_force <= n_scn_force + 1;
+    end else if (scn_fon) begin
+      release dut.u_bpu.w_sc_pred_meta_p3[0];
+      release dut.u_bpu.w_sc_pred_rdy_p3[0];
+      scn_fon <= 1'b0;
+    end
+  end
+
+  always @(posedge clk) begin : sc_nored_log
+    logic                any_p3;
+    logic                seen;
+    logic                done;
+    logic [VA_WIDTH-1:0] nxt;
+    if (rstn && scn_on) begin
+      if (dut.bkend_ftq_redir_val && (dut.bkend_ftq_redir_pc == scn_p2))
+        scn_arm <= 1'b1;
+      if (scn_fon) begin
+        scn_arm <= 1'b0;
+        any_p3 = 1'b0;
+        for (int s = 0; s < NUM_PRED_SLOTS; s++)
+          any_p3 = any_p3 | dut.bpu_redir_p3[s].valid;
+        if (any_p3) n_scn_redir <= n_scn_redir + 1;
+        if (dut.u_bpu.r_taken_p3[0]) n_scn_p2tkn <= n_scn_p2tkn + 1;
+        if (!dut.u_bpu.w_taken_p3[0]) n_scn_p3ntk <= n_scn_p3ntk + 1;
+        if (dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+            !dut.ftq_ifu_flush_val && (dut.ftq_ifu_idx == scn_kidx))
+          n_scn_req <= n_scn_req + 1;
+      end
+      if ((n_scn_force > 0) && !scn_done && dut.ifu_ibuf_val &&
+          dut.ibuf_ifu_rdy && !dut.bkend_ftq_redir_val) begin
+        seen = scn_seen;
+        done = 1'b0;
+        nxt  = '0;
+        for (int i = 0; i < FTQ_PD_WIDTH; i++) begin
+          if (dut.ifu_ibuf_en[i] && !done) begin
+            if (seen) begin
+              nxt  = dut.ifu_ibuf_slot[i].start_pc;
+              done = 1'b1;
+            end else if ((dut.ifu_ibuf_slot[i].ftq_idx == scn_kidx) &&
+                         (dut.ifu_ibuf_slot[i].start_pc == scn_b)) begin
+              seen = 1'b1;
+            end
+          end
+        end
+        scn_seen <= seen;
+        if (done) begin
+          scn_done <= 1'b1;
+          scn_next <= nxt;
+        end
       end
     end
   end
@@ -1241,6 +1346,21 @@ module tb;
     n_mc_ok      = 0;
     n_mc_bad     = 0;
     n_mc_drop    = 0;
+    scn_on       = 1'b0;                      // BP-150, sc_nored
+    scn_arm      = 1'b0;
+    scn_fon      = 1'b0;
+    scn_p2       = '0;
+    scn_k        = '0;
+    scn_b        = '0;
+    scn_kidx     = '0;
+    scn_seen     = 1'b0;
+    scn_done     = 1'b0;
+    scn_next     = '0;
+    n_scn_force  = 0;
+    n_scn_redir  = 0;
+    n_scn_p2tkn  = 0;
+    n_scn_p3ntk  = 0;
+    n_scn_req    = 0;
     n_t0u_pred   = 0;
     n_t0u_upd    = 0;
     n_t0u_ok     = 0;
@@ -2606,6 +2726,91 @@ module tb;
                    " each (%0d ok, %0d not)"}, n_mc_ok, n_mc_bad),
         (n_mc_bad == 0) && (n_mc_ok > 0));
 `endif
+  endtask
+
+  // -----------------------------------------------------------------
+  // sc_nored (BP-150, TD#205): SC reverses at p3, to not taken, a
+  // conditional the entry holds taken at p2, and no p3 redirect fires
+  // because the branch's taken target is the block's fall-through. The
+  // p3 slot write changes the entry's taken position, which is what the
+  // IFU truncates the block on, so a fetch request for the entry
+  // presented in its p3 cycle must not carry the p2 view: if it does,
+  // the instructions between the branch and the fall-through are never
+  // fetched. Layout:
+  //   top        mixed(1); C0 = bcc(last pass, P2); jal x0, K
+  //   K          six addi (K .. K+20), 32-byte aligned
+  //   K+24       B = bcc(not last pass, K+32): its target, K+32, is the
+  //              block fall-through
+  //   K+28       X = addi, skipped when B is taken
+  //   K+32       mixed(1); bcc(not last pass, top), the loop branch
+  //   P2         mixed(1); jal x0, K (the last pass only)
+  // B is taken on every pass but the last, so at p2 it is taken on the
+  // last pass too. C0 is taken only on the last pass, so it mispredicts
+  // and the backend redirects to P2; the next p3 of K is then on the
+  // path and fetch has caught up with allocation (the redirect empties
+  // the run-ahead). sc_nored_force makes SC's prediction for B not
+  // taken at that p3, which is B's real direction there.
+  // THE CHECK: the instruction written to the ibuf after B, from K, is
+  // B + 4 (X). Preconditions checked with it: the force fired once, at
+  // a p3 that raised no redirect, with B taken in the p2 view and not
+  // taken in the p3 view. A testbench force of SC's prediction, allowed
+  // by BP-150; no program reaches the case by SC alone (BP-142).
+  // -----------------------------------------------------------------
+  localparam int SCN_PASSES = 10;
+
+  task automatic p_sc_nored();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] k;
+    logic [VA_WIDTH-1:0] p2;
+    logic                last;
+    begin_prog("sc_nored");
+    k      = RESET_VECTOR + VA_WIDTH'('h400);
+    p2     = RESET_VECTOR + VA_WIDTH'('h800);
+    scn_k  = k;
+    scn_b  = k + VA_WIDTH'(24);
+    scn_p2 = p2;
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < SCN_PASSES; it++) begin
+      last = (it == SCN_PASSES - 1);
+      if (it == 4) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(1);
+      W.bcc(last, p2);                         // C0
+      if (last) W.mixed(1);                    // P2
+      W.jal(5'd0, k);
+      for (int j = 0; j < 6; j++) W.i32(ADDI_T0);
+      W.bcc(!last, k + VA_WIDTH'(32));         // B
+      if (!last) begin
+        // X, off this pass's path: written, not appended.
+        W.wp  = k + VA_WIDTH'(28);
+        W.dry = 1'b1;
+        W.i32(ADDI_T0);
+        W.dry = 1'b0;
+      end else begin
+        W.i32(ADDI_T0);                        // X
+      end
+      W.mixed(1);
+      W.bcc(!last, top);                       // the loop branch
+    end
+    W.mixed(3);
+    scn_on = 1'b1;
+    end_prog(80000);
+    scn_on = 1'b0;
+    $display("%s", $sformatf({"   SCNORED %s forced %0d, p3 redirect %0d,",
+             " p2 taken %0d, p3 not taken %0d, K fetch in the p3 cycle %0d,",
+             " after B %011h: %011h"}, tname, n_scn_force, n_scn_redir,
+             n_scn_p2tkn, n_scn_p3ntk, n_scn_req, scn_b, scn_next));
+    chk($sformatf({"sc_nored: SC forced once, at a p3 of K with no p3",
+                   " redirect, B taken at p2 and not taken at p3",
+                   " (%0d, %0d, %0d, %0d)"}, n_scn_force, n_scn_redir,
+                  n_scn_p2tkn, n_scn_p3ntk),
+        (n_scn_force == 1) && (n_scn_redir == 0) && (n_scn_p2tkn == 1) &&
+        (n_scn_p3ntk == 1));
+    chk($sformatf({"sc_nored: stream after the reversed branch %011h:",
+                   " got %011h exp %011h"}, scn_b, scn_next,
+                  scn_b + VA_WIDTH'(4)),
+        scn_done && (scn_next == scn_b + VA_WIDTH'(4)));
   endtask
 
   // -----------------------------------------------------------------
@@ -4019,6 +4224,7 @@ module tb;
       "cross":      p_cross();
       "rvc":        p_rvc();
       "misp_call":  p_misp_call();
+      "sc_nored":   p_sc_nored();              // BP-150
       "jals":       p_jals();
       "fencei":     p_smc(1);
       "cboinval":   p_smc(2);
@@ -4049,11 +4255,12 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:41] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:42] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
                               "multistart", "cross", "rvc", "misp_call",
+                              "sc_nored",
                               "jals", "fencei", "cboinval", "uc_nc",
                               "uc_io", "pt_faults_s", "pt_faults_h",
                               "pt_napot_s", "pt_napot_h", "pt_rsv_s",

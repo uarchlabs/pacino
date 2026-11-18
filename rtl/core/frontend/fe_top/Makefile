@@ -159,10 +159,11 @@ PT_ARG  := $(if $(strip $(PT_MODE)),+PT_MODE=$(strip $(PT_MODE)))
 # provider, CTR rows 19.1-19.8). BP-148 added sv48, sv57 and h57 (Sv48,
 # Sv57 and Sv57 / Sv57x4, the 512 GiB and 256 TiB pages, ITLB-18).
 # BP-149 added pt_gonly_x4 (G-stage only under Sv57x4, the x4 root's
-# entries at 0x100 and above).
+# entries at 0x100 and above). BP-150 added sc_nored (an SC reversal at
+# p3 that raises no redirect, TD#205).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             recur t0_uaon deep indir region multistart cross rvc \
-            misp_call jals fencei cboinval uc_nc uc_io pt_faults_s \
+            misp_call sc_nored jals fencei cboinval uc_nc uc_io pt_faults_s \
             pt_faults_h \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
             zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57 pt_gonly_x4

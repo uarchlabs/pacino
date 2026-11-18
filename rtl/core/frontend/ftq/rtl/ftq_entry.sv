@@ -60,7 +60,9 @@
 //            bp_ftq_entry_t.pc and nothing else from the entry, so the
 //            port is VA_WIDTH wide rather than a whole entry. Added by
 //            BP-112 (TD#127).
-//   fetch    every cycle, at fetch_ptr. Section 1.
+//   fetch    every cycle, at fetch_ptr. Section 1. It writes through
+//            the p3 slot correction of the same cycle (BP-150, at the
+//            reads below).
 //   redir    on redirect, for the checkpoint and the RAS snapshot
 //            to restore, and to re-derive the block successor.
 //            Section 1, 3.2.
@@ -211,9 +213,35 @@ module ftq_entry (
   // -----------------------------------------------------------------
   // Reads. Combinational, see the header.
   // -----------------------------------------------------------------
+  // THE FETCH PORT WRITES THROUGH THE p3 SLOT CORRECTION (BP-150,
+  // TD#205). The fetch request for an entry is first presented in the
+  // entry's p3 cycle: its translation is presented no earlier than p2,
+  // once the p1 write has landed (the written frontier, 5.1), and the
+  // fetch waits for a translation presented in an earlier cycle. The p3
+  // slot write lands at the end of that cycle, so a request accepted in
+  // it would carry the p2 slots. When p3 redirects, the flush discards
+  // that request (ftq_ifu_interfaces.md 5). But bp_cluster redirects only
+  // when the block SUCCESSOR changes, and SC can move the taken position
+  // without changing it: a conditional whose taken target is the
+  // block's fall-through, or a later slot taken to the same target. The
+  // IFU truncates the block on taken_val and taken_pos, so the request
+  // carrying the p2 view dropped the instructions between the branch and
+  // the fall-through (SC to not taken) or delivered the ones after a
+  // branch now taken. The port returns the slots p3 is writing, so the
+  // request presented in the p3 cycle is the corrected one, as 7 W3
+  // requires of a fetch of a corrected entry. Only the slot array: p3
+  // writes nothing else. The p2 writes need no such path: p2 precedes
+  // the first cycle a request for the entry can be presented. The pd
+  // and rsv writes, which land after p3, are for an entry already
+  // fetched, so they never name the fetch index in its p3 cycle.
   always_comb begin : reads
     xlate_rd_pc      = r_arr[xlate_rd_idx].pc;
     fetch_rd_entry   = r_arr[fetch_rd_idx];
+    if (p3_wr_val && (p3_wr_idx == fetch_rd_idx)) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        fetch_rd_entry.slot[s] = p3_wr_slot[s];
+      end
+    end
     redir_rd_entry   = r_arr[redir_rd_idx];
     pdwb_rd_entry    = r_arr[pdwb_rd_idx];
     commit_rd_entry  = r_arr[commit_rd_idx];
