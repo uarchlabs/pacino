@@ -16,6 +16,75 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-086, continued: PERF-002 recorded; BP-150 written.
+
+PERF-002 COMPLETE, WITH TWO STATED GAPS (767eab8). The harness:
+perf/sv/perf_top.sv around fe_top and the walker, the C++ gasket in
+perf/src/harness, the trace tools, the changed traces with veneers
+(PF-15), the CBP reruns, the study runner. regress.sh RESULT: PASS,
+285 targets, 362 s.
+- Reader: 105 of 105 traces equal the reference results.
+- Changed traces: 47,912 stubs, 0 two-hop, 0 unplaced; every trace
+  read back record by record; 105 pt_gen images, 0 rejected.
+- Reruns, fallback plan: the ten working predictors equal their golden
+  results on the 5 unchanged traces (50 of 50); TAGE192 on the 100
+  changed traces moves MPKI by -0.109 to +0.163. The full plan
+  (about 6 hours on 28 workers) is outstanding.
+- Speed 24k to 26k cycles/s, 25k to 95k instructions/s.
+- Gaps: the PF-11 oracle is not built; the full rerun did not run.
+PA assessment: the build is complete; THE HARNESS IS NOT YET A
+MEASURING INSTRUMENT. No PERF-002 MPKI is compared with R: the oracle
+has not run (PF-11); pred_src is read from an FTQ slot whose reading
+disagrees with fetch 202 to 9,463 times per 2e6 run; MPKI depends on
+backend commit timing (TD#207).
+
+RULED (Jeff), recorded in perf_decisions.md:
+  1. THE ORACLE STAYS (PF-11), as an FTB-slot oracle: an SV force by
+     hierarchical reference from the wrapper sets each slot's
+     direction and target to the trace's; no file under rtl/
+     changes. Zero mispredicts on branches the FTB had in a slot;
+     misses counted on their own. The same run gives the cycle
+     ceiling.
+  2. THE BACKEND (PF-18): resolve latency is a sum of decode, rename,
+     dispatch and execute parameters; the default is the smallest
+     setting beyond which return mispredicts stop changing, found by
+     a sweep: a near-perfect backend, the nearest to CBP's scoring.
+  3. THE FETCH RULE (PF-18): the prediction fetch used is recorded per
+     FTQ entry and compared at resolve. Accepted in two steps with NO
+     TOLERANCE: observe (agrees on every branch with the stream
+     rule) then drive. pred_src from the same record.
+  4. THE CPU CAP (PF-22): 75% of the hardware threads by default,
+     overridable. Several machines later, an INFRA task.
+  5. ORDER: BP-150 (TD#205) first, then PERF-003.
+
+PA ERROR, CORRECTED. PF-11 recorded the oracle and PC checks as
+Jeff's, session-084. They were the PA's proposal (item 8 of the
+session-084 decision list); Jeff's answer was to sanity-check against
+CBP's results, which is the count check. The PA defended the oracle
+in session-086 on that attribution before checking it. PF-11 now
+states it; Jeff kept both checks.
+
+TECHNICAL DEBT. Opened: TD#205 (the SC p3 skip, CORRECTNESS; BP-150),
+TD#206 (fetch stalls while the FTQ is full), TD#207 (return
+mispredicts depend on commit timing). TD#197 gains PERF-002's aging
+finding. Closed: TD#181, on the PA's check at 3bface6: the cov_*
+targets already run tools/bin's 5.048 verilator_coverage; moved to
+CLOSED_TECH_DEBT.md.
+
+BP-150 WRITTEN: locate and fix TD#205; a tb_fe_top program that
+reproduces it; stop with options if the fix needs a rule changed.
+
+Not done here, carried: tools/scan_traces.py:127 still names PF-16 (a
+code comment); the stale Module Status rows of the session-086
+review.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, perf_decisions.md.
+
+Next free: BP-151, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-003,
+TD#208.
+
+---
 ## Session-086: PERF-002 is the gasket; perf_decisions.md rulings.
 
 RULED (Jeff), recorded in perf_decisions.md:
@@ -6269,6 +6338,23 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | monitor removed. sim_fe_top       |
 |                         |             |                   | 736/0, 734/0 at 1 slot;           |
 |                         |             |                   | assert_labels 168, 160.           |
+| perf harness            | Working     | perf studies      | Built PERF-002 (767eab8):         |
+|                         |             |                   | perf/sv/perf_top.sv around fe_top |
+|                         |             |                   | and the walker, the C++ gasket    |
+|                         |             |                   | perf/src/harness, the trace tools |
+|                         |             |                   | perf/src, tools/perf_traces.py,   |
+|                         |             |                   | perf_rerun.py, perf_study.py;     |
+|                         |             |                   | make -C perf. Not in regress.sh   |
+|                         |             |                   | (PF-9). Reader 105/105 equal to   |
+|                         |             |                   | the reference results; 105        |
+|                         |             |                   | changed traces read back; 25k to  |
+|                         |             |                   | 95k instructions/s. Not yet a     |
+|                         |             |                   | measuring instrument: the PF-11   |
+|                         |             |                   | oracle is not built, and the      |
+|                         |             |                   | mispredict rule is provisional    |
+|                         |             |                   | (PF-18); PERF-003. Found TD#205,  |
+|                         |             |                   | 206, 207, and the TD#197 aging    |
+|                         |             |                   | note.                             |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -6315,9 +6401,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Performance analysis on the       |
 |                         |             |                   | CBP2025 traces: sources, harness, |
 |                         |             |                   | configurations, metrics.          |
-|                         |             |                   | Session-085 (Jeff): PF-16, the    |
-|                         |             |                   | traces run unchanged under Sv57;  |
-|                         |             |                   | PF-U1 closed; PF-U11 new.         |
+|                         |             |                   | Session-086 (Jeff): PF-16         |
+|                         |             |                   | removed, the traces changed       |
+|                         |             |                   | through veneers (PF-15); PF-18 to |
+|                         |             |                   | PF-22. After PERF-002: PF-1,      |
+|                         |             |                   | PF-5, PF-9, PF-15, PF-19 as       |
+|                         |             |                   | built; PF-11 the FTB-slot oracle; |
+|                         |             |                   | PF-18 the fetch rule and stage    |
+|                         |             |                   | latencies, for PERF-003.          |
 | pacino_features.md      | Draft       | --                | Created session-084,              |
 |                         |             |                   | planning/arch. What pacino is as  |
 |                         |             |                   | built; decides nothing, owns no   |
@@ -6544,14 +6635,6 @@ moves there in the planning update that closes it.
 |     |          | misses them. ITTAGE is not in the table. Found by BP-132 |
 |     |          | (Deferred Work 1). For the formal verification coverage  |
 |     |          | exercise (Jeff, session-078).                            |
-| 181 | bpu      | OPEN, VERIFICATION. The bpu cov_* targets run            |
-|     |          | verilator_coverage from PATH, which is /usr/local/bin    |
-|     |          | v5.020, on coverage data written by the 5.048 build.     |
-|     |          | tools/bin holds the 5.048 verilator_coverage; proposed   |
-|     |          | $(RVA_ROOT)/tools/bin/verilator_coverage in the bpu      |
-|     |          | Makefile, which changes the coverage reports. Found by   |
-|     |          | BP-132 (Deferred Work 2). For the formal verification    |
-|     |          | coverage exercise (Jeff, session-078).                   |
 | 183 | tage, sc | OPEN, PERFORMANCE. The TD#182 fix (BP-134, the T0        |
 |     |          | counter read as its 3-bit equivalent) raised hist        |
 |     |          | mispredicts 22 -> 31 at 2 slots and 42 -> 50 at 1;       |
@@ -6773,36 +6856,40 @@ moves there in the planning update that closes it.
 |     |          | memory model in tb_fe_top may not check the mask. Opened |
 |     |          | session-084 (Jeff).                                      |
 | 197 | bpu      | OPEN, PERFORMANCE. INVESTIGATE THE OPTIONS FOR USEFUL-   |
-|     |          | COUNTER AGING AND EPOCH COUNTING in TAGE and ITTAGE.     |
-|     |          | As built (tage_cntrl.sv:195-199, 397-446; ittage_cntrl   |
+|     |          | COUNTER AGING AND EPOCH COUNTING in TAGE and ITTAGE. As  |
+|     |          | built (tage_cntrl.sv:195-199, 397-446; ittage_cntrl      |
 |     |          | .sv:579-600; tage_cntrl_use_update_rules.md): one 32-bit |
 |     |          | interval down counter and one 2-bit epoch per slot, per  |
 |     |          | predictor, four of each in all; an entry's 2-bit EPC     |
 |     |          | takes the epoch on each useful update and allocation;    |
 |     |          | age = epoch - EPC mod 4 counts the useful value in full  |
-|     |          | at age 0, half at 1, none at 2 or 3. Findings:           |
-|     |          | (1) the two slots' counters tick together on every       |
-|     |          | prediction, since bp_cluster.sv:640-641 copies one       |
-|     |          | request-valid to both, and load from one interval input  |
-|     |          | per predictor, so the epochs move in lockstep although   |
-|     |          | slot 1's tables train far less often than slot 0's;      |
-|     |          | (2) the count is predictions, not branches or updates;   |
-|     |          | (3) the 2-bit age wraps, so an entry idle for four       |
-|     |          | intervals counts its stale useful value in full again;   |
-|     |          | (4) the counters load the interval at reset, when the    |
-|     |          | CSR holds 0, and an interval of 0 with aging on advances |
-|     |          | the epoch on every prediction. Options found: a fixed    |
-|     |          | period as in Seznec's TAGE (gem5 logUResetPeriod 18,     |
-|     |          | u >>= 1); ticks on each slot's own activity with an      |
-|     |          | interval per counter; adaptive tick counters as in       |
-|     |          | XiangShan, counting failed minus successful allocations  |
-|     |          | and resetting the useful bits at saturation (TAGE        |
-|     |          | bankTickCtrs, 7 bits; ITTAGE tickCtr, 8 bits). Jeff,     |
-|     |          | session-084: the enables stay CSR bits; the intervals    |
-|     |          | become parameters, one for TAGE and one for ITTAGE at    |
-|     |          | least, whether as CSR 0x7C1 reset values or build-time   |
-|     |          | constants not yet ruled. Until this closes, performance  |
-|     |          | runs use 2^18 for both (perf_decisions.md PF-5). Opened  |
+|     |          | at age 0, half at 1, none at 2 or 3. Findings: (1) the   |
+|     |          | two slots' counters tick together on every prediction,   |
+|     |          | since bp_cluster.sv:640-641 copies one request-valid to  |
+|     |          | both, and load from one interval input per predictor, so |
+|     |          | the epochs move in lockstep although slot 1's tables     |
+|     |          | train far less often than slot 0's; (2) the count is     |
+|     |          | predictions, not branches or updates; (3) the 2-bit age  |
+|     |          | wraps, so an entry idle for four intervals counts its    |
+|     |          | stale useful value in full again; (4) the counters load  |
+|     |          | the interval at reset, when the CSR holds 0, and an      |
+|     |          | interval of 0 with aging on advances the epoch on every  |
+|     |          | prediction. Options found: a fixed period as in Seznec's |
+|     |          | TAGE (gem5 logUResetPeriod 18, u >>= 1); ticks on each   |
+|     |          | slot's own activity with an interval per counter;        |
+|     |          | adaptive tick counters as in XiangShan, counting failed  |
+|     |          | minus successful allocations and resetting the useful    |
+|     |          | bits at saturation (TAGE bankTickCtrs, 7 bits; ITTAGE    |
+|     |          | tickCtr, 8 bits). Jeff, session-084: the enables stay    |
+|     |          | CSR bits; the intervals become parameters, one for TAGE  |
+|     |          | and one for ITTAGE at least, whether as CSR 0x7C1 reset  |
+|     |          | values or build-time constants not yet ruled. Until this |
+|     |          | closes, performance runs use 2^18 for both               |
+|     |          | (perf_decisions.md PF-5). PERF-002 (Other Notes 3): the  |
+|     |          | enables and intervals change no count over 1e5 and 3e5   |
+|     |          | instructions, interval 1 included, though fe_top         |
+|     |          | receives each value (fe_cfg_seen); at interval 1 that    |
+|     |          | suggests aging does not reach the tables. Opened         |
 |     |          | session-084 (Jeff).                                      |
 | 198 | mmu, csr | OPEN, FEATURE. BUILD debug_support (csr_decisions.md     |
 |     |          | CSR-8, mmu_decisions.md MMU-33). csr_pkg: CSR 0x7C2,     |
@@ -6874,6 +6961,39 @@ moves there in the planning update that closes it.
 |     |          | been tested. Needed for B, pacino matched to R           |
 |     |          | (perf_decisions.md PF-10), which is not built until this |
 |     |          | closes. Was PF-U7. Opened session-086 (Jeff).            |
+| 205 | bpu, ftq | OPEN, CORRECTNESS. AN SC p3 REVERSAL TO NOT-TAKEN SKIPS  |
+|     |          | INSTRUCTIONS. Found by PERF-002 (Other Notes 1): after   |
+|     |          | SC reverses at p3 a conditional predicted taken at p2,   |
+|     |          | fetch resumes 4 to 580 bytes past the branch's pc + 4;   |
+|     |          | 20 of 20 stream errors in two 3e5-instruction runs       |
+|     |          | (media_3, web_11) followed an SC-predicted conditional.  |
+|     |          | bp_cluster.sv's p3 successor (1332-1347) follows         |
+|     |          | ftq_bpu_interfaces.md 6. ftq_ifu_interfaces.md 7 W3 and  |
+|     |          | ifu_ibuf_interfaces.md IB-13 take it that entry K is not |
+|     |          | yet fetched when a p2 or p3 redirect for it arrives; the |
+|     |          | harness may be producing the case where it is. No        |
+|     |          | tb_fe_top program shows it. The harness counts it as an  |
+|     |          | SC mispredict. BP-150. Opened session-086 (Jeff).        |
+| 206 | ftq, ifu | OPEN, CORRECTNESS (forward progress) until shown         |
+|     |          | otherwise. WITH THE FTQ FULL, FETCH DELIVERS NOTHING     |
+|     |          | UNTIL ITS OLDEST ENTRY COMMITS: the ibuf stayed empty    |
+|     |          | 200,000 cycles on web_11 with 64 entries allocated ahead |
+|     |          | (PERF-002 Other Notes 4). The harness works around it    |
+|     |          | with fe_tb_backend's eager commit, which hides it.       |
+|     |          | Suspected at ftq_ifu.sv:256-258, a request only for an   |
+|     |          | entry whose translation has been presented. Opened       |
+|     |          | session-086 (Jeff).                                      |
+| 207 | bpu, ftq | OPEN, INVESTIGATE. RETURN MISPREDICTS DEPEND ON HOW SOON |
+|     |          | THE BACKEND COMMITS. media_2, 3e5 instructions (PERF-002 |
+|     |          | Other Notes 2): 723 return mispredicts, 710 attributed   |
+|     |          | to the RAS, with resolve and commit immediate; 111 with  |
+|     |          | resolve latency 8; 21 with resolve to commit 8; MPKI     |
+|     |          | 4.04 against 1.74. Conditional and indirect mispredicts  |
+|     |          | unchanged. The RTL (the RAS commit or restore when an    |
+|     |          | entry commits right after its prediction,                |
+|     |          | ras_decisions.md 4.5) or the harness: not known. Sets    |
+|     |          | PF-18's default backend (PERF-003). Next to TD#149.      |
+|     |          | Opened session-086 (Jeff).                               |
 
 ---
 

@@ -1442,6 +1442,17 @@
 |     |          | 32 -> 5 at both slot counts (BP-121 measured 39 on its   |
 |     |          | tree), jump-field turn-taking 38 -> 0 in coro and 703 -> |
 |     |          | 0 over the tb_fe_top programs.                           |
+| 181 | bpu      | CLOSED session-086, on the PA's check at 3bface6. The    |
+|     |          | bpu cov_* targets run $(VERILATOR_COVERAGE)              |
+|     |          | (rtl/core/frontend/bpu/Makefile:917), which              |
+|     |          | rtl/Vars.mk:9 sets to                                    |
+|     |          | $(RVA_ROOT)/tools/bin/verilator_coverage, the 5.048      |
+|     |          | copy; nothing in the Makefile runs verilator_coverage    |
+|     |          | from PATH. Was: the bpu cov_* targets run                |
+|     |          | verilator_coverage from PATH, /usr/local/bin v5.020, on  |
+|     |          | coverage data written by the 5.048 build. Found by       |
+|     |          | BP-132 (Deferred Work 2). For the formal verification    |
+|     |          | coverage exercise (Jeff, session-078).                   |
 | 189 | bpu      | CLOSED by ruling, session-084 (Jeff): c_bos is final     |
 |     |          | (ras_decisions.md 12.11 CO5). BP-143 showed the          |
 |     |          | exception guards a real fault (tb_ras TC-44: BOS moved   |

@@ -64,6 +64,12 @@ PF-1   Pacino takes the CBP workload traces and the CBP reference
        licenses are set aside (Jeff, session-084): eight of the nine
        carry no license notice of their own; the CBP2025 rules say
        only that source code, papers and results are made public.
+       FOUND BY PERF-002: the submodule's work tree must be at
+       6cc9952; at PERF-002's start it was at 6074966 (upstream main),
+       and Jeff checked out 6cc9952 during the task. Mose fails on
+       every training trace, in its golden results and in the reruns
+       alike (an assertion in perceptron.h), so it cannot be compared.
+       Cai and Jimenez give identical results, golden and rerun.
 
 PF-2   Perf scripts live in tools/ with pacino's other scripts, the
        first being tools/scan_traces.py. Perf data, the trace
@@ -197,11 +203,54 @@ PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
        branch class (conditional, indirect, return). Built first:
        fixed, uniform, geometric and table.
        Replaces PF-U5.
+       BUILT by PERF-002 (perf/src/harness/perf_fe.cc, dist.h):
+       fixed, uniform, geometric and table, one seed per run; normal
+       and triangular are not built. The ibuf read port takes every
+       presented instruction or none (ibuf.sv), so the take rate is a
+       credit: each cycle adds the drawn rate, capped at 8, and the
+       backend takes when the credit and the window cover the
+       instructions presented. The take cycle is the cycle after the
+       ibuf handshake. As built, every event defaults to immediate,
+       the take rate to fixed:8 and the window to none.
+       RULED session-086 (Jeff), to be built by PERF-003:
+       - RESOLVE LATENCY IS A SUM OF STAGES: decode, rename, dispatch
+         and execute, each a parameter with a range and distribution
+         as above. Resolve to commit stays its own parameter.
+       - THE DEFAULT IS A NEAR-PERFECT BACKEND: the smallest stage and
+         commit values beyond which return mispredicts stop changing
+         (the commit race, TD#207), found by a sweep in PERF-003. It
+         is the nearest pacino comes to CBP's scoring, which corrects
+         branch history at once with the actual outcome and trains
+         the tables later.
+       - THE MISPREDICT RULE. PERF-002 decides a mispredict by the
+         fetched stream: a branch mispredicts when the next
+         instruction fetch delivers is not the trace's next PC, and a
+         branch that ends its fetch bundle waits for that instruction
+         (PROVISIONAL). PERF-003 builds the FETCH RULE: the prediction
+         fetch used is recorded per FTQ entry at the fetch request and
+         at each correction, and a branch is compared with the trace
+         in its resolve cycle, as hardware does. Per-predictor
+         attribution (pred_src) comes from the same record.
+       - THE FETCH RULE IS ACCEPTED IN TWO STEPS, WITH NO TOLERANCE.
+         (1) Observe: the stream rule drives the redirects, and the
+         fetch rule's verdict, computed beside it, agrees on every
+         branch. A disagreement is a harness or RTL defect. Each case
+         in which the two may legitimately differ has a written rule
+         before the step runs. (2) Drive: the fetch rule drives the
+         redirects, and its MPKI is the measurement. It is not
+         compared with the stream rule's MPKI.
 
 PF-19  THE I-CACHE SWITCH (PF-U6 as written): a run parameter selects
        a real, a preloaded or a perfect I-cache, so that predictor
        effects separate from miss effects and scenarios can be set up
        from software. Built by PERF-002.
+       BUILT (perf/src/harness/icache.h): preload fills the L1I with
+       the trace's code lines in page first-touch order, to 8 ways
+       per set, before the run; perfect writes the line the IFU asks
+       for into its set before the arrays read it. Both write
+       l1i_meta_array tag_mem and val_mem and l1i_data_array
+       data_mem, public through perf/sv/perf.vlt; no RTL file
+       changes.
 
 PF-20  ONE PARAMETER SOURCE, IN ONE DIRECTION (Jeff, session-086).
        bp_defines_pkg.sv is the input: a utility reads it and writes
@@ -209,6 +258,20 @@ PF-20  ONE PARAMETER SOURCE, IN ONE DIRECTION (Jeff, session-086).
        file may then be edited directly for a study, without changing
        the RTL. Nothing generates bp_defines_pkg.sv. Applies when the
        standalone model is built. Replaces PF-U10.
+
+PF-21  WHAT PERF-002 BUILT: the trace tools (perf/src); the changed
+       traces under CBP_TRACES_RV (default ../cbp_traces_rv), with
+       their SHA-256 lists in perf/ (PF-15); the reference reruns
+       (tools/perf_rerun.py; the fallback plan run, the full plan
+       outstanding); the harness (perf/sv/perf_top.sv,
+       perf/src/harness); and the study runner (tools/perf_study.py).
+       Build: make -C perf. The oracle check of PF-11 is not built.
+
+PF-22  THE PERF TOOLS USE AT MOST 75% OF THE MACHINE'S HARDWARE THREADS
+       BY DEFAULT, with -j to use fewer or more (Jeff, session-086:
+       PERF-002's runs made the machine unusable). Built by PERF-003.
+       Spreading runs over several machines, the three on the local
+       network, is wanted later, as an INFRA task of its own.
 
 ## 3. Configurations
 
@@ -218,6 +281,8 @@ PF-5   A measured configuration is named by a release tag, <tag>, for
        is a parameter, a release tag or head (PF-10). The RTL is
        tweaked between tags; a result on head or on an untagged tree
        is keyed by the sha (PF-9) until the next tag.
+       The harness runs a trace in U-mode: every PF-17 leaf has U set
+       (PERF-002; S-mode faulted on every fetch).
        The predictor enables are custom CSRs 0x7C0 and 0x7C1
        (csr_pkg.sv:121-133, 204-205). Their reset values are
        unchanged: SC enabled; the FTB fast path, TAGE aging and ITTAGE
@@ -277,6 +342,17 @@ PF-8   The first version measures the committed path only, as CBP
 PF-9   A result is keyed by its configuration name (PF-5) and the
        pacino sha it ran on, which is a tag's sha when the tree is
        tagged (Jeff, session-084). A performance run gates no push.
+       A STUDY is a set of harness runs: every trace of a trace list
+       under every parameter set of a parameter-set list, each run
+       with the seed and parameters its set gives, run in parallel
+       and gathered into one CSV. Each row is a run's result row
+       (the configuration name, the revision sha, the seed and every
+       run parameter) with the parameter set's name in front
+       (study_set). A parameter set is a name and the harness
+       arguments it runs with. The runner is tools/perf_study.py;
+       parameter-set files and study CSVs live in perf/studies/
+       (PF-2). A study gates no push. Proposed by PERF-002; PF-20
+       and PERF-002 used the term undefined.
 
 ## 5. Comparison
 
@@ -314,16 +390,30 @@ PF-10  Three are compared (Jeff, session-084):
 ## 6. Checking the harness
 
 PF-11  The harness is checked three ways, and a result is not used
-       until all three pass (Jeff, session-084):
+       until all three pass. The count check answers Jeff's session-084
+       request to sanity-check against CBP's results. The oracle and
+       PC checks were proposed by the PA in session-084 and were
+       recorded here as Jeff's; Jeff kept them in session-086.
        - exact counts against the reference results: the instruction
          and branch counts of each trace, full and second half, equal
          the reference results' Instr and NumBr columns, from the
          published results for an unchanged trace and from the reruns
          for a changed one (PF-15). This checks the trace reader and
          the committed stream.
-       - an oracle mode, in which every prediction is correct: zero
-         mispredictions, and the fetched committed stream equals the
-         trace.
+       - an oracle mode, in which every prediction the FTB makes is
+         correct (Jeff, session-086). The wrapper forces each slot's
+         direction and target to the trace's, by an SV force by
+         hierarchical reference after the predictors and before the
+         FTQ; no file under rtl/ changes. It passes with zero
+         mispredicts on every branch the FTB had in a slot. A branch
+         the FTB did not have, a cold or capacity miss, is counted on
+         its own and is expected to be non-zero. The same run's cycles
+         are the front end's ceiling with direction and target
+         perfect: the design's cycles minus the oracle's are what
+         prediction costs. Not built by PERF-002 (it stated the gap);
+         built by PERF-003. It read: "an oracle mode, in which every
+         prediction is correct: zero mispredictions, and the fetched
+         committed stream equals the trace."
        - every committed PC equals the trace's next PC.
        The reference results are a yardstick for pacino's MPKI, not a
        check of it: one predictor's mispredictions are not checked
@@ -356,6 +446,29 @@ PF-15  Changing a trace invalidates the published reference results,
        predictors see one stream. Where a stub is placed and how its
        records are classed are proposed by PERF-002 and recorded as
        provisional until ruled.
+       PROVISIONAL, AS BUILT BY PERF-002. A stub occupies free words
+       within the branch's reach: not an executed PC of the trace, not
+       another stub's, and not the branch's own pc + 4 (a taken branch
+       to its fall-through cannot be told from a not-taken one, and
+       CBP's uarchsim asserts against it). The nearest free place is
+       taken. A stub serves every far branch in reach to its target;
+       conditional sites are placed first. Forms: jal x0, T within
+       the stub's jal reach; auipc t1 / jalr x0 within +-2 GiB; beyond
+       that a long veneer (auipc t1, 0; ld t1, 16(t1); jalr x0,
+       0(t1); an 8-byte literal), never needed by the training set.
+       The far branch keeps its PC and condition, and its taken
+       target becomes the stub. The stub's records are added on each
+       taken pass: class 4 for jal; class 0 (out x16) then class 5
+       (in x16) for auipc and jalr; x16 is the register Arm veneers
+       use. The training set needs 47,912 stubs (6,668 jal, 41,244
+       auipc and jalr) for 113,814 far sites; 0 two-hop, 0 unplaced;
+       24,504,622 records added; 19 pages only stubs touch. A direct
+       jump or call with more than one traced target (web_9_trace's
+       three PCs, 21 records) changes to its indirect class and needs
+       no veneer. A PC seen in more than one class (web_11_trace's 9
+       PCs, rewritten code) holds its most frequent class in the code
+       image; a pass through a minority record is repaired and
+       counted (class_conflict_passes).
        Because the addresses are kept, every PC must be canonical under
        a mode pacino supports. Every PC of every trace
        (perf/cbp2025_training_scan.csv pc_mode_min, BP-145): 24 traces
@@ -486,4 +599,11 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               PF-20 the parameter direction; the window limit a
               PF-18 parameter. PF-U5, PF-U6, PF-U7,
               PF-U10 and PF-U11 closed; PF-U9 later.
+  2026-11-18  session-086, PERF-002 recorded. PF-1, PF-5, PF-9 (study),
+              PF-15 and PF-19 record PERF-002 as built; PF-21 what it
+              built. PF-11: the oracle as an FTB-slot oracle by SV
+              force, kept (Jeff); its attribution corrected. PF-18:
+              built as recorded; stage latencies, the near-perfect
+              default, the fetch rule and its two-step acceptance
+              ruled (Jeff), for PERF-003. PF-22 the CPU cap.
 ```

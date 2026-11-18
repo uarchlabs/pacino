@@ -58,7 +58,7 @@
       "enabled": true,
       "text": "Seven had none, and the one in  tb_bp_cluster  counted clock cycles, so it could not fire if the clo"
     },
-    "404d79": {
+    "b8b10d": {
       "construction": "TRICOLON",
       "pattern": "tricolon",
       "line_when_waived": 269,
@@ -107,7 +107,7 @@
       "enabled": true,
       "text": "I identified the constraints in BP-092 and BP-093 that blocked the IA's fixes, returned the update p"
     },
-    "d73123": {
+    "db42e0": {
       "construction": "TRICOLON",
       "pattern": "tricolon",
       "line_when_waived": 332,
