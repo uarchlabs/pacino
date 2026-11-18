@@ -36,7 +36,9 @@ include $(RVA_ROOT)/rtl/Vars.mk
 SRC_ROOT ?= $(RVA_ROOT)
 NAME     ?= head
 SLOTS    ?= 2
-JOBS     ?= $(shell nproc)
+# The build's -j: 75% of the hardware threads, at least 1 (PF-22).
+JOBS     ?= $(shell n=$$(( $$(nproc) * 3 / 4 )); [ $$n -ge 1 ] || n=1; \
+              echo $$n)
 
 ifeq ($(VERBOSE),1)
   Q        :=

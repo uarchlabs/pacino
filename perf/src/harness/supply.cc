@@ -115,7 +115,7 @@ bool TraceSupply::at(uint64_t k, Inst& out) {
 }
 
 void TraceSupply::commit(uint64_t k) {
-  while (base_ < k && !win_.empty()) {
+  while (base_ + keep_ < k && !win_.empty()) {
     win_.pop_front();
     base_++;
   }

@@ -1,0 +1,3 @@
+# PERF-003 Problem 1: a short run, to show the worker count perf_study.py
+# uses with and without -j (PF-22).
+demo  --max-instr 20000

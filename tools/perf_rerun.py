@@ -37,6 +37,7 @@ perf/cbp2025_rv_rerun.csv, one row per predictor and trace:
 Usage, from the repository root:
   python3 tools/perf_rerun.py [-j N] [--plan full|fallback] [--only P]
                               [--dry-run]
+-j defaults to 75% of the hardware threads, at least 1 (PF-22).
 Setup notes: README.md, section Performance analysis.
 """
 
@@ -120,9 +121,17 @@ def golden(pred, group):
     return out
 
 
+def default_jobs():
+    """PF-22: 75% of the hardware threads, rounded down, at least 1."""
+    return max(1, (os.cpu_count() or 1) * 3 // 4)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count())
+    ap.add_argument("-j", "--jobs", type=int, default=default_jobs(),
+                    help="worker processes (default %d: 75%%%% of the %d "
+                    "hardware threads, PF-22)" % (default_jobs(),
+                                                  os.cpu_count() or 1))
     ap.add_argument("--plan", choices=("full", "fallback"),
                     default="fallback")
     ap.add_argument("--only", help="predictors, comma separated")
@@ -181,6 +190,7 @@ def main():
           "need no change (%s)" % (args.plan, len(jobs), len(changed),
                                    len(same), " ".join("/".join(k)
                                                        for k in same)))
+    print("perf_rerun.py: %d worker processes" % args.jobs)
     if args.dry_run:
         for j in jobs:
             print("  %s %s %s/%s" % (j[0], j[1], j[2], j[3]))

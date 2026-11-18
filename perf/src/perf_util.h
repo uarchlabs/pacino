@@ -56,12 +56,18 @@ struct Csv {
   }
 };
 
-// Run fn(i) for i in [0, n) on up to jobs threads, largest-first order
-// left to the caller.
+// The default thread count of the perf tools (PF-22): 75% of the
+// hardware threads, rounded down, at least 1.
+inline unsigned default_jobs() {
+  unsigned j = std::thread::hardware_concurrency() * 3 / 4;
+  return j == 0 ? 1 : j;
+}
+
+// Run fn(i) for i in [0, n) on up to jobs threads (0: default_jobs()),
+// largest-first order left to the caller.
 inline void parallel_for(size_t n, unsigned jobs,
                          const std::function<void(size_t)>& fn) {
-  if (jobs == 0) jobs = std::thread::hardware_concurrency();
-  if (jobs == 0) jobs = 1;
+  if (jobs == 0) jobs = default_jobs();
   if (jobs > n) jobs = unsigned(n);
   std::atomic<size_t> next{0};
   std::vector<std::thread> th;

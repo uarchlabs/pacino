@@ -1,0 +1,12 @@
+# PERF-003 Problem 4: err_predict's causes under the stream rule (observe),
+# with the resolution target as built (head) and with PERF-002's pc + 8
+# not-taken target (pc8, a temporary build of the same source with that
+# one line restored; deleted after the run). The take-time reading and
+# err_predict were then removed, so these sets no longer produce the
+# ep_* and sd_* columns of perf003_p4_causes.csv, and pc8 does not exist.
+# The CSV was made with --resolve-lat uniform:4:12; the latency sets now
+# name it --execute-lat (Problem 6).
+head_immediate  --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0 --mispredict-rule stream
+head_latency    --max-instr 2000000 --execute-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1 --mispredict-rule stream
+pc8_immediate   bin=perf/build/pc8_s2/perf_fe --max-instr 2000000 --mispredict-rule stream
+pc8_latency     bin=perf/build/pc8_s2/perf_fe --max-instr 2000000 --resolve-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1 --mispredict-rule stream

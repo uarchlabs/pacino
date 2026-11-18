@@ -15,3 +15,18 @@
 public_flat_rw -module "l1i_meta_array" -var "tag_mem"
 public_flat_rw -module "l1i_meta_array" -var "val_mem"
 public_flat_rw -module "l1i_data_array" -var "data_mem"
+
+// THE ORACLE (PERF-003, PF-11). perf_top forces predictor outputs inside
+// bp_cluster to a mux of the trace's value and the predictor's own. The
+// predictor's own value is read from its module's output port. Once the
+// module is inlined, that port and bp_cluster's net are one variable, so
+// the read would see the forced value: a circular force, which the 5.048
+// build rejects. These modules are therefore not inlined: each port stays
+// its own variable, driven by the module and read unforced. The logic is
+// unchanged; only the model's hierarchy is kept.
+no_inline -module "loop_pred"
+no_inline -module "ftb"
+no_inline -module "tage"
+no_inline -module "ittage"
+no_inline -module "sc"
+no_inline -module "ras"

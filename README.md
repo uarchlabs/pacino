@@ -411,20 +411,52 @@ perf/build/head_s2/perf_fe --trace int/int_6_trace --max-instr 2000000 \
 perf/build/head_s2/perf_fe --help           # every run parameter
 ```
 
-The run parameters are the backend timing (`--resolve-lat`,
-`--resolve-commit`, `--take-rate` as `fixed:V`, `uniform:MIN:MAX`,
-`geometric:MIN:MAX:MEAN` or `table:FILE`; `--window`), `--seed`,
-`--icache real|preload|perfect`, `--max-instr`, the predictor enables
-(`--cfg key=value`, with `--config <tag>/<name>` when they differ from
-PF-5) and the configuration name. Each run appends one CSV row: the
-trace, configuration, revision sha, seed, every parameter and every
-count. A study runs a list of traces under a list of parameter sets in
-parallel and gathers one CSV:
+The run parameters are:
+
+- the backend timing (`perf_decisions.md` PF-18), each a distribution
+  `fixed:V`, `uniform:MIN:MAX`, `geometric:MIN:MAX:MEAN` or `table:FILE`:
+  the four backend stages `--decode-lat`, `--rename-lat`,
+  `--dispatch-lat` and `--execute-lat`, whose sum is the latency from
+  the take to the resolve, each drawn from its own random stream;
+  `--resolve-commit`; `--take-rate`; and `--window`. `--resolve-lat`
+  is removed: a set that used it names the same distribution as
+  `--execute-lat`, which draws from the stream it had. THE DEFAULT
+  BACKEND is immediate: every stage and resolve-to-commit `fixed:0`,
+  take rate `fixed:8`, no window. PF-18's near-perfect default (the
+  smallest stage and commit values beyond which return mispredicts stop
+  changing) is not set: in the PERF-003 sweep
+  (`perf/studies/perf003_p6_sweep_table.csv`) return mispredicts did not
+  settle on five of six traces, and only (8, 8) met the rule; it awaits a
+  ruling.
+- `--mispredict-rule fetch|stream` (default `fetch`). `fetch`: the
+  harness records the prediction fetch used for each FTQ entry, at the
+  fetch request and at each predecode correction, and judges a branch
+  against the trace in its resolve cycle; the redirect is formed then.
+  `stream`: PERF-002's rule, in which a branch mispredicts when the next
+  instruction fetch delivers is not the trace's next PC, and a branch
+  that ends its fetch bundle waits for it.
+- `--oracle`: the FTB-slot oracle (PF-11). Each slot of an FTQ entry on
+  the trace's path predicts the trace's direction and target; slot
+  presence stays the predictors' own, so a branch with no slot is a
+  miss.
+- `--seed`, `--icache real|preload|perfect`, `--max-instr`, the
+  predictor enables (`--cfg key=value`, with `--config <tag>/<name>`
+  when they differ from PF-5) and the configuration name.
+
+Each run appends one CSV row: the trace, configuration, revision sha,
+seed, every parameter and every count. A study runs a list of traces
+under a list of parameter sets in parallel and gathers one CSV:
 
 ```bash
 python3 tools/perf_study.py --traces int/int_6_trace,web/web_11_trace \
-  --sets perf/studies/p5.sets --out study.csv -j 8
+  --sets perf/studies/p5.sets --out study.csv
 ```
+
+The perf tools (`perf_study.py`, `perf_rerun.py`, `perf_traces.py` and
+the `veneer` it runs, and the harness build's `make -C perf`) use 75% of
+the machine's hardware threads by default, rounded down and at least 1
+(PF-22); `-j N` (`JOBS=N` for make) uses N. Each tool prints the count it
+uses.
 
 ### Running a study
 
@@ -441,9 +473,11 @@ first study: build (`make -C perf`) and make the changed traces
 
    ```
    # immediate backend against a backend with latency, 2e6 instructions
-   immediate  --max-instr 2000000
-   latency    --max-instr 2000000 --resolve-lat uniform:4:12 \
+   immediate  --max-instr 2000000 --execute-lat fixed:0 \
+              --resolve-commit fixed:0
+   latency    --max-instr 2000000 --execute-lat uniform:4:12 \
               --resolve-commit uniform:2:8 --seed 1
+   oracle     --max-instr 2000000 --oracle
    ftb512     bin=perf/build/ftb512_s2/perf_fe --max-instr 2000000
    ```
 
@@ -458,12 +492,12 @@ first study: build (`make -C perf`) and make the changed traces
 2. Name the traces, as `<group>/<trace>` separated by commas, or in a
    file with one per line (`#` comments allowed).
 
-3. Run it, with `-j` set to the processes you want to give it (one run
-   is one process, single threaded; default: every core):
+3. Run it. One run is one process, single threaded; `-j` sets the
+   processes (default: 75% of the hardware threads, PF-22):
 
    ```bash
    python3 tools/perf_study.py --traces traces.txt \
-     --sets perf/studies/my.sets --out perf/studies/my.csv -j 8
+     --sets perf/studies/my.sets --out perf/studies/my.csv
    ```
 
    Each run's own row goes to `<out>_work/<set>__<group>_<trace>.csv`
@@ -474,20 +508,38 @@ first study: build (`make -C perf`) and make the changed traces
 4. Check every row before using it. `status` must be `ok`; a run exits 0
    only then. Other values: `check_errors` (a hard check failed), or
    `stalled: ...` and `stopped at --max-cycles`. The hard checks, all
-   0 in an `ok` row: `err_word` (a fetched word is not the image's),
-   `err_fault`, `err_illegal`, `err_ftq_idx`, `err_tl_opcode`,
-   `err_entry_reopen`, `err_unspec_repair`. Two diagnostics may be
-   non-zero and do not fail a run: `err_stream` (fetch left the path
-   after a correctly predicted instruction, and the backend repaired
-   it) and `err_predict` (the FTQ slot's reading and the fetched stream
-   disagree). `decided_by_slot` counts branches decided by that reading
-   when fetch delivered nothing; a high count makes that trace's MPKI
-   less certain.
+   0 in an `ok` row:
+   - `err_word` (a fetched word is not the image's), `err_fault`,
+     `err_illegal`, `err_ftq_idx`, `err_tl_opcode`, `err_entry_reopen`,
+     `err_unspec_repair`;
+   - `err_cond_target` (a taken conditional's encoded target is not its
+     traced target);
+   - the fetch record's: `err_no_record` (a slot taken whose FTQ entry
+     has no record holding its PC), `err_late_write` (a p2 or p3 slot
+     write to an entry after its fetch request), `err_fetch_port` (the
+     fetch read port named another entry), `err_record_moved` (a request
+     for a branch's entry between its take and its resolve);
+   - under `--mispredict-rule fetch`: `err_stream` (fetch left the path
+     after a branch the record judged correct) and `err_fetch_rule`
+     (fetch gave the trace's next PC after a branch the record judged
+     mispredicted). Under `stream`, `err_stream` is a diagnostic the
+     backend repairs, and `fr_disagree` (the record's verdict against
+     the stream's, outside the cases below) is hard;
+   - under `--oracle`: `err_orc_slot_mispred` (a branch the record held
+     in a slot mispredicted on its own outcome).
+   Under `stream`, `decided_by_slot` counts branches decided by the
+   record's verdict when fetch delivered nothing; a high count makes that
+   trace's MPKI less certain. It is 0 under `fetch`.
 
 5. Read the counts. Every row carries the trace, the configuration
    name, `revision`, `sha` and `src_root`, the seed and every run
-   parameter, and `fe_cfg_seen` (the predictor enables as fe_top got
-   them). The counts:
+   parameter (the stages as `decode_lat`, `rename_lat`, `dispatch_lat`
+   and `execute_lat`, which replace PERF-002's `resolve_lat`;
+   `mispredict_rule`; `oracle`), and `fe_cfg_seen` (the predictor
+   enables as fe_top got them). PERF-002's `err_predict` (the FTQ slot
+   read at the take against the stream) is removed with that reading:
+   it came from predecode corrections that reach the entry after the
+   take (PERF-003). The counts:
 
    | columns | meaning |
    |---|---|
@@ -504,6 +556,13 @@ first study: build (`make -C perf`) and make the changed traces
    | `walks`, `ptw_reads`, `ptw_cas` | ITLB walks and the walker's memory accesses |
    | `resolve_lat_sum`, `commit_delay_sum`, `commit_wait_sum`, `resolve_wait_sum` | the drawn latencies, and the cycles waited for the FTQ or for fetch |
    | `class_conflict_*`, `static_pcs`, `stubs`, `pages` | about the trace and its image |
+   | `fr_mispred` | mispredicts by the fetch record's verdict (under `fetch`, equal to `mispred`) |
+   | `fr_agree`, `fr_disagree`; `fr_c1_*`, `fr_c2_*`, `fr_c3_excluded` | under `stream`: the record's verdict against the stream's, apart for the cases C1 (decided by the record when fetch delivered nothing), C2 (at or before a class-conflict PC) and C3 (the path's last branch) |
+   | `fr_requests`, `fr_corrections`, `fr_corr_after_take`, `fr_beyond_taken` | fetch requests and predecode corrections recorded; branches whose entry was corrected after their take; branches after their entry's taken position |
+   | `mispred_trap_after` | mispredicts whose trace next PC is neither the branch's target nor its fall-through: an exception entry the trace records after the branch |
+   | `orc_forced_entries`, `orc_offpath_entries`, `orc_path_unforced`, `orc_realigned` | under `--oracle`: entries allocated on the trace's path (forced) and off it (not forced); committed branches from an unforced entry; alignments changed at p2 or p3 |
+   | `orc_slot_trap` | slot-held branches whose own outcome was predicted, followed by a trap entry (they count in `mispred`) |
+   | `miss_<class>`, `miss_<class>_mis` | branches the record held in no slot, by class (cond, direct, indirect, return), and the mispredicts among them |
    | `host_seconds`, `sim_seconds`, `instr_per_sec`, `cycles_per_sec` | speed |
 
 6. Compare with the reference. `perf/cbp2025_rv_rerun.csv` holds each
@@ -516,7 +575,10 @@ first study: build (`make -C perf`) and make the changed traces
 
 The examples in `perf/studies/` are the PERF-002 studies:
 `p4_params.sets` (every run parameter), `p5.sets` (the checks) and
-`p5_speed.sets` (the speed), each with its CSV.
+`p5_speed.sets` (the speed), each with its CSV, and the PERF-003
+studies, `perf003_*.sets` and their CSVs: the baseline, the resolution
+target, the fetch rule observed and driving, the oracle, the backend
+stages and the sweep of execute latency against resolve to commit.
 
 ## Push
 

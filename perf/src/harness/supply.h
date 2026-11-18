@@ -64,6 +64,10 @@ class TraceSupply : public Supply {
   bool at(uint64_t k, Inst& out) override;
   void redirect(uint64_t, uint64_t) override {}  // the trace is the path
   void commit(uint64_t k) override;
+  // Keep the last n retired records readable by at() (PERF-003: the
+  // oracle aligns an entry allocated after its predecessor's block has
+  // retired, so it reads records behind the commit point).
+  void set_keep(uint64_t n) { keep_ = n; }
 
   uint64_t length() const { return len_; }       // records on the path
   size_t   static_pcs() const { return static_; }
@@ -82,6 +86,7 @@ class TraceSupply : public Supply {
   cbp::Reader                            rd_;
   std::deque<Inst>                       win_;
   uint64_t                               base_ = 0;   // index of win_[0]
+  uint64_t                               keep_ = 0;   // retired, kept
   uint64_t                               len_ = 0;
   size_t                                 static_ = 0;
   size_t                                 nstubs_ = 0;

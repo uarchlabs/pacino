@@ -16,6 +16,36 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-086, continued: PERF-003 written.
+
+PERF-003 WRITTEN: make the harness a measuring instrument (PF-11,
+PF-18, PF-22). In order, each step accepted before the next; a step
+that fails stops the task:
+  1. the CPU cap, 75% of the hardware threads by default;
+  2. a conditional's resolution carries its encoded taken target, not
+     pc + 8 (ftb_decisions.md 5.5; perf_fe.cc:631-634);
+  3. the fetch rule observed beside the stream rule: exact agreement
+     outside three written cases (slot-decided branches, class-
+     conflict PCs, the path's last branch) and any the IA adds from
+     the RTL before the runs;
+  4. the fetch rule driving; pred_src from its record; err_predict's
+     causes, then the take-time slot reading removed;
+  5. the FTB-slot oracle, forced inside bp_cluster by hierarchical
+     reference;
+  6. the four backend stages, and a 9 x 9 sweep of execute latency and
+     resolve to commit setting the near-perfect default; if return
+     mispredicts do not settle exactly, no default is set and the
+     table goes to Jeff.
+The PA put the CPU cap first, ahead of the order given in session-086,
+so that the task's own studies run under it.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md.
+
+Next free: BP-151, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-004,
+TD#210.
+
+---
 ## Session-086, continued: BP-150 recorded.
 
 BP-150 COMPLETE (8e55744). TD#205 fixed. regress.sh: 287 targets,

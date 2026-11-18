@@ -18,14 +18,26 @@
 // No RTL file is changed, and no signal is made public: the internal
 // signals the counts need are read here by hierarchical reference and
 // brought out as this module's ports (PF-3, PF-6):
-//   pq_*         for each decode slot, the prediction slots of the FTQ
-//                entry it names (pd_out[i].ftq_idx), from
-//                dut.u_ftq.u_entry.r_arr: slot_valid, taken, pos,
-//                br_type, target and pred_src (bp_ftq_slot_t,
-//                bp_structs_pkg.sv). pred_src is the predictor that
-//                supplied the final prediction; the gasket reads the
-//                slot at the instruction's position as the backend
-//                takes it, before its resolution rewrites the slot
+//   fr_*         THE FETCH RECORD (PERF-003, PF-18): the FTQ's fetch
+//                request (dut.ftq_ifu_req_val, _rdy, _idx, _start_pc,
+//                _next_pc, _taken_val, _taken_pos), the flush that
+//                discards a request presented with it, and the fetch
+//                read port's slots in the request cycle
+//                (dut.u_ftq.u_entry.fetch_rd_entry: slot_valid, taken,
+//                pos, br_type, target, pred_src). pred_src is the
+//                predictor that supplied the final prediction (PF-6)
+//   pc_*         the predecode correction as the FTQ writes the entry:
+//                dut.u_ftq.u_ifu pd_wr_val, pd_wr_idx, the corrected
+//                slots w_corr_slot and the successor w_corr_succ
+//   ew_*         the entry writes the record's checks read: allocation
+//                and the p2 and p3 slot writes (dut.u_ftq.u_entry ports)
+//   (PERF-002's pq_*, the slots of each decode slot's entry read at the
+//   take, are removed by PERF-003: the record replaces them)
+//   os_*, orc_*  THE ORACLE (PERF-003, PF-11): os_* the block at each BPU
+//                stage, the slots its stage logic reads and its
+//                predecessor's FTQ entry; orc_* the trace's direction
+//                and target per slot, from the gasket, forced into
+//                bp_cluster's predictor outputs (the oracle section)
 //   obs_walk     a walk request accepted, itlb_l2t_req_val and _rdy
 //   obs_pd_redir the predecode redirect, dut.ifu_ftq_mis_val
 //   obs_p2_redir, obs_p3_redir
@@ -123,13 +135,6 @@ module perf_top (
   input  logic [31:0]                 cfg_ittage_aging_interval,
 
   // ---- observation (PF-6), by hierarchical reference ---------------
-  // The prediction slots of the FTQ entry each decode slot names.
-  output logic [NUM_PRED_SLOTS-1:0]   pq_val  [SLOTS],
-  output logic [NUM_PRED_SLOTS-1:0]   pq_taken [SLOTS],
-  output logic [FTB_BR_POS_BITS-1:0]  pq_pos  [SLOTS][NUM_PRED_SLOTS],
-  output logic [2:0]                  pq_type [SLOTS][NUM_PRED_SLOTS],
-  output logic [2:0]                  pq_src  [SLOTS][NUM_PRED_SLOTS],
-  output logic [VA_WIDTH-1:0]         pq_tgt  [SLOTS][NUM_PRED_SLOTS],
   output logic                        obs_walk,
   // fe_cfg as fe_top receives it: sc, fast path, TAGE and ITTAGE aging
   // enables, then the two intervals.
@@ -143,7 +148,101 @@ module perf_top (
   output logic [PA_WIDTH-1:0]         obs_l1i_paddr,
   output logic                        obs_l1i_rdy,
   output logic                        ftq_full,
-  output logic                        ftq_empty
+  output logic                        ftq_empty,
+
+  // ---- the fetch record (PERF-003, PF-18), by hierarchical reference
+  // The fetch request (dut.ftq_ifu_*, ftq_ifu.sv request) and the
+  // flush that discards a request presented with it (ftq_ifu.sv 5).
+  output logic                        fr_req_val,
+  output logic                        fr_req_rdy,
+  output logic                        fr_flush_val,
+  output logic [FTQ_IDX_BITS-1:0]     fr_idx,
+  output logic [FTQ_IDX_BITS-1:0]     fr_rd_idx,
+  output logic [VA_WIDTH-1:0]         fr_start_pc,
+  output logic [VA_WIDTH-1:0]         fr_next_pc,
+  output logic                        fr_taken_val,
+  output logic [FTB_BR_POS_BITS-1:0]  fr_taken_pos,
+  // The fetch read port's slots in the request cycle
+  // (dut.u_ftq.u_entry.fetch_rd_entry, which writes through p3).
+  output logic [NUM_PRED_SLOTS-1:0]   fr_s_val,
+  output logic [NUM_PRED_SLOTS-1:0]   fr_s_taken,
+  output logic [FTB_BR_POS_BITS-1:0]  fr_s_pos [NUM_PRED_SLOTS],
+  output logic [2:0]                  fr_s_type [NUM_PRED_SLOTS],
+  output logic [2:0]                  fr_s_src [NUM_PRED_SLOTS],
+  output logic [VA_WIDTH-1:0]         fr_s_tgt [NUM_PRED_SLOTS],
+  // The predecode correction as the FTQ writes it: pd_wr_val and _idx
+  // (the gen-tested, R3-gated redirect), the corrected slots and the
+  // successor re-derived over them (dut.u_ftq.u_ifu w_corr_slot,
+  // w_corr_succ, ftq_ifu.sv 7).
+  output logic                        pc_val,
+  output logic [FTQ_IDX_BITS-1:0]     pc_idx,
+  output logic [VA_WIDTH-1:0]         pc_succ,
+  output logic [NUM_PRED_SLOTS-1:0]   pc_s_val,
+  output logic [NUM_PRED_SLOTS-1:0]   pc_s_taken,
+  output logic [FTB_BR_POS_BITS-1:0]  pc_s_pos [NUM_PRED_SLOTS],
+  output logic [2:0]                  pc_s_type [NUM_PRED_SLOTS],
+  output logic [2:0]                  pc_s_src [NUM_PRED_SLOTS],
+  output logic [VA_WIDTH-1:0]         pc_s_tgt [NUM_PRED_SLOTS],
+  // The entry writes the late-write check reads: allocation, and the
+  // p2 and p3 slot writes (dut.u_ftq.u_entry ports).
+  output logic                        ew_alloc_val,
+  output logic [FTQ_IDX_BITS-1:0]     ew_alloc_idx,
+  output logic                        ew_p2_val,
+  output logic [FTQ_IDX_BITS-1:0]     ew_p2_idx,
+  output logic                        ew_p3_val,
+  output logic [FTQ_IDX_BITS-1:0]     ew_p3_idx,
+  output logic [VA_WIDTH-1:0]         ew_alloc_pc,
+
+  // ---- THE ORACLE (PERF-003, PF-11) ----------------------------------
+  // The block at each BPU stage (bp_cluster r_val_pN, r_pc_pN,
+  // r_idx_pN) and the slots its stage logic reads: p1 the registered
+  // uBTB slots, p2 the FTB classification (w_br_val_p2, w_pos_p2,
+  // w_br_type_p2), p3 the registered p2 slots (r_slot_p3).
+  output logic                        os_p1_val,
+  output logic [VA_WIDTH-1:0]         os_p1_pc,
+  output logic [FTQ_IDX_BITS-1:0]     os_p1_idx,
+  output logic [NUM_PRED_SLOTS-1:0]   os_p1_s_val,
+  output logic [FTB_BR_POS_BITS-1:0]  os_p1_s_pos [NUM_PRED_SLOTS],
+  output logic [2:0]                  os_p1_s_type [NUM_PRED_SLOTS],
+  output logic                        os_p2_val,
+  output logic [VA_WIDTH-1:0]         os_p2_pc,
+  output logic [FTQ_IDX_BITS-1:0]     os_p2_idx,
+  output logic [NUM_PRED_SLOTS-1:0]   os_p2_s_val,
+  output logic [FTB_BR_POS_BITS-1:0]  os_p2_s_pos [NUM_PRED_SLOTS],
+  output logic [2:0]                  os_p2_s_type [NUM_PRED_SLOTS],
+  output logic                        os_p3_val,
+  output logic [VA_WIDTH-1:0]         os_p3_pc,
+  output logic [FTQ_IDX_BITS-1:0]     os_p3_idx,
+  output logic [NUM_PRED_SLOTS-1:0]   os_p3_s_val,
+  output logic [FTB_BR_POS_BITS-1:0]  os_p3_s_pos [NUM_PRED_SLOTS],
+  output logic [2:0]                  os_p3_s_type [NUM_PRED_SLOTS],
+  // The FTQ entry before each stage's block (its predecessor, whose
+  // prediction gave the block's PC): start, fall-through and slots, from
+  // dut.u_ftq.u_entry.r_arr; [0] p1, [1] p2, [2] p3.
+  output logic [VA_WIDTH-1:0]         os_pr_pc [3],
+  output logic [VA_WIDTH-1:0]         os_pr_pft [3],
+  output logic [NUM_PRED_SLOTS-1:0]   os_pr_s_val [3],
+  output logic [NUM_PRED_SLOTS-1:0]   os_pr_s_taken [3],
+  output logic [FTB_BR_POS_BITS-1:0]  os_pr_s_pos [3][NUM_PRED_SLOTS],
+  // The trace's value for each slot, from the gasket: _den forces the
+  // direction to _dir, _ten the target to _tgt; p1 _ret forces the RAS
+  // top of stack (a return slot) to _dir and _tgt; p2 _jten forces the
+  // block's jump target to _jtgt. A slot with no enable keeps the
+  // predictor's own value. orc_on is --oracle.
+  input  logic                        orc_on,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p1_den,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p1_dir,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p1_ten,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p1_ret,
+  input  logic [VA_WIDTH-1:0]         orc_p1_tgt [NUM_PRED_SLOTS],
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p2_den,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p2_dir,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p2_ten,
+  input  logic [VA_WIDTH-1:0]         orc_p2_tgt [NUM_PRED_SLOTS],
+  input  logic                        orc_p2_jten,
+  input  logic [VA_WIDTH-1:0]         orc_p2_jtgt,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p3_den,
+  input  logic [NUM_PRED_SLOTS-1:0]   orc_p3_dir
 );
 
   // ---- every fe_top port, the names fe_tb_dut.svh gives them -------
@@ -334,22 +433,6 @@ module perf_top (
 
   // ---- observation, by hierarchical reference (PF-6) ---------------
   always_comb begin : observe
-    for (int i = 0; i < SLOTS; i++) begin
-      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        pq_val[i][s]   = dut.u_ftq.u_entry.r_arr[pd_out[i].ftq_idx].slot[s]
-                           .slot_valid;
-        pq_taken[i][s] = dut.u_ftq.u_entry.r_arr[pd_out[i].ftq_idx].slot[s]
-                           .taken;
-        pq_pos[i][s]   = dut.u_ftq.u_entry.r_arr[pd_out[i].ftq_idx].slot[s]
-                           .pos;
-        pq_type[i][s]  = 3'(dut.u_ftq.u_entry.r_arr[pd_out[i].ftq_idx]
-                             .slot[s].br_type);
-        pq_src[i][s]   = 3'(dut.u_ftq.u_entry.r_arr[pd_out[i].ftq_idx]
-                             .slot[s].pred_src);
-        pq_tgt[i][s]   = dut.u_ftq.u_entry.r_arr[pd_out[i].ftq_idx].slot[s]
-                           .target;
-      end
-    end
     obs_walk     = itlb_l2t_req_val && itlb_l2t_req_rdy;
     obs_cfg_en   = {fe_cfg.ittage_enable_aging, fe_cfg.tage_enable_aging,
                     fe_cfg.ftb_fastpath_en, fe_cfg.sc_enable};
@@ -365,6 +448,204 @@ module perf_top (
     obs_l1i_req   = dut.ifu_l1i_req_val;
     obs_l1i_paddr = dut.ifu_l1i_req_paddr;
     obs_l1i_rdy   = dut.ifu_l1i_req_rdy;
+  end
+
+  // ---- the fetch record (PERF-003), by hierarchical reference ------
+  always_comb begin : fetch_record
+    fr_req_val   = dut.ftq_ifu_req_val;
+    fr_req_rdy   = dut.ftq_ifu_req_rdy;
+    fr_flush_val = dut.ftq_ifu_flush_val;
+    fr_idx       = dut.ftq_ifu_idx;
+    fr_rd_idx    = dut.u_ftq.u_entry.fetch_rd_idx;
+    fr_start_pc  = dut.ftq_ifu_start_pc;
+    fr_next_pc   = dut.ftq_ifu_next_pc;
+    fr_taken_val = dut.ftq_ifu_taken_val;
+    fr_taken_pos = dut.ftq_ifu_taken_pos;
+    pc_val       = dut.u_ftq.u_ifu.pd_wr_val;
+    pc_idx       = dut.u_ftq.u_ifu.pd_wr_idx;
+    pc_succ      = dut.u_ftq.u_ifu.w_corr_succ;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      fr_s_val[s]   = dut.u_ftq.u_entry.fetch_rd_entry.slot[s].slot_valid;
+      fr_s_taken[s] = dut.u_ftq.u_entry.fetch_rd_entry.slot[s].taken;
+      fr_s_pos[s]   = dut.u_ftq.u_entry.fetch_rd_entry.slot[s].pos;
+      fr_s_type[s]  = 3'(dut.u_ftq.u_entry.fetch_rd_entry.slot[s].br_type);
+      fr_s_src[s]   = 3'(dut.u_ftq.u_entry.fetch_rd_entry.slot[s].pred_src);
+      fr_s_tgt[s]   = dut.u_ftq.u_entry.fetch_rd_entry.slot[s].target;
+      pc_s_val[s]   = dut.u_ftq.u_ifu.w_corr_slot[s].slot_valid;
+      pc_s_taken[s] = dut.u_ftq.u_ifu.w_corr_slot[s].taken;
+      pc_s_pos[s]   = dut.u_ftq.u_ifu.w_corr_slot[s].pos;
+      pc_s_type[s]  = 3'(dut.u_ftq.u_ifu.w_corr_slot[s].br_type);
+      pc_s_src[s]   = 3'(dut.u_ftq.u_ifu.w_corr_slot[s].pred_src);
+      pc_s_tgt[s]   = dut.u_ftq.u_ifu.w_corr_slot[s].target;
+    end
+    ew_alloc_val = dut.u_ftq.u_entry.alloc_wr_val;
+    ew_alloc_idx = dut.u_ftq.u_entry.alloc_wr_idx;
+    ew_p2_val    = dut.u_ftq.u_entry.p2_wr_val;
+    ew_p2_idx    = dut.u_ftq.u_entry.p2_wr_idx;
+    ew_p3_val    = dut.u_ftq.u_entry.p3_wr_val;
+    ew_p3_idx    = dut.u_ftq.u_entry.p3_wr_idx;
+    ew_alloc_pc  = dut.u_ftq.u_entry.alloc_wr_pc;
+  end
+
+  // ---- THE ORACLE (PERF-003, PF-11), by SV force inside bp_cluster ---
+  // Every force is continuous, from the start, to a mux: the trace's
+  // value where the gasket enables it (an entry allocated on the path,
+  // at a slot the trace decides), else the predictor's own value. The
+  // predictor's own value is read where the force does not reach:
+  //   - r_ubtb_pred_p1 and r_ras_tos_*_p1 are bp_cluster's p0 -> p1
+  //     registers, loaded every clock from w_ubtb_pred_p1 and
+  //     w_ras_tos_*_p0 with a synchronous reset (bp_cluster stage_ff).
+  //     sh_* below are the same registers, loaded from the same nets,
+  //     so they hold the value the forced register would hold.
+  //   - the p2 and p3 predictor outputs are read at the predictor
+  //     module's own output port, a variable of its own because perf.vlt
+  //     keeps loop_pred, ftb, tage, ittage, sc and ras out of inlining.
+  //   - w_ftb_br_taken_p2 and _target_p2 are bp_cluster's per-slot
+  //     views of the FTB's br0 and br1 ports; those ports are read.
+  // Slot presence, type and position are never forced: a branch the
+  // predictors hold in no slot stays a miss (PF-11).
+  ubtb_pred_t [NUM_PRED_SLOTS-1:0] sh_ubtb_pred;
+  logic [VA_WIDTH-1:0]             sh_tos_addr [NUM_PRED_SLOTS];
+  logic                            sh_tos_val  [NUM_PRED_SLOTS];
+  always_ff @(posedge clk) begin : oracle_shadow
+    if (!rstn) begin
+      sh_ubtb_pred <= '0;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        sh_tos_addr[s] <= '0;
+        sh_tos_val[s]  <= 1'b0;
+      end
+    end else begin
+      sh_ubtb_pred <= dut.u_bpu.w_ubtb_pred_p1;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        sh_tos_addr[s] <= dut.u_bpu.w_ras_tos_addr_p0[s];
+        sh_tos_val[s]  <= dut.u_bpu.w_ras_tos_valid_p0[s];
+      end
+    end
+  end
+
+  logic [FTQ_IDX_BITS-1:0] pr_idx [3];
+  always_comb begin : oracle_state
+    os_p1_val = dut.u_bpu.r_val_p1;
+    os_p1_pc  = dut.u_bpu.r_pc_p1;
+    os_p1_idx = dut.u_bpu.r_idx_p1;
+    os_p2_val = dut.u_bpu.r_val_p2;
+    os_p2_pc  = dut.u_bpu.r_pc_p2;
+    os_p2_idx = dut.u_bpu.r_idx_p2;
+    os_p3_val = dut.u_bpu.r_val_p3;
+    os_p3_pc  = dut.u_bpu.r_pc_p3;
+    os_p3_idx = dut.u_bpu.r_idx_p3;
+    pr_idx[0] = dut.u_bpu.r_idx_p1 - 1'b1;
+    pr_idx[1] = dut.u_bpu.r_idx_p2 - 1'b1;
+    pr_idx[2] = dut.u_bpu.r_idx_p3 - 1'b1;
+    for (int g = 0; g < 3; g++) begin
+      os_pr_pc[g]  = dut.u_ftq.u_entry.r_arr[pr_idx[g]].pc;
+      os_pr_pft[g] = dut.u_ftq.u_entry.r_arr[pr_idx[g]].pft_addr;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        os_pr_s_val[g][s]   = dut.u_ftq.u_entry.r_arr[pr_idx[g]].slot[s]
+                                .slot_valid;
+        os_pr_s_taken[g][s] = dut.u_ftq.u_entry.r_arr[pr_idx[g]].slot[s]
+                                .taken;
+        os_pr_s_pos[g][s]   = dut.u_ftq.u_entry.r_arr[pr_idx[g]].slot[s]
+                                .pos;
+      end
+    end
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      os_p1_s_val[s]  = sh_ubtb_pred[s].valid;
+      os_p1_s_pos[s]  = FTB_BR_POS_BITS'(sh_ubtb_pred[s].pos);
+      os_p1_s_type[s] = 3'(sh_ubtb_pred[s].br_type);
+      os_p2_s_val[s]  = dut.u_bpu.w_br_val_p2[s];
+      os_p2_s_pos[s]  = dut.u_bpu.w_pos_p2[s];
+      os_p2_s_type[s] = 3'(dut.u_bpu.w_br_type_p2[s]);
+      os_p3_s_val[s]  = dut.u_bpu.r_slot_p3[s].slot_valid;
+      os_p3_s_pos[s]  = dut.u_bpu.r_slot_p3[s].pos;
+      os_p3_s_type[s] = 3'(dut.u_bpu.r_slot_p3[s].br_type);
+    end
+  end
+
+  // The forced values. Each is a whole variable or array element, built
+  // from the predictor's own value with the trace's fields put in: a
+  // second force on another member of the same element is not applied
+  // by this build (found here: of ITTAGE's prm_tgt and alt_tgt, only one
+  // took), so no element is forced member by member.
+  ubtb_pred_t [NUM_PRED_SLOTS-1:0] o_p1_ubtb;
+  lp_pred_t             o_p1_lp   [NUM_PRED_SLOTS];
+  logic                 o_p1_tosv [NUM_PRED_SLOTS];
+  logic [VA_WIDTH-1:0]  o_p1_tosa [NUM_PRED_SLOTS];
+  lp_pred_t             o_p2_lp   [NUM_PRED_SLOTS];
+  tage_pred_meta_t      o_p2_tage [NUM_PRED_SLOTS];
+  logic                 o_p2_ftk  [NUM_PRED_SLOTS];
+  logic [VA_WIDTH-1:0]  o_p2_ftg  [NUM_PRED_SLOTS];
+  logic [VA_WIDTH-1:0]  o_p2_ras  [NUM_PRED_SLOTS];
+  ittage_pred_meta_t    o_p2_it   [NUM_PRED_SLOTS];
+  logic [VA_WIDTH-1:0]  o_p2_jt;
+  sc_pred_meta_t        o_p3_sc   [NUM_PRED_SLOTS];
+  always_comb begin : oracle_values
+    o_p1_ubtb = sh_ubtb_pred;
+    o_p2_jt = (orc_on && orc_p2_jten) ? orc_p2_jtgt
+                                      : dut.u_bpu.u_ftb.ftb_jmp_target_p2;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (orc_on && orc_p1_den[s]) o_p1_ubtb[s].br_taken = orc_p1_dir[s];
+      if (orc_on && orc_p1_ten[s]) o_p1_ubtb[s].target   = orc_p1_tgt[s];
+      o_p1_lp[s] = dut.u_bpu.u_loop_pred.pred_p1[s];
+      if (orc_on && orc_p1_den[s]) o_p1_lp[s].lp_pred_taken = orc_p1_dir[s];
+      o_p1_tosv[s] = (orc_on && orc_p1_ret[s]) ? orc_p1_dir[s]
+                                               : sh_tos_val[s];
+      o_p1_tosa[s] = (orc_on && orc_p1_ret[s]) ? orc_p1_tgt[s]
+                                               : sh_tos_addr[s];
+      o_p2_lp[s] = dut.u_bpu.u_loop_pred.pred_p2[s];
+      if (orc_on && orc_p2_den[s]) o_p2_lp[s].lp_pred_taken = orc_p2_dir[s];
+      o_p2_tage[s] = dut.u_bpu.u_tage.tage_pred_meta_p2[s];
+      if (orc_on && orc_p2_den[s]) o_p2_tage[s].tage_pred_tkn = orc_p2_dir[s];
+      o_p2_ftk[s]  = (orc_on && orc_p2_den[s])
+                   ? orc_p2_dir[s]
+                   : ((s == 0) ? dut.u_bpu.u_ftb.ftb_br0_taken_p2
+                               : dut.u_bpu.u_ftb.ftb_br1_taken_p2);
+      o_p2_ftg[s]  = (orc_on && orc_p2_ten[s])
+                   ? orc_p2_tgt[s]
+                   : ((s == 0) ? dut.u_bpu.u_ftb.ftb_br0_target_p2
+                               : dut.u_bpu.u_ftb.ftb_br1_target_p2);
+      o_p2_ras[s]  = (orc_on && orc_p2_ten[s])
+                   ? orc_p2_tgt[s]
+                   : dut.u_bpu.u_ras.ras_pop_addr_p2[s];
+      o_p2_it[s] = dut.u_bpu.u_ittage.ittage_pred_meta_p2[s];
+      if (orc_on && orc_p2_ten[s]) begin
+        o_p2_it[s].ittage_prm_tgt = orc_p2_tgt[s][VA_WIDTH-1:1];
+        o_p2_it[s].ittage_alt_tgt = orc_p2_tgt[s][VA_WIDTH-1:1];
+      end
+      o_p3_sc[s] = dut.u_bpu.u_sc.sc_pred_meta_p3[s];
+      if (orc_on && orc_p3_den[s]) o_p3_sc[s].sc_pred_tkn = orc_p3_dir[s];
+    end
+  end
+
+  // The forces: the predictor outputs the stage logic reads, by slot.
+  //   p1 (p1_form_comb): r_ubtb_pred_p1 (.br_taken, .target), the loop
+  //      predictor's pred_p1 (.lp_pred_taken), the RAS top of stack
+  //      r_ras_tos_val_p1 and r_ras_tos_addr_p1
+  //   p2 (p2_class_comb, p2_succ_comb): w_lp_pred_p2 (.lp_pred_taken),
+  //      w_tage_pred_meta_p2 (.tage_pred_tkn), the FTB br direction and
+  //      target w_ftb_br_taken_p2 and _target_p2, the FTB jump target
+  //      w_ftb_jmp_target_p2, the RAS pop address w_ras_pop_addr_p2,
+  //      w_ittage_pred_meta_p2 (.ittage_prm_tgt, .ittage_alt_tgt)
+  //   p3 (p3_redir_comb, p3_slot_comb): w_sc_pred_meta_p3 (.sc_pred_tkn)
+  initial begin : oracle_p1_ubtb
+    force dut.u_bpu.r_ubtb_pred_p1 = o_p1_ubtb;
+  end
+  for (genvar gs = 0; gs < NUM_PRED_SLOTS; gs++) begin : g_oracle
+    initial begin
+      force dut.u_bpu.w_lp_pred_p1[gs]          = o_p1_lp[gs];
+      force dut.u_bpu.r_ras_tos_val_p1[gs]      = o_p1_tosv[gs];
+      force dut.u_bpu.r_ras_tos_addr_p1[gs]     = o_p1_tosa[gs];
+      force dut.u_bpu.w_lp_pred_p2[gs]          = o_p2_lp[gs];
+      force dut.u_bpu.w_tage_pred_meta_p2[gs]   = o_p2_tage[gs];
+      force dut.u_bpu.w_ftb_br_taken_p2[gs]     = o_p2_ftk[gs];
+      force dut.u_bpu.w_ftb_br_target_p2[gs]    = o_p2_ftg[gs];
+      force dut.u_bpu.w_ras_pop_addr_p2[gs]     = o_p2_ras[gs];
+      force dut.u_bpu.w_ittage_pred_meta_p2[gs] = o_p2_it[gs];
+      force dut.u_bpu.w_sc_pred_meta_p3[gs]     = o_p3_sc[gs];
+    end
+  end
+  initial begin : oracle_jump
+    force dut.u_bpu.w_ftb_jmp_target_p2 = o_p2_jt;
   end
 
 endmodule : perf_top

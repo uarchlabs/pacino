@@ -70,6 +70,18 @@ inline uint32_t auipc(int rd, int32_t hi20) {
   return (uint32_t(hi20) << 12) | (uint32_t(rd) << 7) | 0x17u;
 }
 
+// True when w is a B-type (BRANCH opcode) word.
+inline bool is_b_type(uint32_t w) { return (w & 0x7fu) == 0x63u; }
+
+// The taken target of the B-type word w at pc: pc plus the sign-extended
+// immediate, as fe_tb_backend.svh's br_target decodes it (PERF-003).
+inline uint64_t br_target(uint64_t pc, uint32_t w) {
+  uint32_t imm = (((w >> 31) & 1u) << 12) | (((w >> 7) & 1u) << 11) |
+                 (((w >> 25) & 0x3fu) << 5) | (((w >> 8) & 0xfu) << 1);
+  int64_t off = (imm & 0x1000u) ? int64_t(imm) - 0x2000 : int64_t(imm);
+  return pc + uint64_t(off);
+}
+
 // The word for a record of class cls at pc, taken target t (pc + 8 for
 // a conditional never seen taken).
 inline uint32_t class_word(uint8_t cls, uint64_t pc, uint64_t t) {

@@ -1,0 +1,8 @@
+# PERF-003 Problem 4: the p5.sets backends under each mispredict rule,
+# 2e6 instructions, NUM_PRED_SLOTS 2 (head_s2). perf003_p4_rules.csv was
+# made with --resolve-lat uniform:4:12 (its resolve_lat column); the
+# latency sets now name the same distribution as --execute-lat (Problem 6).
+stream_immediate  --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0 --mispredict-rule stream
+stream_latency    --max-instr 2000000 --execute-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1 --mispredict-rule stream
+fetch_immediate   --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0 --mispredict-rule fetch
+fetch_latency     --max-instr 2000000 --execute-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1 --mispredict-rule fetch

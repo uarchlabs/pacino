@@ -12,8 +12,8 @@ A parameter-set file holds one set per line: a name, then the harness's
 arguments (perf/build/<NAME>_s<SLOTS>/perf_fe --help). Blank lines and
 lines starting with # are skipped. A set may name its build with
 bin=<path> as its first argument; otherwise --bin is used.
-  base     --resolve-lat fixed:0
-  lat8     --resolve-lat fixed:8 --resolve-commit uniform:0:4
+  base     --execute-lat fixed:0
+  lat8     --execute-lat fixed:8 --resolve-commit uniform:0:4
 A trace list holds one <group>/<trace> per line, or is given with
 --traces as a comma-separated list.
 
@@ -26,6 +26,7 @@ Usage, from the repository root:
   python3 tools/perf_study.py --traces <list or file> --sets <file>
                               --out <csv> [-j N] [--bin <perf_fe>]
                               [--work <dir>]
+-j defaults to 75% of the hardware threads, at least 1 (PF-22).
 Setup notes: README.md, section Performance analysis.
 """
 
@@ -53,6 +54,11 @@ def run(job):
             p.stderr.strip().splitlines()[-1:] if p.stderr else [])
 
 
+def default_jobs():
+    """PF-22: 75% of the hardware threads, rounded down, at least 1."""
+    return max(1, (os.cpu_count() or 1) * 3 // 4)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--traces", required=True)
@@ -60,7 +66,10 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--bin", default=DEFAULT_BIN)
     ap.add_argument("--work", default=None)
-    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count())
+    ap.add_argument("-j", "--jobs", type=int, default=default_jobs(),
+                    help="worker processes (default %d: 75%%%% of the %d "
+                    "hardware threads, PF-22)" % (default_jobs(),
+                                                  os.cpu_count() or 1))
     args = ap.parse_args()
 
     if os.path.isfile(args.traces):
@@ -89,11 +98,12 @@ def main():
         for t in traces:
             out = os.path.join(work, "%s__%s.csv" % (name, t.replace("/", "_")))
             jobs.append((name, t, binp, argv, out))
-    print("perf_study.py: %d traces x %d sets = %d runs, %d processes"
-          % (len(traces), len(sets), len(jobs), args.jobs))
+    nproc = min(args.jobs, len(jobs))
+    print("perf_study.py: %d traces x %d sets = %d runs, %d processes "
+          "(-j %d)" % (len(traces), len(sets), len(jobs), nproc, args.jobs))
     t0 = time.time()
     done = []
-    with multiprocessing.Pool(min(args.jobs, len(jobs))) as pool:
+    with multiprocessing.Pool(nproc) as pool:
         for r in pool.imap_unordered(run, jobs):
             name, trace, rc, out, sec, err = r
             print("  %-12s %-24s exit %d  %.0f s %s" % (name, trace, rc, sec,

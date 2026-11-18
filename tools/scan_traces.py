@@ -125,7 +125,7 @@ COLUMNS = [
     "pc_mode_min", "pc_noncanon_sv57_static",
 ]
 
-# The translation modes PF-16 checks, narrowest first: (name, NN).
+# The translation modes PF-15 checks, narrowest first: (name, NN).
 SV_MODES = (("sv39", 39), ("sv48", 48), ("sv57", 57))
 
 

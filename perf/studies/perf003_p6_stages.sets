@@ -1,0 +1,20 @@
+# PERF-003 Problem 6: THE BACKEND STAGES (PF-18). media_2, 3e5
+# instructions, the fetch rule, resolve to commit 0 unless named.
+#   each stage at two fixed values: resolve_lat_sum = value x 300000
+#   two stages fixed against their sum in one stage: the same row
+#   min = max on two seeds: the same row
+#   all four 0: resolve in the take cycle
+st_zero        --max-instr 300000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0
+st_dec2        --max-instr 300000 --decode-lat fixed:2 --resolve-commit fixed:0
+st_dec5        --max-instr 300000 --decode-lat fixed:5 --resolve-commit fixed:0
+st_ren2        --max-instr 300000 --rename-lat fixed:2 --resolve-commit fixed:0
+st_ren5        --max-instr 300000 --rename-lat fixed:5 --resolve-commit fixed:0
+st_dis2        --max-instr 300000 --dispatch-lat fixed:2 --resolve-commit fixed:0
+st_dis5        --max-instr 300000 --dispatch-lat fixed:5 --resolve-commit fixed:0
+st_exe2        --max-instr 300000 --execute-lat fixed:2 --resolve-commit fixed:0
+st_exe5        --max-instr 300000 --execute-lat fixed:5 --resolve-commit fixed:0
+st_split_2_3   --max-instr 300000 --decode-lat fixed:2 --execute-lat fixed:3 --resolve-commit fixed:0
+st_split_1_4   --max-instr 300000 --rename-lat fixed:1 --dispatch-lat fixed:4 --resolve-commit fixed:0
+st_minmax_s1   --max-instr 300000 --decode-lat uniform:1:1 --rename-lat uniform:2:2 --dispatch-lat uniform:1:1 --execute-lat uniform:3:3 --resolve-commit uniform:2:2 --seed 1
+st_minmax_s2   --max-instr 300000 --decode-lat uniform:1:1 --rename-lat uniform:2:2 --dispatch-lat uniform:1:1 --execute-lat uniform:3:3 --resolve-commit uniform:2:2 --seed 2
+st_sum7_c2     --max-instr 300000 --execute-lat fixed:7 --resolve-commit fixed:2

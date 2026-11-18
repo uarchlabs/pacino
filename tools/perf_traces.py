@@ -21,8 +21,11 @@ Steps, from the repository root:
      lists), paths relative to CBP_TRACES_RV
 
 Usage:
-  python3 tools/perf_traces.py [-j N] [--skip-veneer]
---skip-veneer runs steps 3 and 4 on traces already written.
+  python3 tools/perf_traces.py [-j N] [--skip-veneer] [--dry-run]
+--skip-veneer runs steps 3 and 4 on traces already written. -j defaults to
+75% of the hardware threads, at least 1 (PF-22), and is passed to veneer.
+--dry-run prints the worker count and the veneer command, and writes
+nothing.
 Setup notes: README.md, section Performance analysis.
 """
 
@@ -61,20 +64,36 @@ def run_pt_gen(job):
     return (pages, img, p.returncode, (p.stdout + p.stderr).strip())
 
 
+def default_jobs():
+    """PF-22: 75% of the hardware threads, rounded down, at least 1."""
+    return max(1, (os.cpu_count() or 1) * 3 // 4)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count())
+    ap.add_argument("-j", "--jobs", type=int, default=default_jobs(),
+                    help="worker processes, and veneer's -j (default %d: "
+                    "75%%%% of the %d hardware threads, PF-22)"
+                    % (default_jobs(), os.cpu_count() or 1))
     ap.add_argument("--skip-veneer", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     rv_root = os.path.abspath(os.environ.get(
         "CBP_TRACES_RV", os.path.join(REPO_ROOT, "..", "cbp_traces_rv")))
+    veneer_cmd = [os.path.join(REPO_ROOT, "perf", "build", "veneer"),
+                  "-j", str(args.jobs)]
+    print("perf_traces.py: %d worker processes" % args.jobs)
+    if args.dry_run:
+        if not args.skip_veneer:
+            print("  would run: %s" % " ".join(veneer_cmd))
+        print("  would run pt_gen on %d processes" % args.jobs)
+        return 0
     if subprocess.run(["make", "-C", os.path.join(REPO_ROOT, "perf"),
                        "tools", "pt_gen"]).returncode != 0:
         fail("the perf tools did not build")
     if not args.skip_veneer:
-        if subprocess.run([os.path.join(REPO_ROOT, "perf", "build", "veneer"),
-                           "-j", str(args.jobs)]).returncode != 0:
+        if subprocess.run(veneer_cmd).returncode != 0:
             fail("veneer failed")
 
     # The training list names the traces; each has its changed form.

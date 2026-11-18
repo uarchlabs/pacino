@@ -609,6 +609,8 @@ int main(int argc, char** argv) {
     else if (a == "--only" && i + 1 < argc) only.insert(argv[++i]);
     else die("unknown argument " + a);
   }
+  if (jobs == 0) jobs = perf::default_jobs();     // PF-22
+  std::printf("veneer: %u threads\n", jobs);
   struct stat st;
   if (stat(cx.in_root.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
     die("trace directory " + cx.in_root + " not found; set CBP_TRACES");

@@ -1,5 +1,8 @@
 # PERF-002 Problem 5: the first 2e6 instructions of a trace, at
 # NUM_PRED_SLOTS 2 (the head_s2 build), under two backends: every PF-18
 # event immediate, and a backend with resolve and commit latency.
-immediate  --max-instr 2000000
-latency    --max-instr 2000000 --resolve-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1
+# PERF-003: latency's --resolve-lat (removed) is --execute-lat with the
+# same distribution. immediate names every event explicitly, so that it
+# stays the immediate backend whatever the harness default.
+immediate  --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0
+latency    --max-instr 2000000 --execute-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1

@@ -1,0 +1,12 @@
+# PERF-003 Problem 5: the FTB-slot oracle (PF-11), 2e6 instructions, the
+# fetch rule. immediate and latency are p5.sets, rerun on the oracle build
+# with the oracle off; the oracle_ sets the same with --oracle; perfect
+# and perfect_oracle the immediate backend with a perfect I-cache. The
+# latency backend names its resolve latency --execute-lat (Problem 6),
+# drawn from the stream --resolve-lat had.
+immediate        --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0
+latency          --max-instr 2000000 --execute-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1
+oracle_immediate --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0 --oracle
+oracle_latency   --max-instr 2000000 --execute-lat uniform:4:12 --resolve-commit uniform:2:8 --seed 1 --oracle
+perfect          --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0 --icache perfect
+perfect_oracle   --max-instr 2000000 --execute-lat fixed:0 --resolve-commit fixed:0 --icache perfect --oracle

@@ -238,6 +238,7 @@
 # Updated after BP-150, session-086 (PROJECT_STATUS.md,
 # CLOSED_TECH_DEBT.md, ftq_decisions.md, ibuf_decisions.md,
 # ftq_ifu_interfaces.md, ifu_ibuf_interfaces.md).
+# Updated when PERF-003 was written, session-086 (PROJECT_STATUS.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -281,7 +282,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   5c101e88a24c
-PLAN  PROJECT_STATUS.md                 455441caa344
+PLAN  PROJECT_STATUS.md                 69a7025e9daa
 PLAN  CLOSED_TECH_DEBT.md               805021a07a9c
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
