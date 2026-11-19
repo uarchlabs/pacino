@@ -2845,11 +2845,11 @@ module tb;
   endtask
 
   // =================================================================
-  // BP-151 programs: return mispredicts the RAS rules allow (TD#207).
-  // Each is EXPECTED TO FAIL on the current RTL, which meets every rule
-  // of ras_decisions.md here, until the cause is ruled; each runs as its
-  // own target (the fe_top Makefile FE_XPROGS, not in FE_PROGS) and
-  // tools/known_failures.txt waives it at both slot counts.
+  // BP-151 programs: return mispredicts the RAS rules allowed (TD#207).
+  // Each failed on the BP-151 RTL, which met every rule of
+  // ras_decisions.md there; they ran as their own targets (FE_XPROGS)
+  // waived in tools/known_failures.txt. BP-152 builds the fixes (A1 for
+  // ras_fbstale, C1 for ras_pdcall), and both are in FE_PROGS.
   // =================================================================
 
   // -----------------------------------------------------------------
@@ -2971,6 +2971,106 @@ module tb;
                    "found is predicted (mispredicted %0d)"},
                   mis_pc.exists(fret) ? mis_pc[fret] : 0),
         !mis_pc.exists(fret));
+  endtask
+
+  // =================================================================
+  // BP-152 programs: TD#211, the commit walk commits only what executed
+  // (ftq_decisions.md 5.4). Each fails on the BP-151 RTL, where the walk
+  // commits a call that did not execute and the RAS commit check reports
+  // it ("RAS commit 1 ... with none retired").
+  // =================================================================
+
+  // -----------------------------------------------------------------
+  // rsv_twores: TWO RESOLUTIONS OF ONE ENTRY IN ONE CYCLE (TD#211 b,
+  // BP-151 compress_1 idx 15). Block B, 32-byte aligned, new to the FTB:
+  //   B+0  addi, B+4 addi
+  //   B+8  bne x0,x0 (pos 4, not taken)
+  //   B+12 addi
+  //   B+16 beq x0,x0 to T (pos 8, taken)
+  //   B+20 jal x1, F (pos 10) in memory only: never executed.
+  // The block is predicted to fall through, so predecode finds the JAL
+  // (M1) and puts a taken call at pos 10 in slot 0. The two conditionals
+  // retire in one backend cycle; the second is mispredicted. With rsv2
+  // both resolutions are accepted in one cycle: the older (pos 4) is
+  // placed in slot 0 in the younger's view, and BP-139 suppresses its
+  // write (not taken, not a RAS operation, not an end); the younger
+  // (pos 8, the end) goes to slot 1. On the BP-151 RTL the end cleared
+  // the slots above slot 1 only, so the call in slot 0 survived and the
+  // walk committed it. The redirect at pos 8 (_self clear) also clears
+  // it since BP-152 (TD#211 a), so this program fails only with neither
+  // fix; tb_ftq_entry J1 checks the positional clear alone. Two slots
+  // only: at one slot there is one resolution port.
+  // -----------------------------------------------------------------
+  task automatic p_rsv_twores();
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] t;
+    logic [VA_WIDTH-1:0] f;
+    logic [31:0]         w;
+    begin_prog("rsv_twores");
+    rsv2 = 1'b1;
+    b = RESET_VECTOR + VA_WIDTH'('h400);
+    t = RESET_VECTOR + VA_WIDTH'('h600);
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    W.mixed(3);
+    W.jal(5'd0, b);
+    W.i32(ADDI_T0);                            // B+0
+    W.i32(ADDI_T0);                            // B+4
+    W.cond(1'b0, b + VA_WIDTH'('h40));         // B+8, pos 4, not taken
+    W.i32(ADDI_T0);                            // B+12
+    W.cond(1'b1, t);                           // B+16, pos 8, taken
+    w = W.enc_jal(5'd1, int'(f - (b + VA_WIDTH'('h14))));
+    W.put_hw(b + VA_WIDTH'('h14), w[15:0]);     // B+20, pos 10, never run
+    W.put_hw(b + VA_WIDTH'('h16), w[31:16]);
+    for (int k = 0; k < 6; k++)
+      W.put_hw(b + VA_WIDTH'('h18 + 2 * k), CADDI);
+    for (int k = 0; k < 8; k++)
+      W.put_hw(f + VA_WIDTH'(2 * k), CADDI);   // the wrong path's code
+    W.mixed(4);                                // at T
+    end_prog(20000);
+    if (NUM_RESOLVE_PORTS > 1)
+      chk($sformatf({"rsv_twores: two resolutions of one entry accepted ",
+                     "in one cycle (%0d)"}, n_rsv_pair), n_rsv_pair >= 1);
+  endtask
+
+  // -----------------------------------------------------------------
+  // rsv_trapcall: A TRAP BEFORE A CALL IN ITS ENTRY, _SELF CLEAR (TD#211
+  // a, BP-151 web_11 idx 7). Block B, new to the FTB:
+  //   B+0  ecall (pos 0), trapping to H
+  //   B+4  c.addi, B+6 c.addi, in memory only
+  //   B+8  jal x1, F (pos 4) in memory only: never executed.
+  // Predecode finds the JAL (M1) and puts a taken call at pos 4 in slot
+  // 0; C1 pushes it. The ecall retires and traps with _self clear
+  // (trap_sc, as the harness's RC_TRAP): B's entry survives and
+  // commits. On the BP-151 RTL nothing cleared the call, so the walk
+  // committed it. Since BP-152 the redirect clears the slots after pos 0
+  // and the restore undoes the pushed call (ras_rs_undo).
+  // -----------------------------------------------------------------
+  task automatic p_rsv_trapcall();
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] h;
+    logic [VA_WIDTH-1:0] f;
+    logic [31:0]         w;
+    begin_prog("rsv_trapcall");
+    trap_sc = 1'b1;
+    b = RESET_VECTOR + VA_WIDTH'('h400);
+    h = RESET_VECTOR + VA_WIDTH'('h600);
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    W.mixed(3);
+    W.jal(5'd0, b);
+    W.ecall(h);                                // B+0, pos 0
+    W.put_hw(b + VA_WIDTH'('h4), CADDI);       // B+4, never run
+    W.put_hw(b + VA_WIDTH'('h6), CADDI);
+    w = W.enc_jal(5'd1, int'(f - (b + VA_WIDTH'('h8))));
+    W.put_hw(b + VA_WIDTH'('h8), w[15:0]);     // B+8, pos 4, never run
+    W.put_hw(b + VA_WIDTH'('hA), w[31:16]);
+    for (int k = 0; k < 10; k++)
+      W.put_hw(b + VA_WIDTH'('hC + 2 * k), CADDI);
+    for (int k = 0; k < 8; k++)
+      W.put_hw(f + VA_WIDTH'(2 * k), CADDI);   // the wrong path's code
+    W.mixed(4);                                // at H
+    end_prog(20000);
+    chk($sformatf("rsv_trapcall: the trap redirect was taken (%0d)", n_trap),
+        n_trap >= 1);
   endtask
 
 
@@ -4355,8 +4455,10 @@ module tb;
       "misp_call":  p_misp_call();
       "sc_nored":   p_sc_nored();              // BP-150
       "jals":       p_jals();
-      "ras_fbstale": p_ras_fbstale();          // BP-151, expected fail
-      "ras_pdcall": p_ras_pdcall();            // BP-151, expected fail
+      "ras_fbstale": p_ras_fbstale();          // BP-151; passes BP-152 A1
+      "ras_pdcall": p_ras_pdcall();            // BP-151; passes BP-152 C1
+      "rsv_twores": p_rsv_twores();            // BP-152, TD#211 b
+      "rsv_trapcall": p_rsv_trapcall();        // BP-152, TD#211 a
       "fencei":     p_smc(1);
       "cboinval":   p_smc(2);
       "uc_nc":      p_uc(2'd1);
@@ -4386,7 +4488,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:44] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:46] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
@@ -4399,7 +4501,7 @@ module tb;
                               "zstar", "pt_gonly", "pt_vsonly",
                               "pt_upriv", "init_walk", "sv48", "sv57",
                               "h57", "pt_gonly_x4", "ras_fbstale",
-                              "ras_pdcall"};
+                              "ras_pdcall", "rsv_twores", "rsv_trapcall"};
 
   // =================================================================
   initial begin

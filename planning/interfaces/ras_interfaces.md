@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -283,6 +283,9 @@ ras_tos_valid_p0[s] = 1 -- ras_tos_addr_p0[s] holds the
                            Valid before FTB result at p2.
 ras_tos_valid_p0[s] = 0 -- speculative and commit stacks
                            both empty.
+
+  2026-11-18  session-086, after BP-151. IC-RAS-07: the commit top
+              does not reflect uncommitted pops. 11: RI-4 opened.
 ```
 
 Both slots may have ras_pred_val_p2 asserted in the same
@@ -398,6 +401,11 @@ ras_pop_valid_p2[s] and ras_tos_valid_p0[s] deassert.
 TOSR == BOS holds exactly when the speculative stack is empty,
 across commits (ras_decisions.md 3.2, BP-138). A pop never presents
 a speculative entry the stack does not hold.
+
+The commit stack top is the CSP-1 entry as commits have left it, not
+as the speculative pops since have: a pop that consumed a committed
+frame is not reflected until its return commits (ras_decisions.md
+3.3, MEASURED BP-151; RI-4).
 
 ### IC-RAS-08: Snapshot timing
 
@@ -643,6 +651,10 @@ While rstn is low (active low, synchronous):
 | RI-3   | PHR/GHR contribution to RAS.          | N/A. RAS does      |
 |        |                                       | not use folded     |
 |        |                                       | history. No action.|
+| RI-4   | The fallback after a speculative pop  | OPEN.              |
+|        | of a committed frame, the reuse below | ras_decisions.md   |
+|        | BOS, the call and return only         | 10 RAS-4; BP-152.  |
+|        | predecode finds (BP-151).             |                    |
 
 ---
 

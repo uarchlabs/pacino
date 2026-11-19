@@ -651,6 +651,23 @@ commits an entry only after every resolution naming it is accepted
 the walk committed calls that never executed and missed return-calls
 predicted not taken (TD#161).
 
+TWO CASES BREAK IT, found by BP-151 (TD#211):
+(a) A backend redirect with _self clear at a non-branch (a trap):
+    the named entry survives and its slots after the trap's position
+    are never cleared, so the walk commits a call there that did not
+    execute (web_11, 4 and 5 per 2e6 run). No resolution covers it.
+    PROPOSED (PA, for Jeff's ruling; built by BP-152 for acceptance):
+    such a redirect clears the entry's slots after its position, as a
+    resolved end does.
+(b) Two resolutions of one entry in one cycle: ftq_resolve.sv
+    place_slot plans the younger's placement on the older's slot
+    write, which BP-139 suppresses (not taken, not a RAS op, not an
+    end); ftq_entry.sv's end clear clears only the slots above the
+    younger's slot, so a predecode-placed call below it survives and
+    commits (compress_1 and int_6, 1 to 2 per run). A defect. BP-152
+    makes the end clear positional: every slot whose pos is after the
+    resolved end's pos.
+
 ras_decisions.md 4.5 rules restore > commit > hold for BOS, so the
 FTQ SUPPRESSES the RAS commit it would have issued in a cycle where a
 redirect restore fires. The walk does not advance that cycle.
@@ -1581,4 +1598,7 @@ Section 1 counts six, since session-074.
 
   2026-11-18  session-086, after BP-150. Section 1: the fetch port
               writes through the p3 slot write (TD#205).
+
+  2026-11-18  session-086, after BP-151. 5.4: two cases in which the
+              walk commits a call that did not execute (TD#211).
 ```

@@ -21,6 +21,26 @@
 //               committed return, in trace order.
 //   THE CAUSE   one per mispredicted slot-held return, by the rules in
 //               classify() (BP-151 Results Capture, Problem 1).
+//
+// BP-152 (RAS-4), the RAS state the rules read changes, the rules are
+// those of BP-151 except as below (BP-152 Results Capture, Problem 1):
+//   - A1: a pop on an empty stack reads the commit stack at the index
+//     the RAS forms (rc_p2_fbi, CSP-1-n), so its occupant is that
+//     index's, not the top's.
+//   - C1: a call predecode found is pushed on the restore of its
+//     predecode redirect (rc_pd_*): the push is the call's, its
+//     allocation is tracked as any other, and R5 counts it.
+//   - R8 (C_T's entry reused) applies to a pop that read the speculative
+//     stack, at C_T's own reused slot. With B1 a pop whose link was
+//     killed reads empty and falls back, and R9 decides it; a pop of
+//     another entry is decided by R10.
+//   - R9, C_T committed, a closed frame at the fallback index: with A1
+//     the index is the speculative depth's, so the frame's closer
+//     decides, as in R10 (ret_pd, ret_nopop), else fb_stale_top.
+//   - an off-path op of a restored block (snap_offpath_op) excludes a
+//     push the restore undid (rc_rs_undo).
+//   - a C1 push is also recorded by instance (pd_by_inst_), since the
+//     call's take may precede the write-back's restore.
 // ===================================================================
 #ifndef PERF_RAS_CLASS_H
 #define PERF_RAS_CLASS_H
@@ -109,6 +129,15 @@ struct IObs {
   bool     rep_applied = false;
   uint64_t rep_seq = 0;          // a missed push's allocation
   uint8_t  rep_aidx = 0;
+  // BP-152, C1: the predecode operation on this instance's restore
+  bool     pd_push = false, pd_pop = false;
+  uint8_t  pd_pos = 0;
+  uint64_t pd_seq = 0, pd_ft = 0;
+  uint8_t  pd_aidx = 0;
+  // BP-152, A1: the commit-stack index the empty pop read, and n, the
+  // committed depth less the depth at the pop
+  uint8_t  fbi = 0;
+  int      fbn = 0;
   // restores that named this instance
   uint32_t n_named = 0;
 };
@@ -139,6 +168,7 @@ struct RefEnt {
   uint64_t addr = 0, k = 0;
   uint8_t  pos = 0, src = S_NONE;
   bool     in_slot = false;
+  bool     ind = false;          // BP-152: an indirect call (C_CALL_IND)
   uint64_t max_above = 0;        // the most entries above it while live
   IObs     obs;                  // the call's instance, at its take
 };
@@ -179,6 +209,8 @@ class RasClass {
   uint64_t n_ret = 0, n_slot_mis = 0, max_spec = 0, max_cmt = 0;
   uint64_t max_ref = 0, n_restores = 0, n_wrap_skip = 0;
   uint64_t n_cmt_unexec_trap = 0;   // commit_unexecuted after an RC_TRAP
+  uint64_t n_pd_push = 0, n_pd_pop = 0;  // BP-152, C1 operations
+  uint64_t n_call_pd_ind = 0;   // BP-152: call_pd whose call is a JALR
   int      dump = 0;              // RC_DUMP: lines to print per cause
   int      dumped[C_N] = {};
   uint64_t tr_from = 0, tr_to = 0;  // RC_TRACE=from:to, the RAS events
@@ -259,6 +291,7 @@ class RasClass {
           o.rep |= r;
           o.rep_applied = !rs;
           if ((r & REP_MISS_PUSH) && !rs) {
+            pushed_inst_.insert(o.inst);
             int port = -1;
             for (int n = 1; n >= 0; n--)
               if (port < 0 && ((t->rc_we >> (s * 2 + n)) & 1)) port = s * 2 + n;
@@ -303,7 +336,15 @@ class RasClass {
           o.pocc = spec_[o.pre];
           for (auto& a : al)
             if (int(t->rc_waddr[a.port]) == int(o.pre)) o.pocc = a.o;
-          o.cocc = cmt_[(uint32_t(t->rc_csp) + RC - 1) % RC];
+          // BP-152 A1: the fallback reads the index the RAS formed
+          o.fbi  = uint8_t(t->rc_p2_fbi[s]);
+          // the depth before the pop is the slot's dep plus the pop, less
+          // a push of the same slot (RETURN_CALL)
+          o.fbn  = int8_t(uint8_t(t->rc_dcm) -
+                          uint8_t(t->rc_p2_dep[s] + 1 -
+                                  ((o.op[s] & OP_PUSH) ? 1 : 0)));
+          o.cocc = o.pop_empty ? cmt_[o.fbi % RC]
+                               : cmt_[(uint32_t(t->rc_csp) + RC - 1) % RC];
           o.cmt_inst = last_cmt_inst_;
           o.ncstk = 0;
           for (uint32_t j = 0; j < 8 && j < uint32_t(t->rc_ccnt); j++) {
@@ -318,6 +359,7 @@ class RasClass {
         }
         if ((o.op[s] & OP_PUSH) && o.push_s < 0) {
           o.push_s = s;
+          if (o.applied) pushed_inst_.insert(o.inst);
           o.kind = ((t->rc_p2_inc >> s) & 1) ? 1
                  : ((t->rc_p2_sat >> s) & 1) ? 2 : 0;
           o.ft = uint64_t(t->rc_p2_ft[s]) & VMASK;
@@ -397,6 +439,9 @@ class RasClass {
       }
       for (int s = 0; s < NS; s++) {
         if (!o.applied || !o.op[s]) continue;
+        // BP-152: a push the restore undid (ras_rs_undo) is not in the
+        // restored state; only a pop stays off the path.
+        if (t->rc_rs_undo && !(o.op[s] & OP_POP)) continue;
         if (o.pos[s] > r.pos) r.op_after = true;
         if (o.pos[s] == r.pos &&
             (is_call_t(o.type[s]) != is_call_t(cty) ||
@@ -411,6 +456,52 @@ class RasClass {
       // RC_TRAP (cause 1) names the trapping instruction's entry, which
       // survives (_self clear) with its slots after the trap uncleared.
       if (!r.pd && rd_cause == 1) trap_inst_.insert(r.inst);
+      // BP-152, C1: the predecode operation on this restore. Its push
+      // allocates as a p2 push does (THE SENTINEL SKIP against the
+      // snapshot's TOSW and BOS, which the restore loads).
+      if (t->rc_pd_val) {
+        uint8_t pty = t->rc_pd_type;
+        o.pd_pos = uint8_t(t->rc_pd_pos);
+        if (is_ret_t(pty)) { o.pd_pop = true; n_pd_pop++; }
+        if (is_call_t(pty)) {
+          o.pd_push = true;
+          o.pd_ft = uint64_t(t->rc_pd_ret) & VMASK;
+          n_pd_push++;
+          if (t->rc_pd_al) {
+            uint8_t i = t->rc_pd_waddr;
+            if (uint8_t(t->rc_rs_tosw) == uint8_t(t->rc_rs_bos) &&
+                i == uint8_t((uint32_t(t->rc_rs_bos) + 1) % RS)) {
+              n_wrap_skip++;
+              skip_cyc_.push_back(cyc);
+              if (skip_cyc_.size() > 256) skip_cyc_.erase(skip_cyc_.begin());
+            }
+            Occ& v = spec_[i];
+            if (v.seq != 0) {
+              Evict e;
+              e.by_inst = o.inst;
+              e.cyc = cyc;
+              e.victim_cmt = v.inst <= last_cmt_inst_;
+              e.skip = (uint8_t(t->rc_rs_tosw) == uint8_t(t->rc_rs_bos));
+              evict_[v.seq] = e;
+            }
+            Occ oc;
+            oc.inst = o.inst; oc.addr = o.pd_ft; oc.cyc = cyc;
+            oc.pos = o.pd_pos;
+            oc.seq = ++seq_;
+            v = oc;
+            o.pd_seq = oc.seq;
+            o.pd_aidx = i;
+          }
+          // The call may have been taken, and its instance observation
+          // copied, before this restore (the write-back trails the
+          // delivery): the push is also kept by instance.
+          PdRec pr;
+          pr.pos = o.pd_pos; pr.seq = o.pd_seq; pr.aidx = o.pd_aidx;
+          pr.ft = o.pd_ft;
+          pd_by_inst_[o.inst] = pr;
+          pushed_inst_.insert(o.inst);
+        }
+      }
       last_rst_ = r;
       rst_log_.push_back(r);
       if (rst_log_.size() > 256) rst_log_.erase(rst_log_.begin());
@@ -450,10 +541,11 @@ class RasClass {
   void path_conflict(uint64_t inst) { conflict_.insert(inst); }
   // A committed call, in trace order.
   void commit_call(uint64_t pc, uint64_t k, uint8_t pos, uint8_t src,
-                   bool in_slot, const IObs& obs) {
+                   bool in_slot, const IObs& obs, bool ind = false) {
     RefEnt e;
     e.addr = (pc + 4) & VMASK;
     e.k = k; e.pos = pos; e.src = src; e.in_slot = in_slot; e.obs = obs;
+    e.ind = ind;
     ref_.push_back(e);
     live_.insert(k);
     if (ref_.size() > max_ref) max_ref = ref_.size();
@@ -511,6 +603,16 @@ class RasClass {
   }
 
  private:
+  // BP-152: a C1 push, by the instance that made it.
+  struct PdRec {
+    uint8_t  pos = 0, aidx = 0;
+    uint64_t seq = 0, ft = 0;
+  };
+  std::unordered_map<uint64_t, PdRec> pd_by_inst_;
+  // BP-152, diagnostics: the instances whose call operated the
+  // speculative stack (a kept p2 push of any kind, a p3 missed push, a
+  // C1 push).
+  std::unordered_set<uint64_t> pushed_inst_;
   IObs     cur_[64];
   Occ      spec_[RS];
   COcc     cmt_[RC];
@@ -567,22 +669,37 @@ class RasClass {
         return note(C_P3_REACH, k, pc, tgt, o, top, "");
       return note(C_P1_ONLY, k, pc, tgt, o, top, "");
     }
-    // R5: the call the reference names, C_T.
-    const IObs& ct = top.obs;
+    // R5: the call the reference names, C_T. A C1 push made after the
+    // call's take is read from the record by instance (BP-152).
+    IObs ct = top.obs;
+    {
+      auto pr = pd_by_inst_.find(ct.inst);
+      if (!ct.pd_push && pr != pd_by_inst_.end()) {
+        ct.pd_push = true;
+        ct.pd_pos = pr->second.pos; ct.pd_seq = pr->second.seq;
+        ct.pd_aidx = pr->second.aidx; ct.pd_ft = pr->second.ft;
+      }
+    }
     bool p2push = ct.p2 && ct.ftb && ct.push_s >= 0 &&
                   ct.pos[ct.push_s] == top.pos;
     bool p3push = (ct.rep & REP_MISS_PUSH) && ct.rep_applied &&
                   ct.rep_seq != 0;
-    if (!p2push && !p3push) {
-      if (top.src == S_NONE) return note(C_CALL_PD, k, pc, tgt, o, top, "");
+    // BP-152, C1: the push on the restore of the call's predecode
+    // redirect, at the call's position.
+    bool pdpush = ct.pd_push && ct.pd_pos == top.pos;
+    if (!p2push && !p3push && !pdpush) {
+      if (top.src == S_NONE) {
+        if (top.ind) n_call_pd_ind++;
+        return note(C_CALL_PD, k, pc, tgt, o, top, top.ind ? "ind" : "dir");
+      }
       return note(C_CALL_P1, k, pc, tgt, o, top, "");
     }
-    if (p2push && !ct.applied && !p3push)
+    if (p2push && !ct.applied && !p3push && !pdpush)
       return note(C_CALL_DROP, k, pc, tgt, o, top, "");
     if (p2push && (ct.rep & (REP_UNDO_PUSH | REP_UNDO_RC)) && ct.rep_applied)
       return note(C_CALL_UNDONE, k, pc, tgt, o, top, "");
-    uint64_t cft = p2push ? ct.ft : 0;
-    if (p2push && cft != top.addr)
+    uint64_t cft = p2push ? ct.ft : pdpush ? ct.pd_ft : 0;
+    if ((p2push || pdpush) && cft != top.addr)
       return note(C_CALL_ADDR, k, pc, tgt, o, top, "");
     if (p2push && ct.kind == 2) return note(C_RCTR_SAT, k, pc, tgt, o, top, "");
     // R6: true depth, the commit stack cannot hold T.
@@ -591,10 +708,16 @@ class RasClass {
     // R7: the pop's result.
     if (!o.popv) return note(C_POP_EMPTY, k, pc, tgt, o, top, "");
     if (o.pop_addr == tgt) return note(C_TGT_OK, k, pc, tgt, o, top, "");
-    // R8: C_T's entry reused by a later allocation before R's p2.
-    uint64_t cseq = p2push ? ct.aseq : ct.rep_seq;
-    uint8_t  cidx = p2push ? ct.aidx : ct.rep_aidx;
-    {
+    // R8: C_T's entry reused by a later allocation before R's p2, and R's
+    // pop read the speculative stack (BP-152: with B1 a pop whose link
+    // was killed reads empty and R9 decides it).
+    uint64_t cseq = p2push ? ct.aseq : p3push ? ct.rep_seq : ct.pd_seq;
+    uint8_t  cidx = p2push ? ct.aidx : p3push ? ct.rep_aidx : ct.pd_aidx;
+    // BP-152: and the pop read C_T's slot itself, the reused one: the
+    // definition of stale_below_bos (BP-151, "a pop follows a link into
+    // a slot below BOS that the allocator has reused"). A pop that read
+    // another entry, with C_T's slot reused elsewhere, is decided by R10.
+    if (!o.pop_empty && o.pre == cidx) {
       auto it = evict_.find(cseq);
       if (cseq != 0 && it != evict_.end() && it->second.cyc < o.p2_cyc)
         return note(it->second.victim_cmt ? C_STALE : C_WRAP, k, pc, tgt, o,
@@ -625,7 +748,15 @@ class RasClass {
       if (p2push && ct.kind == 1 && cidx == o.bos)
         return note(C_FB_RCTR_BOS, k, pc, tgt, o, top, "");
       // C_T not committed: a sentinel skip since its push left its entry
-      // unreachable (the wrap, PU3), else a restore's snapshot.
+      // unreachable (the wrap, PU3), or (BP-152) its entry reallocated
+      // and its link killed (B1: the allocator came round to an entry
+      // not yet committed, the wrap), else a restore's snapshot.
+      {
+        auto ev = evict_.find(cseq);
+        if (cseq != 0 && ev != evict_.end() && ev->second.cyc < o.p2_cyc &&
+            ct.inst > o.cmt_inst)
+          skip = true;
+      }
       if (ct.inst > o.cmt_inst)
         return note(skip ? C_WRAP : offp ? C_SNAP_AFTER
                     : rewind ? C_BOS_REWIND : C_FB_UNCMT,
@@ -645,7 +776,23 @@ class RasClass {
         return note(C_CMT_TRAP, k, pc, tgt, o, top, "");
       }
       if (ck == top.k) return note(C_CMT_ADDR, k, pc, tgt, o, top, "");
-      if (!live_.count(ck)) return note(C_FB_STALE, k, pc, tgt, o, top, "");
+      if (!live_.count(ck)) {
+        // BP-152: with A1 the fallback reads the frame at the speculative
+        // depth, so a closed frame there was closed by a return that took
+        // nothing off the depth: decided by its closer, as in R10.
+        auto cit = closer_.find(ck);
+        if (cit != closer_.end()) {
+          const Closer& c2 = cit->second;
+          const IObs& ro = c2.obs;
+          bool rpop = ro.p2 && ro.ftb && ro.applied && ro.pop_s >= 0;
+          if (!rpop && !((ro.rep & REP_MISS_POP) && ro.rep_applied)) {
+            if (c2.src == S_NONE)
+              return note(C_RET_PD, k, pc, tgt, o, top, "fb");
+            return note(C_RET_NOPOP, k, pc, tgt, o, top, "fb");
+          }
+        }
+        return note(C_FB_STALE, k, pc, tgt, o, top, "");
+      }
       return note(offp ? C_SNAP_AFTER : rewind ? C_BOS_REWIND : C_CMT_LOST,
                   k, pc, tgt, o, top, "");
     }
@@ -707,9 +854,25 @@ class RasClass {
           last_rst_.cyc, int(last_rst_.pd), int(last_rst_.op_after),
           int(last_rst_.rep), ref_.size(), int(o.cocc.v), o.cocc.inst,
           o.cocc.addr, o.cmt_inst, top.obs.inst);
+      // BP-152: for a fallback, the index read and the commit stack's
+      // top entries, newest first, each with its reference state (L live,
+      // C closed, - not on the path).
+      if (o.pop_empty) {
+        std::fprintf(stderr, "   FB fbi %d n %d csp %d:", int(o.fbi), o.fbn,
+                     int(o.csp));
+        for (int j = 0; j < o.ncstk; j++) {
+          auto it = path_inst_.find(o.cstk_inst[j]);
+          char st = it == path_inst_.end() ? '-'
+                  : live_.count(it->second) ? 'L' : 'C';
+          char pu = pushed_inst_.count(o.cstk_inst[j]) ? 'p' : 'n';
+          std::fprintf(stderr, " %c%c%" PRIx64, st, pu, o.cstk_addr[j]);
+        }
+        std::fprintf(stderr, "\n");
+      }
       if (c == C_EXTRA_DEEP || c == C_EXTRA_OFFPATH || c == C_EXTRA_CLOSED ||
           c == C_OTHER || c == C_POP_EMPTY || c == C_CMT_LOST ||
-          c == C_CMT_NONCALL || c == C_FB_UNCMT)
+          c == C_CMT_NONCALL || c == C_FB_UNCMT || c == C_FB_STALE ||
+          c == C_BOS_REWIND || c == C_SNAP_AFTER)
         for (auto& r : rst_log_)
           if (r.cyc > top.obs.p2_cyc && r.cyc <= o.p2_cyc)
             std::fprintf(stderr, "   RST cyc %" PRIu64 " inst %" PRIu64

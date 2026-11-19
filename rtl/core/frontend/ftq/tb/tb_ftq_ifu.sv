@@ -123,6 +123,14 @@ module tb;
   logic [TRX_SLOT_BITS-1:0]  pd_wr_sel;
   bp_ftq_slot_t              pd_wr_slot;
   logic                      pd_wr_kill;
+  // BP-152, C1: the predecode jump's end and the RAS operation.
+  logic                      pd_wr_pft_val;
+  logic [VA_WIDTH-1:0]       pd_wr_pft;
+  logic                      ras_pd_val;
+  bp_br_type_e               ras_pd_br_type;
+  logic [VA_WIDTH-1:0]       ras_pd_ret_addr;
+  logic                      ras_pd_undo;
+  logic                      pd_ras_wr_val;
   // ftq_entry's placement write (BP-119), idle in this bench.
   logic [FTQ_IDX_BITS-1:0]   j_rsvw_idx [0:NUM_RESOLVE_PORTS-1];
   logic [TRX_SLOT_BITS-1:0]  j_rsv_sel  [0:NUM_RESOLVE_PORTS-1];
@@ -200,6 +208,13 @@ module tb;
     .pd_wr_sel         (pd_wr_sel),
     .pd_wr_slot        (pd_wr_slot),
     .pd_wr_kill        (pd_wr_kill),
+    .pd_wr_pft_val     (pd_wr_pft_val),
+    .pd_wr_pft         (pd_wr_pft),
+    .ras_pd_val        (ras_pd_val),
+    .ras_pd_br_type    (ras_pd_br_type),
+    .ras_pd_ret_addr   (ras_pd_ret_addr),
+    .ras_pd_undo       (ras_pd_undo),
+    .pd_ras_wr_val     (pd_ras_wr_val),
     .pd_redir_val      (pd_redir_val),
     .pd_redir_idx      (pd_redir_idx),
     .pd_redir_pc       (pd_redir_pc),
@@ -266,6 +281,14 @@ module tb;
     .pd_wr_sel           (pd_wr_sel),
     .pd_wr_slot          (pd_wr_slot),
     .pd_wr_kill          (pd_wr_kill),
+    .pd_wr_pft_val       (pd_wr_pft_val),
+    .pd_wr_pft           (pd_wr_pft),
+    .pd_ras_wr_val       (1'b0),
+    .pd_ras_wr_idx       ('0),
+    .pd_ras_wr           ('0),
+    .bkr_clr_val         (1'b0),
+    .bkr_clr_idx         ('0),
+    .bkr_clr_pos         ('0),
     .rsv_wr_val          ('0),
     .rsv_wr_idx          (j_rsvw_idx),
     .rsv_wr_sel          (j_rsv_sel),

@@ -160,27 +160,22 @@ PT_ARG  := $(if $(strip $(PT_MODE)),+PT_MODE=$(strip $(PT_MODE)))
 # Sv57 and Sv57 / Sv57x4, the 512 GiB and 256 TiB pages, ITLB-18).
 # BP-149 added pt_gonly_x4 (G-stage only under Sv57x4, the x4 root's
 # entries at 0x100 and above). BP-150 added sc_nored (an SC reversal at
-# p3 that raises no redirect, TD#205).
+# p3 that raises no redirect, TD#205). BP-151 added ras_fbstale and
+# ras_pdcall as expected fails (FE_XPROGS, TD#207); BP-152 fixed both
+# (A1, C1) and moved them here, removing FE_XPROGS, and added rsv_twores
+# and rsv_trapcall (TD#211 b and a: the commit walk commits only what
+# executed).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             recur t0_uaon deep indir region multistart cross rvc \
             misp_call sc_nored jals fencei cboinval uc_nc uc_io pt_faults_s \
             pt_faults_h \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
-            zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57 pt_gonly_x4
+            zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57 pt_gonly_x4 \
+            ras_fbstale ras_pdcall rsv_twores rsv_trapcall
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
-# BP-151: programs EXPECTED TO FAIL until their cause is ruled (TD#207;
-# tools/known_failures.txt waives each, at both slot counts). Each runs
-# as its own target only: sim_fe_top does not run them, so it stays a
-# gate for FE_PROGS.
-#   ras_fbstale  the commit-stack fallback reads a frame whose return
-#                has popped speculatively and not committed
-#   ras_pdcall   a call only predecode finds is not pushed, and its
-#                commit pushes pft_addr
-FE_XPROGS     := ras_fbstale ras_pdcall
-FE_XPROG_TGTS := $(addprefix sim_fe_top_,$(FE_XPROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \
-        fe_top_bin $(FE_PROG_TGTS) $(FE_XPROG_TGTS) sim_fe_top_init_walk
+        fe_top_bin $(FE_PROG_TGTS) sim_fe_top_init_walk
 
 # The targets share one object directory: build_fe_top and fe_top_bin
 # must never run together under make -j.
@@ -277,7 +272,7 @@ sim_fe_top: build_fe_top
 
 # Each program alone, on sim_fe_top's binary when it is current
 # (fe_top_bin, INFRA-014).
-$(FE_PROG_TGTS) $(FE_XPROG_TGTS): sim_fe_top_%: fe_top_bin
+$(FE_PROG_TGTS): sim_fe_top_%: fe_top_bin
 	@echo "[simulating] $(FE_BIN) $(PT_ARG) +PROG=$*"
 	$(Q)./$(FE_BIN) $(FE_PLUSARGS) $(PT_ARG) +PROG=$*
 
@@ -338,7 +333,7 @@ clean:
 #                       - the compile steps the sim targets run first.
 #   clean, regress_list - housekeeping and this plumbing.
 REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
-                   sim_fe_top_init_walk $(FE_XPROG_TGTS)
+                   sim_fe_top_init_walk
 REGRESS_EXCLUDE := all build_fe_top fe_top_bin clean regress_list
 # BP-149: the targets tools/regress_weekly.sh runs at every PT_MODE.
 # sim_fe_top runs every program, each in its own simulation, so every

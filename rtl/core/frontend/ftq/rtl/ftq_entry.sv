@@ -6,9 +6,12 @@
 // FTQ fast-path entry array (BP-107).
 //
 // Owns bp_ftq_entry_t x FTQ_DEPTH, ftq_entry_formats.md 1 and 2.
-// 232 bits per entry, 64 entries, 14,848 bits ($bits(bp_ftq_entry_t)
-// at two slots; BP-142, the RAS snapshot's recursion count, 4 bits,
-// TD#194; BP-141 it read 228 and 14,592). It is the storage
+// 316 bits per entry at two slots (241 at one), 64 entries, 20,224 bits
+// ($bits(bp_ftq_entry_t), measured by BP-152). BP-152 adds 12 bits, the
+// RAS snapshot's depth and tag (RAS-4): 304 and 19,456 before. Until
+// BP-152 this read 232 bits and 14,848, which was not $bits of the
+// entry (BP-142 had added the recursion count, 4 bits, TD#194, to a
+// 228 that was not either). It is the storage
 // class read EVERY CYCLE, which is why it is its own module and not
 // merged with ftq_status (ftq_decisions.md 7.4).
 //
@@ -33,14 +36,19 @@
 //   p3  slot correction. Same shape, SC direction applied.
 //   pd  predecode correction. ONE slot, from the IFU writeback. The
 //       third correction, later than both and superseding both for
-//       the slot it names.
+//       the slot it names. Since BP-152 (C1) with it pft_addr for a
+//       predecode-found jump and the RAS snapshot after a predecode
+//       call or return.
 //   rsv placement (BP-119). ONE slot per resolution channel: a
 //       resolved branch the entry did not hold, placed by ftq_resolve,
 //       or since BP-121 the resolved branch the entry did hold,
 //       replacing its predicted slot. Architectural and the latest
 //       event for the slot, so it lands last. A slot written taken
-//       or mispredicted clears the slots above it (the executed block
-//       ends there).
+//       or mispredicted clears the slots after it by position (the
+//       executed block ends there; BP-152, TD#211 b).
+//   bkr  the backend redirect clear (BP-152, TD#211 a). A backend
+//       redirect with _self clear clears the slots after its position.
+//       Lands after everything.
 //
 // SAME-INDEX ORDER, resolved here because the array is this
 // module's state: pd > p3 > p2 > allocation on the SLOT array, and
@@ -153,6 +161,27 @@ module ftq_entry (
   input  logic [TRX_SLOT_BITS-1:0]  pd_wr_sel,
   input  bp_ftq_slot_t              pd_wr_slot,
   input  logic                      pd_wr_kill,
+  // BP-152, C1. With the predecode slot: the block's new end, the
+  // corrected jump's pc plus its length, into pft_addr (pd_wr_idx). And
+  // the RAS snapshot after the restore's own operations (the undo of the
+  // block's off-path push, the C1 call or return), into the ras field of
+  // the entry the restore named, pd_ras_wr_idx: the predecode entry, or
+  // the entry of a backend redirect with _self clear.
+  input  logic                      pd_wr_pft_val,
+  input  logic [VA_WIDTH-1:0]       pd_wr_pft,
+  input  logic                      pd_ras_wr_val,
+  input  logic [FTQ_IDX_BITS-1:0]   pd_ras_wr_idx,
+  input  bp_ras_snapshot_t          pd_ras_wr,
+
+  // ---- the backend redirect clear (BP-152, TD#211 a) ---------------
+  // A backend redirect with _self clear names an entry that survives,
+  // and the path leaves it at bkr_clr_pos: every slot after that
+  // position is off the path and is cleared, as a resolved end clears
+  // (ftq_decisions.md 5.4). A trap or a replay at a non-branch has no
+  // resolution to do it.
+  input  logic                      bkr_clr_val,
+  input  logic [FTQ_IDX_BITS-1:0]   bkr_clr_idx,
+  input  logic [FTB_BR_POS_BITS-1:0] bkr_clr_pos,
 
   // ---- placement write, one slot per resolution channel (BP-119) --
   input  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
@@ -164,7 +193,9 @@ module ftq_entry (
   // jump: the block ended there, so its end is the jump's end, which
   // the RAS commit pushes and the FTB update records.
   input  logic [VA_WIDTH-1:0]       rsv_wr_pft  [0:NUM_RESOLVE_PORTS-1],
-  // The written slot ends the executed block: clear the slots above it.
+  // The written slot ends the executed block: clear every slot whose
+  // position is after it (BP-152, TD#211 b: by position, not by slot
+  // index).
   input  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_end,
 
   // ---- reads -------------------------------------------------------
@@ -294,8 +325,9 @@ module ftq_entry (
   // (BP-107, TD#113). The 4c write now replaces pft_addr at p2 with
   // the cluster's corrected fall-through -- the FTB fall-through when
   // the FTB answered, else the p1 value carried forward -- so the
-  // commit reads the corrected value. A predecode correction does not
-  // rewrite pft_addr; that case is not covered here.
+  // commit reads the corrected value. Since BP-152 (C1) a predecode
+  // correction to a taken jump rewrites pft_addr with the jump's own
+  // end (pd_wr_pft), as a resolved taken jump does (rsv_wr_pft).
   always_comb begin : ras_commit_payload
     ras_commit_snapshot = commit_rd_entry.ras;
     ras_commit_ret_addr = commit_rd_entry.pft_addr;
@@ -312,6 +344,68 @@ module ftq_entry (
         ras_commit_br_type = commit_rd_entry.slot[s].br_type;
         ras_commit_val     = commit_step_val;
       end
+    end
+  end
+
+  // -----------------------------------------------------------------
+  // THE CLEARS BY POSITION (BP-152, TD#211). ftq_decisions.md 5.4: the
+  // walk commits only what executed, so every slot after the point the
+  // path leaves the entry is cleared.
+  //   (b) A resolved end (taken or mispredicted) clears every slot whose
+  //       pos is after the resolved branch's pos, whatever its slot
+  //       index. Before BP-152 it cleared the slots above rsv_wr_sel.
+  //       ftq_resolve places a younger resolution of an entry on the
+  //       view of the older's placement, and BP-139 may suppress the
+  //       older's write, so the younger's slot can sit above a slot
+  //       holding a later position: a predecode-placed call below it
+  //       survived and was committed (BP-151, compress_1 idx 15).
+  //   (a) A backend redirect with _self clear clears every slot whose
+  //       pos is after the redirect's pos. Before BP-152 nothing did
+  //       for a trap or replay at a non-branch (BP-151, web_11 idx 7: a
+  //       predecode slot at pos 10, a trap at pos 0).
+  // Each is judged on the slot as this cycle's earlier writes leave it
+  // (the p2, p3 and predecode slot writes and every resolution's slot
+  // write), so a slot another channel writes this cycle at an earlier
+  // position is kept.
+  // -----------------------------------------------------------------
+  logic [NUM_PRED_SLOTS-1:0] w_rsv_clr [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_PRED_SLOTS-1:0] w_bkr_clr;
+
+  function automatic bp_ftq_slot_t f_eff(
+      input logic [FTQ_IDX_BITS-1:0] idx, input int s);
+    bp_ftq_slot_t r;
+    r = r_arr[idx].slot[s];
+    if (p2_wr_val && (p2_wr_idx == idx)) r = p2_wr_slot[s];
+    if (p3_wr_val && (p3_wr_idx == idx)) r = p3_wr_slot[s];
+    if (pd_wr_val && (pd_wr_idx == idx)) begin
+      if (TRX_SLOT_BITS'(s) == pd_wr_sel) begin
+        r = pd_wr_slot;
+      end else if (pd_wr_kill && (TRX_SLOT_BITS'(s) > pd_wr_sel)) begin
+        r.slot_valid = 1'b0;
+        r.taken      = 1'b0;
+      end
+    end
+    for (int q = 0; q < NUM_RESOLVE_PORTS; q++) begin
+      if (rsv_wr_val[q] && (rsv_wr_idx[q] == idx) &&
+          (rsv_wr_sel[q] == TRX_SLOT_BITS'(s)))
+        r = rsv_wr_slot[q];
+    end
+    return r;
+  endfunction
+
+  always_comb begin : clears
+    bp_ftq_slot_t e;
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        e = f_eff(rsv_wr_idx[p], s);
+        w_rsv_clr[p][s] = rsv_wr_val[p] && rsv_wr_end[p] &&
+                          (TRX_SLOT_BITS'(s) != rsv_wr_sel[p]) &&
+                          e.slot_valid && (e.pos > rsv_wr_slot[p].pos);
+      end
+    end
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      e = f_eff(bkr_clr_idx, s);
+      w_bkr_clr[s] = bkr_clr_val && e.slot_valid && (e.pos > bkr_clr_pos);
     end
   end
 
@@ -359,7 +453,9 @@ module ftq_entry (
         end
       end
 
-      // pd: one slot, and the kill of every slot above it.
+      // pd: one slot, and the kill of every slot above it. BP-152 (C1):
+      // the block's end for a predecode-found jump, and the RAS snapshot
+      // after the predecode call or return the RAS applied.
       if (pd_wr_val) begin
         r_arr[pd_wr_idx].slot[pd_wr_sel] <= pd_wr_slot;
         if (pd_wr_kill) begin
@@ -370,14 +466,17 @@ module ftq_entry (
             end
           end
         end
+        if (pd_wr_pft_val) r_arr[pd_wr_idx].pft_addr <= pd_wr_pft;
       end
+      if (pd_ras_wr_val) r_arr[pd_ras_wr_idx].ras <= pd_ras_wr;
 
-      // rsv: the resolved slot, last (see the header). A slot that
-      // resolved TAKEN, or MISPREDICTED (the backend redirects at it and
-      // fetch continues in a new entry), ends the executed block, so
-      // every slot above it is off the path and is cleared, as the
-      // predecode kill does (BP-121): the commit walk then sees only
-      // executed branches.
+      // rsv: the resolved slot, last but for the redirect clear (see the
+      // header). A slot that resolved TAKEN, or MISPREDICTED (the
+      // backend redirects at it and fetch continues in a new entry),
+      // ends the executed block, so every slot after it is off the path
+      // and is cleared, as the predecode kill does (BP-121): the commit
+      // walk then sees only executed branches. By position since BP-152
+      // (TD#211 b, THE CLEARS BY POSITION above).
       for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
         if (rsv_wr_val[p]) begin
           r_arr[rsv_wr_idx[p]].slot[rsv_wr_sel[p]] <= rsv_wr_slot[p];
@@ -386,14 +485,22 @@ module ftq_entry (
               (rsv_wr_slot[p].br_type != NO_BRANCH)) begin
             r_arr[rsv_wr_idx[p]].pft_addr <= rsv_wr_pft[p];
           end
-          if (rsv_wr_end[p]) begin
-            for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-              if (TRX_SLOT_BITS'(s) > rsv_wr_sel[p]) begin
-                r_arr[rsv_wr_idx[p]].slot[s].slot_valid <= 1'b0;
-                r_arr[rsv_wr_idx[p]].slot[s].taken      <= 1'b0;
-              end
-            end
+        end
+      end
+      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+        for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+          if (w_rsv_clr[p][s]) begin
+            r_arr[rsv_wr_idx[p]].slot[s].slot_valid <= 1'b0;
+            r_arr[rsv_wr_idx[p]].slot[s].taken      <= 1'b0;
           end
+        end
+      end
+
+      // The backend redirect clear (BP-152, TD#211 a), last.
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        if (w_bkr_clr[s]) begin
+          r_arr[bkr_clr_idx].slot[s].slot_valid <= 1'b0;
+          r_arr[bkr_clr_idx].slot[s].taken      <= 1'b0;
         end
       end
     end

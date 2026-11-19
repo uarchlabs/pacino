@@ -1596,7 +1596,8 @@ int main(int argc, char** argv) {
         // THE RAS CLASSIFICATION (BP-151): the reference stack, in trace
         // order, and the cause of each mispredicted slot-held return.
         if (r.in.cls == cbp::C_CALL_DIR || r.in.cls == cbp::C_CALL_IND)
-          rcl.commit_call(r.in.pc, r.k, r.pos, r.src, r.in_slot, r.rco);
+          rcl.commit_call(r.in.pc, r.k, r.pos, r.src, r.in_slot, r.rco,
+                          r.in.cls == cbp::C_CALL_IND);
         else if (r.in.cls == cbp::C_RET)
           rcl.commit_ret(r.k, r.in.pc, r.in.target, r.pos, r.src,
                          r.mis && r.in_slot, trap_after, r.rco, 0);
@@ -1855,6 +1856,10 @@ int main(int argc, char** argv) {
   row.push_back({"rc_commit_unexecuted_trap",
                  std::to_string(rcl.n_cmt_unexec_trap)});
   row.push_back({"rc_sentinel_skips", std::to_string(rcl.n_wrap_skip)});
+  // BP-152, C1: the predecode calls and returns applied to the RAS.
+  row.push_back({"rc_pd_push", std::to_string(rcl.n_pd_push)});
+  row.push_back({"rc_pd_pop", std::to_string(rcl.n_pd_pop)});
+  row.push_back({"rc_call_pd_ind", std::to_string(rcl.n_call_pd_ind)});
   // THE OPTIONS (Problem 4): of the returns of a cause, those the commit
   // stack's top (ctop) or its first open frame (cskip) would predict.
   for (int k : {int(rcls::C_FB_STALE), int(rcls::C_STALE), int(rcls::C_WRAP)}) {

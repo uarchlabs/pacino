@@ -18,6 +18,9 @@
 // history checks, the ITLB-invalidate trigger); models_reset, the
 // reset of every model's state; release_reset.
 //
+// BP-152: two knobs, off by default (fe_tb_be_state.svh rsv2, trap_sc):
+// a second resolution port, and a trap with _self clear.
+//
 // CHANGED FROM tb_fe_top.sv:
 // - the WBR line of tb_fe_top's +TRACE is now its be_retire_hook
 // - be_trap_hook is called after a trap's privilege change
@@ -141,7 +144,23 @@
     forever begin
       @(posedge clk);
       // ---- sample at the edge -----------------------------------
-      if (rstn && bkend_ftq_rsv_val[0] && ftq_bkend_rsv_rdy[0]) rq_hd++;
+      // BP-152: a queue entry is done when the port presenting it is
+      // accepted; the head then passes every done entry. With rsv2 clear
+      // only port 0 presents, the head, so this is the head's acceptance
+      // as before.
+      if (rstn && bkend_ftq_rsv_val[0] && ftq_bkend_rsv_rdy[0])
+        rq_done[rq_hd % 256] = 1'b1;
+      if (rstn && rsv2 && (NUM_RESOLVE_PORTS > 1) &&
+          bkend_ftq_rsv_val[RSV_P1] && ftq_bkend_rsv_rdy[RSV_P1]) begin
+        rq_done[rq_p1 % 256] = 1'b1;
+        if (bkend_ftq_rsv_val[0] && ftq_bkend_rsv_rdy[0] &&
+            (bkend_ftq_rsv[0].ftq_idx == bkend_ftq_rsv[RSV_P1].ftq_idx))
+          n_rsv_pair++;
+      end
+      while ((rq_hd != rq_tl) && rq_done[rq_hd % 256]) begin
+        rq_done[rq_hd % 256] = 1'b0;
+        rq_hd++;
+      end
       stop  = 1'b0;
       prsnt = rstn && run_be && dec_ibuf_rdy && !bkend_ftq_redir_val &&
               !mt_pend;
@@ -310,7 +329,8 @@
             // BP-124: a trap taken to S (pt_upriv).
             if (W.ex[ep].npriv >= 0) csr_priv(2'(W.ex[ep].npriv));
             be_trap_hook(ep);
-            redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
+            // BP-152: _self clear with trap_sc (the harness's RC_TRAP).
+            redirect(s.ftq_idx, s.pos, W.ex[ep].target, !trap_sc, RC_TRAP);
             ep++;
             continue;
           end
@@ -327,7 +347,8 @@
             // BP-124: an ecall to S or an sret to U (pt_upriv).
             if (W.ex[ep].npriv >= 0) csr_priv(2'(W.ex[ep].npriv));
             be_trap_hook(ep);
-            redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
+            // BP-152: _self clear with trap_sc (the harness's RC_TRAP).
+            redirect(s.ftq_idx, s.pos, W.ex[ep].target, !trap_sc, RC_TRAP);
             ep++;
             continue;
           end
@@ -460,6 +481,15 @@
       end
       bkend_ftq_rsv_val[0] = (rq_hd != rq_tl);
       bkend_ftq_rsv[0]     = rq[rq_hd % 256];
+      // BP-152, rsv2: port 1 presents the next entry not yet done. Held
+      // until accepted (A4), as port 0 is. Off unless a program sets it.
+      if (NUM_RESOLVE_PORTS > 1) begin
+        rq_p1 = rq_hd + 1;
+        while ((rq_p1 != rq_tl) && rq_done[rq_p1 % 256]) rq_p1++;
+        bkend_ftq_rsv_val[RSV_P1] = rstn && rsv2 && (rq_hd != rq_tl) &&
+                                    (rq_p1 != rq_tl);
+        bkend_ftq_rsv[RSV_P1]     = rq[rq_p1 % 256];
+      end
       dec_ibuf_rdy         = rstn && run_be && !mt_pend &&
                              ((be_rdy_pat == 0) ||
                               ((cyc % be_rdy_pat) == 0));
@@ -522,6 +552,12 @@
     rq_hd        = 0;
     rq_tl        = 0;
     rd_pend      = 1'b0;
+    // BP-152: both knobs off; a program sets them after its reset.
+    rsv2         = 1'b0;
+    trap_sc      = 1'b0;
+    rq_p1        = 0;
+    n_rsv_pair   = 0;
+    for (int i = 0; i < 256; i++) rq_done[i] = 1'b0;
     // BP-123.
     mt_pend       = 1'b0;
     mt_req        = 1'b0;

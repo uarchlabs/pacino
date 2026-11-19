@@ -661,6 +661,23 @@ package bp_defines_pkg;
   localparam int RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES);
   // RAS_COMMIT_PTR_BITS: $clog2(32) = 5
   localparam int RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES);
+  // RAS_DEPTH_BITS (BP-152, A1): the width of the speculative call
+  // depth (in the snapshot) and of the last committed block's copy of
+  // it. Only their difference is read, the count of committed frames
+  // the younger blocks have popped, so both wrap freely. That
+  // difference is bounded by the blocks not yet committed to the RAS,
+  // at most FTQ_DEPTH, each one RAS operation (FE-11), so it lies in
+  // -FTQ_DEPTH .. +FTQ_DEPTH: $clog2(64) + 2 = 8 bits, signed.
+  localparam int RAS_DEPTH_BITS = $clog2(FTQ_DEPTH) + 2;
+  // RAS_TAG_BITS (BP-152, B1): the allocation generation of a
+  // speculative entry, carried by a snapshot for the entry at its TOSR.
+  // A snapshot lives while its block is in the FTQ, so at most
+  // FTQ_DEPTH younger allocations run TOSW past it, and its entry is
+  // reallocated at most once per lap of RAS_SPEC_ENTRIES - 1 slots:
+  // 64 / 15 + 1 = 5 times. The tag must not wrap within that:
+  // $clog2(5) + 1 = 4 bits (16 values).
+  localparam int RAS_TAG_BITS =
+    $clog2(FTQ_DEPTH / (RAS_SPEC_ENTRIES - 1) + 1) + 1;
 
 endpackage : bp_defines_pkg
 

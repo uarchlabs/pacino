@@ -183,6 +183,9 @@ module tb;
   bp_ras_snapshot_t    ras_commit_snapshot;
   logic                ras_flush_val;
   bp_ras_snapshot_t    ras_flush_snapshot;
+  // BP-152, C1: tied off here (no predecode in this testbench); the
+  // RAS unit's C1 cases are in tb_ras.
+  bp_ras_snapshot_t    ras_pd_snapshot;
 
   logic                     ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx;
@@ -316,6 +319,11 @@ module tb;
     .ras_commit_snapshot   (ras_commit_snapshot),
     .ras_flush_val         (ras_flush_val),
     .ras_flush_snapshot    (ras_flush_snapshot),
+    .ras_pd_val            (1'b0),
+    .ras_pd_br_type        (NO_BRANCH),
+    .ras_pd_ret_addr       ('0),
+    .ras_rs_undo           (1'b0),
+    .ras_pd_snapshot       (ras_pd_snapshot),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
     .ftq_rollback_corr     (ftq_rollback_corr),
@@ -4109,6 +4117,11 @@ module tb;
     ras_commit_br_type  = DIRECT_CALL;
     ras_commit_ret_addr = VA_WIDTH'('h00_0000_D440);
     ras_commit_snapshot = '0;
+    // BP-152 A1: the call's block, which operated nothing at p2, carries
+    // the depth the RETURN block's pop left, -1; the fallback then reads
+    // the top (n 0). With dep 0 the stimulus would commit a call the
+    // depth count places before that pop.
+    ras_commit_snapshot.dep = {RAS_DEPTH_BITS{1'b1}};
     #1;
     chk("G7 the cluster admits a DIRECT_CALL commit",
         dut.w_ras_commit_val === 1'b1);
@@ -5796,21 +5809,23 @@ module tb;
     tick();
     req(pc, 6'h07);
     tick();                                   // block 1 at p2
-    chk("CB4 block 1 (a valid p2 block): snapshot {1,2,0,0}",
+    // BP-152: all six fields; dep is the call depth (A1), tag the
+    // generation of the entry at tosr, idx1 allocated once (B1).
+    chk("CB4 block 1 (a valid p2 block): snapshot {1,2,0,0}, dep 1, tag 1",
         (bpu_blk_val_p2 === 1'b1) &&
-        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd0}));
+        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd0, 8'd1, 4'd1}));
     req(VA_WIDTH'('h00_0A48_0000), 6'h08);
     tick();                                   // block 2 at p2
     norq();
-    chk("CB4 block 2, the recursion push: snapshot {1,2,0,1}",
+    chk("CB4 block 2, the recursion push: snapshot {1,2,0,1}, dep 2, tag 1",
         (bpu_blk_val_p2 === 1'b1) &&
-        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1}));
+        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1, 8'd2, 4'd1}));
     tick();                                   // block 3 at p2
     chk("CB4 the RAS holds the count the snapshot carried",
         dut.u_ras.spec_rctr[1] === RAS_RCTR_WIDTH'(1));
-    chk("CB4 block 3, no FTB entry: the current state, rctr 1",
+    chk("CB4 block 3, no FTB entry: the current state, rctr 1, dep 2",
         (bpu_blk_val_p2 === 1'b1) &&
-        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1}));
+        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1, 8'd2, 4'd1}));
 
     // -- CB7. pred_src = PRED_RAS only when the RAS supplies a RETURN or
     //    RETURN_CALL target, and the RAS target is used for those types

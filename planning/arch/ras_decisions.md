@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-18
  CONTACT: Jeff Nye
 ```
 
@@ -458,6 +458,13 @@ the slot B reused, B read empty). Ruled final, session-084 (Jeff);
 TD#189 closed. BP-144 checks the converse of IV1, which that fault
 breaks (12.12).
 
+MEASURED BP-151: the reuse below BOS that PO7 excepts is the second
+cause of return mispredicts in PERF-003's sweep (513 of 543
+mispredicted slot-held returns on media_2 at execute 8, resolve to
+commit 8; 1,320 to 1,611 on infra_1). It is not bounded by the wrap:
+an entry below BOS is reused whenever the allocator passes it, full
+or not. RAS-4 (section 10); BP-152 adds a reuse guard on the links.
+
 Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
 so that empty (TOSR == BOS) is never aliased by a full stack.
@@ -517,6 +524,22 @@ is consumed. BOS likewise advances to the committing entry's
 post-op TOSR (ras_commit_snapshot.tosr), except when that snapshot
 is an empty stack (snapshot TOSR == snapshot BOS): BOS then stays
 (3.2, BP-140).
+
+MEASURED BP-151 (TD#207): THE FALLBACK READS A POPPED FRAME. The
+commit stack is updated only at commit (CO2, CO3), and the fallback
+reads its top, CSP-1 (PO5). When a return pops, speculatively, a
+frame whose call has committed, and a later return finds the
+speculative stack empty (TOSR == BOS), the later return reads that
+frame from the commit stack until the earlier return commits. The
+empty stack is reached by the rules as built: a call committed
+before the next push makes that push bottom (PU1, CO6), and the pop
+of a bottom entry sets TOSR to BOS (PO3). Every rule is met. It is
+85 to 99 percent of the mispredicted slot-held returns at most
+points of PERF-003's sweep (media_2 4,739 of 4,754 at immediate) and
+carries the timing dependence of TD#207: the faster commit runs, the
+more returns depend on the fallback. tb_fe_top ras_fbstale reproduces
+it. RAS-4 (section 10); BP-152 builds a speculative read offset into
+the commit stack (BP-151 option A1).
 
 On commit of a RETURN_CALL: the return rule above, then the push
 rule, applied to the state the return leaves (RAS-DS1: pop first,
@@ -656,6 +679,10 @@ program returns, and on a pop when TOSR == BOS the prediction falls
 through to the commit stack (section 3.2), which is architectural
 state; and BOS advances toward TOSR on every commit (section 3.3).
 Corruption is squeezed, not merely drained.
+CORRECTED session-086: the commit stack is architectural only for
+frames no speculative return has popped. A pop of a committed frame
+is not reflected in it until that return commits, so the fallback can
+read a popped frame (3.3, MEASURED BP-151; RAS-4).
 
 ### 4.4.1  What is still open, and what it is not
 
@@ -907,6 +934,14 @@ implementation phase. RAS-1 may be closed when RTL confirms
 the p2 push timing is sufficient for all call/return
 interleavings.
 
+MEASURED BP-151 (H4): IT IS NOT. A call the FTB does not hold at p2
+and predecode finds is never pushed, and its commit pushes the
+entry's pft_addr, which a predecode correction does not rewrite
+(2,585 to 3,383 of web_11's slot-held return mispredicts; tb_fe_top
+ras_pdcall). A return predecode finds makes no pop (ret_pd, up to 91).
+RAS-1 stays open; BP-152 applies predecode-found calls and returns to
+the RAS (BP-151 option C1).
+
 ---
 
 ## 8. Return Address Value
@@ -1003,6 +1038,15 @@ Commit stack pointer width:
          (fe_decisions.md FE-14). See 4.4.1.
          Do not re-raise from the unread ras_flush_* ports; see
          4.4.2.
+
+  RAS-4: Return mispredicts the rules allow (BP-151, TD#207): the
+         commit-stack fallback after a speculative pop of a
+         committed frame (3.3), the reuse below BOS (3.2), the call
+         and return only predecode finds (7). OPEN. BP-152 builds
+         the fixes (BP-151 options A1, B1, C1) for acceptance. The
+         smaller causes (p3_reach, the snapshot's off-path
+         operations, TD#149's repair, a counted entry at BOS, the
+         wrap) are left: at most 54 per 2e6 run.
 
 ---
 
@@ -1136,7 +1180,8 @@ PO4  A pop writes no ret_addr, nos or bot, and does not move TOSW or
      BOS. PO1's count is its only array write.
 PO5  With TOSR == BOS and the commit count above 0: it returns the
      commit top (CSP-1), valid 1. The commit entry is not consumed
-     and no pointer moves.
+     and no pointer moves. The commit top is read even when an
+     uncommitted pop has consumed it (3.3, MEASURED BP-151; RAS-4).
 PO6  With both stacks empty: ras_pop_valid_p2 = 0. ras_pop_addr_p2
      is not checked when valid is 0.
 PO7  A valid pop returns a chain entry (IV1): never the BOS sentinel
@@ -1475,4 +1520,10 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
 
   2026-11-12  session-085, after BP-145. 12: return addresses are VA_WIDTH
               bits; the value is stated in FE-19 only.
+
+  2026-11-18  session-086, after BP-151. 3.3: the fallback reads a
+              popped frame, the cause of TD#207. 3.2: the reuse below
+              BOS measured. 4.4: "architectural state" corrected. 7:
+              RAS-1 not sufficient for a call only predecode finds.
+              12.5 PO5 noted. 10: RAS-4 opened.
 ```

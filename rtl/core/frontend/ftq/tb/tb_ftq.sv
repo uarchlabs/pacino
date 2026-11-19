@@ -112,6 +112,12 @@ module tb;
   bp_br_type_e              ras_commit_br_type;
   logic [VA_WIDTH-1:0]      ras_commit_ret_addr;
   bp_ras_snapshot_t         ras_commit_snapshot;
+  // BP-152, C1: the predecode RAS operation out, its snapshot back
+  // (no RAS in this bench: the snapshot is driven zero).
+  logic                     ras_pd_val;
+  bp_br_type_e              ras_pd_br_type;
+  logic [VA_WIDTH-1:0]      ras_pd_ret_addr;
+  logic                     ras_rs_undo;
   // Section 8 per-predictor update ports (BP-119, TD#151). The
   // readies are the cluster's per-slot queue readies, held high here.
   // The config group (SYS-001, csr_decisions.md CSR-2): the
@@ -257,6 +263,11 @@ module tb;
     .ras_commit_br_type    (ras_commit_br_type),
     .ras_commit_ret_addr   (ras_commit_ret_addr),
     .ras_commit_snapshot   (ras_commit_snapshot),
+    .ras_pd_val            (ras_pd_val),
+    .ras_pd_br_type        (ras_pd_br_type),
+    .ras_pd_ret_addr       (ras_pd_ret_addr),
+    .ras_rs_undo           (ras_rs_undo),
+    .ras_pd_snapshot       ('0),
     .sc_enable             (fe_cfg.sc_enable),
     .ubtb_upd_u0           (ubtb_upd_u0),
     .lp_upd_valid_p0       (lp_upd_valid_p0),

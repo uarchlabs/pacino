@@ -172,6 +172,15 @@ module ftq (
   output bp_br_type_e                 ras_commit_br_type,
   output logic [VA_WIDTH-1:0]         ras_commit_ret_addr,
   output bp_ras_snapshot_t            ras_commit_snapshot,
+  // BP-152, C1 (ras_decisions.md 7): the call or return only predecode
+  // found, applied by the RAS on this cycle's restore; the post-op
+  // snapshot comes back for the entry (ftq_ifu pd_ras).
+  output logic                        ras_pd_val,
+  output bp_br_type_e                 ras_pd_br_type,
+  output logic [VA_WIDTH-1:0]         ras_pd_ret_addr,
+  // BP-152: with the restore, undo the named block's off-path push.
+  output logic                        ras_rs_undo,
+  input  bp_ras_snapshot_t            ras_pd_snapshot,
 
   // ---- 8. updates, the per-predictor channels (TD#151, BP-119) -----
   // Formed by ftq_upd_conv from the resolved record. The readies are
@@ -352,6 +361,16 @@ module ftq (
   logic [TRX_SLOT_BITS-1:0] w_pd_wr_sel;
   bp_ftq_slot_t             w_pd_wr_slot;
   logic                     w_pd_wr_kill;
+  // BP-152, C1.
+  logic                     w_pd_wr_pft_val;
+  logic [VA_WIDTH-1:0]      w_pd_wr_pft;
+  logic                     w_pd_ras_wr_val;
+  logic                     w_pd_undo;
+  logic                     w_bk_undo;
+  logic                     w_ras_fix_wr_val;
+  // BP-152, TD#211 (a): a backend redirect with _self clear, the entry
+  // it names surviving, clears the entry's slots after its position.
+  logic                     w_bkr_clr_val;
   logic                     w_pd_redir_val;
   logic [FTQ_IDX_BITS-1:0]  w_pd_redir_idx;
   logic [VA_WIDTH-1:0]      w_pd_redir_pc;
@@ -517,6 +536,38 @@ module ftq (
   // corrected (backend_interfaces 5). One derivation, two consumers.
   assign ras_restore_val = ftq_rollback_val;
 
+  // BP-152, TD#211 (a). Every backend redirect but RC_UNSPEC (which
+  // names no instruction) whose entry survives: the path leaves the
+  // entry at the redirect's position. A mispredict's resolution clears
+  // the same slots; a trap or replay at a non-branch has no resolution.
+  assign w_bkr_clr_val = bkend_ftq_redir_val && !bkend_ftq_redir_self &&
+                         (bkend_ftq_redir_cause != RC_UNSPEC);
+
+  // BP-152, the undo of the restored block's own push. The restore
+  // loads the named entry's post-op snapshot (ras_decisions.md 4.2): for
+  // a backend redirect with _self clear that wins, the entry survives
+  // and the path leaves it at the redirect's position, so a taken call
+  // slot after that position is a push the path never made. The RAS
+  // retracts it on the restore (ras_rs_undo), and the snapshot after the
+  // undo is written back into the entry (its later restores and its
+  // commit read it). The predecode arm forms its own (ftq_ifu pd_ras).
+  // A taken return there is not undone: the post-op snapshot holds no
+  // pre-op TOSR (snap_offpath_op, BP-151 E).
+  always_comb begin : bk_undo
+    w_bk_undo = 1'b0;
+    if (ftq_rollback_val && w_arm_win[1] && w_bkr_clr_val) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        if (w_redir_entry.slot[s].slot_valid && w_redir_entry.slot[s].taken &&
+            ((w_redir_entry.slot[s].br_type == DIRECT_CALL) ||
+             (w_redir_entry.slot[s].br_type == INDIRECT_CALL)) &&
+            (w_redir_entry.slot[s].pos > bkend_ftq_redir_pos))
+          w_bk_undo = 1'b1;
+      end
+    end
+  end
+  assign ras_rs_undo       = w_pd_undo | w_bk_undo;
+  assign w_ras_fix_wr_val  = w_pd_ras_wr_val | w_bk_undo;
+
   // -----------------------------------------------------------------
   // ftq_shadow. The four-deep response shadow, 5.6.
   // -----------------------------------------------------------------
@@ -596,6 +647,14 @@ module ftq (
     .pd_wr_sel           (w_pd_wr_sel),
     .pd_wr_slot          (w_pd_wr_slot),
     .pd_wr_kill          (w_pd_wr_kill),
+    .pd_wr_pft_val       (w_pd_wr_pft_val),
+    .pd_wr_pft           (w_pd_wr_pft),
+    .pd_ras_wr_val       (w_ras_fix_wr_val),
+    .pd_ras_wr_idx       (ftq_rollback_idx),
+    .pd_ras_wr           (ras_pd_snapshot),
+    .bkr_clr_val         (w_bkr_clr_val),
+    .bkr_clr_idx         (bkend_ftq_redir_idx),
+    .bkr_clr_pos         (bkend_ftq_redir_pos),
     .rsv_wr_val          (w_rsv_wr_val),
     .rsv_wr_idx          (w_rsv_wr_idx),
     .rsv_wr_sel          (w_rsv_wr_sel),
@@ -742,6 +801,13 @@ module ftq (
     .pd_wr_sel         (w_pd_wr_sel),
     .pd_wr_slot        (w_pd_wr_slot),
     .pd_wr_kill        (w_pd_wr_kill),
+    .pd_wr_pft_val     (w_pd_wr_pft_val),
+    .pd_wr_pft         (w_pd_wr_pft),
+    .ras_pd_val        (ras_pd_val),
+    .ras_pd_br_type    (ras_pd_br_type),
+    .ras_pd_ret_addr   (ras_pd_ret_addr),
+    .ras_pd_undo       (w_pd_undo),
+    .pd_ras_wr_val     (w_pd_ras_wr_val),
     .pd_redir_val      (w_pd_redir_val),
     .pd_redir_idx      (w_pd_redir_idx),
     .pd_redir_pc       (w_pd_redir_pc),

@@ -173,14 +173,25 @@ package bp_structs_pkg;
   // entry (TD#194 option A, ruled session-084, BP-142; 4.1, 4.3).
   // A count below the top is not carried. No push/pop replay needed.
   // It read "Simple circular buffer" until BP-141 (TD#195).
-  // RAS_PTR_BITS = $clog2(16) = 4b, RAS_RCTR_WIDTH = 4b.
-  // Total snapshot = 3 * 4 + 4 = 16b (12b before BP-142).
+  // BP-152 adds two fields:
+  //   dep  the speculative call depth after the block (A1). The
+  //        commit-stack fallback reads the committed frame at that
+  //        depth: CSP-1-n, n = the last committed block's dep - dep.
+  //   tag  the allocation generation of the entry at tosr, 0 when
+  //        tosr == bos (B1). A restore whose entry has been reallocated
+  //        since reads the stack empty.
+  // RAS_PTR_BITS = $clog2(16) = 4b, RAS_RCTR_WIDTH = 4b,
+  // RAS_DEPTH_BITS = 8b, RAS_TAG_BITS = 4b.
+  // Total snapshot = 3 * 4 + 4 + 8 + 4 = 28b (16b before BP-152, 12b
+  // before BP-142).
   // See planning/arch/ras_decisions.md section 4.
   typedef struct packed {
     logic [RAS_PTR_BITS-1:0]   tosr; // top-of-stack read pointer
     logic [RAS_PTR_BITS-1:0]   tosw; // top-of-stack write pointer
     logic [RAS_PTR_BITS-1:0]   bos;  // bottom-of-stack pointer
     logic [RAS_RCTR_WIDTH-1:0] rctr; // count of the entry at tosr
+    logic [RAS_DEPTH_BITS-1:0] dep;  // speculative call depth (BP-152)
+    logic [RAS_TAG_BITS-1:0]   tag;  // generation of the tosr entry
   } bp_ras_snapshot_t;
 
 //  // SC (Statistical Corrector) predictor metadata.

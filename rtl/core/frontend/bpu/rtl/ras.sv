@@ -35,6 +35,42 @@
 // Empty is TOSR == BOS, and BP-138 keeps it exact when a commit moves
 // BOS: see THE BOTTOM below.
 //
+// BP-152 (RAS-4, TD#207), three rules, each for acceptance:
+//   A1  THE FALLBACK READS THE COMMITTED FRAME AT THE SPECULATIVE DEPTH.
+//       dsp is the speculative path's call depth: a push adds one, a pop
+//       takes one, whatever the stack does with it; it is carried in the
+//       snapshot as dep and restored. dcm is the dep of the last block
+//       the RAS committed (ras_commit_snapshot.dep), the depth the
+//       commit stack's top stands at in the same count. n = dcm - dsp is
+//       the number of committed frames the blocks after it have popped
+//       and not committed. The fallback reads CSP-1-n; before BP-152 it
+//       read CSP-1, the frame such a pop had already consumed
+//       (fb_stale_top, BP-151). With n below 0 (the speculative path
+//       deeper than the committed one, which only the wrap leaves empty)
+//       it reads CSP-1 as before; with n at or above the count the frame
+//       is gone and the pop is not valid. dcm is taken from the snapshot
+//       rather than counted at commit, so a call or return that commits
+//       without having operated at p2 (one the FTB did not give) cannot
+//       leave the two depths apart for good.
+//   B1  A LINK NEVER NAMES A REUSED ENTRY. An allocation at index a
+//       makes bottom every other entry whose link names a, so its pop
+//       goes to BOS and falls back (A1); before BP-152 it followed the
+//       link into the reusing push (stale_below_bos, BP-151). A push
+//       whose allocation lands on the TOSR entry itself is bottom. Each
+//       entry carries an allocation generation (spec_gen); the snapshot
+//       carries the generation of its TOSR entry (tag), and a restore,
+//       or a p3 undo, to a TOSR entry reallocated since reads empty.
+//       So TOSR == BOS stays the whole empty test (IV1).
+//   C1  ras_pd_*: the operation of a call or return only predecode
+//       found, applied on top of the restore of the predecode redirect
+//       that corrects its block (ras_decisions.md 7). The post-op
+//       snapshot goes back to the FTQ on ras_pd_snapshot.
+//   ras_rs_undo: a restore whose block's snapshot holds a push the
+//       redirect shows off the path (it leaves the block before the
+//       call) retracts that push first. With C1 every predecode call is
+//       in its block's snapshot, so a conditional before it resolved
+//       taken, or a trap before it, would otherwise keep it.
+//
 // See planning/arch/ras_decisions.md and
 // planning/interfaces/ras_interfaces.md.
 // ===================================================================
@@ -82,7 +118,26 @@ module ras (
   // ---- flush (redundant, read by nothing; RAS-3 CLOSED: a flush is a
   //      redirect and takes the pointer restore, ras_decisions.md 4.4)
   input  logic                ras_flush_val,
-  input  bp_ras_snapshot_t    ras_flush_snapshot
+  input  bp_ras_snapshot_t    ras_flush_snapshot,
+
+  // ---- C1, the predecode operation (BP-152) -------------------------
+  // Read only with ras_restore_val: the restore is the predecode
+  // redirect's, and its block holds a call or return that predecode
+  // found and the RAS did not operate at p2. The type names the
+  // operation (a call pushes ras_pd_ret_addr, the instruction's own pc
+  // plus its length; a return pops; RETURN_CALL both), applied to the
+  // restored state. ras_pd_snapshot is the state after it, for the FTQ
+  // entry of the block. Driven every cycle from ras_restore_snapshot.
+  input  logic                ras_pd_val,
+  input  bp_br_type_e         ras_pd_br_type,
+  input  logic [VA_WIDTH-1:0] ras_pd_ret_addr,
+  // Read only with ras_restore_val (BP-152): the restored block's own
+  // push is off the path (the redirect leaves the block before the call
+  // its snapshot holds), so it is undone first, as the p3 undo-push
+  // retracts the top. Then the C1 operation, if any. ras_pd_snapshot is
+  // the state after both.
+  input  logic                ras_rs_undo,
+  output bp_ras_snapshot_t    ras_pd_snapshot
 );
 
   // -----------------------------------------------------------------
@@ -111,6 +166,19 @@ module ras (
   // order, which is the order the scan makes them.
   localparam int RAS_WR_PER_SLOT = 2;
   localparam int RAS_WR_PORTS    = 2 * NUM_PRED_SLOTS * RAS_WR_PER_SLOT;
+  // The restore cycle's writes (BP-152): port 0 the count of the
+  // snapshot's top (RE6), port 1 the undo of the block's push, ports 2
+  // and 3 the C1 pop and push, in that order.
+  localparam int RS_WR_PORTS     = 4;
+  localparam int RS_P_UNDO       = 1;
+  localparam int RS_P_POP        = 2;
+  localparam int RS_P_PUSH       = 3;
+
+  localparam logic [RAS_PTR_BITS-1:0]   PTR_ONE  = RAS_PTR_BITS'(1);
+  localparam logic [RAS_RCTR_WIDTH-1:0] RCTR_ONE = RAS_RCTR_WIDTH'(1);
+  localparam logic [RAS_DEPTH_BITS-1:0] DEP_ONE  = RAS_DEPTH_BITS'(1);
+  localparam logic [RAS_TAG_BITS-1:0]   TAG_ONE  = RAS_TAG_BITS'(1);
+  localparam int RAS_COMMIT_CNT_BITS = RAS_COMMIT_PTR_BITS + 1;
 
   // -----------------------------------------------------------------
   // Register-file storage and pointers
@@ -124,8 +192,13 @@ module ras (
   logic [RAS_PTR_BITS-1:0]   spec_nos      [0:RAS_SPEC_ENTRIES-1];
   // Bottom (BP-138): the entry was pushed onto an empty stack, or by
   // the sentinel skip, so nothing speculative lies below it. A pop
-  // that removes it sets TOSR to BOS as it is then, not to nos.
+  // that removes it sets TOSR to BOS as it is then, not to nos. Since
+  // BP-152 also set when the entry its link names is reallocated (B1).
   logic                      spec_bot      [0:RAS_SPEC_ENTRIES-1];
+  // Allocation generation (BP-152, B1): advanced each time the index is
+  // allocated, so a snapshot (tag) or a p3 undo that names the index
+  // can tell whether the entry is still the one it named.
+  logic [RAS_TAG_BITS-1:0]   spec_gen      [0:RAS_SPEC_ENTRIES-1];
 
   // No recursion count on the commit stack: each committed call is its
   // own entry (BP-133, TD#79). The commit_rctr field, written zero and
@@ -139,8 +212,12 @@ module ras (
   // Commit-stack occupancy, 0 to RAS_COMMIT_ENTRIES (BP-126, TD#121).
   // CSP alone wraps to 0 on the 32nd push and could not tell a full
   // stack from an empty one. Empty is c_cnt == 0.
-  localparam int RAS_COMMIT_CNT_BITS = RAS_COMMIT_PTR_BITS + 1;
   logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt;
+  // The call depths (BP-152, A1): the speculative path's, and the dep of
+  // the last block the RAS committed. Free running; only dcm - dsp is
+  // read.
+  logic [RAS_DEPTH_BITS-1:0]      dsp;
+  logic [RAS_DEPTH_BITS-1:0]      dcm;
 
   // Registered "reset complete": low in the first cycle after reset,
   // high after. Read by observers only (tb_fe_top, examples/fe_demo).
@@ -157,7 +234,10 @@ module ras (
   logic [VA_WIDTH-1:0] p3_fallthr_q [0:NUM_PRED_SLOTS-1];
   // TOSR before the slot's p2 operation. Read to undo a pop, alone or
   // as the first half of a whole RETURN_CALL (see the repair pass).
+  // With it the generation of the entry there (BP-152, B1): an undo to
+  // an entry reallocated since reads empty.
   logic [RAS_PTR_BITS-1:0] p3_pre_tosr_q [0:NUM_PRED_SLOTS-1];
+  logic [RAS_TAG_BITS-1:0] p3_pre_tag_q  [0:NUM_PRED_SLOTS-1];
   // The stack was empty before the slot's p2 operation (BP-138). An
   // undo then restores TOSR to BOS as it is at the undo, which a commit
   // may have moved since p2, rather than to the registered TOSR.
@@ -179,34 +259,55 @@ module ras (
   logic [RAS_PTR_BITS-1:0] p3_inc_ptr_q  [0:NUM_PRED_SLOTS-1];
 
   // -----------------------------------------------------------------
-  // Commit-stack top (read-only fallback for empty speculative pops)
-  // CSP is a free pointer: top entry is at CSP-1. Empty is the count
-  // at zero, not CSP == 0, which a full stack also reaches (TD#121).
-  // Reads csp/commit_ret_addr (FF outputs) -> nba_sequent.
+  // THE COMMIT-STACK FALLBACK (A1, BP-152). The committed frame at the
+  // speculative depth d: CSP-1-n with n = dcm - d. CSP is a free
+  // pointer, so the top is at CSP-1. Empty is the count at zero, not
+  // CSP == 0, which a full stack also reaches (TD#121). Reads csp,
+  // c_cnt, dcm and commit_ret_addr (FF outputs) -> nba_sequent.
   // -----------------------------------------------------------------
-  logic                           commit_top_valid;
-  logic [RAS_COMMIT_PTR_BITS-1:0] commit_top_idx;
-  logic [VA_WIDTH-1:0]            commit_top_addr;
+  typedef struct packed {
+    logic                           valid;
+    logic [RAS_COMMIT_PTR_BITS-1:0] idx;
+    logic [VA_WIDTH-1:0]            addr;
+  } ras_fb_t;
 
-  always_comb begin
-    commit_top_valid = (c_cnt != '0);
-    commit_top_idx   = csp - {{(RAS_COMMIT_PTR_BITS-1){1'b0}}, 1'b1};
-    commit_top_addr  = commit_ret_addr[commit_top_idx];
-  end
+  function automatic ras_fb_t f_fb(input logic [RAS_DEPTH_BITS-1:0] d);
+    ras_fb_t                   r;
+    logic [RAS_DEPTH_BITS-1:0] n;
+    n = dcm - d;
+    if (n[RAS_DEPTH_BITS-1]) begin
+      // The speculative path is deeper than the committed one: no
+      // committed frame has been popped. The top, as before BP-152.
+      r.valid = (c_cnt != '0);
+      r.idx   = csp - RAS_COMMIT_PTR_BITS'(1);
+    end else if (n < RAS_DEPTH_BITS'(c_cnt)) begin
+      r.valid = 1'b1;
+      r.idx   = csp - RAS_COMMIT_PTR_BITS'(1) - RAS_COMMIT_PTR_BITS'(n);
+    end else begin
+      // Every committed frame the stack holds has been popped, or the
+      // frame was lost to a full commit stack's overwrite.
+      r.valid = 1'b0;
+      r.idx   = csp - RAS_COMMIT_PTR_BITS'(1);
+    end
+    r.addr = commit_ret_addr[r.idx];
+    return r;
+  endfunction
 
   // -----------------------------------------------------------------
   // p0 TOS read. Both slots present the same combinational TOS value.
-  // Source: speculative top when non-empty, else commit-stack top.
+  // Source: speculative top when non-empty, else the commit-stack
+  // fallback at the current speculative depth (A1).
   // -----------------------------------------------------------------
   logic                spec_top_valid_p0;
   logic [VA_WIDTH-1:0] p0_tos_addr;
   logic                p0_tos_valid;
+  ras_fb_t             p0_fb;
 
   always_comb begin
     spec_top_valid_p0 = (tosr != bos);
-    p0_tos_addr  = spec_top_valid_p0 ? spec_ret_addr[tosr]
-                                     : commit_top_addr;
-    p0_tos_valid = spec_top_valid_p0 | commit_top_valid;
+    p0_fb        = f_fb(dsp);
+    p0_tos_addr  = spec_top_valid_p0 ? spec_ret_addr[tosr] : p0_fb.addr;
+    p0_tos_valid = spec_top_valid_p0 | p0_fb.valid;
   end
 
   // Per-slot fan-out of the shared p0 read (named generate block).
@@ -261,6 +362,17 @@ module ras (
   // first). Before BP-119 3'b111 was a no-op here and at commit
   // (TD-DCD-2).
   //
+  // THE DEPTH (A1, BP-152). The working state carries dsp. Each
+  // operation moves it by its logical effect, not by what the stack
+  // did: a push adds one whether it allocated, matched a count or met
+  // a saturated one; a pop takes one whether it read the stack or the
+  // fallback, valid or not. A repair reverses or applies the same.
+  //
+  // THE KILL (B1, BP-152). st_push allocating index a sets kl for every
+  // other entry whose link names a; the sequential block makes those
+  // entries bottom. The scan records each allocation (al_v, al_n) so a
+  // second allocation in the same scan reads the links as they stand.
+  //
   // THE BOTTOM (BP-138, D2). Empty is TOSR == BOS, and a commit moves
   // BOS to the committing block's post-op TOSR. Before BP-138 nothing
   // moved TOSR with it, so a commit could leave TOSR != BOS on a slot no
@@ -298,13 +410,20 @@ module ras (
   typedef struct packed {
     logic [RAS_PTR_BITS-1:0]   tosr;
     logic [RAS_PTR_BITS-1:0]   tosw;
+    // The BOS the working state is judged against: the flop in the
+    // scan, the snapshot's in the restore scan (BP-152).
+    logic [RAS_PTR_BITS-1:0]   bos;
+    logic [RAS_DEPTH_BITS-1:0] dsp;      // A1
+    logic [RAS_TAG_BITS-1:0]   ttag;     // B1: generation at TOSR
     logic [VA_WIDTH-1:0]       top_addr;
     logic [RAS_RCTR_WIDTH-1:0] top_rctr;
     logic [RAS_PTR_BITS-1:0]   top_nos;
     logic                      top_bot;
     logic                      valid;
-    // The array write the last primitive made, if any.
+    // The array write the last primitive made, if any, and whether it
+    // allocated (BP-152: an allocation advances the generation).
     logic                      we;
+    logic                      wal;
     logic [RAS_PTR_BITS-1:0]   waddr;
     logic [VA_WIDTH-1:0]       wdata_a;
     logic [RAS_RCTR_WIDTH-1:0] wdata_r;
@@ -319,27 +438,39 @@ module ras (
     // count from the array (tb_ras TC-62).
     logic [RAS_SPEC_ENTRIES-1:0]                     cw_v;
     logic [RAS_SPEC_ENTRIES-1:0][RAS_RCTR_WIDTH-1:0] cw_r;
+    // B1 (BP-152): the indices this scan allocated, with the links it
+    // wrote there, and the entries whose link it killed.
+    logic [RAS_SPEC_ENTRIES-1:0]                     al_v;
+    logic [RAS_SPEC_ENTRIES-1:0][RAS_PTR_BITS-1:0]   al_n;
+    logic [RAS_SPEC_ENTRIES-1:0]                     kl;
   } ras_ws_t;
 
-  localparam logic [RAS_PTR_BITS-1:0]   PTR_ONE  = RAS_PTR_BITS'(1);
-  localparam logic [RAS_RCTR_WIDTH-1:0] RCTR_ONE = RAS_RCTR_WIDTH'(1);
+  // The generation of index i as this scan leaves it: one more than the
+  // array's when the scan allocated it (at most one allocation per
+  // index per scan: four allocations at most, fewer than a lap).
+  function automatic logic [RAS_TAG_BITS-1:0] f_gen(
+      input ras_ws_t w, input logic [RAS_PTR_BITS-1:0] i);
+    return w.al_v[i] ? (spec_gen[i] + TAG_ONE) : spec_gen[i];
+  endfunction
 
   // Reload the working top from the array at the working TOSR. TOSR
   // equal to BOS is empty.
   function automatic ras_ws_t st_load(input ras_ws_t w);
     ras_ws_t r;
     r = w;
-    if (r.tosr != bos) begin
+    if (r.tosr != r.bos) begin
       r.top_addr = spec_ret_addr[r.tosr];
       r.top_rctr = r.cw_v[r.tosr] ? r.cw_r[r.tosr] : spec_rctr[r.tosr];
       r.top_nos  = spec_nos[r.tosr];
-      r.top_bot  = spec_bot[r.tosr];
+      r.top_bot  = spec_bot[r.tosr] | r.kl[r.tosr];
+      r.ttag     = f_gen(r, r.tosr);
       r.valid    = 1'b1;
     end else begin
       r.top_addr = '0;
       r.top_rctr = '0;
       r.top_nos  = '0;
       r.top_bot  = 1'b0;
+      r.ttag     = '0;
       r.valid    = 1'b0;
     end
     return r;
@@ -357,10 +488,30 @@ module ras (
     return r;
   endfunction
 
+  // B1: index a is being allocated. Every other entry whose link names
+  // a now names a reused entry: kill its link (it becomes bottom). The
+  // link of an entry this scan allocated is the one it wrote. The new
+  // entry's own link is wdata_n, recorded here.
+  function automatic ras_ws_t st_kill(input ras_ws_t w,
+                                      input logic [RAS_PTR_BITS-1:0] a);
+    ras_ws_t                 r;
+    logic [RAS_PTR_BITS-1:0] nj;
+    r = w;
+    for (int j = 0; j < RAS_SPEC_ENTRIES; j++) begin
+      nj = r.al_v[j] ? r.al_n[j] : spec_nos[j];
+      if ((RAS_PTR_BITS'(j) != a) && (nj == a)) r.kl[j] = 1'b1;
+    end
+    r.kl[a]   = 1'b0;
+    r.al_v[a] = 1'b1;
+    r.al_n[a] = r.wdata_n;
+    return r;
+  endfunction
+
   function automatic ras_ws_t st_retract(input ras_ws_t w);
     ras_ws_t r;
-    r    = w;
-    r.we = 1'b0;
+    r     = w;
+    r.we  = 1'b0;
+    r.wal = 1'b0;
     if (r.valid) begin
       if (r.top_rctr != '0) begin
         // Recursion outstanding: decrement the count, TOSR holds.
@@ -374,8 +525,9 @@ module ras (
       end else begin
         // TOSR follows the link to the entry below, no data
         // overwritten. Before BP-120: TOSR - 1. A bottom entry goes to
-        // BOS as it is now, empty (BP-138).
-        r.tosr = r.top_bot ? bos : r.top_nos;
+        // BOS as it is now, empty (BP-138), and so does one whose link
+        // was killed (B1).
+        r.tosr = r.top_bot ? r.bos : r.top_nos;
         r      = st_load(r);
       end
     end
@@ -389,14 +541,17 @@ module ras (
   // only decremented a recursion count held TOSR, so this restores the
   // same TOSR; the count is put back by st_rctr_adj (BP-133, TD #78;
   // before BP-133 it stayed decremented). A pop that began on an empty
-  // stack restores BOS as it is now (BP-138).
+  // stack restores BOS as it is now (BP-138), and so does one whose
+  // pre-op entry has been reallocated since (B1, the generation).
   function automatic ras_ws_t st_restore(
       input ras_ws_t w, input logic [RAS_PTR_BITS-1:0] pre_tosr,
-      input logic pre_empty);
+      input logic [RAS_TAG_BITS-1:0] pre_tag, input logic pre_empty);
     ras_ws_t r;
     r      = w;
     r.we   = 1'b0;
-    r.tosr = pre_empty ? bos : pre_tosr;
+    r.wal  = 1'b0;
+    r.tosr = (pre_empty || (f_gen(r, pre_tosr) != pre_tag)) ? r.bos
+                                                            : pre_tosr;
     r      = st_load(r);
     return r;
   endfunction
@@ -412,8 +567,9 @@ module ras (
       input logic inc);
     ras_ws_t                   r;
     logic [RAS_RCTR_WIDTH-1:0] c;
-    r    = w;
-    r.we = 1'b0;
+    r     = w;
+    r.we  = 1'b0;
+    r.wal = 1'b0;
     if (r.valid && (ptr == r.tosr)) begin
       c         = r.top_rctr;
       r.wdata_a = r.top_addr;
@@ -423,7 +579,7 @@ module ras (
       c         = r.cw_v[ptr] ? r.cw_r[ptr] : spec_rctr[ptr];
       r.wdata_a = spec_ret_addr[ptr];
       r.wdata_n = spec_nos[ptr];
-      r.wdata_b = spec_bot[ptr];
+      r.wdata_b = spec_bot[ptr] | r.kl[ptr];
     end
     if (inc ? (c != RCTR_MAX) : (c != '0)) begin
       r.we      = 1'b1;
@@ -441,8 +597,11 @@ module ras (
                                       input logic                recur);
     ras_ws_t                 r;
     logic [RAS_PTR_BITS-1:0] alloc;
-    r  = w;
-    r.we = 1'b1;
+    logic                    skip;
+    logic                    self;
+    r     = w;
+    r.we  = 1'b1;
+    r.wal = 1'b0;
     if (recur & r.valid & (ft == r.top_addr)) begin
       // Recursion: increment rctr at TOSR, saturate, no advance.
       r.waddr    = r.tosr;
@@ -469,18 +628,27 @@ module ras (
       //
       // Both cases, the empty stack and the skip, link to BOS and mark
       // the entry bottom (BP-138): its pop returns to BOS as it is then.
-      alloc      = (r.tosw == bos) ? (r.tosw + PTR_ONE) : r.tosw;
+      // So does an allocation that lands on the TOSR entry itself (B1,
+      // BP-152): TOSR below BOS, the allocator round to it. The entry
+      // being overwritten is the one the link would name, so the new
+      // entry has nothing below it; before BP-152 it linked to itself.
+      skip       = (r.tosw == r.bos);
+      alloc      = skip ? (r.tosw + PTR_ONE) : r.tosw;
+      self       = r.valid & (alloc == r.tosr);
+      r.wal      = 1'b1;
       r.waddr    = alloc;
       r.wdata_a  = ft;
       r.wdata_r  = '0;
-      r.wdata_n  = (r.tosw == bos) ? bos : r.tosr;
-      r.wdata_b  = (r.tosw == bos) | ~r.valid;
+      r.wdata_n  = (skip | self) ? r.bos : r.tosr;
+      r.wdata_b  = skip | self | ~r.valid;
+      r          = st_kill(r, alloc);
       r.tosr     = alloc;
       r.tosw     = alloc + PTR_ONE;
       r.top_addr = ft;
       r.top_rctr = '0;
       r.top_nos  = r.wdata_n;
       r.top_bot  = r.wdata_b;
+      r.ttag     = f_gen(r, alloc);
       r.valid    = 1'b1;
     end
     r = st_note(r);
@@ -489,12 +657,17 @@ module ras (
 
   logic [RAS_PTR_BITS-1:0]   nxt_tosr;
   logic [RAS_PTR_BITS-1:0]   nxt_tosw;
+  logic [RAS_DEPTH_BITS-1:0] nxt_dsp;
+  logic [RAS_SPEC_ENTRIES-1:0] nxt_kl;
   // The state after the repair pass alone, for a cycle whose p2 pass
   // is dropped (ras_p2_keep low).
   logic [RAS_PTR_BITS-1:0]   rep_tosr;
   logic [RAS_PTR_BITS-1:0]   rep_tosw;
+  logic [RAS_DEPTH_BITS-1:0] rep_dsp;
+  logic [RAS_SPEC_ENTRIES-1:0] rep_kl;
 
   logic                      sp_we      [0:RAS_WR_PORTS-1];
+  logic                      sp_al      [0:RAS_WR_PORTS-1];
   logic [RAS_PTR_BITS-1:0]   sp_waddr   [0:RAS_WR_PORTS-1];
   logic [VA_WIDTH-1:0]       sp_wdata_a [0:RAS_WR_PORTS-1];
   logic [RAS_RCTR_WIDTH-1:0] sp_wdata_r [0:RAS_WR_PORTS-1];
@@ -503,14 +676,19 @@ module ras (
 
   logic [1:0]                p2_op       [0:NUM_PRED_SLOTS-1];
   logic [RAS_PTR_BITS-1:0]   p2_pre_tosr [0:NUM_PRED_SLOTS-1];
+  logic [RAS_TAG_BITS-1:0]   p2_pre_tag  [0:NUM_PRED_SLOTS-1];
   logic                      p2_pre_empty[0:NUM_PRED_SLOTS-1];
   logic                      p2_pop_dec  [0:NUM_PRED_SLOTS-1];
   logic                      p2_push_inc [0:NUM_PRED_SLOTS-1];
   logic                      p2_push_sat [0:NUM_PRED_SLOTS-1];
   logic [RAS_PTR_BITS-1:0]   p2_inc_ptr  [0:NUM_PRED_SLOTS-1];
+  // The fallback a p2 pop on an empty stack read (A1): the commit-stack
+  // index and n. Observation only (perf ras_class.h).
+  logic [RAS_COMMIT_PTR_BITS-1:0] p2_fb_idx [0:NUM_PRED_SLOTS-1];
 
   always_comb begin : scan
     ras_ws_t w;
+    ras_fb_t fb;
     int      n;       // writes made so far by this slot in this pass
     int      pi;      // write port index
     logic    s3_pop;
@@ -530,19 +708,27 @@ module ras (
     q_push   = 1'b0;
     is_pop   = 1'b0;
     is_push  = 1'b0;
+    fb       = '0;
     nxt_tosr = tosr;
     nxt_tosw = tosw;
+    nxt_dsp  = dsp;
+    nxt_kl   = '0;
     rep_tosr = tosr;
     rep_tosw = tosw;
+    rep_dsp  = dsp;
+    rep_kl   = '0;
 
     // Working state from the FF pointers.
     w      = '0;
     w.tosr = tosr;
     w.tosw = tosw;
+    w.bos  = bos;
+    w.dsp  = dsp;
     w      = st_load(w);
 
     for (int p = 0; p < RAS_WR_PORTS; p++) begin
       sp_we[p]      = 1'b0;
+      sp_al[p]      = 1'b0;
       sp_waddr[p]   = '0;
       sp_wdata_a[p] = '0;
       sp_wdata_r[p] = '0;
@@ -555,11 +741,13 @@ module ras (
       ras_snapshot_p2[s]  = '0;
       p2_op[s]            = OP_NONE;
       p2_pre_tosr[s]      = '0;
+      p2_pre_tag[s]       = '0;
       p2_pre_empty[s]     = 1'b0;
       p2_pop_dec[s]       = 1'b0;
       p2_push_inc[s]      = 1'b0;
       p2_push_sat[s]      = 1'b0;
       p2_inc_ptr[s]       = '0;
+      p2_fb_idx[s]        = '0;
     end
 
     // -------- p3 repair pass (corrects the prior cycle's op) -------
@@ -584,6 +772,10 @@ module ras (
     // of a push that met a saturated count does nothing, as the push
     // did nothing (BP-134).
     //
+    // The depth (A1) is moved by each component: an undo-push takes
+    // one, an undo-pop adds one, a missed pop takes one, a missed push
+    // adds one, the undo of a whole RETURN_CALL none.
+    //
     // A RETURN_CALL PAIRED AT THE OTHER STAGE WITH A PLAIN PUSH OR POP
     // is not specified (ras_decisions.md 1). It takes the per-component
     // steps below. p2 RETURN_CALL / p3 pop undoes the push (the link
@@ -607,8 +799,8 @@ module ras (
       n       = 0;
 
       if (q_pop & q_push & ~s3_pop & ~s3_push) begin
-        w.tosr = p3_pre_empty_q[s] ? bos : p3_pre_tosr_q[s];
-        w      = st_load(w);
+        w = st_restore(w, p3_pre_tosr_q[s], p3_pre_tag_q[s],
+                       p3_pre_empty_q[s]);
         if (p3_pop_dec_q[s] != p3_push_inc_q[s]) begin
           w = p3_pop_dec_q[s] ? st_rctr_adj(w, p3_pre_tosr_q[s], 1'b1)
                               : st_rctr_adj(w, p3_inc_ptr_q[s], 1'b0);
@@ -625,23 +817,29 @@ module ras (
       end else begin
         // Undo a push the p3 type does not have. Skipped when the push
         // met a saturated count and changed nothing: st_retract would
-        // decrement a count the push did not raise (BP-134).
-        if (q_push & ~s3_push & ~p3_push_sat_q[s]) begin
-          w = st_retract(w);
-          if (w.we) begin
-            pi             = (s * RAS_WR_PER_SLOT) + n;
-            sp_we[pi]      = 1'b1;
-            sp_waddr[pi]   = w.waddr;
-            sp_wdata_a[pi] = w.wdata_a;
-            sp_wdata_r[pi] = w.wdata_r;
-            sp_wdata_n[pi] = w.wdata_n;
-            sp_wdata_b[pi] = w.wdata_b;
-            n              = n + 1;
+        // decrement a count the push did not raise (BP-134). The depth
+        // is taken back either way.
+        if (q_push & ~s3_push) begin
+          w.dsp = w.dsp - DEP_ONE;
+          if (~p3_push_sat_q[s]) begin
+            w = st_retract(w);
+            if (w.we) begin
+              pi             = (s * RAS_WR_PER_SLOT) + n;
+              sp_we[pi]      = 1'b1;
+              sp_waddr[pi]   = w.waddr;
+              sp_wdata_a[pi] = w.wdata_a;
+              sp_wdata_r[pi] = w.wdata_r;
+              sp_wdata_n[pi] = w.wdata_n;
+              sp_wdata_b[pi] = w.wdata_b;
+              n              = n + 1;
+            end
           end
         end
         // Undo a pop the p3 type does not have, or apply a missed one.
         if (q_pop & ~s3_pop) begin
-          w = st_restore(w, p3_pre_tosr_q[s], p3_pre_empty_q[s]);
+          w.dsp = w.dsp + DEP_ONE;
+          w = st_restore(w, p3_pre_tosr_q[s], p3_pre_tag_q[s],
+                         p3_pre_empty_q[s]);
           if (p3_pop_dec_q[s]) begin
             w = st_rctr_adj(w, p3_pre_tosr_q[s], 1'b1);
             if (w.we && (n < RAS_WR_PER_SLOT)) begin
@@ -656,6 +854,7 @@ module ras (
             end
           end
         end else if (~q_pop & s3_pop) begin
+          w.dsp = w.dsp - DEP_ONE;
           w = st_retract(w);
           if (w.we && (n < RAS_WR_PER_SLOT)) begin
             pi             = (s * RAS_WR_PER_SLOT) + n;
@@ -670,10 +869,12 @@ module ras (
         end
         // Apply a missed push: allocate the registered fall-through.
         if (~q_push & s3_push) begin
+          w.dsp = w.dsp + DEP_ONE;
           w = st_push(w, p3_fallthr_q[s], 1'b0);
           if (n < RAS_WR_PER_SLOT) begin
             pi             = (s * RAS_WR_PER_SLOT) + n;
             sp_we[pi]      = 1'b1;
+            sp_al[pi]      = w.wal;
             sp_waddr[pi]   = w.waddr;
             sp_wdata_a[pi] = w.wdata_a;
             sp_wdata_r[pi] = w.wdata_r;
@@ -686,6 +887,8 @@ module ras (
 
     rep_tosr = w.tosr;
     rep_tosw = w.tosw;
+    rep_dsp  = w.dsp;
+    rep_kl   = w.kl;
 
     // -------- p2 pass (this cycle's prediction) --------------------
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
@@ -699,16 +902,20 @@ module ras (
       p2_op[s]       = is_pop ? (is_push ? OP_POPPUSH : OP_POP)
                               : (is_push ? OP_PUSH    : OP_NONE);
       p2_pre_tosr[s] = w.tosr;
+      p2_pre_tag[s]  = w.ttag;
       p2_pre_empty[s] = ~w.valid;
       n              = 0;
 
       // The pop first (RAS-DS1). It supplies the predicted target.
       if (is_pop) begin
         if (~w.valid) begin
-          // Empty speculative stack: commit-stack fallback, not
-          // consumed. Valid only if the commit stack is non-empty.
-          ras_pop_addr_p2[s]  = commit_top_addr;
-          ras_pop_valid_p2[s] = commit_top_valid;
+          // Empty speculative stack: the commit-stack frame at the
+          // speculative depth (A1), not consumed. Valid only while the
+          // commit stack still holds it.
+          fb                  = f_fb(w.dsp);
+          ras_pop_addr_p2[s]  = fb.addr;
+          ras_pop_valid_p2[s] = fb.valid;
+          p2_fb_idx[s]        = fb.idx;
         end else begin
           ras_pop_addr_p2[s]  = w.top_addr;
           ras_pop_valid_p2[s] = 1'b1;
@@ -725,6 +932,7 @@ module ras (
             n              = n + 1;
           end
         end
+        w.dsp = w.dsp - DEP_ONE;
       end
 
       // Then the push, applied to the state the pop left.
@@ -737,8 +945,10 @@ module ras (
                        & (w.top_rctr == RCTR_MAX);
         p2_inc_ptr[s]  = w.tosr;
         w = st_push(w, ras_fall_through_p2[s], 1'b1);
+        w.dsp          = w.dsp + DEP_ONE;
         pi             = ((NUM_PRED_SLOTS + s) * RAS_WR_PER_SLOT) + n;
         sp_we[pi]      = 1'b1;
+        sp_al[pi]      = w.wal;
         sp_waddr[pi]   = w.waddr;
         sp_wdata_a[pi] = w.wdata_a;
         sp_wdata_r[pi] = w.wdata_r;
@@ -748,16 +958,147 @@ module ras (
 
       // Post-op snapshot for this slot (BOS unchanged across p2), with
       // the count of the entry at its TOSR, 0 when the stack is empty
-      // (TD#194 option A, ras_decisions.md 4.1; BP-142). A restore
-      // writes the count back.
+      // (TD#194 option A, ras_decisions.md 4.1; BP-142), the depth and
+      // the generation of the entry at TOSR (BP-152). A restore writes
+      // the count back.
       ras_snapshot_p2[s].tosr = w.tosr;
       ras_snapshot_p2[s].tosw = w.tosw;
       ras_snapshot_p2[s].bos  = bos;
       ras_snapshot_p2[s].rctr = w.valid ? w.top_rctr : '0;
+      ras_snapshot_p2[s].dep  = w.dsp;
+      ras_snapshot_p2[s].tag  = w.valid ? w.ttag : '0;
     end
 
     nxt_tosr = w.tosr;
     nxt_tosw = w.tosw;
+    nxt_dsp  = w.dsp;
+    nxt_kl   = w.kl;
+  end
+
+  // -----------------------------------------------------------------
+  // THE RESTORE (IC-RAS-09, ras_decisions.md 4.3; BP-152). The state a
+  // restore loads, and the C1 operation applied on top of it.
+  //   - TOSR, TOSW, BOS and the depth from the snapshot, except that a
+  //     snapshot whose TOSR entry has been reallocated since (its
+  //     generation is not the snapshot's tag) loads an empty stack,
+  //     TOSR = BOS (B1).
+  //   - the count of the snapshot's top written back (RE6), only for a
+  //     TOSR the restore keeps.
+  //   - with ras_rs_undo, the restored block's own push retracted first
+  //     (its snapshot is post-op, 4.2; the redirect leaves the block
+  //     before the call).
+  //   - with ras_pd_val, the predecode operation by the p2 rules: the
+  //     pop (PO1 to PO6, the A1 fallback), then the push (PU1 to PU7,
+  //     recursion allowed). A pop on an empty stack reads nothing: the
+  //     predecode redirect's own target is predecode's (ftq_ifu W3).
+  // Reads the snapshot input and the arrays (FF outputs).
+  // -----------------------------------------------------------------
+  logic                      rs_keep_top;
+  logic [RAS_PTR_BITS-1:0]   rs_tosr;
+  logic [RAS_PTR_BITS-1:0]   rs_tosw;
+  logic [RAS_DEPTH_BITS-1:0] rs_dsp;
+  logic [RAS_SPEC_ENTRIES-1:0] rs_kl;
+  logic                      rs_we      [0:RS_WR_PORTS-1];
+  logic                      rs_al      [0:RS_WR_PORTS-1];
+  logic [RAS_PTR_BITS-1:0]   rs_waddr   [0:RS_WR_PORTS-1];
+  logic [VA_WIDTH-1:0]       rs_wdata_a [0:RS_WR_PORTS-1];
+  logic [RAS_RCTR_WIDTH-1:0] rs_wdata_r [0:RS_WR_PORTS-1];
+  logic [RAS_PTR_BITS-1:0]   rs_wdata_n [0:RS_WR_PORTS-1];
+  logic                      rs_wdata_b [0:RS_WR_PORTS-1];
+
+  always_comb begin : restore_scan
+    ras_ws_t w;
+    logic    pd_pop;
+    logic    pd_push;
+    for (int p = 0; p < RS_WR_PORTS; p++) begin
+      rs_we[p]      = 1'b0;
+      rs_al[p]      = 1'b0;
+      rs_waddr[p]   = '0;
+      rs_wdata_a[p] = '0;
+      rs_wdata_r[p] = '0;
+      rs_wdata_n[p] = '0;
+      rs_wdata_b[p] = 1'b0;
+    end
+    pd_pop  = ras_pd_val &
+              ((ras_pd_br_type == RETURN) | (ras_pd_br_type == RETURN_CALL));
+    pd_push = ras_pd_val &
+              ((ras_pd_br_type == DIRECT_CALL)   |
+               (ras_pd_br_type == INDIRECT_CALL) |
+               (ras_pd_br_type == RETURN_CALL));
+
+    rs_keep_top = (ras_restore_snapshot.tosr != ras_restore_snapshot.bos) &&
+                  (spec_gen[ras_restore_snapshot.tosr] ==
+                   ras_restore_snapshot.tag);
+    w      = '0;
+    w.bos  = ras_restore_snapshot.bos;
+    w.tosw = ras_restore_snapshot.tosw;
+    w.dsp  = ras_restore_snapshot.dep;
+    w.tosr = rs_keep_top ? ras_restore_snapshot.tosr
+                         : ras_restore_snapshot.bos;
+    if (rs_keep_top) begin
+      // RE6, seen by the C1 pop below as the scan sees its own counts.
+      w.cw_v[ras_restore_snapshot.tosr] = 1'b1;
+      w.cw_r[ras_restore_snapshot.tosr] = ras_restore_snapshot.rctr;
+      rs_we[0]      = 1'b1;
+      rs_waddr[0]   = ras_restore_snapshot.tosr;
+      rs_wdata_r[0] = ras_restore_snapshot.rctr;
+    end
+    w = st_load(w);
+
+    // The undo of the restored block's own push (ras_rs_undo): the top
+    // the snapshot holds is that push, so retract it, as the p3
+    // undo-push does (RP1, RP2), and take the depth back.
+    if (ras_rs_undo) begin
+      if (w.valid) begin
+        w = st_retract(w);
+        if (w.we) begin
+          rs_we[RS_P_UNDO]      = 1'b1;
+          rs_waddr[RS_P_UNDO]   = w.waddr;
+          rs_wdata_a[RS_P_UNDO] = w.wdata_a;
+          rs_wdata_r[RS_P_UNDO] = w.wdata_r;
+          rs_wdata_n[RS_P_UNDO] = w.wdata_n;
+          rs_wdata_b[RS_P_UNDO] = w.wdata_b;
+        end
+      end
+      w.dsp = w.dsp - DEP_ONE;
+    end
+    if (pd_pop) begin
+      if (w.valid) begin
+        w = st_retract(w);
+        if (w.we) begin
+          rs_we[RS_P_POP]      = 1'b1;
+          rs_waddr[RS_P_POP]   = w.waddr;
+          rs_wdata_a[RS_P_POP] = w.wdata_a;
+          rs_wdata_r[RS_P_POP] = w.wdata_r;
+          rs_wdata_n[RS_P_POP] = w.wdata_n;
+          rs_wdata_b[RS_P_POP] = w.wdata_b;
+        end
+      end
+      w.dsp = w.dsp - DEP_ONE;
+    end
+    if (pd_push) begin
+      w = st_push(w, ras_pd_ret_addr, 1'b1);
+      w.dsp                 = w.dsp + DEP_ONE;
+      rs_we[RS_P_PUSH]      = 1'b1;
+      rs_al[RS_P_PUSH]      = w.wal;
+      rs_waddr[RS_P_PUSH]   = w.waddr;
+      rs_wdata_a[RS_P_PUSH] = w.wdata_a;
+      rs_wdata_r[RS_P_PUSH] = w.wdata_r;
+      rs_wdata_n[RS_P_PUSH] = w.wdata_n;
+      rs_wdata_b[RS_P_PUSH] = w.wdata_b;
+    end
+
+    rs_tosr = w.tosr;
+    rs_tosw = w.tosw;
+    rs_dsp  = w.dsp;
+    rs_kl   = w.kl;
+
+    ras_pd_snapshot.tosr = w.tosr;
+    ras_pd_snapshot.tosw = w.tosw;
+    ras_pd_snapshot.bos  = w.bos;
+    ras_pd_snapshot.rctr = w.valid ? w.top_rctr : '0;
+    ras_pd_snapshot.dep  = w.dsp;
+    ras_pd_snapshot.tag  = w.valid ? w.ttag : '0;
   end
 
   // -----------------------------------------------------------------
@@ -769,6 +1110,9 @@ module ras (
   // A return on an empty stack (count 0) leaves it unchanged. A call
   // on a full stack overwrites the oldest entry, CSP wrapping past it,
   // and the count holds at RAS_COMMIT_ENTRIES (no fault, 3.3).
+  // The committed depth (A1, BP-152) is the committing block's dep: the
+  // speculative depth after the block, which the commit stack now
+  // stands at.
   // -----------------------------------------------------------------
   logic                           c_pop;
   logic                           c_push;
@@ -776,6 +1120,7 @@ module ras (
   logic [RAS_COMMIT_PTR_BITS-1:0] c_nxt;
   logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt_mid;
   logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt_nxt;
+  logic [RAS_DEPTH_BITS-1:0]      c_dcm_nxt;
   // TOSR after this cycle's scan, and the commit moving it with BOS
   // (BP-138): the stack is empty at the BOS the commit replaces.
   logic [RAS_PTR_BITS-1:0]        scan_tosr;
@@ -800,6 +1145,7 @@ module ras (
     c_cnt_nxt = (c_push &&
                  (c_cnt_mid != RAS_COMMIT_CNT_BITS'(RAS_COMMIT_ENTRIES)))
                   ? (c_cnt_mid + RAS_COMMIT_CNT_BITS'(1)) : c_cnt_mid;
+    c_dcm_nxt = (c_pop | c_push) ? ras_commit_snapshot.dep : dcm;
     scan_tosr = ras_p2_keep ? nxt_tosr : rep_tosr;
     c_bos     = c_push |
                 (c_pop & (ras_commit_snapshot.tosr != ras_commit_snapshot.bos));
@@ -819,12 +1165,15 @@ module ras (
       bos  <= '0;
       csp  <= '0;
       c_cnt <= '0;
+      dsp  <= '0;
+      dcm  <= '0;
       ras_rst_done <= 1'b0;
       for (int i = 0; i < RAS_SPEC_ENTRIES; i++) begin
         spec_ret_addr[i] <= '0;
         spec_rctr[i]     <= '0;
         spec_nos[i]      <= '0;
         spec_bot[i]      <= 1'b0;
+        spec_gen[i]      <= '0;
       end
       for (int i = 0; i < RAS_COMMIT_ENTRIES; i++) begin
         commit_ret_addr[i] <= '0;
@@ -833,6 +1182,7 @@ module ras (
         p3_op_q[s]       <= OP_NONE;
         p3_fallthr_q[s]  <= '0;
         p3_pre_tosr_q[s] <= '0;
+        p3_pre_tag_q[s]  <= '0;
         p3_pre_empty_q[s] <= 1'b0;
         p3_pop_dec_q[s]  <= 1'b0;
         p3_push_inc_q[s] <= 1'b0;
@@ -844,21 +1194,38 @@ module ras (
 
       // ---- speculative pointers and array writes -----------------
       if (ras_restore_val) begin
-        // Pointer restore; circular data is not cleared. The one array
-        // write is the count of the snapshot's top entry, when the
+        // Pointer restore; circular data is not cleared. The array
+        // writes are the count of the snapshot's top entry, when the
         // snapshot is not an empty stack (TD#194 option A, ruled
-        // session-084, ras_decisions.md 4.3, 12.9 RE6; BP-142). Before
-        // BP-142 a count changed in place on the wrong path kept the
-        // wrong path's value (tb_ras TC-45). No other count changes.
-        tosr <= ras_restore_snapshot.tosr;
-        tosw <= ras_restore_snapshot.tosw;
-        if (ras_restore_snapshot.tosr != ras_restore_snapshot.bos)
-          spec_rctr[ras_restore_snapshot.tosr] <= ras_restore_snapshot.rctr;
+        // session-084, ras_decisions.md 4.3, 12.9 RE6; BP-142), and the
+        // C1 operation's (BP-152). Before BP-142 a count changed in
+        // place on the wrong path kept the wrong path's value (tb_ras
+        // TC-45). No other count changes.
+        tosr <= rs_tosr;
+        tosw <= rs_tosw;
+        dsp  <= rs_dsp;
+        if (rs_we[0])
+          spec_rctr[rs_waddr[0]] <= rs_wdata_r[0];
+        for (int p = 1; p < RS_WR_PORTS; p++) begin
+          if (rs_we[p]) begin
+            spec_ret_addr[rs_waddr[p]] <= rs_wdata_a[p];
+            spec_rctr[rs_waddr[p]]     <= rs_wdata_r[p];
+            spec_nos[rs_waddr[p]]      <= rs_wdata_n[p];
+            spec_bot[rs_waddr[p]]      <= rs_wdata_b[p];
+            if (rs_al[p])
+              spec_gen[rs_waddr[p]] <= spec_gen[rs_waddr[p]] + TAG_ONE;
+          end
+        end
+        // B1: the links the C1 push's allocation killed, last.
+        for (int j = 0; j < RAS_SPEC_ENTRIES; j++) begin
+          if (rs_kl[j]) spec_bot[j] <= 1'b1;
+        end
       end else begin
         // A commit that moves BOS while the stack is empty moves TOSR
         // with it, so the stack stays empty as TOSR == BOS (BP-138).
         tosr <= c_drag ? ras_commit_snapshot.tosr : scan_tosr;
         tosw <= ras_p2_keep ? nxt_tosw : rep_tosw;
+        dsp  <= ras_p2_keep ? nxt_dsp  : rep_dsp;
         // Apply the repair writes, then the p2 writes, in port order
         // (the order the scan made them), so a later write to the
         // same index supersedes an earlier one. The p2 ports are the
@@ -871,7 +1238,14 @@ module ras (
             spec_rctr[sp_waddr[p]]     <= sp_wdata_r[p];
             spec_nos[sp_waddr[p]]      <= sp_wdata_n[p];
             spec_bot[sp_waddr[p]]      <= sp_wdata_b[p];
+            if (sp_al[p])
+              spec_gen[sp_waddr[p]] <= spec_gen[sp_waddr[p]] + TAG_ONE;
           end
+        end
+        // B1: the links this cycle's allocations killed, after the port
+        // writes so a count write of a killed entry does not undo it.
+        for (int j = 0; j < RAS_SPEC_ENTRIES; j++) begin
+          if (ras_p2_keep ? nxt_kl[j] : rep_kl[j]) spec_bot[j] <= 1'b1;
         end
       end
 
@@ -891,6 +1265,7 @@ module ras (
       end
       csp   <= c_nxt;
       c_cnt <= c_cnt_nxt;
+      dcm   <= c_dcm_nxt;
 
       // ---- register p2 op and fallthrough for the p3 repair pass -
       // An operation the restore or the squash dropped is registered
@@ -901,6 +1276,7 @@ module ras (
                                                              : p2_op[s];
         p3_fallthr_q[s]  <= ras_fall_through_p2[s];
         p3_pre_tosr_q[s] <= p2_pre_tosr[s];
+        p3_pre_tag_q[s]  <= p2_pre_tag[s];
         p3_pre_empty_q[s] <= p2_pre_empty[s];
         p3_pop_dec_q[s]  <= p2_pop_dec[s];
         p3_push_inc_q[s] <= p2_push_inc[s];

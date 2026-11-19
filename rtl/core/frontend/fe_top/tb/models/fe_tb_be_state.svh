@@ -39,6 +39,27 @@
   int                      n_ras_ok;
   int                      n_ras_bad;
 
+  // BP-152, two backend knobs, both off by default so every program
+  // that does not set them resolves and traps as before:
+  //   rsv2     the resolution queue is presented on two ports, the head
+  //            on port 0 and the next on port 1, so two resolutions of
+  //            one entry can be accepted in one cycle (TD#211 b). Only
+  //            at two slots: NUM_RESOLVE_PORTS is NUM_PRED_SLOTS.
+  //   trap_sc  a trap redirects with _self clear, as the perf harness's
+  //            RC_TRAP does: the entry survives (TD#211 a).
+  // rq_done marks a queue entry port 1 took before port 0 took the one
+  // ahead of it, so the head skips it.
+  logic                    rsv2;
+  logic                    trap_sc;
+  logic                    rq_done [0:255];
+  int                      rq_p1;     // the entry port 1 presents
+  // Cycles both ports were accepted for one entry (rsv2): the stimulus
+  // of TD#211 b reached, counted so a program can check it was.
+  int                      n_rsv_pair;
+  // The second port's index: 1 at two slots, and at one slot 0, where the
+  // code that uses it is not reached (NUM_RESOLVE_PORTS > 1).
+  localparam int           RSV_P1 = NUM_RESOLVE_PORTS - 1;
+
   // =================================================================
   // The FTQ fetch log: the block start the FTQ presented for each
   // index, taken from the FTQ-to-IFU fetch handshake inside the top.

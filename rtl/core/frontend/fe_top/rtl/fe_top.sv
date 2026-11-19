@@ -266,6 +266,13 @@ module fe_top (
   bp_br_type_e                ras_commit_br_type;
   logic [VA_WIDTH-1:0]        ras_commit_ret_addr;
   bp_ras_snapshot_t           ras_commit_snapshot;
+  // BP-152, C1: the predecode call or return, FTQ to RAS, and the
+  // post-op snapshot back.
+  logic                       ras_pd_val;
+  bp_br_type_e                ras_pd_br_type;
+  logic [VA_WIDTH-1:0]        ras_pd_ret_addr;
+  logic                       ras_rs_undo;
+  bp_ras_snapshot_t           ras_pd_snapshot;
   logic                       tage_pq_not_full;
   logic                       ittage_pq_not_full;
   logic                       sc_uq_not_full;
@@ -465,6 +472,11 @@ module fe_top (
     .ras_commit_snapshot   (ras_commit_snapshot),
     .ras_flush_val         (1'b0),
     .ras_flush_snapshot    ('0),
+    .ras_pd_val            (ras_pd_val),
+    .ras_pd_br_type        (ras_pd_br_type),
+    .ras_pd_ret_addr       (ras_pd_ret_addr),
+    .ras_rs_undo           (ras_rs_undo),
+    .ras_pd_snapshot       (ras_pd_snapshot),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
     .ftq_rollback_corr     (ftq_rollback_corr),
@@ -558,6 +570,11 @@ module fe_top (
     .ras_commit_br_type    (ras_commit_br_type),
     .ras_commit_ret_addr   (ras_commit_ret_addr),
     .ras_commit_snapshot   (ras_commit_snapshot),
+    .ras_pd_val            (ras_pd_val),
+    .ras_pd_br_type        (ras_pd_br_type),
+    .ras_pd_ret_addr       (ras_pd_ret_addr),
+    .ras_rs_undo           (ras_rs_undo),
+    .ras_pd_snapshot       (ras_pd_snapshot),
     .sc_enable             (fe_cfg.sc_enable),
     .ubtb_upd_u0           (ubtb_upd_u0),
     .lp_upd_valid_p0       (lp_upd_valid_p0),

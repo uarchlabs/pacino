@@ -241,6 +241,9 @@
 # Updated when PERF-003 was written, session-086 (PROJECT_STATUS.md).
 # Updated after PERF-003, BP-151 written, session-086
 # (PROJECT_STATUS.md, perf_decisions.md).
+# Updated after BP-151, BP-152 written, session-086
+# (PROJECT_STATUS.md, ras_decisions.md, ras_interfaces.md,
+# ftq_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -284,7 +287,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   5c101e88a24c
-PLAN  PROJECT_STATUS.md                 cd3f8c9e5a02
+PLAN  PROJECT_STATUS.md                 2aadb6667bb5
 PLAN  CLOSED_TECH_DEBT.md               805021a07a9c
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
@@ -298,7 +301,7 @@ ARCH  csr_decisions.md                  484fe6279bb8
 ARCH  dcd_decisions.md                  8232e5fdf27f
 ARCH  fe_decisions.md                   af2411c071bc
 ARCH  ftb_decisions.md            00f15664c751
-ARCH  ftq_decisions.md            cb29531c597a
+ARCH  ftq_decisions.md            bb810f3e0ef9
 ARCH  ftq_entry_formats.md        968ae67e193f
 ARCH  ibuf_decisions.md                 36a96982352e
 ARCH  icache_decisions.md               0e18fe32a823
@@ -307,7 +310,7 @@ ARCH  itlb_decisions.md                 d97092555525
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  be6a0ceaa8f5
-ARCH  ras_decisions.md                  23e7974e38ad
+ARCH  ras_decisions.md                  6a3dbc1e0f22
 ARCH  sc_decisions.md                   667f9510517a
 ARCH  sc_table_hash_rules.md            ad6ddcde00a8
 ARCH  sram_init.md                      d6cefefe7fc5
@@ -350,7 +353,7 @@ INTF  ptw_mem_interfaces.md       a7bb1b8e3253
 INTF  ittage_interfaces.md        18b3ed55b8fe
 INTF  l1i_ifu_interfaces.md       5267cfdffe1c
 INTF  loop_pred_interfaces.md     f700641358ec
-INTF  ras_interfaces.md           8364da53998f
+INTF  ras_interfaces.md           b6dd1a271c80
 INTF  sc_interfaces.md            7936cbf21f43
 INTF  sc_table_interfaces.md      3e31f095e2e8
 INTF  tage_interfaces.md          80e89e517207

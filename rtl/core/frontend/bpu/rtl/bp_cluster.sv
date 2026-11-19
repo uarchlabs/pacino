@@ -232,6 +232,17 @@ module bp_cluster (
   input  bp_ras_snapshot_t                ras_commit_snapshot,
   input  logic                            ras_flush_val,
   input  bp_ras_snapshot_t                ras_flush_snapshot,
+  // C1 (BP-152, ras_decisions.md 7): the RAS operation of a call or
+  // return only predecode found, applied with the predecode redirect's
+  // restore; the post-op snapshot returns to the FTQ entry. ras_pd_val
+  // is read only with the restore this cycle, and is masked with it.
+  input  logic                            ras_pd_val,
+  input  bp_br_type_e                     ras_pd_br_type,
+  input  logic [VA_WIDTH-1:0]             ras_pd_ret_addr,
+  // BP-152: with the restore, the named block's own push is off the
+  // path and is undone first (ras.sv ras_rs_undo).
+  input  logic                            ras_rs_undo,
+  output bp_ras_snapshot_t                ras_pd_snapshot,
 
   // FTQ-requested history rollback (TD-FE-7). Driven by the FTQ on a
   // backend redirect, which can restore the RAS through the group
@@ -2060,7 +2071,14 @@ module bp_cluster (
     .ras_commit_ret_addr  (ras_commit_ret_addr),
     .ras_commit_snapshot  (ras_commit_snapshot),
     .ras_flush_val        (ras_flush_val),
-    .ras_flush_snapshot   (ras_flush_snapshot)
+    .ras_flush_snapshot   (ras_flush_snapshot),
+    // C1 (BP-152): with the restore it rides on, so the cluster's own
+    // p2 or p3 redirect, which takes no restore, takes no C1 operation.
+    .ras_pd_val           (ras_pd_val & w_ras_restore_val),
+    .ras_pd_br_type       (ras_pd_br_type),
+    .ras_pd_ret_addr      (ras_pd_ret_addr),
+    .ras_rs_undo          (ras_rs_undo & w_ras_restore_val),
+    .ras_pd_snapshot      (ras_pd_snapshot)
   );
 
 endmodule : bp_cluster

@@ -57,6 +57,14 @@ module tb;
   logic [TRX_SLOT_BITS-1:0] pd_wr_sel;
   bp_ftq_slot_t             pd_wr_slot;
   logic                     pd_wr_kill;
+  // BP-152, C1 and TD#211 (a).
+  logic                     pd_wr_pft_val;
+  logic [VA_WIDTH-1:0]      pd_wr_pft;
+  logic                     pd_ras_wr_val;
+  bp_ras_snapshot_t         pd_ras_wr;
+  logic                     bkr_clr_val;
+  logic [FTQ_IDX_BITS-1:0]  bkr_clr_idx;
+  logic [FTB_BR_POS_BITS-1:0] bkr_clr_pos;
 
   logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val;
   logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
@@ -111,6 +119,14 @@ module tb;
     .pd_wr_sel           (pd_wr_sel),
     .pd_wr_slot          (pd_wr_slot),
     .pd_wr_kill          (pd_wr_kill),
+    .pd_wr_pft_val       (pd_wr_pft_val),
+    .pd_wr_pft           (pd_wr_pft),
+    .pd_ras_wr_val       (pd_ras_wr_val),
+    .pd_ras_wr_idx       (pd_wr_idx),
+    .pd_ras_wr           (pd_ras_wr),
+    .bkr_clr_val         (bkr_clr_val),
+    .bkr_clr_idx         (bkr_clr_idx),
+    .bkr_clr_pos         (bkr_clr_pos),
     .rsv_wr_val          (rsv_wr_val),
     .rsv_wr_idx          (rsv_wr_idx),
     .rsv_wr_sel          (rsv_wr_sel),
@@ -185,6 +201,9 @@ module tb;
     p3_wr_val       = 1'b0;
     pd_wr_val       = 1'b0;
     pd_wr_kill      = 1'b0;
+    pd_wr_pft_val   = 1'b0;
+    pd_ras_wr_val   = 1'b0;
+    bkr_clr_val     = 1'b0;
     rsv_wr_val      = '0;
     commit_step_val = 1'b0;
   endtask
@@ -224,6 +243,10 @@ module tb;
     pd_wr_idx          = '0;
     pd_wr_sel          = '0;
     pd_wr_slot         = '0;
+    pd_wr_pft          = '0;
+    pd_ras_wr          = '0;
+    bkr_clr_idx        = '0;
+    bkr_clr_pos        = '0;
     xlate_rd_idx       = '0;
     fetch_rd_idx       = '0;
     redir_rd_idx       = '0;
@@ -875,6 +898,150 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // J. BP-152: the clears by position (TD#211) and the C1 writes.
+  //   J1 (b) two resolutions of one entry, the older's write suppressed
+  //      (BP-139): a predecode-placed call at pos 10 in slot 0, and the
+  //      younger resolution, a mispredicted conditional at pos 8, placed
+  //      in slot 1 with the end. The end clears every slot after pos 8,
+  //      slot 0 included; the walk commits nothing. Before BP-152 the
+  //      end cleared only the slots above slot 1 and the walk committed
+  //      the call (BP-151, compress_1 idx 15). Two slots only.
+  //   J2 (b) a slot at an earlier position in a higher slot is kept.
+  //   J3 (a) a backend redirect with _self clear at pos 0 (a trap): the
+  //      call at pos 10 is cleared, the walk commits nothing. Before
+  //      BP-152 nothing cleared it (BP-151, web_11 idx 7).
+  //   J4 C1: the predecode slot write with pft_addr and the RAS
+  //      snapshot; the commit pushes the written pft_addr.
+  // -----------------------------------------------------------------
+  task automatic group_j();
+    bp_ftq_slot_t     cs;
+    bp_ras_snapshot_t rs;
+    $display("-- J: the clears by position and the C1 writes (BP-152) --");
+    do_reset();
+    alloc(50);
+    alloc(51);
+    alloc(52);
+    cs = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9C00_0000)), DIRECT_CALL,
+                 1'b1, FTB_BR_POS_BITS'(10));
+    // J1, J2
+    if (NUM_PRED_SLOTS > 1) begin
+      pd_wr_val  = 1'b1;
+      pd_wr_idx  = 6'd50;
+      pd_wr_sel  = '0;
+      pd_wr_slot = cs;
+      pd_wr_kill = 1'b1;
+      tick();
+      clr();
+      rsv_wr_val      = '0;
+      rsv_wr_val[HP]  = 1'b1;
+      rsv_wr_idx[HP]  = 6'd50;
+      rsv_wr_sel[HP]  = TRX_SLOT_BITS'(HS);
+      rsv_wr_slot[HP] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9D00_0000)),
+                                COND, 1'b1, FTB_BR_POS_BITS'(8));
+      rsv_wr_end      = '0;
+      rsv_wr_end[HP]  = 1'b1;
+      tick();
+      clr();
+      rsv_wr_end = '0;
+      fetch_rd_idx = 6'd50;
+      commit_rd_idx = 6'd50;
+      commit_step_val = 1'b1;
+      #1;
+      chk("J1 TD#211b the end at pos 8 clears the call at pos 10 in slot 0",
+          !fetch_rd_entry.slot[0].slot_valid &&
+          fetch_rd_entry.slot[HS].slot_valid &&
+          (fetch_rd_entry.slot[HS].pos == FTB_BR_POS_BITS'(8)));
+      chk("J1 TD#211b the walk commits nothing (BP-151 RTL: the call)",
+          !ras_commit_val);
+      tick();
+      commit_step_val = 1'b0;
+      // J2: slot 1 holds pos 3; an end at pos 6 written to slot 0 keeps it.
+      rsv_wr_val      = '0;
+      rsv_wr_val[0]   = 1'b1;
+      rsv_wr_idx[0]   = 6'd52;
+      rsv_wr_sel[0]   = TRX_SLOT_BITS'(HS);
+      rsv_wr_slot[0]  = mk_slot(1'b1, '0, COND, 1'b0, FTB_BR_POS_BITS'(3));
+      tick();
+      rsv_wr_val      = '0;
+      rsv_wr_val[0]   = 1'b1;
+      rsv_wr_idx[0]   = 6'd52;
+      rsv_wr_sel[0]   = '0;
+      rsv_wr_slot[0]  = mk_slot(1'b1, '0, DIRECT_UNC, 1'b1,
+                                FTB_BR_POS_BITS'(6));
+      rsv_wr_end      = '0;
+      rsv_wr_end[0]   = 1'b1;
+      tick();
+      clr();
+      rsv_wr_end = '0;
+      fetch_rd_idx = 6'd52;
+      #1;
+      chk("J2 TD#211b a slot at an earlier pos above the end's slot is kept",
+          fetch_rd_entry.slot[HS].slot_valid &&
+          (fetch_rd_entry.slot[HS].pos == FTB_BR_POS_BITS'(3)));
+    end else begin
+      skip("J1 TD#211b two resolutions of one entry");
+      skip("J2 TD#211b a slot at an earlier pos above the end's slot");
+    end
+    // J3
+    pd_wr_val  = 1'b1;
+    pd_wr_idx  = 6'd51;
+    pd_wr_sel  = '0;
+    pd_wr_slot = cs;
+    pd_wr_kill = 1'b1;
+    tick();
+    clr();
+    bkr_clr_val = 1'b1;
+    bkr_clr_idx = 6'd51;
+    bkr_clr_pos = FTB_BR_POS_BITS'(0);
+    tick();
+    clr();
+    fetch_rd_idx  = 6'd51;
+    commit_rd_idx = 6'd51;
+    commit_step_val = 1'b1;
+    #1;
+    chk("J3 TD#211a the redirect at pos 0 clears the call at pos 10",
+        !fetch_rd_entry.slot[0].slot_valid);
+    chk("J3 TD#211a the walk commits nothing (BP-151 RTL: the call)",
+        !ras_commit_val);
+    tick();
+    commit_step_val = 1'b0;
+    // J4
+    rs      = '0;
+    rs.tosr = 4'd5;
+    rs.tosw = 4'd6;
+    rs.dep  = 8'd9;
+    rs.tag  = 4'd3;
+    pd_wr_val     = 1'b1;
+    pd_wr_idx     = 6'd51;
+    pd_wr_sel     = '0;
+    pd_wr_slot    = cs;
+    pd_wr_kill    = 1'b1;
+    pd_wr_pft_val = 1'b1;
+    pd_wr_pft     = VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 51 * 32 + 24);
+    pd_ras_wr_val = 1'b1;
+    pd_ras_wr     = rs;
+    tick();
+    clr();
+    fetch_rd_idx  = 6'd51;
+    commit_rd_idx = 6'd51;
+    commit_step_val = 1'b1;
+    #1;
+    chk("J4 C1 pft_addr is the call's end, pc + 2 * 10 + 4",
+        fetch_rd_entry.pft_addr ==
+        VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 51 * 32 + 24));
+    chk("J4 C1 the RAS snapshot is the one the RAS returned",
+        fetch_rd_entry.ras == rs);
+    chk("J4 C1 the commit pushes the call's return address",
+        ras_commit_val && (ras_commit_br_type == DIRECT_CALL) &&
+        (ras_commit_ret_addr ==
+         VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 51 * 32 + 24)) &&
+        (ras_commit_snapshot == rs));
+    tick();
+    commit_step_val = 1'b0;
+    clr();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -897,6 +1064,7 @@ module tb;
     group_g();
     group_h();
     group_i();
+    group_j();                                            // BP-152
 
     $display("tb_ftq_entry: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

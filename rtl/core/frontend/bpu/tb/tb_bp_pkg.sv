@@ -36,9 +36,12 @@ module tb;
                               FTQ_CONF_BITS;
   // Two VA_WIDTH terms: pc and pft_addr, the block fall-through. The RAS
   // snapshot is three pointers and the TOSR entry's count (BP-142,
-  // TD#194 option A): 232 bits at two slots, 228 before.
+  // TD#194 option A) and since BP-152 the depth and the tag (RAS-4):
+  // 316 bits at two slots, 304 before (this read "232 bits at two slots,
+  // 228 before", which was not the value the check computes).
   localparam int ENTRY_BITS = VA_WIDTH + VA_WIDTH + FTQ_IDX_BITS +
                               (3 * RAS_PTR_BITS) + RAS_RCTR_WIDTH +
+                              RAS_DEPTH_BITS + RAS_TAG_BITS +
                               GHIST_PTR_BITS +
                               PHIST_PTR_BITS + 1 +
                               (NUM_PRED_SLOTS * SLOT_BITS);
@@ -181,9 +184,22 @@ module tb;
     end
     pass_count++;
 
-    if ($bits(bp_ras_snapshot_t) !== 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH) begin
+    // BP-152 (RAS-4): the depth (A1) and the tag (B1), and the snapshot
+    // 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH + RAS_DEPTH_BITS + RAS_TAG_BITS
+    // wide (PM2, 28 bits; 16 before).
+    if (($bits(entry_a.ras.dep) !== RAS_DEPTH_BITS) ||
+        ($bits(entry_a.ras.tag) !== RAS_TAG_BITS)) begin
+      $fatal(1, "FAIL ras.dep / ras.tag: got %0d / %0d, want %0d / %0d",
+             $bits(entry_a.ras.dep), $bits(entry_a.ras.tag), RAS_DEPTH_BITS,
+             RAS_TAG_BITS);
+    end
+    pass_count++;
+
+    if ($bits(bp_ras_snapshot_t) !== 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+                                    RAS_DEPTH_BITS + RAS_TAG_BITS) begin
       $fatal(1, "FAIL bp_ras_snapshot_t: got %0d, want %0d",
-             $bits(bp_ras_snapshot_t), 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH);
+             $bits(bp_ras_snapshot_t), 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+             RAS_DEPTH_BITS + RAS_TAG_BITS);
     end
     pass_count++;
 

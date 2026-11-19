@@ -70,7 +70,17 @@ module ftq_entry_assert (
   input logic                     blk_wr_val,
   input logic [FTQ_IDX_BITS-1:0]  blk_wr_idx,
   input logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx,
-  input logic [VA_WIDTH-1:0]      xlate_rd_pc
+  input logic [VA_WIDTH-1:0]      xlate_rd_pc,
+  // BP-152: the C1 writes with the predecode slot, and the backend
+  // redirect clear (TD#211 a).
+  input logic                     pd_wr_pft_val,
+  input logic [VA_WIDTH-1:0]      pd_wr_pft,
+  input logic                     pd_ras_wr_val,
+  input logic [FTQ_IDX_BITS-1:0]  pd_ras_wr_idx,
+  input bp_ras_snapshot_t         pd_ras_wr,
+  input logic                     bkr_clr_val,
+  input logic [FTQ_IDX_BITS-1:0]  bkr_clr_idx,
+  input logic [FTB_BR_POS_BITS-1:0] bkr_clr_pos
 );
 
   // The four whole-entry read ports, as one array so E8 to E10 are
@@ -104,8 +114,10 @@ module ftq_entry_assert (
     end else if (pd_wr_val) begin
       // A placement write to the same entry in the same cycle lands
       // after it (ftq_entry, BP-119), so the predecode slot is not
-      // what the entry then holds: do not arm.
-      r_pd_val  <= !w_rsv_same;
+      // what the entry then holds: do not arm. Nor with the backend
+      // redirect clear of the entry (BP-152, TD#211 a), which lands last.
+      r_pd_val  <= !w_rsv_same &&
+                   !(bkr_clr_val && (bkr_clr_idx == pd_wr_idx));
       r_pd_kill <= pd_wr_kill;
       r_pd_idx  <= pd_wr_idx;
       r_pd_sel  <= pd_wr_sel;
@@ -122,9 +134,11 @@ module ftq_entry_assert (
       w_rsv_same = w_rsv_same | (rsv_wr_val[p] && (rsv_wr_idx[p] == pd_wr_idx));
       w_rsv_over = w_rsv_over | (rsv_wr_val[p] && (rsv_wr_idx[p] == r_pd_idx));
     end
+    // BP-152: the backend redirect clear may clear the predecode slot.
     w_pd_overwritten = (alloc_wr_val && (alloc_wr_idx == r_pd_idx)) ||
                        (p2_wr_val    && (p2_wr_idx    == r_pd_idx)) ||
                        (p3_wr_val    && (p3_wr_idx    == r_pd_idx)) ||
+                       (bkr_clr_val  && (bkr_clr_idx  == r_pd_idx)) ||
                        w_rsv_over;
   end
 
@@ -191,7 +205,8 @@ module ftq_entry_assert (
       w_rs_over[p] = (alloc_wr_val && (alloc_wr_idx == r_rs_idx[p])) ||
                      (p2_wr_val    && (p2_wr_idx    == r_rs_idx[p])) ||
                      (p3_wr_val    && (p3_wr_idx    == r_rs_idx[p])) ||
-                     (pd_wr_val    && (pd_wr_idx    == r_rs_idx[p]));
+                     (pd_wr_val    && (pd_wr_idx    == r_rs_idx[p])) ||
+                     (bkr_clr_val  && (bkr_clr_idx  == r_rs_idx[p]));
       w_rs_late[p] = 1'b0;
       for (int q = 0; q < NUM_RESOLVE_PORTS; q++) begin
         if (rsv_wr_val[q] && (rsv_wr_idx[q] == r_rs_idx[p]))
@@ -237,6 +252,118 @@ module ftq_entry_assert (
     end
   end
 
+  // ---------------------------------------------------------------
+  // BP-152. E14: the backend redirect clear (TD#211 a), armed until a
+  // later write to its index; E15: the C1 writes with the predecode slot
+  // (pft_addr and the RAS snapshot), armed until a later write of the
+  // same field. Read back through the ports, as E8 to E13.
+  // ---------------------------------------------------------------
+  logic                       r_bk_val;
+  logic [FTQ_IDX_BITS-1:0]    r_bk_idx;
+  logic [FTB_BR_POS_BITS-1:0] r_bk_pos;
+  logic                       r_c1_pv;
+  logic                       r_c1_rv;
+  logic [FTQ_IDX_BITS-1:0]    r_c1_ridx;
+  logic [FTQ_IDX_BITS-1:0]    r_c1_idx;
+  logic [VA_WIDTH-1:0]        r_c1_pft;
+  bp_ras_snapshot_t           r_c1_ras;
+  logic                       w_bk_over;
+  logic                       w_c1_rsv;
+  logic                       w_c1_rsv_same;
+  logic                       w_e14_bad;
+  logic                       w_e15_bad;
+
+  always_comb begin : c1_disarm
+    w_bk_over     = (alloc_wr_val && (alloc_wr_idx == r_bk_idx)) ||
+                    (p2_wr_val    && (p2_wr_idx    == r_bk_idx)) ||
+                    (p3_wr_val    && (p3_wr_idx    == r_bk_idx)) ||
+                    (pd_wr_val    && (pd_wr_idx    == r_bk_idx));
+    w_c1_rsv      = 1'b0;
+    w_c1_rsv_same = 1'b0;
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      w_bk_over     = w_bk_over | (rsv_wr_val[p] && (rsv_wr_idx[p] == r_bk_idx));
+      w_c1_rsv      = w_c1_rsv  | (rsv_wr_val[p] && (rsv_wr_idx[p] == r_c1_idx));
+      w_c1_rsv_same = w_c1_rsv_same |
+                      (rsv_wr_val[p] && (rsv_wr_idx[p] == pd_wr_idx));
+    end
+  end
+
+  always_ff @(posedge clk or negedge rstn) begin : c1_hist
+    if (!rstn) begin
+      r_bk_val <= 1'b0;
+      r_bk_idx <= '0;
+      r_bk_pos <= '0;
+      r_c1_pv  <= 1'b0;
+      r_c1_rv  <= 1'b0;
+      r_c1_ridx <= '0;
+      r_c1_idx <= '0;
+      r_c1_pft <= '0;
+      r_c1_ras <= '0;
+    end else begin
+      if (bkr_clr_val) begin
+        r_bk_val <= 1'b1;
+        r_bk_idx <= bkr_clr_idx;
+        r_bk_pos <= bkr_clr_pos;
+      end else if (w_bk_over) begin
+        r_bk_val <= 1'b0;
+      end
+      if (pd_wr_val) begin
+        // A same-cycle resolution of the entry lands after the pd write
+        // and may rewrite pft_addr; the p2 block write lands before it.
+        r_c1_pv  <= pd_wr_pft_val && !w_c1_rsv_same &&
+                    !(alloc_wr_val && (alloc_wr_idx == pd_wr_idx));
+        r_c1_idx <= pd_wr_idx;
+        r_c1_pft <= pd_wr_pft;
+      end else begin
+        if ((alloc_wr_val && (alloc_wr_idx == r_c1_idx)) ||
+            (blk_wr_val && (blk_wr_idx == r_c1_idx)) || w_c1_rsv)
+          r_c1_pv <= 1'b0;
+      end
+      if (pd_ras_wr_val) begin
+        r_c1_rv   <= !(alloc_wr_val && (alloc_wr_idx == pd_ras_wr_idx));
+        r_c1_ridx <= pd_ras_wr_idx;
+        r_c1_ras  <= pd_ras_wr;
+      end else if ((alloc_wr_val && (alloc_wr_idx == r_c1_ridx)) ||
+                   (blk_wr_val && (blk_wr_idx == r_c1_ridx))) begin
+        r_c1_rv <= 1'b0;
+      end
+    end
+  end
+
+  always_comb begin : c1_checks
+    w_e14_bad = 1'b0;
+    w_e15_bad = 1'b0;
+    for (int p = 0; p < NUM_EPORTS; p++) begin
+      if (r_bk_val && (w_port_idx[p] == r_bk_idx)) begin
+        for (int s = 0; s < NUM_PRED_SLOTS; s++)
+          if (w_port_ent[p].slot[s].slot_valid &&
+              (w_port_ent[p].slot[s].pos > r_bk_pos))
+            w_e14_bad = 1'b1;
+      end
+      if (r_c1_pv && (w_port_idx[p] == r_c1_idx) &&
+          (w_port_ent[p].pft_addr != r_c1_pft))
+        w_e15_bad = 1'b1;
+      if (r_c1_rv && (w_port_idx[p] == r_c1_ridx) &&
+          (w_port_ent[p].ras != r_c1_ras))
+        w_e15_bad = 1'b1;
+    end
+  end
+
+  // E14 BP-152, TD#211 (a). A backend redirect with _self clear clears
+  //     every slot of the entry it names whose position is after the
+  //     redirect's: read back while armed. The trap at a non-branch had
+  //     no resolution to clear them (BP-151, web_11).
+  a_bkr_clears_after: assert property (
+    @(posedge clk) disable iff (!rstn) !w_e14_bad)
+    else $error("E14 a backend redirect clear left a slot after its pos");
+
+  // E15 BP-152, C1. A predecode correction to a taken jump writes the
+  //     jump's own end into pft_addr, and with the C1 operation the RAS
+  //     snapshot after it into ras: read back while armed.
+  a_pd_c1_lands: assert property (
+    @(posedge clk) disable iff (!rstn) !w_e15_bad)
+    else $error("E15 the predecode pft_addr or RAS snapshot did not land");
+
   logic w_e11_bad;
   logic w_e12_bad;
   logic w_e13_bad;
@@ -250,10 +377,11 @@ module ftq_entry_assert (
         if (r_rs_val[q] && (w_port_idx[p] == r_rs_idx[q])) begin
           if (w_port_ent[p].slot[r_rs_sel[q]] != r_rs_slot[q])
             w_e12_bad = 1'b1;
+          // BP-152 (TD#211 b): by position, every slot after the end.
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-            if (r_rs_end[q] && (TRX_SLOT_BITS'(s) > r_rs_sel[q]) &&
-                (w_port_ent[p].slot[s].slot_valid ||
-                 w_port_ent[p].slot[s].taken))
+            if (r_rs_end[q] && (TRX_SLOT_BITS'(s) != r_rs_sel[q]) &&
+                w_port_ent[p].slot[s].slot_valid &&
+                (w_port_ent[p].slot[s].pos > r_rs_slot[q].pos))
               w_e11_bad = 1'b1;
           end
         end
@@ -397,15 +525,18 @@ module ftq_entry_assert (
       else $error("E8 a predecode slot write did not kill above it");
   end
   a_pd_write_lands:    assert property (p_pd_write_lands)
-    else $error("E9 the predecode slot write did not land");
+    else $error("E9 the predecode slot write did not land: idx %0d sel %0d %s %0h",
+                r_pd_idx, r_pd_sel, "written", r_pd_slot);
   a_xlate_pc_agrees:   assert property (p_xlate_pc_agrees)
     else $error("E10 the xlate read port returned a foreign pc");
 
   // E11 BP-121 D2 (m02), TD#170. A resolution that ENDS the executed
   //     block (taken, or mispredicted: the backend redirects at it)
-  //     clears every slot above it: the rest of the block is the wrong
+  //     clears every slot after it: the rest of the block is the wrong
   //     path, so the commit walk must not find a call or return there.
-  //     Read back while the write is armed, as E8 is.
+  //     Read back while the write is armed, as E8 is. BY POSITION since
+  //     BP-152 (TD#211 b): a slot whose pos is after the resolved pos,
+  //     whatever its index; until then the slots above rsv_wr_sel.
   property p_rsv_end_kills_above;
     @(posedge clk) disable iff (!rstn)
       !w_e11_bad;
@@ -476,5 +607,13 @@ bind ftq_entry ftq_entry_assert u_assert (
   .blk_wr_val          (blk_wr_val),
   .blk_wr_idx          (blk_wr_idx),
   .xlate_rd_idx        (xlate_rd_idx),
-  .xlate_rd_pc         (xlate_rd_pc)
+  .xlate_rd_pc         (xlate_rd_pc),
+  .pd_wr_pft_val       (pd_wr_pft_val),
+  .pd_wr_pft           (pd_wr_pft),
+  .pd_ras_wr_val       (pd_ras_wr_val),
+  .pd_ras_wr_idx       (pd_ras_wr_idx),
+  .pd_ras_wr           (pd_ras_wr),
+  .bkr_clr_val         (bkr_clr_val),
+  .bkr_clr_idx         (bkr_clr_idx),
+  .bkr_clr_pos         (bkr_clr_pos)
 );

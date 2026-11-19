@@ -172,6 +172,28 @@ module ftq_ifu (
   output logic [TRX_SLOT_BITS-1:0] pd_wr_sel,
   output bp_ftq_slot_t             pd_wr_slot,
   output logic                     pd_wr_kill,
+  // BP-152, C1. A predecode-found jump ends the block at its own end,
+  // the pc plus its length: pd_wr_pft is written into pft_addr with the
+  // slot (pd_wr_pft_val), as a resolved taken jump writes it
+  // (ftq_resolve rsv_wr_pft), so the RAS commit of a call predecode
+  // found pushes the call's return address, not the block's end.
+  output logic                     pd_wr_pft_val,
+  output logic [VA_WIDTH-1:0]      pd_wr_pft,
+  // BP-152, C1, to the RAS through the cluster. With the predecode
+  // redirect winning this cycle (its restore is the RAS's), the
+  // corrected slot a taken call, return or return-call, and no slot of
+  // the entry a taken RAS operation before the correction (the RAS
+  // made none for the block): the operation, its type and the return
+  // address a call pushes. pd_ras_wr_val writes the post-op snapshot
+  // the RAS returns into the entry's ras field.
+  output logic                     ras_pd_val,
+  output bp_br_type_e              ras_pd_br_type,
+  output logic [VA_WIDTH-1:0]      ras_pd_ret_addr,
+  // The entry's own push (a taken call slot) is off the path of the
+  // correction (after mis_pos, or at it and no longer a call): the RAS
+  // undoes it on the restore first (ras.sv ras_rs_undo).
+  output logic                     ras_pd_undo,
+  output logic                     pd_ras_wr_val,
 
   // ---- to ftq_npc, arm 2 -------------------------------------------
   output logic                     pd_redir_val,
@@ -556,6 +578,88 @@ module ftq_ifu (
     pd_wr_kill    = 1'b1;
   end
 
+  // -----------------------------------------------------------------
+  // C1 (BP-152, ras_decisions.md 7, RAS-4). The RAS operates at p2 only
+  // when the FTB answers (CB1), so a call or return predecode finds in
+  // a block the FTB did not give it for was never applied: the call
+  // was not pushed (call_pd, BP-151) and its commit pushed the block's
+  // pft_addr. Two corrections ride on the predecode slot write:
+  //   - pft_addr: the corrected slot is a taken jump, so the block ends
+  //     at its end, the pc plus its length (the rule ftq_resolve applies
+  //     to a resolved taken jump, TD#164). Written with the slot, whether
+  //     or not the redirect wins (the slot write is not gated on it).
+  //   - the RAS operation, applied by the RAS on top of this redirect's
+  //     restore of the entry's snapshot, and the post-op snapshot
+  //     written back into the entry. Only when this redirect wins (it is
+  //     then the restore the RAS takes; an older winner squashes the
+  //     entry) and the entry held no taken RAS operation before the
+  //     correction: the snapshot is then the state before the block, and
+  //     the operation lands on it.
+  //   - an entry that held one (the FTB gave a call or return in the
+  //     block; FE-11, one per block): its snapshot holds it. A held push
+  //     (a taken call) the correction leaves off the path (after
+  //     mis_pos, or at it and no longer a call) is undone on the restore
+  //     first (ras_pd_undo), then the new operation applies. A held push
+  //     the correction keeps (a call at mis_pos retargeted, M3) needs
+  //     nothing. A held pop (a return or return-call) cannot be undone
+  //     from a post-op snapshot, which holds no pre-op TOSR: left
+  //     (snap_offpath_op, BP-151 E), and no C1 operation is applied over
+  //     it.
+  // ifu_f3 raises a predecode mispredict for a JAL (M1, M3) and for a
+  // position holding no control transfer (M2), never for a JALR: the
+  // corrected slot is a DIRECT_CALL or DIRECT_UNC, or no branch. The
+  // return and return-call arms are built for the corrected types the
+  // entry can carry and are not reached from ifu_f3.
+  // -----------------------------------------------------------------
+  always_comb begin : pd_ras
+    logic held_push;
+    logic held_pop;
+    logic push_off;
+    logic ras_t;
+    logic new_push;
+    logic win;
+    held_push = 1'b0;
+    held_pop  = 1'b0;
+    push_off  = 1'b0;
+    new_push  = w_new_slot.slot_valid && w_new_slot.taken &&
+                ((w_pd_br_type == DIRECT_CALL) ||
+                 (w_pd_br_type == INDIRECT_CALL));
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (pdwb_entry.slot[s].slot_valid && pdwb_entry.slot[s].taken) begin
+        if ((pdwb_entry.slot[s].br_type == DIRECT_CALL) ||
+            (pdwb_entry.slot[s].br_type == INDIRECT_CALL)) begin
+          held_push = 1'b1;
+          if ((pdwb_entry.slot[s].pos > FTB_BR_POS_BITS'(ifu_ftq_mis_pos)) ||
+              ((pdwb_entry.slot[s].pos == FTB_BR_POS_BITS'(ifu_ftq_mis_pos))
+               && !new_push))
+            push_off = 1'b1;
+        end
+        if ((pdwb_entry.slot[s].br_type == RETURN) ||
+            (pdwb_entry.slot[s].br_type == RETURN_CALL))
+          held_pop = 1'b1;
+      end
+    end
+    win   = pd_redir_val && redir_val && redir_arm[ARM_PD];
+    ras_t = w_new_slot.slot_valid && w_new_slot.taken &&
+            ((w_pd_br_type == DIRECT_CALL)   ||
+             (w_pd_br_type == INDIRECT_CALL) ||
+             (w_pd_br_type == RETURN)        ||
+             (w_pd_br_type == RETURN_CALL));
+
+    pd_wr_pft       = pdwb_entry.pc +
+                      VA_WIDTH'({ifu_ftq_mis_pos, 1'b0}) +
+                      (w_pd_at_mis.is_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
+    pd_wr_pft_val   = pd_wr_val && w_new_slot.slot_valid &&
+                      w_new_slot.taken && (w_pd_br_type != COND);
+
+    ras_pd_undo     = win && held_push && push_off;
+    ras_pd_val      = win && ras_t && !held_pop &&
+                      (!held_push || push_off);
+    ras_pd_br_type  = w_pd_br_type;
+    ras_pd_ret_addr = pd_wr_pft;
+    pd_ras_wr_val   = ras_pd_val || ras_pd_undo;
+  end
+
   // ifu_ftq_pd_range, ifu_ftq_cfi_val, ifu_ftq_cfi_pos and
   // ifu_ftq_fault_pos are DECLARED AND NOT READ, and each absence is
   // a decision rather than an omission:
@@ -580,9 +684,10 @@ module ftq_ifu (
   // HERE. Each acceptance advances a pointer, which is ftq_ptr's
   // state, so the ports are consumed there; they are on this port
   // list because sections 4 and 4.1 declare them on this interface.
-  // redir_arm[ARM_BKEND], redir_arm[ARM_PD] and the p1 arm are not
-  // read: the K+1 and K rows by _self are every redirect outside the
-  // p2, p3 set, and the predecode arm is always _self clear. The wrap bit of
+  // redir_arm[ARM_BKEND] and the p1 arm are not read: the K+1 and K
+  // rows by _self are every redirect outside the p2, p3 set, and the
+  // predecode arm is always _self clear. redir_arm[ARM_PD] is read by
+  // C1 only (BP-152, pd_ras). The wrap bit of
   // commit_ptr is not read: both of its uses here are indices.
   //
   // clk and rstn are read by the bound properties, not by this
@@ -591,7 +696,7 @@ module ftq_ifu (
   assign w_unused = |ifu_ftq_pd_range | ifu_ftq_cfi_val |
                     |ifu_ftq_cfi_pos  | |ifu_ftq_fault_pos |
                     ftq_ifu_req_rdy   | ftq_ifu_xlate_rdy |
-                    redir_arm[ARM_BKEND] | redir_arm[ARM_PD] |
+                    redir_arm[ARM_BKEND] |
                     redir_arm[ARM_P1] |
                     commit_ptr[FTQ_IDX_BITS] | rstn | clk;
 

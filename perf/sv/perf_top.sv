@@ -301,7 +301,22 @@ module perf_top (
   output logic [FTQ_IDX_BITS-1:0]        rc_cm_idx,
   // the entry a restore names, and the predecode redirect's position
   output logic [FTQ_IDX_BITS-1:0]        rc_rs_idx,
-  output logic [FTQ_PD_POS_BITS-1:0]     rc_pd_pos
+  output logic [FTQ_PD_POS_BITS-1:0]     rc_pd_pos,
+  // BP-152: the commit-stack index a p2 pop on an empty stack read (A1),
+  // and the C1 operation on a restore: valid, type, the address a call
+  // pushes, and its allocation (the restore scan's port 3, RS_P_PUSH).
+  output logic [RAS_COMMIT_PTR_BITS-1:0] rc_p2_fbi   [NUM_PRED_SLOTS],
+  output logic                           rc_pd_val,
+  output logic [2:0]                     rc_pd_type,
+  output logic [VA_WIDTH-1:0]            rc_pd_ret,
+  output logic                           rc_pd_al,
+  output logic [RAS_PTR_BITS-1:0]        rc_pd_waddr,
+  // BP-152, A1: the depth after each slot's p2 operation (its snapshot's
+  // dep) and the committed depth, for the classifier's diagnostics.
+  output logic [RAS_DEPTH_BITS-1:0]      rc_p2_dep   [NUM_PRED_SLOTS],
+  output logic [RAS_DEPTH_BITS-1:0]      rc_dcm,
+  // BP-152: the restore undid the named block's own push (ras_rs_undo).
+  output logic                           rc_rs_undo
 );
 
   // ---- every fe_top port, the names fe_tb_dut.svh gives them -------
@@ -759,6 +774,18 @@ module perf_top (
     rc_cm_idx  = dut.u_ftq.u_entry.commit_rd_idx;
     rc_rs_idx  = dut.u_ftq.ftq_rollback_idx;
     rc_pd_pos  = dut.u_ftq.u_ifu.ifu_ftq_mis_pos;
+    // BP-152.
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      rc_p2_fbi[s] = dut.u_bpu.u_ras.p2_fb_idx[s];
+      rc_p2_dep[s] = dut.u_bpu.u_ras.ras_snapshot_p2[s].dep;
+    end
+    rc_dcm      = dut.u_bpu.u_ras.dcm;
+    rc_rs_undo  = dut.u_bpu.u_ras.ras_rs_undo;
+    rc_pd_val   = dut.u_bpu.u_ras.ras_pd_val;
+    rc_pd_type  = 3'(dut.u_bpu.u_ras.ras_pd_br_type);
+    rc_pd_ret   = dut.u_bpu.u_ras.ras_pd_ret_addr;
+    rc_pd_al    = dut.u_bpu.u_ras.rs_we[3] && dut.u_bpu.u_ras.rs_al[3];
+    rc_pd_waddr = dut.u_bpu.u_ras.rs_waddr[3];
   end
 
 endmodule : perf_top
