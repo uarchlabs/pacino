@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -435,7 +435,18 @@ set by ISA branch/jump reach in the EXPANDED address space, not by
 in-block granularity. A conditional B-type reaches +/-4 KB in original
 code; in the worst all-RVC-expanded case that span doubles to +/-8 KB,
 so FTB_BR_TGT_BITS = 13. A J-type reaches +/-1 MB original, +/-2 MB
-expanded, so FTB_JMP_TGT_BITS = 21. Both pair with TAR_STAT_BITS = 2.
+expanded, so FTB_JMP_TGT_BITS was 21. Both pair with TAR_STAT_BITS = 2.
+BP-153 (RC13), ACCEPTED session-086 (Jeff): FTB_JMP_TGT_BITS =
+VA_WIDTH. The jump field is the target of every jump type and the
+fallback for a JALR on an ITTAGE miss (this section), and a JALR target
+is anywhere in the VA; at 21 bits every JALR more than 2^20 bytes from
+its PC came back truncated, because ftb_cntrl wrote the fit status and
+never read it (after the ITTAGE p2 ready fix, 5,454 mispredicts over
+six traces, web_11 4,557). The uBTB's jump field stays at 21
+(UBTB_JMP_TGT_BITS no longer follows FTB_JMP_TGT_BITS): its target is
+the p1 prediction, which p2 corrects with a redirect. Cost: the FTB
+entry 114 -> 152 bits, +77,824 RAM bits (+33.6%). A narrower field
+that still covers the measured targets is a study (TD#214).
 The position field (which instruction in the block) is separate and is
 FTB_BR_POS_BITS = 4 ($clog2(16)), in-block granularity: sixteen
 2-byte positions in a 32-byte block, BP-099.
@@ -1028,8 +1039,10 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               the width of every position PORT.
   FTB_BR_TGT_BITS   = 13      conditional target displacement. B-type
                               +/-4 KB original -> +/-8 KB expanded.
-  FTB_JMP_TGT_BITS  = 21      jump target displacement. J-type
-                              +/-1 MB original -> +/-2 MB expanded.
+  FTB_JMP_TGT_BITS  = VA_WIDTH jump target displacement, the full
+                              VA (BP-153 RC13, accepted). Was 21:
+                              J-type +/-1 MB original -> +/-2 MB
+                              expanded.
   TAR_STAT_BITS     = 2       fit / overflow / underflow status,
                               shared by conditional and jump targets.
   PFTADDR_BITS      = 5       FTB_BR_POS_BITS + 1. The stored block
@@ -1042,7 +1055,8 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
 
-  FTB_ENTRY_WIDTH (logical, per way) = 114 bits:
+  FTB_ENTRY_WIDTH (logical, per way) = 152 bits since BP-153 (the
+  jump target +38); 114 before it:
     1   valid          -- held in ftb_plru (flops), not ftb_array
   + 30  tag            -- 26 region tag + 4 start offset
   + 2 * (1 + 4 + 13 + 2 + 3)       = 46   br0 + br1 (valid,pos,tgt,
@@ -1501,4 +1515,7 @@ bits hold.
 
   2026-11-12  session-085, after BP-145. 3, 4.1 and 8: VA_WIDTH named, not
               its value; the tag stays pinned at 26.
+
+  2026-11-20  session-086, after BP-153. 4.2, 8: FTB_JMP_TGT_BITS =
+              VA_WIDTH (RC13, accepted, Jeff); the entry 152 bits.
 ```

@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-11-19
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -180,6 +180,8 @@ been squashed; see section 7 rule R3.
   bkend_ftq_redir_pc     [VA_WIDTH-1:0]                    NEW
   bkend_ftq_redir_self                                     NEW
   bkend_ftq_redir_cause  ftq_redir_cause_e                 NEW
+  bkend_ftq_redir_type   bp_br_type_e                      BP-153
+  bkend_ftq_redir_rvc                                      BP-153
 ```
 
 ```
@@ -211,7 +213,15 @@ squashes every entry after that index, and the entry itself when
 `_pos`. ftq_npc uses `_pos` and `_taken` to form the history
 correction it drives with the rollback (D1; ftq_bpu_interfaces.md
 9). Added by BP-121 (D14, decision 8). One bit, on fe_top and the
-ftq; read only on an RC_MISPREDICT with _self clear. Since BP-122
+ftq; read only on an RC_MISPREDICT with _self clear.
+
+`bkend_ftq_redir_type` and `_rvc` (BP-153, RC1, for acceptance) are
+the resolved type and length of the instruction named, NO_BRANCH for
+one that is not a branch; read only with cause RC_MISPREDICT and _self
+clear, on fe_top and the ftq. The FTQ applies a call or return the
+entry did not hold to the RAS on the restore (ras_decisions.md 7); the
+push address is the entry pc + 2 * _pos + 2 or 4, which needs _rvc
+because _pc is the target. Since BP-122
 it also forms the loop predictor's rollback slot bits.
 
 The FTQ's response:
@@ -660,4 +670,7 @@ Every one of these is unverifiable today. The backend does not exist.
 
   2026-11-19  session-086, after BP-152, for acceptance. 5 D5: the
               slot clear after _pos with _self clear (TD#211 a).
+
+  2026-11-20  session-086, after BP-153, for acceptance. 5: _type and
+              _rvc on the redirect (RC1).
 ```

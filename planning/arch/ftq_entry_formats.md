@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-11-19
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -36,17 +36,21 @@ update. The two are separated so the every-cycle read does not carry
 the width of the update-only metadata.
 
 ```
-  fast path   bp_ftq_entry_t   316b   x 64 entries        20,224b
+  fast path   bp_ftq_entry_t   329b   x 64 entries        21,056b
   slow path   bp_ftq_meta_t    461b   x 2 slots x 64      59,008b
                                                           -------
-                                                          79,232b
+                                                          80,064b
 ```
 
 These are the widths as built at the VA_WIDTH of fe_decisions.md
 FE-19, measured by BP-145 ($bits); this section is their one
 statement. BP-152 (for acceptance) widened the fast path by 12 bits,
 the RAS snapshot's dep and tag: 304b -> 316b at two slots, 229b ->
-241b at one ($bits). VA_WIDTH reaches pc, pft_addr and the two slot targets of
+241b at one ($bits). BP-153 (for acceptance) widened the snapshot to
+41b: 316b -> 329b at two slots, 241b -> 254b at one. BP-154's revert
+of RC11 (16 speculative entries) takes the snapshot to 39b and the
+entry to 327b and 252b.
+VA_WIDTH reaches pc, pft_addr and the two slot targets of
 the fast path, and the two ITTAGE targets of each slot's metadata.
 
 The slow-path figure is the unpacked layout. Section 3.1 defines an
@@ -94,7 +98,9 @@ Block scalar fields, one per entry:
 pc            41     prediction block start PC, VA_WIDTH
 pft_addr      41     block fall-through address, VA_WIDTH
 branch_id      6     FTQ entry index, FTQ_IDX_BITS
-ras           28     bp_ras_snapshot_t: TOSR, TOSW, BOS and the
+ras           41     bp_ras_snapshot_t (BP-153; 39 after BP-154;
+                     ras_decisions.md 4.1). Before BP-153, 28:
+                     bp_ras_snapshot_t: TOSR, TOSW, BOS and the
                      TOSR entry's recursion count, 4 bits each
                      (the count: TD#194 option A, BP-142); the
                      depth, 8, and the TOSR entry's generation, 4
@@ -667,4 +673,7 @@ path touches none of those.
   2026-11-19  session-086, after BP-152, for acceptance. 1, 2: the
               fast path 316b (ras 28b); the end clear by position and
               the backend redirect clear (TD#211).
+
+  2026-11-20  session-086, after BP-153, for acceptance. 1, 2: the
+              fast path 329b (ras 41b); 327b after BP-154.
 ```

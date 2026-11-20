@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-18
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -229,6 +229,13 @@ PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
          7 and 8; compress_1, infra_1 and int_6 rise with resolve to
          commit). RULED session-086 (Jeff): the default stays
          immediate, and TD#207 is investigated first.
+         RETIRED session-086 (Jeff), after BP-153. With TD#207 fixed,
+         return mispredicts no longer rise with resolve to commit
+         (infra_1 2,791 to 2,848 over the grid, web_11 8,208 to 8,277),
+         but the exact rule is still met only at (8, 8): the
+         remaining variation is FTB replacement timing, not a race.
+         THE IMMEDIATE BACKEND IS THE DEFAULT; the sweep
+         (perf003_p6_sweep.sets) stays as a study.
        - THE MISPREDICT RULE. PERF-002 decides a mispredict by the
          fetched stream: a branch mispredicts when the next
          instruction fetch delivers is not the trace's next PC, and a
@@ -690,4 +697,7 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               set, the default immediate until TD#207 (Jeff); a trap
               after a branch judged apart (Jeff), for PERF-004. PF-21,
               PF-22: built.
+  2026-11-20  session-086, after BP-153. PF-18: the near-perfect
+              default retired; the immediate backend is the default
+              (Jeff).
 ```

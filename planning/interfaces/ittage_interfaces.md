@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -242,6 +242,12 @@ ittage_pred_val_p0[s] = 0  -- no request for slot s.
                               ittage_pred_rdy_p2[s] will be
                               0 at p2.
 ittage_pred_rdy_p2[s] = 1  -- ittage_pred_meta_p2[s] is valid.
+                              It is the p2 result of the prediction
+                              granted the cycle before, whatever the
+                              arbiter grants in the current cycle
+                              (BP-153; bp_arb_spec.md 4.6). Before
+                              BP-153 an update granted in the p2 cycle
+                              cleared it, a defect.
 ```
 
 Both slots may have ittage_pred_val_p0 asserted in the same
@@ -529,7 +535,8 @@ p3: SC
 Target selection at p2, by branch class then by hit:
 
 ```
-  RETURN     RAS ras_pop_addr_p2
+  RETURN     RAS peek, ras_peek_addr_p2 (BP-153; ras_pop_addr_p2
+             before it)
   indirect   ITTAGE on hit; the FTB target on an ITTAGE miss
   otherwise  FTB target
 ```

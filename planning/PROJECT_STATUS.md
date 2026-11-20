@@ -16,6 +16,66 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-086, continued: BP-153 recorded; BP-154 written.
+
+BP-153 COMPLETE (073ab98). regress.sh: 301 targets, 0 new failures,
+0 known failures. TD#207 is closed: the timing race is gone.
+- BUILT, FOR ACCEPTANCE: RC1 the redirect's _type and _rvc; RC2 the
+  backend's RAS operation; RC3 the pop record and the off-path pop
+  undo; RC4 one rule for a held operation at the position; RC5 the
+  widths; RC6 the return target is the peek; RC7 a held operation is
+  one the snapshot records; RC8 the p3 snapshot after the repair
+  (TD#149 closed); RC9 the p1 slots on an FTB miss; RC10 64 commit
+  entries; RC11 32 speculative entries; RC12 the count below; RC13
+  the FTB jump field at the full VA. And a defect fix: ITTAGE's p2
+  ready was cleared by an update granted in its p2 cycle, against
+  bp_arb_spec.md 4.6.
+- MEASURED: slot-held return mispredicts 6,335 -> 1,059 over the 25
+  runs (ref_unmatched 1,009, unwound 50; every RAS cause 0). p5,
+  immediate: web_11 MPKI 25.88 -> 22.80 (mpki_ftb 4.40 -> 1.33),
+  infra_1 11.51 -> 10.28. Returns no longer rise with resolve to
+  commit over the sweep.
+PA assessment: accept. Open from it: pt_gonly_x4's cycles moved 398
+-> 363 at both slot counts and were not traced (BP-154); RC3's proposed
+text gives the snapshot as 38b where 41b was built (recorded as
+built). Process: the IA stopped twice with the DONE checklist unmet and
+context free; Jeff restarted it each time. Eight concurrent builds took
+the machine down. PA ERRORS: the DONE checklist required the header
+Status, which CLAUDE.md did not let the IA write; nothing capped
+scratch builds.
+
+RULINGS (Jeff, session-086):
+- RC10 (commit 64) and RC13 (the FTB jump field at the full VA)
+  accepted.
+- RC11 (32 speculative entries) REJECTED: it doubles the link-kill
+  comparators on every allocation and widens the restore path for 5
+  returns. BP-154 reverts it and measures the wrap at long resolve to
+  commit, where a real backend may have far more calls in flight.
+- PF-18's near-perfect default retired; the immediate backend is the
+  default (perf_decisions.md PF-18).
+- CLAUDE.md, as Jeff edited it: output filters and scratch scripts
+  allowed, one build at a time, a task's AREA counts as listed files
+  and a change outside it is reported without stopping, the IA sets the
+  header Status line.
+
+TECHNICAL DEBT. Closed: TD#149 and TD#207, moved to
+CLOSED_TECH_DEBT.md. Opened: TD#212 (the FTB never holds some blocks),
+TD#213 (the restore paths' timing), TD#214 (RC13's width study).
+
+BP-154 WRITTEN: revert RC11 (RAS_SPEC_ENTRIES 16), TC-82 as a capacity
+test, the classified runs, p5 and regress; measure the wrap at resolve
+to commit 50, 100 and 200 at 16 and at 32 entries; trace
+pt_gonly_x4.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, ras_decisions.md,
+ras_interfaces.md, ftq_backend_interfaces.md, ftq_entry_formats.md,
+ftb_decisions.md, ittage_interfaces.md, perf_decisions.md.
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-004,
+TD#215.
+
+---
 ## Session-086, continued: BP-152 recorded; BP-153 written.
 
 BP-152 (0588b7b), Status as delivered: complete in the header,
@@ -6838,15 +6898,6 @@ moves there in the planning update that closes it.
 |     |          | commitment on this. Session-085 (Jeff): pacino needs two |
 |     |          | taken branches per cycle and a 64-byte prediction block  |
 |     |          | to keep the 8-wide midcore fed; see TD#202.              |
-| 149 | bpu, ftq | OPEN, MEASURED by BP-121 and BP-151. The p3 RAS repair:  |
-|     |          | after SC reverses a slot at p3 the entry holds the       |
-|     |          | pre-repair snapshot. Repairs: recur 14, rvc 9, misp_call |
-|     |          | 16; restores naming a repaired entry: recur 1, rvc 2,    |
-|     |          | misp_call 9; no return mispredict after warm-up          |
-|     |          | attributable. BP-151 on traces: the first cause of 7     |
-|     |          | slot-held return mispredicts (infra_1, resolve to commit |
-|     |          | 8), 0 at the other measured points. Fix if measured      |
-|     |          | worse; it is not.                                        |
 | 150 | ftq, bpu | OPEN, DEFERRED. The AND is built (BP-119, ftq_upd_conv). |
 |     |          | bp_cluster gives each queued predictor (TAGE, ITTAGE,    |
 |     |          | SC) a ready per slot; the converter ANDs them, so a full |
@@ -7271,20 +7322,6 @@ moves there in the planning update that closes it.
 |     |          | Suspected at ftq_ifu.sv:256-258, a request only for an   |
 |     |          | entry whose translation has been presented. Opened       |
 |     |          | session-086 (Jeff).                                      |
-| 207 | bpu, ras | OPEN, MOSTLY FIXED (BP-152), REST IN BP-153. RETURN      |
-|     |          | MISPREDICTS DEPEND ON BACKEND TIMING. Cause (BP-151):    |
-|     |          | the commit-stack fallback reads a frame an uncommitted   |
-|     |          | return has popped; second, reuse below BOS; third, calls |
-|     |          | only predecode finds. BP-152 built A1, B1, C1 and the    |
-|     |          | undo (ras_decisions.md 3.2, 3.3, 4.3, 7; for             |
-|     |          | acceptance): slot-held return mispredicts 123,712 ->     |
-|     |          | 6,335 over BP-151's 25 runs; media_2 returns 4,815 ->    |
-|     |          | 62, 61 to 73 over the whole sweep; infra_1 MPKI 17.01 -> |
-|     |          | 11.51. Left: calls and returns only the backend finds    |
-|     |          | (3,105), the snapshot's off-path pops (988, raised from  |
-|     |          | 235 by A1), 381 located and not explained; returns still |
-|     |          | rise slowly with resolve to commit (infra_1 2,950 to     |
-|     |          | 3,547). BP-153. Opened session-086 (Jeff).               |
 | 208 | perf     | OPEN, PERFORMANCE, INVESTIGATE, AFTER TD#207. MPKI AND   |
 |     |          | mis_sc RISE ON SOME TRACES AFTER BP-150 (web_11 +37      |
 |     |          | immediate, +166 latency; compress_1 +45; int_6 +21;      |
@@ -7315,6 +7352,31 @@ moves there in the planning update that closes it.
 |     |          | to a stamp file rewritten only when the value changes,   |
 |     |          | and the binary depends on the stamp. PERF-004. Opened    |
 |     |          | session-086 (PA).                                        |
+| 212 | bpu, ftb | OPEN, PERFORMANCE. THE FTB NEVER HOLDS SOME BLOCKS.      |
+|     |          | BP-153's count of backend-found branches by why the FTB  |
+|     |          | missed them (six traces, immediate): cold 15,250,        |
+|     |          | evicted 15,057, never 11,052, slots full 95, free slot   |
+|     |          | unused 3,093, of 44,547. NEVER is a PC committed before  |
+|     |          | whose block was never held in a slot: an allocation      |
+|     |          | question (ftb_cntrl update and replacement), the largest |
+|     |          | remaining prediction loss found. Opened session-086      |
+|     |          | (PA).                                                    |
+| 213 | bpu, ftq | OPEN, PHYSICAL DESIGN. THE RAS AND FTQ RESTORE PATHS     |
+|     |          | GREW (BP-152, BP-153): the undo of the restored block's  |
+|     |          | push and pop, the C1 and backend operations, the         |
+|     |          | generation test, the count write-back, and the peek per  |
+|     |          | slot at p2; the p3 snapshot write; the link-kill         |
+|     |          | comparators on every allocation. No timing number        |
+|     |          | exists. Measure when synthesis is available; the         |
+|     |          | fallbacks are a registered restore or a narrower undo.   |
+|     |          | Opened session-086 (PA).                                 |
+| 214 | bpu, ftb | OPEN, STUDY. THE FTB JUMP FIELD AT THE FULL VA (BP-153   |
+|     |          | RC13, accepted) costs +77,824 RAM bits (+33.6%). The far |
+|     |          | targets measured are about 2^34 from their PCs. Measure  |
+|     |          | the displacement distribution of every committed JALR    |
+|     |          | over the six traces, and whether a field of about 40     |
+|     |          | bits gives the same mispredicts. Opened session-086      |
+|     |          | (PA).                                                    |
 ---
 
 ## Open Items

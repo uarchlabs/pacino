@@ -86,6 +86,18 @@ production-quality outputs.
 - Read, search and list files with the Read, Grep and Glob tools, not
   with shell commands. A Bash command names its files by literal paths:
   no shell variables, $(...) or backticks, loops, or xargs.
+- A command's own output may be filtered through a pipe (grep, head,
+  tail, sort, uniq, wc, cut, awk) to keep it short. The exception is
+  the regress.sh summary, which is taken whole. Reading a file is
+  still done with Read, not with a filter.
+- A scratch script in the scratchpad, created with Write and run as
+  bash <file> or python3 <file>, may use variables, loops and
+  pipelines inside it. A one-off calculation goes in such a script,
+  not in python3 -c.
+- ONE BUILD AT A TIME. Do not start a build while another runs, in the
+  tree or in a scratch copy. A build's own parallel jobs count against
+  the limit of 75% of the hardware threads (perf_decisions.md PF-22).
+  Eight concurrent Verilator builds took the machine down (BP-153).
 - Run tools/regress.sh once, at the end, in the background, and wait
   for it to finish before writing Results Capture; no file changes
   while it runs. Its run is longer than the 600 s foreground limit.
@@ -99,13 +111,16 @@ production-quality outputs.
 
 ## Experiment File Rules
 - Only read or write files explicitly listed in the
-  Context Loaded manifest or Deliverables section. Do
-  not create, modify, or write to any file not in these
-  lists. This includes comment blocks, headers, and any
+  Context Loaded manifest or Deliverables section. A
+  task file that states an AREA lists every file in it:
+  the IA may read and change those files as the task
+  says. Do not create, modify, or write to any file not
+  in these lists. This includes comment blocks, headers, and any
   other content in listed files that is outside the
   explicit scope of the prompt. If a change outside
-  scope appears necessary, stop and report it before
-  making the change.
+  scope appears necessary, do not make it: report it in
+  Results Capture with its reason, and continue with
+  the rest of the task.
 - Write Results Capture into ./prompts/<TASK-ID>.md
   Fill in every section completely.  Do not leave any
   section as TBD if information is available.
@@ -113,9 +128,10 @@ production-quality outputs.
   :: RESULTS:START :: :: RESULTS:END :: markers. Do not
   modify any content outside these markers.
   The exceptions are the header fields Model, Run time, Ctx % and
-  Resume sha, and the region between :: CONTEXT:START :: and
-  :: CONTEXT:END ::, populated per "Model Reporting in Task Files"
-  below.
+  Resume sha, the header's Status line (set to agree with the
+  first line of the Summary), and the region between
+  :: CONTEXT:START :: and :: CONTEXT:END ::, populated per "Model
+  Reporting in Task Files" below.
 - No default permission is allowed for git commands unless expressed
   in the task file. Unless permission has been granted the IA
   must ask for permission before proceeding.

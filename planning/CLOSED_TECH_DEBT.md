@@ -1440,6 +1440,28 @@
 |     |          | and rsv_trapcall fail before and pass after;             |
 |     |          | commit_unexecuted 25 -> 0 over BP-151's 25 runs. Was:    |
 |     |          | OPEN, CORRECTNESS, found by BP-151.                      |
+| 149 | bpu, ftq | CLOSED by BP-153 (073ab98), session-086, RC8, for        |
+|     |          | acceptance. THE p3 RAS REPAIR WAS NOT IN THE SNAPSHOT: a |
+|     |          | restore to a repaired entry undid the repair. The RAS    |
+|     |          | now gives the p3 block's snapshot after the repair       |
+|     |          | (ras_rep_val, ras_rep_snapshot) and the FTQ writes it    |
+|     |          | into the entry (ras_decisions.md 4.1). Measured:         |
+|     |          | commit_lost 20 -> 0, with RC6 and RC7 removing 100 of    |
+|     |          | the then-remaining returns. tb_ras TC-80, tb_ftq_entry   |
+|     |          | J5. Was: OPEN, measured by BP-121 and BP-151.            |
+| 207 | bpu, ras | CLOSED by BP-153 (073ab98), session-086, for acceptance. |
+|     |          | RETURN MISPREDICTS DEPENDED ON BACKEND TIMING. BP-151    |
+|     |          | found the cause (the commit-stack fallback reading a     |
+|     |          | popped frame); BP-152 built A1, B1, C1 and the undo;     |
+|     |          | BP-153 the backend-found operations, the off-path pop    |
+|     |          | undo, the peek, the record gating, the p3 snapshot, the  |
+|     |          | p1 slots on an FTB miss, the count below, and commit 64. |
+|     |          | Slot-held return mispredicts 123,712 -> 1,059 over       |
+|     |          | BP-151's 25 runs; the 1,059 are ref_unmatched (1,009)    |
+|     |          | and unwound (50); every RAS cause 0. Over the sweep      |
+|     |          | returns no longer rise with resolve to commit (infra_1   |
+|     |          | 2,791 to 2,848). RC11 (32 speculative entries) rejected: |
+|     |          | BP-154.                                                  |
 
 ## Performance / Verification Debt
 

@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-19
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -179,6 +179,15 @@ module ras (
   input  logic [VA_WIDTH-1:0] ras_pd_ret_addr,
   input  logic             ras_rs_undo,
   output bp_ras_snapshot_t ras_pd_snapshot,
+  // BP-153, for acceptance: the pop undo (ras_decisions.md 4.3, RE10),
+  // read only with ras_restore_val; ras_pd_* also carry the backend's
+  // operation (7). The peek of every slot (7, RC6), and the p3 block's
+  // snapshot after the repair (4.1, RC8):
+  input  logic             ras_rs_undo_pop,
+  output logic [VA_WIDTH-1:0] ras_peek_addr_p2[0:NUM_PRED_SLOTS-1],
+  output logic                ras_peek_valid_p2[0:NUM_PRED_SLOTS-1],
+  output logic             ras_rep_val,
+  output bp_ras_snapshot_t ras_rep_snapshot,
 
   // ----------------------------------------------------------
   // Commit inputs (driven by FTQ at retire)
@@ -239,6 +248,10 @@ RAS_TAG_BITS wide (BP-152):
 
 With RAS_PTR_BITS=4, RAS_RCTR_WIDTH=4, RAS_DEPTH_BITS=8 and
 RAS_TAG_BITS=4: total 28b per snapshot (16b before BP-152).
+BP-153, for acceptance, adds push (1b), pmode (RAS_PMODE_BITS, 2b),
+ptosr (RAS_PTR_BITS) and ptag (RAS_TAG_BITS): the block's push and
+the pop record (ras_decisions.md 4.1). 41b at RAS_SPEC_ENTRIES 32;
+39b at 16, after BP-154 reverts RC11.
 rctr is TD#194 option A, ruled session-084 (ras_decisions.md 4.1),
 built by BP-142; the snapshot was 12b, the three pointers.
 Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos,
@@ -303,6 +316,10 @@ ras_tos_valid_p0[s] = 0 -- speculative and commit stacks
   2026-11-19  session-086, after BP-152, for acceptance. 4: the C1
               and undo ports. 5: the 28-bit snapshot (dep, tag).
               IC-RAS-07: the fallback at the speculative depth. RI-4.
+
+  2026-11-20  session-086, after BP-153, for acceptance. 4: the pop
+              undo, the peek, the p3 snapshot ports. 5: push and the
+              pop record. RI-4 closed.
 ```
 
 Both slots may have ras_pred_val_p2 asserted in the same
@@ -670,7 +687,8 @@ While rstn is low (active low, synchronous):
 | RI-3   | PHR/GHR contribution to RAS.          | N/A. RAS does      |
 |        |                                       | not use folded     |
 |        |                                       | history. No action.|
-| RI-4   | The fallback after a speculative pop  | OPEN.              |
+| RI-4   | The fallback after a speculative pop  | CLOSED, BP-153 (for|
+|        |                                       | acceptance).       |
 |        | of a committed frame, the reuse below | ras_decisions.md   |
 |        | BOS, the call and return only         | 10 RAS-4. BUILT    |
 |        |                                       | BP-152 (A1, B1,    |

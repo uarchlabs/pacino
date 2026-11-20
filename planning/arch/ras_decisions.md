@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-19
+ UPDATED: 2026-11-20
  CONTACT: Jeff Nye
 ```
 
@@ -614,6 +614,22 @@ Fields (bp_structs_pkg.sv; rctr added by BP-142):
                             block (BP-152, A1, 3.3)
   tag   : RAS_TAG_BITS   -- the generation of the entry at tosr, 0
                             when tosr == bos (BP-152, B1, 3.2)
+  push  : 1              -- the block pushed (BP-153, RC7)
+  pmode : RAS_PMODE_BITS -- the block's pop: NONE, LINK, DEC or
+                            EMPTY, from the state the pop found
+                            (BP-153, RC3)
+  ptosr : RAS_PTR_BITS   -- TOSR before the pop (BP-153, RC3)
+  ptag  : RAS_TAG_BITS   -- the generation at ptosr (BP-153, RC3)
+The p1 snapshot carries no push and pmode NONE: it is the block
+ahead's state (BP-153). ras_pd_snapshot carries the C1 or backend
+pop's record, else NONE.
+
+BUILT BY BP-153, FOR ACCEPTANCE: 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1 = 41b at
+RAS_SPEC_ENTRIES 32 (RAS_PTR_BITS 5, RAS_TAG_BITS 3). RC11 (32
+entries) was REJECTED session-086 (Jeff): BP-154 returns the stack to
+16 entries, RAS_PTR_BITS 4 and RAS_TAG_BITS 4, so 39b. The paragraph
+below is the BP-152 figure.
 
 RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = $clog2(16) = 4b.
 Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
@@ -652,10 +668,44 @@ that consumed or produced the RAS state is issued", and
 ras_interfaces.md IC-RAS-12 gated the write per slot on
 ras_pred_val_p2, which left the p1 value in a block with no FTB
 result. Whether the p3 repair of section 1 also needs to rewrite the
-snapshot is open (ftq_bpu_interfaces.md 4c, TD#149, measured by
-BP-121 and left open).
+snapshot was open (ftq_bpu_interfaces.md 4c, TD#149, measured by
+BP-121 and left open). BUILT BY BP-153 (RC8), FOR ACCEPTANCE, TD#149
+CLOSED: when the p3 repair changes the stack for the p3 block and no
+restore is taken that cycle, the RAS gives the block's snapshot after
+the repair (ras_rep_val, ras_rep_snapshot, with the repaired pop
+record); bp_cluster passes it as bpu_blk_ras_val_p3 and
+bpu_blk_ras_p3, and the FTQ writes it into the block's entry
+(p3_ras_wr), after the p3 slot write and before a predecode write,
+gated by the p3 slot write's validity. Measured: commit_lost 20 -> 0.
 
 ### 4.3  Restore on mispredict
+
+BUILT BY BP-153, FOR ACCEPTANCE (RC3, RC4, RC7, RC12):
+- THE OFF-PATH POP (RC3). With ras_rs_undo_pop the restore undoes the
+  block's pop record after the push undo and before the C1 or backend
+  operation: LINK sets TOSR = ptosr, or BOS when the generation at
+  ptosr is not ptag, and writes that entry's count 0; DEC writes the
+  count at ptosr + 1 when ptosr is the restored top; EMPTY changes no
+  stack state; every case adds one to the depth; NONE does nothing.
+  The FTQ raises it for a held taken return or return-call after the
+  redirect position, or at it as another operation, on both arms.
+  This replaces "a pop cannot be undone from a post-op snapshot"
+  below. Measured: snap_offpath_op 988 -> 0.
+- A HELD OPERATION AT THE POSITION (RC4). It is kept when the
+  corrected (predecode) or resolved (RC_MISPREDICT) operation is the
+  same push, pop or both; otherwise each of its parts is undone and
+  the new operation applies. For a backend cause other than
+  RC_MISPREDICT it is kept: no type names it.
+- A HELD OPERATION IS ONE THE SNAPSHOT RECORDS (RC7). A taken call
+  slot is a held push only when the snapshot has push set; a taken
+  return slot is a held pop only when its pmode is not NONE. A slot
+  the RAS did not operate (a p1 uBTB slot no p2 slot replaced) is
+  neither held nor undone.
+- THE COUNT BELOW (RC12). Each speculative entry records at its
+  allocation the recursion count of the entry its link names
+  (spec_ncnt; 0 for a bottom entry). A pop that follows the link to a
+  live entry writes that count back when it differs, on the port a
+  decrementing pop uses (12.9 RE11).
 
 THE RESTORED BLOCK'S OWN PUSH OFF THE PATH (BP-152, FOR ACCEPTANCE).
 The snapshot is post-op (4.2). When the redirect leaves the named
@@ -1008,6 +1058,29 @@ DIRECT CALLS; returns and indirect calls the FTB does not give are
 still applied only at commit (ret_pd, call_pd; RAS-4). Measured:
 call_pd 19,864 -> 704 (all indirect) over BP-151's 25 runs.
 
+BUILT BY BP-153, FOR ACCEPTANCE:
+- THE BACKEND'S OPERATION (RC2). On the restore of a winning
+  RC_MISPREDICT redirect with _self clear whose _type is a call,
+  return or return-call (ftq_backend_interfaces.md 5, RC1), the RAS
+  applies the operation to the restored state by the C1 rules (the pop
+  first, then the push of the entry pc + 2 * _pos + 2 or 4), on the C1
+  ports, when the entry holds no taken RAS operation before _pos, or
+  at it as the same operation. A held operation after _pos, or at it
+  as another, is undone first (4.3). The post-op snapshot is written
+  into the entry. The resolution's slot is a taken RAS type and is
+  always written, so the commit operates once. Measured: call_pd 704
+  and ret_pd 2,401 -> 0.
+- ON AN FTB MISS THE RAS OPERATES ON THE p1 SLOTS (RC9): the p1 view's
+  taken call, return and return-call slots in reach (the uBTB's), with
+  the p1 fall-through; the p3 view keeps that type. Measured:
+  call_p1_only 15 and ret_nopop 15 -> 0.
+- THE RETURN TARGET IS THE PEEK (RC6). The RAS gives per slot the
+  address the slot's pop would read (ras_peek_addr_p2,
+  ras_peek_valid_p2), whether it pops or not; the p2 target of a
+  return or return-call slot is the peek. Measured: p3_reach 403 and
+  snap_repair 37 -> 0.
+Every call and return now reaches the RAS speculatively: RAS-1 closed.
+
 ---
 
 ## 8. Return Address Value
@@ -1061,11 +1134,15 @@ width set (TC-72a, TC-72b).
 Defined in bp_defines_pkg.sv, added by BP-062. This read "Names
 and values to be added when RAS RTL task is written". Session-071.
 
-  RAS_SPEC_ENTRIES   = 16        -- speculative stack depth
-  RAS_COMMIT_ENTRIES = 32        -- commit stack depth
+  RAS_SPEC_ENTRIES   = 16        -- speculative stack depth (32 by
+                                    BP-153 RC11, rejected; 16 again
+                                    by BP-154)
+  RAS_COMMIT_ENTRIES = 64        -- commit stack depth (32 before
+                                    BP-153 RC10, accepted session-086)
   RAS_RCTR_WIDTH     = 4         -- recursion counter bits
   RAS_DEPTH_BITS     = 8         -- speculative depth (BP-152, 4.1)
   RAS_TAG_BITS       = 4         -- entry generation (BP-152, 4.1)
+  RAS_PMODE_BITS     = 2         -- the pop record's mode (BP-153)
   RAS_ADDR_WIDTH     = VA_WIDTH  -- return address width
 
 Pointer width (already present in bp_defines_pkg.sv as
@@ -1077,11 +1154,12 @@ bp_structs_pkg.sv, which holds types only
 
 bp_ras_snapshot_t uses RAS_PTR_BITS for tosr, tosw, bos, and
 RAS_RCTR_WIDTH for rctr (4.1, TD#194 option A, BP-142).
-Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16b per
-FTQ entry; 12b before session-084.
+Total snapshot width: 4.1 (41b as built by BP-153, 39b after
+BP-154; 28b after BP-152, 16b before it, 12b before session-084).
 
 Commit stack pointer width:
-  RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES) = 5b
+  RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES) = 6b (5b before
+  BP-153)
   Already present in bp_defines_pkg.sv.
   The occupancy count of 3.3 is RAS_COMMIT_PTR_BITS + 1 bits
   (BP-126); no package parameter names it.
@@ -1090,12 +1168,15 @@ Commit stack pointer width:
 
 ## 10. Open Items
 
-  RAS-1: Push timing. PARTIALLY RESOLVED. Push at p2 gated
-         on FTB branch type. Predecode early hint deferred.
-         Close when RTL confirms p2 timing is sufficient.
+  RAS-1: Push timing. CLOSED by BP-152 and BP-153 (for
+         acceptance): predecode-found and backend-found calls and
+         returns, and the p1 view on an FTB miss, reach the RAS
+         speculatively (7).
 
-  RAS-2: Stack depth. RESOLVED session-050.
-         16 speculative + 32 commit. See section 3.
+  RAS-2: Stack depth. RESOLVED session-050: 16 speculative + 32
+         commit. Session-086 (Jeff): commit 64 (BP-153 RC10);
+         speculative 32 (RC11) rejected, 16 again by BP-154, which
+         measures the wrap at long resolve to commit. See section 3.
 
   RAS-3: Recovery on flush. CLOSED 2026-08-20 -- and it was
          ALREADY ANSWERED by section 4.4 long before that date;
@@ -1118,6 +1199,11 @@ Commit stack pointer width:
          snapshot's off-path pops (988), and 381 located, not
          explained. The smaller causes (p3_reach, TD#149's repair, a
          counted entry at BOS, the wrap) are at BP-151's magnitudes.
+         CLOSED by BP-153 (for acceptance): every RAS cause 0 over the
+         25 runs; the 1,059 left are ref_unmatched (1,009, returns to
+         targets no committed call linked) and unwound (50, returns
+         that skip frames). The wrap returns with RC11's revert
+         (BP-154).
 
 ---
 
@@ -1329,6 +1415,11 @@ RE8  ras_flush_val and ras_flush_snapshot are unread: driving them
 RE9  With ras_rs_undo the restore retracts the top of the restored
      state (RP1, RP2) before any C1 operation; the depth less one
      (4.3, BP-152).
+RE10 With ras_rs_undo_pop the restore undoes the snapshot's pop record
+     after RE9 and before any C1 or backend operation (4.3, BP-153).
+RE11 A pop that follows a link to a live entry writes back the count
+     the entry recorded below it at allocation (spec_ncnt) when it
+     differs (4.3, BP-153). RE6 still writes the top's count.
 
 ### 12.10 p3 repair (1; RI IC-RAS-11)
 RP0  A repair runs if and only if a slot's p3 view differs from its
@@ -1430,16 +1521,22 @@ PM1  No literal depths or widths. The boundaries are derived from
      RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES and RAS_RCTR_WIDTH: 15
      usable entries, saturation at 2^RAS_RCTR_WIDTH - 1, a commit
      count to RAS_COMMIT_ENTRIES.
-PM2  The snapshot is 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-     RAS_DEPTH_BITS + RAS_TAG_BITS = 28 bits (4.1; 16 before BP-152).
+PM2  The snapshot is 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+     RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1 bits
+     (4.1, BP-153: 41 at 32 speculative entries, 39 at 16; 28 after
+     BP-152, 16 before it).
 
 ### 12.14 Cluster obligations (2, 4.2, 4.3, 8; RI IC-RAS-12, 8)
 CB1  ras_pred_val_p2 is gated on a valid FTB result, and
      ras_br_type_p2 comes from the FTB, not predecode or decode,
-     except the C1 operation, which the FTQ forms from the predecode
-     correction (7, BP-152).
+     except the C1 and backend operations, which the FTQ forms from a
+     predecode correction or a backend redirect (7, BP-152, BP-153),
+     and on an FTB miss, when the RAS operates on the p1 view's slots
+     (7, BP-153 RC9).
 CB2  ras_br_type_p3 is the registered ras_br_type_p2, and
-     ras_pred_val_p3 = r_val_p3 & r_brv_p3 & w_reach_p3.
+     ras_pred_val_p3 = r_val_p3 & r_brv_p3 & w_reach_p3. The p2
+     target of a return or return-call slot is the peek (7, BP-153
+     RC6).
 CB3  ras_p2_keep is low for a block a redirect squashes.
 CB4  ras_snapshot_p2[NUM_PRED_SLOTS-1] is written to the FTQ entry
      for every valid p2 block, all four fields.
@@ -1624,4 +1721,12 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               push; 4.1, 9 and PM2 the 28-bit snapshot; 12 CL2, P02,
               PU1, PO5, PO7, RE1, RE9, RP5, CO12, CB1. RAS-4: what is
               left goes to BP-153.
+
+  2026-11-20  session-086, after BP-153, FOR ACCEPTANCE (Jeff): 4.1
+              the pop record and the p3 snapshot (TD#149 closed); 4.3
+              the off-path pop undo, the held rules, the count below;
+              7 the backend operation, the p1 slots on an FTB miss,
+              the peek (RAS-1 closed); 9 commit 64 (RC10 accepted),
+              speculative 32 (RC11 rejected, BP-154); 10 RAS-2, RAS-4
+              closed; 12 RE10, RE11, PM2, CB1, CB2.
 ```
