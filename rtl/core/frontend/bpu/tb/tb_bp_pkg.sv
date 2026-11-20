@@ -38,10 +38,13 @@ module tb;
   // snapshot is three pointers and the TOSR entry's count (BP-142,
   // TD#194 option A) and since BP-152 the depth and the tag (RAS-4):
   // 316 bits at two slots, 304 before (this read "232 bits at two slots,
-  // 228 before", which was not the value the check computes).
+  // 228 before", which was not the value the check computes). BP-153
+  // adds the operation record (push, pmode, ptosr, ptag), 11 bits: 327 at
+  // two slots.
   localparam int ENTRY_BITS = VA_WIDTH + VA_WIDTH + FTQ_IDX_BITS +
-                              (3 * RAS_PTR_BITS) + RAS_RCTR_WIDTH +
-                              RAS_DEPTH_BITS + RAS_TAG_BITS +
+                              (4 * RAS_PTR_BITS) + RAS_RCTR_WIDTH +
+                              RAS_DEPTH_BITS + (2 * RAS_TAG_BITS) +
+                              RAS_PMODE_BITS + 1 +
                               GHIST_PTR_BITS +
                               PHIST_PTR_BITS + 1 +
                               (NUM_PRED_SLOTS * SLOT_BITS);
@@ -195,11 +198,28 @@ module tb;
     end
     pass_count++;
 
-    if ($bits(bp_ras_snapshot_t) !== 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-                                    RAS_DEPTH_BITS + RAS_TAG_BITS) begin
+    // BP-153 (RAS-4): the pop record, pmode, ptosr and ptag (38 bits;
+    // 28 before).
+    if (($bits(entry_a.ras.pmode) !== RAS_PMODE_BITS) ||
+        ($bits(entry_a.ras.ptosr) !== RAS_PTR_BITS) ||
+        ($bits(entry_a.ras.ptag) !== RAS_TAG_BITS)) begin
+      $fatal(1, "FAIL ras.pmode / ptosr / ptag: got %0d / %0d / %0d",
+             $bits(entry_a.ras.pmode), $bits(entry_a.ras.ptosr),
+             $bits(entry_a.ras.ptag));
+    end
+    pass_count++;
+
+    if ($bits(entry_a.ras.push) !== 1) begin
+      $fatal(1, "FAIL ras.push: got %0d, want 1", $bits(entry_a.ras.push));
+    end
+    pass_count++;
+
+    if ($bits(bp_ras_snapshot_t) !== 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+                                    RAS_DEPTH_BITS + 2 * RAS_TAG_BITS +
+                                    RAS_PMODE_BITS + 1) begin
       $fatal(1, "FAIL bp_ras_snapshot_t: got %0d, want %0d",
-             $bits(bp_ras_snapshot_t), 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-             RAS_DEPTH_BITS + RAS_TAG_BITS);
+             $bits(bp_ras_snapshot_t), 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+             RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1);
     end
     pass_count++;
 

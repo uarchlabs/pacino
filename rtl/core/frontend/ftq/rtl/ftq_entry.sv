@@ -6,9 +6,12 @@
 // FTQ fast-path entry array (BP-107).
 //
 // Owns bp_ftq_entry_t x FTQ_DEPTH, ftq_entry_formats.md 1 and 2.
-// 316 bits per entry at two slots (241 at one), 64 entries, 20,224 bits
-// ($bits(bp_ftq_entry_t), measured by BP-152). BP-152 adds 12 bits, the
-// RAS snapshot's depth and tag (RAS-4): 304 and 19,456 before. Until
+// 329 bits per entry at two slots (254 at one), 64 entries, 21,056 bits
+// ($bits(bp_ftq_entry_t), measured by BP-153). BP-153 adds 13 bits to the
+// RAS snapshot (RAS-4): the push bit and the pop record (11), and one
+// more pointer bit and one fewer tag bit for 32 speculative entries (4
+// pointers, 2 tags: +2): 316 and 20,224 before. BP-152 added
+// 12 bits, the RAS snapshot's depth and tag: 304 and 19,456 before. Until
 // BP-152 this read 232 bits and 14,848, which was not $bits of the
 // entry (BP-142 had added the recursion count, 4 bits, TD#194, to a
 // 228 that was not either). It is the storage
@@ -151,6 +154,11 @@ module ftq_entry (
   input  logic                      p3_wr_val,
   input  logic [FTQ_IDX_BITS-1:0]   p3_wr_idx,
   input  bp_ftq_slot_t              p3_wr_slot [0:NUM_PRED_SLOTS-1],
+  // BP-153 (TD#149): with it, the RAS snapshot after the block's p3
+  // repair, into the ras field of p3_wr_idx. After the p2 block write in
+  // the write order, before the predecode / restore write (pd_ras_wr).
+  input  logic                      p3_ras_wr_val,
+  input  bp_ras_snapshot_t          p3_ras_wr,
 
   // ---- predecode correction write, one slot -----------------------
   // pd_wr_sel names the slot; pd_wr_kill clears every slot ABOVE it.
@@ -452,6 +460,8 @@ module ftq_entry (
           r_arr[p3_wr_idx].slot[s] <= p3_wr_slot[s];
         end
       end
+      // BP-153 (TD#149): the snapshot the p3 repair corrected.
+      if (p3_ras_wr_val) r_arr[p3_wr_idx].ras <= p3_ras_wr;
 
       // pd: one slot, and the kill of every slot above it. BP-152 (C1):
       // the block's end for a predecode-found jump, and the RAS snapshot

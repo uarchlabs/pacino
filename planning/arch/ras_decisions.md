@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-18
+ UPDATED: 2026-11-19
  CONTACT: Jeff Nye
 ```
 
@@ -463,7 +463,22 @@ cause of return mispredicts in PERF-003's sweep (513 of 543
 mispredicted slot-held returns on media_2 at execute 8, resolve to
 commit 8; 1,320 to 1,611 on infra_1). It is not bounded by the wrap:
 an entry below BOS is reused whenever the allocator passes it, full
-or not. RAS-4 (section 10); BP-152 adds a reuse guard on the links.
+or not. RAS-4 (section 10).
+BUILT BY BP-152 (B1), FOR ACCEPTANCE. An allocation at index a makes
+bottom every other entry whose link names a (the kill), so its pop
+goes to BOS and the fallback reads the frame (A1, 3.3). An allocation
+that lands on the TOSR entry itself (TOSR below BOS, the allocator
+round to it) is bottom with nos BOS; before BP-152 it linked to itself
+and its pop returned it again (tb_ras TC-74a). Each entry carries an
+allocation generation (spec_gen, RAS_TAG_BITS), advanced at each
+allocation; the snapshot carries the generation of its TOSR entry
+(tag), and the p3 registers that of the pre-op TOSR. A restore, an
+undo-pop or the undo of a whole RETURN_CALL to an entry whose
+generation has moved reads empty (TOSR = BOS). TOSR == BOS stays the
+whole empty test. Cost: 16 x 4 generation bits, the 4-bit tag per
+snapshot, 4 x NUM_PRED_SLOTS p3 bits, and 16 comparators per
+allocation. Measured: stale_below_bos 11,213 -> 30 over BP-151's 25
+runs.
 
 Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
@@ -541,6 +556,23 @@ more returns depend on the fallback. tb_fe_top ras_fbstale reproduces
 it. RAS-4 (section 10); BP-152 builds a speculative read offset into
 the commit stack (BP-151 option A1).
 
+BUILT BY BP-152 (A1), FOR ACCEPTANCE. THE FALLBACK READS THE COMMITTED
+FRAME AT THE SPECULATIVE DEPTH. The speculative call depth (dsp,
+RAS_DEPTH_BITS) moves by the logical effect of every operation: a push
+adds one (an allocation, a recursion increment or a saturated count
+alike), a pop takes one (from the speculative stack or the fallback,
+valid or not), a p3 repair reverses or applies its component. It is
+carried in the snapshot (dep) and a restore loads it. dcm is the dep
+of the last block the RAS committed (ras_commit_snapshot.dep). n = dcm
+- dsp is the number of committed frames the younger blocks have popped
+and not committed. The fallback reads the commit stack at CSP-1-n;
+with n below 0 at CSP-1; with n at or above the count it is not valid.
+dcm is taken from the snapshot, not counted at commit: counted, a call
+or return that commits without having operated at p2 (one the FTB did
+not give) leaves the two depths apart for good. Measured: fb_stale_top
+89,894 -> 113 over BP-151's 25 runs; media_2 return mispredicts 4,815
+-> 62 at immediate.
+
 On commit of a RETURN_CALL: the return rule above, then the push
 rule, applied to the state the return leaves (RAS-DS1: pop first,
 then push). Built by BP-119. The net CSP movement is whatever those two steps give;
@@ -578,10 +610,19 @@ Fields (bp_structs_pkg.sv; rctr added by BP-142):
   bos   : RAS_PTR_BITS   -- committed boundary pointer
   rctr  : RAS_RCTR_WIDTH -- recursion count of the entry at tosr,
                             0 when tosr == bos
+  dep   : RAS_DEPTH_BITS -- the speculative call depth after the
+                            block (BP-152, A1, 3.3)
+  tag   : RAS_TAG_BITS   -- the generation of the entry at tosr, 0
+                            when tosr == bos (BP-152, B1, 3.2)
 
 RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = $clog2(16) = 4b.
-Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16b per
-FTQ entry.
+Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+RAS_DEPTH_BITS + RAS_TAG_BITS = 28b per FTQ entry (16b before BP-152).
+RAS_DEPTH_BITS = $clog2(FTQ_DEPTH) + 2 = 8 (dcm - dsp lies in
+-FTQ_DEPTH .. +FTQ_DEPTH); RAS_TAG_BITS = $clog2(FTQ_DEPTH /
+(RAS_SPEC_ENTRIES - 1) + 1) + 1 = 4 (a snapshot's TOSR entry is
+reallocated at most 5 times in its life without a repeated wrong path;
+2^4 reallocations alias, and ras_assert.sv RS6 checks it).
 
 rctr is TD#194 OPTION A, RULED session-084 (Jeff), BUILT by BP-142
 (tb_ras TC-45, TC-58); before it the package held the three pointers,
@@ -615,6 +656,18 @@ snapshot is open (ftq_bpu_interfaces.md 4c, TD#149, measured by
 BP-121 and left open).
 
 ### 4.3  Restore on mispredict
+
+THE RESTORED BLOCK'S OWN PUSH OFF THE PATH (BP-152, FOR ACCEPTANCE).
+The snapshot is post-op (4.2). When the redirect leaves the named
+block before its call (a backend redirect with _self clear at a
+position before the entry's taken call slot; a predecode correction
+that kills or replaces the call), the restore retracts the snapshot's
+top as RP1 and RP2 do (ras_rs_undo), takes one off the depth, and
+writes the snapshot after it into the entry (12.9 RE9). Exact for an
+allocating push and a count increment. A push that met a saturated
+count would be decremented: the FTQ does not know how the push
+applied. A pop cannot be undone from a post-op snapshot (no pre-op
+TOSR): left, snap_offpath_op (RAS-4).
 
 On mispredict redirect from any predictor: restore TOSR, TOSW,
 BOS from the FTQ snapshot of the entry the redirect names by its
@@ -939,8 +992,21 @@ and predecode finds is never pushed, and its commit pushes the
 entry's pft_addr, which a predecode correction does not rewrite
 (2,585 to 3,383 of web_11's slot-held return mispredicts; tb_fe_top
 ras_pdcall). A return predecode finds makes no pop (ret_pd, up to 91).
-RAS-1 stays open; BP-152 applies predecode-found calls and returns to
-the RAS (BP-151 option C1).
+BUILT BY BP-152 (C1), FOR ACCEPTANCE. On the restore of a predecode
+redirect that wins its cycle, when the corrected slot is a taken call,
+return or return-call and the entry held no taken RAS operation (or
+held a push the correction leaves off the path, undone first, 4.3),
+the RAS applies the operation to the restored state by the p2 rules
+(the pop first, then the push with the recursion match), the push
+writing the call's own pc plus its length. The post-op snapshot
+(ras_pd_snapshot) is written into the entry's ras field. A held pop is
+not undone and no operation is applied over it (snap_offpath_op).
+ifu_f3 raises a predecode mispredict for a JAL only (M1, M3) and for a
+position with no control transfer (M2): the return and return-call
+arms are built and not reached from the IFU. RAS-1 is CLOSED FOR
+DIRECT CALLS; returns and indirect calls the FTB does not give are
+still applied only at commit (ret_pd, call_pd; RAS-4). Measured:
+call_pd 19,864 -> 704 (all indirect) over BP-151's 25 runs.
 
 ---
 
@@ -998,6 +1064,8 @@ and values to be added when RAS RTL task is written". Session-071.
   RAS_SPEC_ENTRIES   = 16        -- speculative stack depth
   RAS_COMMIT_ENTRIES = 32        -- commit stack depth
   RAS_RCTR_WIDTH     = 4         -- recursion counter bits
+  RAS_DEPTH_BITS     = 8         -- speculative depth (BP-152, 4.1)
+  RAS_TAG_BITS       = 4         -- entry generation (BP-152, 4.1)
   RAS_ADDR_WIDTH     = VA_WIDTH  -- return address width
 
 Pointer width (already present in bp_defines_pkg.sv as
@@ -1042,11 +1110,14 @@ Commit stack pointer width:
   RAS-4: Return mispredicts the rules allow (BP-151, TD#207): the
          commit-stack fallback after a speculative pop of a
          committed frame (3.3), the reuse below BOS (3.2), the call
-         and return only predecode finds (7). OPEN. BP-152 builds
-         the fixes (BP-151 options A1, B1, C1) for acceptance. The
-         smaller causes (p3_reach, the snapshot's off-path
-         operations, TD#149's repair, a counted entry at BOS, the
-         wrap) are left: at most 54 per 2e6 run.
+         and return only predecode finds (7). OPEN. BUILT BY BP-152
+         for acceptance: A1 (3.3), B1 (3.2), C1 (7), the undo of the
+         restored block's own push (4.3); slot-held return
+         mispredicts 123,712 -> 6,335 over 25 runs. LEFT FOR BP-153:
+         calls and returns only the backend finds (3,105), the
+         snapshot's off-path pops (988), and 381 located, not
+         explained. The smaller causes (p3_reach, TD#149's repair, a
+         counted entry at BOS, the wrap) are at BP-151's magnitudes.
 
 ---
 
@@ -1124,6 +1195,8 @@ CL1  A push happens if and only if ras_pred_val_p2[s] = 1 and
      ras_br_type_p2[s] is DIRECT_CALL, INDIRECT_CALL or RETURN_CALL.
 CL2  A pop happens if and only if ras_pred_val_p2[s] = 1 and the
      type is RETURN or RETURN_CALL.
+     CL1 and CL2 apart, the restore's C1 operation (ras_pd_val, read
+     only with ras_restore_val) pushes or pops (7, BP-152).
 CL3  Any other type, or ras_pred_val_p2[s] = 0, changes no pointer,
      no array entry and no recursion count.
 CL4  RETURN_CALL is one operation: the pop first, which supplies the
@@ -1139,8 +1212,8 @@ RT2  ras_tos_valid_p0 and ras_pop_valid_p2 are low in the first cycle
 
 ### 12.3 The p0 read (1; RI 4, 6, IC-RAS-07)
 P01  With TOSR != BOS: ras_tos_addr_p0 = ret_addr[TOSR], valid 1.
-P02  With TOSR == BOS and the commit count above 0: the commit top,
-     the CSP-1 entry, valid 1.
+P02  With TOSR == BOS: the frame PO5 names, valid by PO5 (BP-152,
+     A1; before it the commit top, the CSP-1 entry).
 P03  With both stacks empty: valid 0.
 P04  The read is combinational from the current state. p0 makes no
      push and no pop.
@@ -1150,7 +1223,9 @@ P05  Every slot presents the same value (ras.sv g_p0_tos).
 PU1  A push with no recursion match writes the TOSW slot with
      ret_addr = ras_fall_through_p2[s], rctr = 0, nos = TOSR, and
      bot = 1 when the stack is empty (TOSR == BOS), else 0. TOSR
-     becomes that slot and TOSW advances by one.
+     becomes that slot and TOSW advances by one. Every other entry
+     whose nos is the allocated index is made bottom (B1). An
+     allocation at the TOSR index is bottom, nos BOS (BP-152).
 PU2  The sentinel skip: a push that finds TOSW == BOS allocates at
      BOS+1 with nos = BOS and bot = 1, and TOSW advances past it.
 PU3  The wrap's effect: the entry the skip allocates is the only
@@ -1179,19 +1254,21 @@ PO3  With rctr[TOSR] = 0 and bot[TOSR] = 1: it returns
 PO4  A pop writes no ret_addr, nos or bot, and does not move TOSW or
      BOS. PO1's count is its only array write.
 PO5  With TOSR == BOS and the commit count above 0: it returns the
-     commit top (CSP-1), valid 1. The commit entry is not consumed
-     and no pointer moves. The commit top is read even when an
-     uncommitted pop has consumed it (3.3, MEASURED BP-151; RAS-4).
+     commit stack's frame at the speculative depth, CSP-1-n (3.3,
+     A1), valid while 0 <= n < the count; CSP-1 for n < 0. Not
+     consumed; no pointer moves (BP-152; before it the commit top,
+     CSP-1, even when an uncommitted pop had consumed it).
 PO6  With both stacks empty: ras_pop_valid_p2 = 0. ras_pop_addr_p2
      is not checked when valid is 0.
 PO7  A valid pop returns a chain entry (IV1): never the BOS sentinel
      and never a slot no push on the chain wrote (fd07, TD#189). A
-     chain entry at TOSR always pops valid. The one exception is the
-     wrap: once the allocator has gone round the buffer since an
-     entry's push, the entry may have been reused, and its pop returns
-     the reusing push's address, the bounded effect of PU3 and RE7.
-     An entry below BOS is reused before the sentinel skip, which
-     guards only BOS (3.2).
+     chain entry at TOSR always pops valid. A valid pop never returns
+     a reused entry (B1, BP-152): a link to a reallocated index is
+     killed, and a restore or undo to one reads empty. The bound is
+     the tag: a snapshot whose TOSR entry is reallocated
+     2^RAS_TAG_BITS times in its life aliases. PU3 is unchanged.
+     Before BP-152 the wrap was the one exception, and an entry below
+     BOS was reused before the sentinel skip (3.2).
 PO8  The order follows the link: f calls g, g returns, f calls h, h
      returns, and f's return is predicted to f's return address
      (TD#159).
@@ -1225,7 +1302,10 @@ KP2  With keep low, no restore and no repair, no pointer moves.
 
 ### 12.9 Restore (3.2, 4.3, 4.4; RI IC-RAS-09)
 RE1  ras_restore_val loads TOSR, TOSW and BOS from
-     ras_restore_snapshot, in effect the next cycle.
+     ras_restore_snapshot, in effect the next cycle, and the depth
+     from dep. TOSR is the snapshot's unless the generation of the
+     entry at snapshot.tosr is not snapshot.tag; then TOSR =
+     snapshot.bos and RE6 writes no count (B1, BP-152).
 RE2  No array data is cleared. RE6's count is the only array write a
      restore makes.
 RE3  A restore beats that cycle's p2 operation: it is not applied,
@@ -1246,6 +1326,9 @@ RE7  A restore across a wrong-path wrap is not exact; only the bound
      commits.
 RE8  ras_flush_val and ras_flush_snapshot are unread: driving them
      changes nothing.
+RE9  With ras_rs_undo the restore retracts the top of the restored
+     state (RP1, RP2) before any C1 operation; the depth less one
+     (4.3, BP-152).
 
 ### 12.10 p3 repair (1; RI IC-RAS-11)
 RP0  A repair runs if and only if a slot's p3 view differs from its
@@ -1264,7 +1347,8 @@ RP4  Undo-pop (p2 pop, p3 none): TOSR returns to its pre-op value,
      is written; TOSW does not move.
 RP5  The undo of an operation begun on an empty stack sets TOSR to
      BOS as it is at the undo: undo-pop and the undo of a whole
-     RETURN_CALL.
+     RETURN_CALL. An undo to a pre-op entry whose generation moved
+     reads empty as well (B1, BP-152; RP4, RP8).
 RP6  Missed pop (p2 none, p3 pop): a pop by PO1 to PO3.
 RP7  Missed push (p2 none, p3 push): the registered fall-through is
      allocated at the frontier and TOSW advances, with the sentinel
@@ -1307,6 +1391,9 @@ CO10 A full commit stack reads non-empty, and RAS_COMMIT_ENTRIES
 CO11 A restore and a commit in one cycle: the restore sets TOSR, TOSW
      and BOS (restore > commit > hold), so CO6 does not apply, and the
      commit stack still updates.
+CO12 A RAS commit sets the committed depth (dcm) to
+     ras_commit_snapshot.dep. CO11's restore does not change it (A1,
+     BP-152).
 
 ### 12.12 The empty test (3.2; RI IC-RAS-07)
 IV1  TOSR == BOS holds exactly when the speculative stack is empty,
@@ -1318,8 +1405,9 @@ IV1  TOSR == BOS holds exactly when the speculative stack is empty,
      older blocks' commits leave, and a restore to an older snapshot
      can do the same (3.2, TOSR BELOW BOS; BP-142 TC-65). The model
      decides a chain entry from each index's allocation sequence, not
-     from the order of TOSR and BOS, and reports a reused index as
-     the wrap (PO7).
+     from the order of TOSR and BOS, and fails a pop of a reused
+     index (ras_assert.sv RS6, BP-152; before it reported as the
+     wrap, PO7).
      Both directions are checked. TOSR != BOS without a chain entry:
      the tb_ras model every cycle and at every pop of every slot, and
      ras_assert.sv RS2 (a_state_chain every cycle, a_pop_only_held and
@@ -1342,12 +1430,14 @@ PM1  No literal depths or widths. The boundaries are derived from
      RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES and RAS_RCTR_WIDTH: 15
      usable entries, saturation at 2^RAS_RCTR_WIDTH - 1, a commit
      count to RAS_COMMIT_ENTRIES.
-PM2  The snapshot is 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH = 16 bits
-     (4.1).
+PM2  The snapshot is 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+     RAS_DEPTH_BITS + RAS_TAG_BITS = 28 bits (4.1; 16 before BP-152).
 
 ### 12.14 Cluster obligations (2, 4.2, 4.3, 8; RI IC-RAS-12, 8)
 CB1  ras_pred_val_p2 is gated on a valid FTB result, and
-     ras_br_type_p2 comes from the FTB, not predecode or decode.
+     ras_br_type_p2 comes from the FTB, not predecode or decode,
+     except the C1 operation, which the FTQ forms from the predecode
+     correction (7, BP-152).
 CB2  ras_br_type_p3 is the registered ras_br_type_p2, and
      ras_pred_val_p3 = r_val_p3 & r_brv_p3 & w_reach_p3.
 CB3  ras_p2_keep is low for a block a redirect squashes.
@@ -1526,4 +1616,12 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               BOS measured. 4.4: "architectural state" corrected. 7:
               RAS-1 not sufficient for a call only predecode finds.
               12.5 PO5 noted. 10: RAS-4 opened.
+
+  2026-11-19  session-086, after BP-152, FOR ACCEPTANCE (Jeff): 3.3
+              A1, the fallback at the speculative depth; 3.2 B1, the
+              link kill and the generation tag; 7 C1, RAS-1 closed for
+              direct calls; 4.3 the undo of the restored block's own
+              push; 4.1, 9 and PM2 the 28-bit snapshot; 12 CL2, P02,
+              PU1, PO5, PO7, RE1, RE9, RP5, CO12, CB1. RAS-4: what is
+              left goes to BP-153.
 ```

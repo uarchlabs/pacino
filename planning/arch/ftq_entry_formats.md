@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-19
  CONTACT: Jeff Nye
 ```
 
@@ -36,15 +36,17 @@ update. The two are separated so the every-cycle read does not carry
 the width of the update-only metadata.
 
 ```
-  fast path   bp_ftq_entry_t   304b   x 64 entries        19,456b
+  fast path   bp_ftq_entry_t   316b   x 64 entries        20,224b
   slow path   bp_ftq_meta_t    461b   x 2 slots x 64      59,008b
                                                           -------
-                                                          78,464b
+                                                          79,232b
 ```
 
 These are the widths as built at the VA_WIDTH of fe_decisions.md
 FE-19, measured by BP-145 ($bits); this section is their one
-statement. VA_WIDTH reaches pc, pft_addr and the two slot targets of
+statement. BP-152 (for acceptance) widened the fast path by 12 bits,
+the RAS snapshot's dep and tag: 304b -> 316b at two slots, 229b ->
+241b at one ($bits). VA_WIDTH reaches pc, pft_addr and the two slot targets of
 the fast path, and the two ITTAGE targets of each slot's metadata.
 
 The slow-path figure is the unpacked layout. Section 3.1 defines an
@@ -76,7 +78,10 @@ placed (`rsv_wr_val`; since BP-139 a placement into an occupied
 slot only as section 3.1 ITEM C says), and ftq_entry clears the
 slots above a
 resolved end, the position of a taken or mispredicted resolution
-(`rsv_wr_end`). The entry then holds what executed rather than what
+(`rsv_wr_end`), BY POSITION since BP-152: every slot whose pos is
+after the resolved branch's, whatever its slot index (TD#211 b). A
+backend redirect with _self clear clears the slots after its _pos as
+well (TD#211 a). The entry then holds what executed rather than what
 was predicted, which the commit walk relies on (ftq_decisions.md
 5.4). Before it, a resolution of an already-mapped slot did not
 write the entry and slots after a taken or mispredicted branch were
@@ -89,9 +94,11 @@ Block scalar fields, one per entry:
 pc            41     prediction block start PC, VA_WIDTH
 pft_addr      41     block fall-through address, VA_WIDTH
 branch_id      6     FTQ entry index, FTQ_IDX_BITS
-ras           16     bp_ras_snapshot_t: TOSR, TOSW, BOS and the
+ras           28     bp_ras_snapshot_t: TOSR, TOSW, BOS and the
                      TOSR entry's recursion count, 4 bits each
-                     (the count: TD#194 option A, BP-142)
+                     (the count: TD#194 option A, BP-142); the
+                     depth, 8, and the TOSR entry's generation, 4
+                     (BP-152; ras_decisions.md 4.1)
 ghist_ptr      8     GHR circular buffer pointer snapshot
 phist_ptr      5     PHR circular buffer pointer snapshot
 valid          1     entry valid
@@ -656,4 +663,8 @@ path touches none of those.
               (were 232b, 425b, 69,248b). 3.1: ittage_pred_meta_t
               183b, rsvd 88b (were 147b, 124b); the union stays
               278b. 4.1: the totals stated in 1 only.
+
+  2026-11-19  session-086, after BP-152, for acceptance. 1, 2: the
+              fast path 316b (ras 28b); the end clear by position and
+              the backend redirect clear (TD#211).
 ```

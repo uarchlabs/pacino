@@ -52,12 +52,14 @@
 // ftb_decisions.md 8 entry in section 8 order minus the relocated
 // entry-valid, FTB_RAM_ENTRY_WIDTH bits. Widths, from section 8, the
 // sole home of the field widths and their sum:
-//   - entry (logical, FTB_ENTRY_WIDTH):       114 bits per way,
+//   - entry (logical, FTB_ENTRY_WIDTH):       152 bits per way,
 //     including the entry-valid held in ftb_plru
-//   - RAM entry (FTB_RAM_ENTRY_WIDTH):        113 bits per way, the
+//   - RAM entry (FTB_RAM_ENTRY_WIDTH):        151 bits per way, the
 //     entry minus the entry-valid; what ftb_array stores
 // BP-140 left both widths unchanged: the tag grew by FTB_BR_POS_BITS
-// (4) and the three positions and pftAddr each lost one bit.
+// (4) and the three positions and pftAddr each lost one bit. BP-153
+// widened the jump displacement from 21 bits to VA_WIDTH (59): +38, from
+// 114 and 113 (rule change for acceptance; section 8 to be updated).
 // The elaboration check below holds $bits(ftb_entry_t) to the second.
 //   tag
 //   br0{valid,pos,tgt,stat,conf}
@@ -267,12 +269,13 @@ module ftb_cntrl (
 
   // Reconstruct a full-VA jump target from the stored displacement
   // and its base, the jump PC (4.2, TD#137). Sign-extend the
-  // displacement.
+  // displacement: a signed cast, which is the identity at the full
+  // width FTB_JMP_TGT_BITS = VA_WIDTH (BP-153) and needs no zero-count
+  // replication.
   function automatic logic [VA_WIDTH-1:0] recon_jmp(
       input logic [FTB_JMP_TGT_BITS-1:0] disp,
       input logic [VA_WIDTH-1:0]         base);
-    recon_jmp = base
-      + {{(VA_WIDTH-FTB_JMP_TGT_BITS){disp[FTB_JMP_TGT_BITS-1]}}, disp};
+    recon_jmp = base + VA_WIDTH'($signed(disp));
   endfunction
 
   // Encode a full-VA conditional target to the stored displacement

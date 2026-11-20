@@ -130,6 +130,7 @@ module tb;
   bp_br_type_e               ras_pd_br_type;
   logic [VA_WIDTH-1:0]       ras_pd_ret_addr;
   logic                      ras_pd_undo;
+  logic                      ras_pd_undo_pop;    // BP-153
   logic                      pd_ras_wr_val;
   // ftq_entry's placement write (BP-119), idle in this bench.
   logic [FTQ_IDX_BITS-1:0]   j_rsvw_idx [0:NUM_RESOLVE_PORTS-1];
@@ -214,6 +215,7 @@ module tb;
     .ras_pd_br_type    (ras_pd_br_type),
     .ras_pd_ret_addr   (ras_pd_ret_addr),
     .ras_pd_undo       (ras_pd_undo),
+    .ras_pd_undo_pop   (ras_pd_undo_pop),
     .pd_ras_wr_val     (pd_ras_wr_val),
     .pd_redir_val      (pd_redir_val),
     .pd_redir_idx      (pd_redir_idx),
@@ -276,6 +278,8 @@ module tb;
     .p3_wr_val           (1'b0),
     .p3_wr_idx           ('0),
     .p3_wr_slot          (j_idle_slot),
+    .p3_ras_wr_val       (1'b0),                    // BP-153
+    .p3_ras_wr           ('0),
     .pd_wr_val           (pd_wr_val),
     .pd_wr_idx           (pd_wr_idx),
     .pd_wr_sel           (pd_wr_sel),

@@ -51,6 +51,14 @@
   // ahead of it, so the head skips it.
   logic                    rsv2;
   logic                    trap_sc;
+  // BP-153, a third knob, off (0) by default:
+  //   cm_hold  cycles the commit is held after each redirect, as the
+  //            perf harness's resolve-to-commit latency holds it. With 0
+  //            an entry the redirect leaves behind commits at once, so
+  //            the commit-stack fallback (A1) already reads its frame.
+  // cm_until is the first cycle the commit may be driven again.
+  int                      cm_hold;
+  int                      cm_until;
   logic                    rq_done [0:255];
   int                      rq_p1;     // the entry port 1 presents
   // Cycles both ports were accepted for one entry (rsv2): the stimulus
@@ -183,6 +191,10 @@
   logic                    rd_self;
   ftq_redir_cause_e        rd_cause;
   logic                    rd_taken;
+  // BP-153: the redirecting branch's resolved type and length, driven
+  // on the redirect (NO_BRANCH and 0 for a redirect naming no branch).
+  bp_br_type_e             rd_type;
+  logic                    rd_rvc;
   // BP-121, the corrected history: a backend mispredict redirect of a
   // conditional was driven last cycle (h_chk), with its direction.
   // After the rollback the newest history bit must be that direction.

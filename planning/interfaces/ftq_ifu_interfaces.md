@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-11-18
+ UPDATED: 2026-11-19
  CONTACT: Jeff Nye
 ```
 
@@ -502,7 +502,11 @@ On `ifu_ftq_mis_val`, the FTQ:
       computed one. Predecode computes one for every mis_val with a
       control transfer: a JALR never raises mis_val, so the other arm
       is not reached (BP-141). pred_src becomes PRED_NONE -- no predictor
-      supplied this, and the field is diagnostic (TD-FE-4).
+      supplied this, and the field is diagnostic (TD-FE-4). With a
+      taken jump the slot write also writes pft_addr = the jump's pc
+      + 2 or + 4 (BP-152, C1, for acceptance), the rule a resolved
+      taken jump follows (TD#164); with a call it applies the C1 RAS
+      push (ras_decisions.md 7).
 
       FOR A CONDITIONAL BRANCH taken keeps the entry's prediction;
       only the target is corrected. Predecode cannot know a
@@ -843,4 +847,7 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               presented in its entry's p3 cycle carries the p3 slots
               (the fetch read writes through). 7 W3: a p3 correction
               without a redirect. TD#205 closed.
+
+  2026-11-19  session-086, after BP-152, for acceptance. 7 W1: the
+              pft_addr write and the C1 push with a taken jump.
 ```

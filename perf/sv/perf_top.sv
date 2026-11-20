@@ -103,6 +103,9 @@ module perf_top (
   input  logic                        redir_self,
   input  logic [1:0]                  redir_cause,
   input  logic                        redir_taken,
+  // BP-153: the resolved type of the redirecting branch (bp_br_type_e)
+  // and its length. Every image word is 32 bits, so _rvc is driven 0.
+  input  logic [2:0]                  redir_type,
   input  logic                        commit_val,
   input  logic [FTQ_PTR_BITS-1:0]     commit_idx,
 
@@ -316,7 +319,9 @@ module perf_top (
   output logic [RAS_DEPTH_BITS-1:0]      rc_p2_dep   [NUM_PRED_SLOTS],
   output logic [RAS_DEPTH_BITS-1:0]      rc_dcm,
   // BP-152: the restore undid the named block's own push (ras_rs_undo).
-  output logic                           rc_rs_undo
+  output logic                           rc_rs_undo,
+  // BP-153: and its own pop (ras_rs_undo_pop, with a pop record).
+  output logic                           rc_rs_undo_pop
 );
 
   // ---- every fe_top port, the names fe_tb_dut.svh gives them -------
@@ -335,6 +340,8 @@ module perf_top (
   logic                        bkend_ftq_redir_self;
   ftq_redir_cause_e            bkend_ftq_redir_cause;
   logic                        bkend_ftq_redir_taken;
+  bp_br_type_e                 bkend_ftq_redir_type;   // BP-153
+  logic                        bkend_ftq_redir_rvc;    // BP-153
   logic                        bkend_ftq_commit_val;
   logic [FTQ_PTR_BITS-1:0]     bkend_ftq_commit_idx;
   logic                        itlb_l2t_req_val;
@@ -442,6 +449,8 @@ module perf_top (
     bkend_ftq_redir_self  = redir_self;
     bkend_ftq_redir_cause = ftq_redir_cause_e'(redir_cause);
     bkend_ftq_redir_taken = redir_taken;
+    bkend_ftq_redir_type  = bp_br_type_e'(redir_type);
+    bkend_ftq_redir_rvc   = 1'b0;         // every image word is 32 bits
     bkend_ftq_commit_val  = commit_val;
     bkend_ftq_commit_idx  = commit_idx;
     // No FENCE.I, cbo.inval or ITLB invalidate in a trace.
@@ -781,11 +790,16 @@ module perf_top (
     end
     rc_dcm      = dut.u_bpu.u_ras.dcm;
     rc_rs_undo  = dut.u_bpu.u_ras.ras_rs_undo;
+    // BP-153: an undo of the block's pop with a pop record to undo.
+    rc_rs_undo_pop = dut.u_bpu.u_ras.ras_rs_undo_pop &&
+                     (dut.u_bpu.u_ras.ras_restore_snapshot.pmode !=
+                      RAS_POP_NONE);
     rc_pd_val   = dut.u_bpu.u_ras.ras_pd_val;
     rc_pd_type  = 3'(dut.u_bpu.u_ras.ras_pd_br_type);
     rc_pd_ret   = dut.u_bpu.u_ras.ras_pd_ret_addr;
-    rc_pd_al    = dut.u_bpu.u_ras.rs_we[3] && dut.u_bpu.u_ras.rs_al[3];
-    rc_pd_waddr = dut.u_bpu.u_ras.rs_waddr[3];
+    // The C1 push is restore port 4 since BP-153 (RS_P_PUSH; 3 before).
+    rc_pd_al    = dut.u_bpu.u_ras.rs_we[4] && dut.u_bpu.u_ras.rs_al[4];
+    rc_pd_waddr = dut.u_bpu.u_ras.rs_waddr[4];
   end
 
 endmodule : perf_top

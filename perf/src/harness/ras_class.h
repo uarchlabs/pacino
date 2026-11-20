@@ -22,6 +22,13 @@
 //   THE CAUSE   one per mispredicted slot-held return, by the rules in
 //               classify() (BP-151 Results Capture, Problem 1).
 //
+// BP-153 (RAS-4): a backend redirect's operation is at the redirect's
+// position and a backend pop counts as the closer's pop; a pop or push
+// the restore undid is not off the path; ref_unmatched is split by where
+// the target is (rc_unm_*) and bos_rewind by the rule it stands for
+// (rc_brew_*); a frame closed by a return that did not target it (an
+// unwind past it) is the cause unwound, ahead of fb_stale_top and
+// extra_closed.
 // BP-152 (RAS-4), the RAS state the rules read changes, the rules are
 // those of BP-151 except as below (BP-152 Results Capture, Problem 1):
 //   - A1: a pop on an empty stack reads the commit stack at the index
@@ -61,8 +68,19 @@
 namespace rcls {
 
 constexpr int      NS   = PERF_SLOTS;     // NUM_PRED_SLOTS
-constexpr int      RS   = 16;             // RAS_SPEC_ENTRIES
-constexpr int      RC   = 32;             // RAS_COMMIT_ENTRIES
+// RAS_SPEC_ENTRIES. BP-153: a build constant (perf/Makefile RAS_SPEC),
+// as RC below.
+#ifndef PERF_RAS_SPEC
+#define PERF_RAS_SPEC 32
+#endif
+constexpr int      RS   = PERF_RAS_SPEC;
+// RAS_COMMIT_ENTRIES. BP-153: a build constant (perf/Makefile
+// RAS_COMMIT), so a harness built from a tree with another commit-stack
+// size observes it at that size.
+#ifndef PERF_RAS_COMMIT
+#define PERF_RAS_COMMIT 64
+#endif
+constexpr int      RC   = PERF_RAS_COMMIT;
 constexpr int      WP   = 4 * PERF_SLOTS; // ras.sv RAS_WR_PORTS
 constexpr uint64_t VMASK = (uint64_t(1) << 59) - 1;
 // bp_br_type_e
@@ -177,6 +195,9 @@ struct Closer {
   uint64_t k = 0;
   uint8_t  src = S_NONE;
   IObs     obs;
+  // BP-153: the return did not target this frame: it skipped it (an
+  // unwind to a deeper frame) or matched no frame (one entry popped).
+  bool     nonlifo = false;
 };
 
 // The causes (BP-151 Results Capture, Problem 1, THE RULES).
@@ -187,7 +208,7 @@ enum Cause : int {
   C_FB_RCTR_BOS, C_FB_UNCMT, C_FB_STALE, C_CMT_ADDR, C_CMT_LOST,
   C_CMT_NONCALL, C_SNAP_REP, C_RET_NOPOP, C_RET_PD, C_EXTRA_CLOSED,
   C_SNAP_AFTER, C_EXTRA_OFFPATH, C_EXTRA_DEEP, C_PROPAG, C_BOS_REWIND,
-  C_CMT_TRAP, C_OTHER, C_N
+  C_CMT_TRAP, C_UNWOUND, C_OTHER, C_N
 };
 inline const char* cause_name(int c) {
   static const char* n[C_N] = {
@@ -198,7 +219,8 @@ inline const char* cause_name(int c) {
     "commit_addr", "commit_lost", "commit_noncall", "snap_repair",
     "ret_nopop", "ret_pd", "extra_closed", "snap_offpath_op",
     "extra_offpath",
-    "extra_deep", "propagated", "bos_rewind", "commit_unexecuted", "other"};
+    "extra_deep", "propagated", "bos_rewind", "commit_unexecuted",
+    "unwound", "other"};
   return n[c];
 }
 
@@ -210,6 +232,17 @@ class RasClass {
   uint64_t max_ref = 0, n_restores = 0, n_wrap_skip = 0;
   uint64_t n_cmt_unexec_trap = 0;   // commit_unexecuted after an RC_TRAP
   uint64_t n_pd_push = 0, n_pd_pop = 0;  // BP-152, C1 operations
+  // BP-153: of those, the backend redirect's (bk_ras)
+  uint64_t n_bk_push = 0, n_bk_pop = 0;
+  // BP-153: restores that undid the named block's pop (a pop record)
+  uint64_t n_undo_pop = 0;
+  // BP-153: ref_unmatched split by where the target is (commit_ret):
+  // below the reference top; not on it, but the link of an earlier
+  // committed call (its frame closed); never any committed call's link.
+  uint64_t n_unm_deep = 0, n_unm_closed = 0, n_unm_none = 0;
+  // BP-153: bos_rewind by the rule it stands for: 0 fb_uncommitted,
+  // 1 commit_lost, 2 extra_closed, 3 extra_offpath, 4 extra_deep.
+  uint64_t n_brew[5] = {};
   uint64_t n_call_pd_ind = 0;   // BP-152: call_pd whose call is a JALR
   int      dump = 0;              // RC_DUMP: lines to print per cause
   int      dumped[C_N] = {};
@@ -417,6 +450,7 @@ class RasClass {
     // (3) the restore
     if (rs) {
       n_restores++;
+      if (t->rc_rs_undo_pop) n_undo_pop++;           // BP-153
       Rst r;
       r.cyc = cyc;
       r.idx = t->rc_rs_idx;
@@ -440,8 +474,14 @@ class RasClass {
       for (int s = 0; s < NS; s++) {
         if (!o.applied || !o.op[s]) continue;
         // BP-152: a push the restore undid (ras_rs_undo) is not in the
-        // restored state; only a pop stays off the path.
-        if (t->rc_rs_undo && !(o.op[s] & OP_POP)) continue;
+        // restored state. BP-153: nor a pop it undid (ras_rs_undo_pop);
+        // an operation stays off the path only for a part not undone.
+        {
+          bool opop = (o.op[s] & OP_POP) != 0;
+          bool opush = (o.op[s] & OP_PUSH) != 0;
+          if ((!opop || t->rc_rs_undo_pop) && (!opush || t->rc_rs_undo))
+            continue;
+        }
         if (o.pos[s] > r.pos) r.op_after = true;
         if (o.pos[s] == r.pos &&
             (is_call_t(o.type[s]) != is_call_t(cty) ||
@@ -461,12 +501,21 @@ class RasClass {
       // snapshot's TOSW and BOS, which the restore loads).
       if (t->rc_pd_val) {
         uint8_t pty = t->rc_pd_type;
-        o.pd_pos = uint8_t(t->rc_pd_pos);
-        if (is_ret_t(pty)) { o.pd_pop = true; n_pd_pop++; }
+        // BP-153: the operation of a backend redirect (bk_ras) is at the
+        // redirect's position, a predecode one at mis_pos (r.pos either).
+        o.pd_pos = r.pos;
+        if (is_ret_t(pty)) {
+          o.pd_pop = true; n_pd_pop++;
+          if (!r.pd) n_bk_pop++;
+          // BP-153: kept by instance, as the push: the return's take, and
+          // the copy of its observation a closer carries, precede this.
+          pd_pop_inst_.insert(o.inst);
+        }
         if (is_call_t(pty)) {
           o.pd_push = true;
           o.pd_ft = uint64_t(t->rc_pd_ret) & VMASK;
           n_pd_push++;
+          if (!r.pd) n_bk_push++;
           if (t->rc_pd_al) {
             uint8_t i = t->rc_pd_waddr;
             if (uint8_t(t->rc_rs_tosw) == uint8_t(t->rc_rs_bos) &&
@@ -546,6 +595,7 @@ class RasClass {
     e.addr = (pc + 4) & VMASK;
     e.k = k; e.pos = pos; e.src = src; e.in_slot = in_slot; e.obs = obs;
     e.ind = ind;
+    links_.insert(e.addr);                     // BP-153
     ref_.push_back(e);
     live_.insert(k);
     if (ref_.size() > max_ref) max_ref = ref_.size();
@@ -567,6 +617,17 @@ class RasClass {
     int c = -1;
     if (mis_slot) {
       n_slot_mis++;
+      // BP-153: an unmatched return's target on the reference stack below
+      // its top (the return skips open frames: an unwind or a switch of
+      // stacks), or not on it at all (no committed call linked it).
+      if (!matched && !trap) {
+        bool deep = false;
+        for (size_t j = ref_.size(); j > 0; j--)
+          if (ref_[j - 1].addr == tgt) { deep = true; break; }
+        if (deep) n_unm_deep++;
+        else if (links_.count(tgt)) n_unm_closed++;
+        else n_unm_none++;
+      }
       c = classify(k, pc, tgt, pos, src, trap, matched, top, o, rec_tgt);
       cnt[c]++;
       // THE OPTIONS (Problem 4), measured without the change: the commit
@@ -591,11 +652,17 @@ class RasClass {
     if (matched) {
       pop_ref(cl);
     } else {
+      // BP-153: every frame this return closes is one it did not target,
+      // but for the target's own frame in an unwind.
       size_t j = ref_.size();
       while (j > 0 && ref_[j - 1].addr != tgt) j--;
       if (j > 0) {
-        while (ref_.size() >= j) pop_ref(cl);
+        while (ref_.size() >= j) {
+          cl.nonlifo = ref_.size() > j;
+          pop_ref(cl);
+        }
       } else if (!ref_.empty()) {
+        cl.nonlifo = true;
         pop_ref(cl);
       }
     }
@@ -609,6 +676,10 @@ class RasClass {
     uint64_t seq = 0, ft = 0;
   };
   std::unordered_map<uint64_t, PdRec> pd_by_inst_;
+  // BP-153: the instances whose return was popped on a restore.
+  std::unordered_set<uint64_t> pd_pop_inst_;
+  // BP-153: every committed call's link address (ref_unmatched split).
+  std::unordered_set<uint64_t> links_;
   // BP-152, diagnostics: the instances whose call operated the
   // speculative stack (a kept p2 push of any kind, a p3 missed push, a
   // C1 push).
@@ -759,7 +830,7 @@ class RasClass {
       }
       if (ct.inst > o.cmt_inst)
         return note(skip ? C_WRAP : offp ? C_SNAP_AFTER
-                    : rewind ? C_BOS_REWIND : C_FB_UNCMT,
+                    : rewind ? brew(0) : C_FB_UNCMT,
                     k, pc, tgt, o, top, "");
       // C_T had committed: the commit stack's top decides.
       auto it = path_inst_.find(o.cocc.inst);
@@ -784,16 +855,23 @@ class RasClass {
         if (cit != closer_.end()) {
           const Closer& c2 = cit->second;
           const IObs& ro = c2.obs;
-          bool rpop = ro.p2 && ro.ftb && ro.applied && ro.pop_s >= 0;
+          // BP-153: closed by a return that did not target it (an unwind
+          // past it, or a return matching no frame): the program left the
+          // frame without its return, and the RAS popped once for it.
+          if (c2.nonlifo) return note(C_UNWOUND, k, pc, tgt, o, top, "fb");
+          // BP-153: a pop on the restore of its backend redirect is a pop.
+          bool rpop = (ro.p2 && ro.ftb && ro.applied && ro.pop_s >= 0) ||
+                      pd_pop_inst_.count(ro.inst);
           if (!rpop && !((ro.rep & REP_MISS_POP) && ro.rep_applied)) {
             if (c2.src == S_NONE)
+              // a return the FTB did not hold, and no restore popped it
               return note(C_RET_PD, k, pc, tgt, o, top, "fb");
             return note(C_RET_NOPOP, k, pc, tgt, o, top, "fb");
           }
         }
         return note(C_FB_STALE, k, pc, tgt, o, top, "");
       }
-      return note(offp ? C_SNAP_AFTER : rewind ? C_BOS_REWIND : C_CMT_LOST,
+      return note(offp ? C_SNAP_AFTER : rewind ? brew(1) : C_CMT_LOST,
                   k, pc, tgt, o, top, "");
     }
     // R10: TOSR at another entry, e, with C_T's entry intact.
@@ -804,30 +882,40 @@ class RasClass {
       if (it != closer_.end()) {
         const Closer& c2 = it->second;
         const IObs& ro = c2.obs;
+        if (c2.nonlifo) return note(C_UNWOUND, k, pc, tgt, o, top, "");
         bool rpop = ro.p2 && ro.ftb && ro.applied && ro.pop_s >= 0;
+        // BP-153: a pop on the restore of its backend redirect.
+        bool bpop = pd_pop_inst_.count(ro.inst) != 0;
         if (ro.rep && ro.rep_applied && named(ro.inst) > 0)
           return note(C_SNAP_REP, k, pc, tgt, o, top, "");
-        if (c2.src == S_NONE) return note(C_RET_PD, k, pc, tgt, o, top, "");
-        if (!rpop && !((ro.rep & REP_MISS_POP) && ro.rep_applied))
+        if (c2.src == S_NONE && !bpop)
+          return note(C_RET_PD, k, pc, tgt, o, top, "");
+        if (!rpop && !bpop && !((ro.rep & REP_MISS_POP) && ro.rep_applied))
           return note(C_RET_NOPOP, k, pc, tgt, o, top, "");
         // R' popped another entry than e: R' was itself wrong.
         if (rpop && !ro.pop_empty && ro.pocc.seq != o.pocc.seq)
           return note(C_PROPAG, k, pc, tgt, o, top, "");
       }
       return note(offp ? C_SNAP_AFTER
-                  : rewind ? C_BOS_REWIND : C_EXTRA_CLOSED, k, pc, tgt, o,
+                  : rewind ? brew(2) : C_EXTRA_CLOSED, k, pc, tgt, o,
                   top, "");
     }
     if (ek == ~uint64_t(0)) {
       if (named_after_.count(o.pocc.inst))
         return note(C_SNAP_AFTER, k, pc, tgt, o, top, "");
-      return note(rewind ? C_BOS_REWIND : C_EXTRA_OFFPATH, k, pc, tgt, o,
+      return note(rewind ? brew(3) : C_EXTRA_OFFPATH, k, pc, tgt, o,
                   top, "");
     }
     if (ek < top.k)
-      return note(offp ? C_SNAP_AFTER : rewind ? C_BOS_REWIND : C_EXTRA_DEEP,
+      return note(offp ? C_SNAP_AFTER : rewind ? brew(4) : C_EXTRA_DEEP,
                   k, pc, tgt, o, top, "");
     return note(C_OTHER, k, pc, tgt, o, top, "");
+  }
+
+  // BP-153: bos_rewind, counted by the rule it stands for (n_brew).
+  int brew(int sub) {
+    n_brew[sub]++;
+    return C_BOS_REWIND;
   }
 
   int note(int c, uint64_t k, uint64_t pc, uint64_t tgt, const IObs& o,

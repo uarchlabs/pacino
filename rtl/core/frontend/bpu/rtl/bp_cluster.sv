@@ -158,6 +158,11 @@ module bp_cluster (
   output logic [FTQ_IDX_BITS-1:0]         bpu_blk_idx_p2,
   output bp_ras_snapshot_t                bpu_blk_ras_p2,
   output logic [VA_WIDTH-1:0]             bpu_blk_pft_p2,
+  // BP-153 (TD#149): the p3 block's RAS snapshot after the p3 repair,
+  // for the entry bpu_slot_idx_p3 names, valid when the repair changed
+  // the stack for it (ras.sv ras_rep_val). Written over the p2 snapshot.
+  output logic                            bpu_blk_ras_val_p3,
+  output bp_ras_snapshot_t                bpu_blk_ras_p3,
 
   // ---- metadata write, BPU -> FTQ slow path (interfaces 7.1) ------
   // bp_ftq_meta_t is carried per slot; the array is declared here, at
@@ -242,6 +247,8 @@ module bp_cluster (
   // BP-152: with the restore, the named block's own push is off the
   // path and is undone first (ras.sv ras_rs_undo).
   input  logic                            ras_rs_undo,
+  // BP-153: and its own pop (ras.sv ras_rs_undo_pop).
+  input  logic                            ras_rs_undo_pop,
   output bp_ras_snapshot_t                ras_pd_snapshot,
 
   // FTQ-requested history rollback (TD-FE-7). Driven by the FTQ on a
@@ -469,6 +476,9 @@ module bp_cluster (
   logic [VA_WIDTH-1:0] w_ras_fall_through_p2 [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_ras_pop_addr_p2     [0:NUM_PRED_SLOTS-1];
   logic                w_ras_pop_valid_p2    [0:NUM_PRED_SLOTS-1];
+  // BP-153: the pop each slot would make, popping or not (ras.sv).
+  logic [VA_WIDTH-1:0] w_ras_peek_addr_p2    [0:NUM_PRED_SLOTS-1];
+  logic                w_ras_peek_valid_p2   [0:NUM_PRED_SLOTS-1];
   bp_ras_snapshot_t    w_ras_snapshot_p2     [0:NUM_PRED_SLOTS-1];
   logic                w_ras_pred_val_p3     [0:NUM_PRED_SLOTS-1];
   bp_br_type_e         w_ras_br_type_p3      [0:NUM_PRED_SLOTS-1];
@@ -519,6 +529,7 @@ module bp_cluster (
   logic [VA_WIDTH-1:0]     r_pc_p3;     // BP-121: the p3 history bundle
   bp_br_type_e             r_br_type_p3 [0:NUM_PRED_SLOTS-1];
   logic                    r_ras_val_p3 [0:NUM_PRED_SLOTS-1];
+  bp_br_type_e             r_ras_type_p3 [0:NUM_PRED_SLOTS-1];   // BP-153
   logic                    r_taken_p3   [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0]     r_tkn_tgt_p3 [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0]     r_pft_p3;
@@ -698,6 +709,7 @@ module bp_cluster (
         r_succ_p1_p2[s]      <= '0;
         r_br_type_p3[s]      <= NO_BRANCH;
         r_ras_val_p3[s]      <= 1'b0;
+        r_ras_type_p3[s]     <= NO_BRANCH;            // BP-153
         r_brv_p3[s]          <= 1'b0;
         r_taken_p3[s]        <= 1'b0;
         r_tkn_tgt_p3[s]      <= '0;
@@ -763,6 +775,7 @@ module bp_cluster (
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_br_type_p3[s] <= w_br_type_p2[s];
         r_ras_val_p3[s] <= w_ras_pred_val_p2[s];
+        r_ras_type_p3[s] <= w_ras_br_type_p2[s];      // BP-153
         r_brv_p3[s]     <= w_br_val_p2[s];
         r_taken_p3[s]   <= w_taken_p2[s];
         r_tkn_tgt_p3[s] <= w_tkn_tgt_p2[s];
@@ -981,7 +994,16 @@ module bp_cluster (
   //    ras_snapshot_p2 of the highest slot is that block's post-op
   //    state -- which is exactly the state of the p1 block on entry
   //    to p2. One snapshot per entry is sufficient (FE-11).
-  assign bpu_pred_ras_p1 = w_ras_snapshot_p2[NUM_PRED_SLOTS-1];
+  //    BP-153: without the pop record, which is the block ahead's: this
+  //    block has not operated, so a restore of its p1 snapshot has no pop
+  //    of its own to undo (RAS_POP_NONE).
+  always_comb begin : p1_ras
+    bpu_pred_ras_p1       = w_ras_snapshot_p2[NUM_PRED_SLOTS-1];
+    bpu_pred_ras_p1.push  = 1'b0;
+    bpu_pred_ras_p1.pmode = RAS_POP_NONE;
+    bpu_pred_ras_p1.ptosr = '0;
+    bpu_pred_ras_p1.ptag  = '0;
+  end
 
   // -- Checkpoint write at allocation (interfaces section 9).
   assign w_ckpt_wr_en  = r_val_p1;
@@ -1010,8 +1032,12 @@ module bp_cluster (
     logic        jmp_placed;
     logic        jmp_free;
     logic        blk_val;
+    logic        p1_reach;   // BP-153: the p1 view's reach, FTB miss
+    logic        p1_ras;
 
     blk_val = r_val_p2 & w_ftb_valid_p2;
+    p1_reach = 1'b1;
+    p1_ras   = 1'b0;
 
     // FTB jump-field structural classification. is_ret and is_call
     // both set is RETURN_CALL, the JALR that pops then pushes
@@ -1119,8 +1145,25 @@ module bp_cluster (
     // RAS p2 qualification. ras.sv pushes on DIRECT_CALL and
     // INDIRECT_CALL, pops on RETURN, and pops then pushes on
     // RETURN_CALL; every other type is a no-op inside the module.
+    //
+    // BP-153 (RAS-4; BP-151 causes call_p1_only, ret_nopop). On an FTB
+    // miss the RAS operates on the p1 view's taken call, return and
+    // return-call slots (the uBTB's, r_slot_p2), in reach of the p1 view.
+    // The p1 prediction stands when the FTB misses (no p2 redirect), so
+    // the path takes those branches; before BP-153 the RAS operated on
+    // the FTB's slots only, and a call or return the uBTB predicted
+    // correctly with no FTB entry was applied at commit only.
+    p1_reach = 1'b1;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      w_ras_pred_val_p2[s] = blk_val & w_br_val_p2[s] & w_reach_p2[s];
+      p1_ras = r_slot_p2[s].slot_valid && r_slot_p2[s].taken &&
+               ((r_slot_p2[s].br_type == DIRECT_CALL)   ||
+                (r_slot_p2[s].br_type == INDIRECT_CALL) ||
+                (r_slot_p2[s].br_type == RETURN)        ||
+                (r_slot_p2[s].br_type == RETURN_CALL));
+      w_ras_pred_val_p2[s] = w_ftb_valid_p2
+                               ? (blk_val & w_br_val_p2[s] & w_reach_p2[s])
+                               : (r_val_p2 & p1_reach & p1_ras);
+      p1_reach = p1_reach & ~(r_slot_p2[s].slot_valid & r_slot_p2[s].taken);
     end
   end
 
@@ -1195,12 +1238,19 @@ module bp_cluster (
                            : w_fp_use_p2[s]   ? PRED_FTB
                            : w_tage_hit_p2[s] ? PRED_TAGE : PRED_FTB;
         end
+        // BP-153 (p3_reach): the peek, not the pop. For a return that
+        // pops at p2 they are equal. A return a taken earlier slot makes
+        // unreachable at p2 made no pop, and before BP-153 its target was
+        // the FTB jump target; when SC turns that slot not taken at p3
+        // the return is reached and its p3 successor is this target
+        // (r_tkn_tgt_p3), while the p3 repair applies its missed pop. The
+        // peek is the address that pop reads.
         RETURN, RETURN_CALL: begin
-          w_tkn_tgt_p2[s] = w_ras_pop_valid_p2[s]
-                              ? w_ras_pop_addr_p2[s]
+          w_tkn_tgt_p2[s] = w_ras_peek_valid_p2[s]
+                              ? w_ras_peek_addr_p2[s]
                               : w_ftb_jmp_target_p2;
-          w_pred_src_p2[s] = w_ras_pop_valid_p2[s] ? PRED_RAS
-                                                   : PRED_FTB;
+          w_pred_src_p2[s] = w_ras_peek_valid_p2[s] ? PRED_RAS
+                                                    : PRED_FTB;
         end
         INDIRECT_NONRET, INDIRECT_CALL: begin
           w_tkn_tgt_p2[s]  = it_hit ? it_tgt : w_ftb_jmp_target_p2;
@@ -1755,8 +1805,15 @@ module bp_cluster (
       //    (BP-121, TD#164, ruled by Jeff). It was the FTB pftAddr
       //    (interfaces 5.1), which is the region's and is written by
       //    whichever start of the region updated last.
-      assign w_ras_fall_through_p2[gs] = w_jmp_ft_p2;
-      assign w_ras_br_type_p2[gs]      = w_br_type_p2[gs];
+      // BP-153: on an FTB miss the p1 view's slot (p2_class_comb), whose
+      // push address is the p1 fall-through: the uBTB's block end, the
+      // call's own end for a block a taken call ends (TD#164: the uBTB is
+      // trained with the resolved end).
+      assign w_ras_fall_through_p2[gs] = w_ftb_valid_p2 ? w_jmp_ft_p2
+                                                        : r_pft_p1_p2;
+      assign w_ras_br_type_p2[gs]      = w_ftb_valid_p2
+                                           ? w_br_type_p2[gs]
+                                           : r_slot_p2[gs].br_type;
 
       // -- RAS p3 repair inputs: the registered p2 classification,
       //    qualified by p3 reachability, which the SC direction can
@@ -1765,9 +1822,15 @@ module bp_cluster (
       //    and the repair never ran: an SC override that made a call
       //    or a return reachable, or unreachable, left the RAS as p2
       //    had left it.
-      assign w_ras_pred_val_p3[gs]     = r_val_p3 & r_brv_p3[gs]
-                                       & w_reach_p3[gs];
-      assign w_ras_br_type_p3[gs]      = r_br_type_p3[gs];
+      // BP-153: a block the FTB missed keeps the p2 view it operated on
+      // (the p1 slots, r_ras_val_p3, r_ras_type_p3): SC changes no
+      // direction there, so p3 repairs nothing.
+      assign w_ras_pred_val_p3[gs]     = r_ftb_ans_p3
+                                           ? (r_val_p3 & r_brv_p3[gs]
+                                              & w_reach_p3[gs])
+                                           : (r_val_p3 & r_ras_val_p3[gs]);
+      assign w_ras_br_type_p3[gs]      = r_ftb_ans_p3 ? r_br_type_p3[gs]
+                                                      : r_ras_type_p3[gs];
 
       // -- Update fan-out by resolved branch type (7.2, FE-U9).
       //    The resolved type of update channel gs is rederived from
@@ -2060,6 +2123,10 @@ module bp_cluster (
     .ras_fall_through_p2  (w_ras_fall_through_p2),
     .ras_pop_addr_p2      (w_ras_pop_addr_p2),
     .ras_pop_valid_p2     (w_ras_pop_valid_p2),
+    .ras_peek_addr_p2     (w_ras_peek_addr_p2),
+    .ras_peek_valid_p2    (w_ras_peek_valid_p2),
+    .ras_rep_val          (bpu_blk_ras_val_p3),
+    .ras_rep_snapshot     (bpu_blk_ras_p3),
     .ras_snapshot_p2      (w_ras_snapshot_p2),
     .ras_pred_val_p3      (w_ras_pred_val_p3),
     .ras_br_type_p3       (w_ras_br_type_p3),
@@ -2078,6 +2145,7 @@ module bp_cluster (
     .ras_pd_br_type       (ras_pd_br_type),
     .ras_pd_ret_addr      (ras_pd_ret_addr),
     .ras_rs_undo          (ras_rs_undo & w_ras_restore_val),
+    .ras_rs_undo_pop      (ras_rs_undo_pop & w_ras_restore_val),
     .ras_pd_snapshot      (ras_pd_snapshot)
   );
 

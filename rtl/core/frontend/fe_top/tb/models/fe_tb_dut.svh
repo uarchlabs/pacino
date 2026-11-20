@@ -40,6 +40,8 @@
   logic                        bkend_ftq_redir_self;
   ftq_redir_cause_e            bkend_ftq_redir_cause;
   logic                        bkend_ftq_redir_taken;   // BP-121
+  bp_br_type_e                 bkend_ftq_redir_type;    // BP-153
+  logic                        bkend_ftq_redir_rvc;     // BP-153
   logic                        bkend_ftq_commit_val;
   logic [FTQ_PTR_BITS-1:0]     bkend_ftq_commit_idx;
   logic                        itlb_l2t_req_val;

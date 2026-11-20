@@ -247,7 +247,16 @@ package bp_defines_pkg;
   // Target displacement / status widths (ftb_decisions.md 4.2, 8)
   parameter int TAR_STAT_BITS    = 2;  // fit / overflow / underflow
   parameter int FTB_BR_TGT_BITS  = 13; // conditional target displ.
-  parameter int FTB_JMP_TGT_BITS = 21; // jump target displacement
+  // The FTB jump field holds the full VA displacement (BP-153, rule
+  // change for acceptance; it was 21, the J-type reach). It is the
+  // target of every jump type, a JALR's included: the fallback when
+  // ITTAGE misses (ftb_decisions.md 4.2). A JALR target is anywhere in
+  // the VA, and a library call is often more than 2**20 bytes away
+  // (web_11: 38,579 of 40,139 committed indirects), so a 21-bit field
+  // returned a wrong target for every such JALR (ftb_cntrl wrote its
+  // status, jmp_stat, and the lookup did not read it). At VA_WIDTH the
+  // displacement reconstructs every target exactly.
+  parameter int FTB_JMP_TGT_BITS = VA_WIDTH; // = 59, jump target displ.
 
   // Confidence counter (ftb_confidence_override_rules.md). conf is a
   // bimodal DIRECTION counter; the MSB is the predicted direction.
@@ -349,10 +358,14 @@ package bp_defines_pkg;
   localparam int UBTB_POS_OFFSET_BITS =
                              UBTB_OFFSET_BITS - UBTB_BR_POS_BITS; // 1
 
-  // Target displacement widths. Same ISA reach as the FTB
-  // (ftb_decisions.md 4.2). TAR_STAT_BITS is shared.
+  // Target displacement widths: the ISA reach of ftb_decisions.md 4.2.
+  // TAR_STAT_BITS is shared. The jump field stays at the J-type reach
+  // (21) while the FTB's is the full VA since BP-153: the uBTB target is
+  // the p1 prediction, which p2 (the FTB or ITTAGE) corrects with a p2
+  // redirect, not a mispredict, so a JALR out of reach costs a cycle
+  // here, not a flush.
   localparam int UBTB_BR_TGT_BITS  = FTB_BR_TGT_BITS;  // = 13
-  localparam int UBTB_JMP_TGT_BITS = FTB_JMP_TGT_BITS; // = 21
+  localparam int UBTB_JMP_TGT_BITS = 21;               // J-type reach
 
   // Bimodal direction counter; the MSB is the predicted direction.
   localparam int UBTB_CONF_WIDTH = FTB_CONF_WIDTH; // = 3
@@ -560,14 +573,26 @@ package bp_defines_pkg;
   // ============================================================
   // :RAS parameters:
   // ============================================================
-  // Dual-stack RAS. Static partition: 16 speculative entries,
-  // 32 commit entries. The speculative stack is circular with a
+  // Dual-stack RAS. Static partition: 32 speculative entries,
+  // 64 commit entries. The speculative stack is circular with a
   // next-on-stack link per entry (BP-120, TD#159, ras_decisions.md
   // 3.2); the commit stack is a plain circular stack. It read "Simple
   // circular buffer. No linked list" until BP-141 (TD#195).
+  // BP-153 (RAS-4, for acceptance): 64 commit entries, 32 before. With
+  // A1 the fallback reads committed frames at any depth the commit stack
+  // holds, so its capacity bounds the call depth the RAS predicts: in the
+  // 25 classified runs, every return of the causes depth (10) and
+  // pop_empty (1) was in a recursion more than 32 frames deep (web_11),
+  // and 64 entries remove them.
+  // BP-153 (RAS-4, for acceptance): 32 speculative entries, 16 before.
+  // The allocator only advances (TOSW is monotonic, PU1), so a call's
+  // entry is reused after RAS_SPEC_ENTRIES - 1 younger allocations,
+  // popped or not; with 16 the allocator lapped an uncommitted call's
+  // entry in the 25 classified runs (causes wrap 8, fb_uncommitted 1),
+  // and 32 entries remove them. RAS_PTR_BITS 4 -> 5, RAS_TAG_BITS 4 -> 3.
   // See planning/arch/ras_decisions.md section 3.
-  parameter int RAS_SPEC_ENTRIES    = 16;
-  parameter int RAS_COMMIT_ENTRIES  = 32;
+  parameter int RAS_SPEC_ENTRIES    = 32;
+  parameter int RAS_COMMIT_ENTRIES  = 64;
   parameter int RAS_RCTR_WIDTH      = 4;
   parameter int RAS_ADDR_WIDTH      = VA_WIDTH;
 
@@ -678,6 +703,23 @@ package bp_defines_pkg;
   // $clog2(5) + 1 = 4 bits (16 values).
   localparam int RAS_TAG_BITS =
     $clog2(FTQ_DEPTH / (RAS_SPEC_ENTRIES - 1) + 1) + 1;
+  // The snapshot's pop record (BP-153, RAS-4, TD#207): how the block's
+  // pop changed the stack, so a restore that shows the pop off the path
+  // can undo it from the post-op snapshot (bp_ras_snapshot_t pmode,
+  // ptosr, ptag; ras.sv restore_scan). One pop per block (FE-11).
+  //   NONE   the block made no pop (or the snapshot is a p1 one).
+  //   LINK   the pop followed the link from ptosr; the undo restores
+  //          TOSR to ptosr unless its generation moved (B1).
+  //   DEC    the pop decremented the count at ptosr, TOSR held; the
+  //          undo increments it back.
+  //   EMPTY  the pop read the commit-stack fallback; the undo is the
+  //          depth alone.
+  // Every undo adds one to the depth (A1).
+  localparam int          RAS_PMODE_BITS = 2;
+  localparam logic [1:0]  RAS_POP_NONE   = 2'd0;
+  localparam logic [1:0]  RAS_POP_LINK   = 2'd1;
+  localparam logic [1:0]  RAS_POP_DEC    = 2'd2;
+  localparam logic [1:0]  RAS_POP_EMPTY  = 2'd3;
 
 endpackage : bp_defines_pkg
 

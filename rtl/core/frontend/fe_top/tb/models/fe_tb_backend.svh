@@ -109,6 +109,8 @@
     rd_cause = c;
     rd_taken = 1'b0;
     rd_cond  = 1'b0;
+    rd_type  = NO_BRANCH;
+    rd_rvc   = 1'b0;
     // The pointer of entry idx: the current entry's, or one behind it
     // for a mispredict named by the previous entry's branch.
     kp = cur_ptr - FTQ_PTR_BITS'(FTQ_IDX_BITS'(cur_ptr[FTQ_IDX_BITS-1:0]
@@ -132,6 +134,8 @@
     bkend_ftq_redir_self  = 1'b0;
     bkend_ftq_redir_cause = RC_MISPREDICT;
     bkend_ftq_redir_taken = 1'b0;
+    bkend_ftq_redir_type  = NO_BRANCH;
+    bkend_ftq_redir_rvc   = 1'b0;
     bkend_ftq_commit_val  = 1'b0;
     bkend_ftq_commit_idx  = '0;
     bkend_ftq_rsv_val     = '0;
@@ -201,6 +205,8 @@
           redirect(cfi_idx, cfi_pos, W.ex[ep].pc, 1'b0, RC_MISPREDICT);
           rd_taken = W.ex[cfi_e].taken;
           rd_cond  = (W.ex[cfi_e].btype == COND);
+          rd_type  = W.ex[cfi_e].btype;
+          rd_rvc   = W.ex[cfi_e].rvc;
           stop     = 1'b1;
         end
       end
@@ -251,6 +257,9 @@
               // The resolved direction rides with the redirect (BP-121).
               rd_taken = W.ex[cfi_e].taken;
               rd_cond  = (W.ex[cfi_e].btype == COND);
+              // BP-153: and its type and length.
+              rd_type  = W.ex[cfi_e].btype;
+              rd_rvc   = W.ex[cfi_e].rvc;
             end else begin
               n_err++;
               $display("%s", $sformatf(
@@ -468,14 +477,18 @@
         bkend_ftq_redir_self  = rd_self;
         bkend_ftq_redir_cause = rd_cause;
         bkend_ftq_redir_taken = rd_taken;
+        bkend_ftq_redir_type  = rd_type;
+        bkend_ftq_redir_rvc   = rd_rvc;
+        // BP-153, cm_hold: the commit waits cm_hold cycles from here.
+        cm_until = cyc + cm_hold;
       end
       rd_pend = 1'b0;
       // BP-121: an entry commits only after the resolutions of its
       // branches were accepted (a branch resolves before it retires).
       // The commit walk reads the entry's resolved slots (ftq_resolve
       // writes them), so the watermark waits while the resolution
-      // queue holds anything.
-      if (rq_hd == rq_tl) begin
+      // queue holds anything. BP-153: and while cm_hold holds it.
+      if ((rq_hd == rq_tl) && (cyc >= cm_until)) begin
         bkend_ftq_commit_val = wm_val;
         bkend_ftq_commit_idx = wm;
       end
@@ -555,6 +568,8 @@
     // BP-152: both knobs off; a program sets them after its reset.
     rsv2         = 1'b0;
     trap_sc      = 1'b0;
+    cm_hold      = 0;                          // BP-153
+    cm_until     = 0;
     rq_p1        = 0;
     n_rsv_pair   = 0;
     for (int i = 0; i < 256; i++) rq_done[i] = 1'b0;

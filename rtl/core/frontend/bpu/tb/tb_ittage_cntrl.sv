@@ -729,6 +729,62 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-PRED-07 (BP-153): a prediction's p2 result is ready in the cycle
+  //   an update is granted. The result was read and registered by the
+  //   PRED transaction of the cycle before (bp_arb_spec.md 4.6: its
+  //   read result flows to result formation); the grant of the p2
+  //   cycle is the next transaction. Before BP-153 ittage_pred_rdy_p2
+  //   was masked by that grant (trx_type), so the hit was dropped and
+  //   the cluster took the FTB jump target (BP-153 Phase 4).
+  // ================================================================
+  task automatic tc_pred_07();
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-PRED-07 ---");
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[5]   = mk_cb(1'b1, 3'b110, 2'b10, 2'b00,
+                    IT_MAX_TGT_WIDTH'('h0000_0000_5678));
+    ptgt[5] = IT_MAX_TGT_WIDTH'('h0000_0000_5678);
+    // pred_s0's sequence, with the update grant raised in the p2 cycle.
+    clr();
+    trx_type_tb                     = 1'b0;
+    ittage_pred_val_p0[0]           = 1'b1;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h1000);
+    ittage_pred_inp_p0[0].branch_id = '0;
+    for (int t = 0; t < NTS; t++) begin
+      tbl_idx_hash_p0[t][0]   = idx[t];
+      tbl_tag_hash_p0[t][0]   = tag[t];
+      tbl_hit_p1[t][0]        = (t == 5);
+      tbl_cntrl_bits_p1[t][0] = cb[t];
+      tbl_pred_tgt_p1[t][0]   = ptgt[t];
+    end
+    @(posedge clk); #1;
+    ittage_pred_val_p0 = '0;
+    @(posedge clk); #1;
+    for (int t = 0; t < NTS; t++) begin
+      tbl_hit_p1[t][0]        = 1'b0;
+      tbl_cntrl_bits_p1[t][0] = '0;
+      tbl_pred_tgt_p1[t][0]   = '0;
+    end
+    // p2: the arbiter grants an update this cycle.
+    trx_type_tb = 1'b1;
+    #1;
+    chk1("PRED07 rdy with an update granted at p2",
+         ittage_pred_rdy_p2[0], 1'b1);
+    chk1("PRED07 hit",  ittage_pred_meta_p2[0].ittage_hit, 1'b1);
+    chk40("PRED07 tgt", ittage_pred_meta_p2[0].ittage_prm_tgt,
+          IT_MAX_TGT_WIDTH'('h0000_0000_5678));
+    trx_type_tb = 1'b0;
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
   // TC-PRED-02: IT5 only hits, strong CTR
   // ================================================================
   task automatic tc_pred_02();
@@ -1654,6 +1710,7 @@ module tb;
     tc_pred_05();
     if (NPS > 1) tc_pred_06();   // needs two slots (BP-128)
     else $display("SKIP TC-PRED-06 dual-slot: needs NUM_PRED_SLOTS > 1");
+    tc_pred_07();
 
     tc_upd_01();
     tc_upd_02();

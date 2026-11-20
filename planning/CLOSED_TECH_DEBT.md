@@ -1430,6 +1430,16 @@
 |     |          | skips 3,823 -> 0 over 12 runs. Was: OPEN, CORRECTNESS.   |
 |     |          | An SC p3 reversal to not-taken skips 4 to 580 bytes past |
 |     |          | the branch's pc + 4. Found by PERF-002.                  |
+| 211 | ftq      | CLOSED by BP-152 (0588b7b), session-086, for acceptance. |
+|     |          | THE COMMIT WALK COMMITTED A CALL THAT DID NOT EXECUTE    |
+|     |          | (ftq_decisions.md 5.4). (a) A backend redirect with      |
+|     |          | _self clear now clears the named entry's slots after its |
+|     |          | _pos, any cause but RC_UNSPEC. (b) A resolved end clears |
+|     |          | every slot after the resolved branch's pos, whatever its |
+|     |          | slot index. tb_ftq_entry J1 to J3, tb_fe_top rsv_twores  |
+|     |          | and rsv_trapcall fail before and pass after;             |
+|     |          | commit_unexecuted 25 -> 0 over BP-151's 25 runs. Was:    |
+|     |          | OPEN, CORRECTNESS, found by BP-151.                      |
 
 ## Performance / Verification Debt
 

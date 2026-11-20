@@ -123,6 +123,11 @@ module fe_top (
   // The resolved direction of the redirecting branch (BP-121, the
   // corrected history rollback).
   input  logic                        bkend_ftq_redir_taken,
+  // BP-153: the resolved type of the redirecting branch and its length,
+  // read on RC_MISPREDICT with _self clear (the RAS operation of a call
+  // or return the entry did not hold, ras_decisions.md 7).
+  input  bp_br_type_e                 bkend_ftq_redir_type,
+  input  logic                        bkend_ftq_redir_rvc,
   input  logic                        bkend_ftq_commit_val,
   input  logic [FTQ_PTR_BITS-1:0]     bkend_ftq_commit_idx,
 
@@ -241,6 +246,8 @@ module fe_top (
   logic [FTQ_IDX_BITS-1:0]    bpu_blk_idx_p2;
   bp_ras_snapshot_t           bpu_blk_ras_p2;
   logic [VA_WIDTH-1:0]        bpu_blk_pft_p2;
+  logic                       bpu_blk_ras_val_p3;   // BP-153
+  bp_ras_snapshot_t           bpu_blk_ras_p3;       // BP-153
   logic                       bpu_meta_val_p2;
   logic [FTQ_IDX_BITS-1:0]    bpu_meta_idx_p2;
   tage_pred_meta_t            bpu_meta_tage_p2   [0:NUM_PRED_SLOTS-1];
@@ -272,6 +279,7 @@ module fe_top (
   bp_br_type_e                ras_pd_br_type;
   logic [VA_WIDTH-1:0]        ras_pd_ret_addr;
   logic                       ras_rs_undo;
+  logic                       ras_rs_undo_pop;     // BP-153
   bp_ras_snapshot_t           ras_pd_snapshot;
   logic                       tage_pq_not_full;
   logic                       ittage_pq_not_full;
@@ -429,6 +437,8 @@ module fe_top (
     .bpu_blk_idx_p2        (bpu_blk_idx_p2),
     .bpu_blk_ras_p2        (bpu_blk_ras_p2),
     .bpu_blk_pft_p2        (bpu_blk_pft_p2),
+    .bpu_blk_ras_val_p3    (bpu_blk_ras_val_p3),
+    .bpu_blk_ras_p3        (bpu_blk_ras_p3),
     .bpu_meta_val_p2       (bpu_meta_val_p2),
     .bpu_meta_idx_p2       (bpu_meta_idx_p2),
     .bpu_meta_tage_p2      (bpu_meta_tage_p2),
@@ -476,6 +486,7 @@ module fe_top (
     .ras_pd_br_type        (ras_pd_br_type),
     .ras_pd_ret_addr       (ras_pd_ret_addr),
     .ras_rs_undo           (ras_rs_undo),
+    .ras_rs_undo_pop       (ras_rs_undo_pop),
     .ras_pd_snapshot       (ras_pd_snapshot),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
@@ -543,6 +554,8 @@ module fe_top (
     .bpu_blk_idx_p2        (bpu_blk_idx_p2),
     .bpu_blk_ras_p2        (bpu_blk_ras_p2),
     .bpu_blk_pft_p2        (bpu_blk_pft_p2),
+    .bpu_blk_ras_val_p3    (bpu_blk_ras_val_p3),
+    .bpu_blk_ras_p3        (bpu_blk_ras_p3),
     .bpu_redir_p2          (bpu_redir_p2),
     .bpu_redir_idx_p2      (bpu_redir_idx_p2),
     .bpu_redir_p3          (bpu_redir_p3),
@@ -574,6 +587,7 @@ module fe_top (
     .ras_pd_br_type        (ras_pd_br_type),
     .ras_pd_ret_addr       (ras_pd_ret_addr),
     .ras_rs_undo           (ras_rs_undo),
+    .ras_rs_undo_pop       (ras_rs_undo_pop),
     .ras_pd_snapshot       (ras_pd_snapshot),
     .sc_enable             (fe_cfg.sc_enable),
     .ubtb_upd_u0           (ubtb_upd_u0),
@@ -642,6 +656,8 @@ module fe_top (
     .bkend_ftq_redir_self  (bkend_ftq_redir_self),
     .bkend_ftq_redir_cause (bkend_ftq_redir_cause),
     .bkend_ftq_redir_taken (bkend_ftq_redir_taken),
+    .bkend_ftq_redir_type  (bkend_ftq_redir_type),
+    .bkend_ftq_redir_rvc   (bkend_ftq_redir_rvc),
     .bkend_ftq_commit_val  (bkend_ftq_commit_val),
     .bkend_ftq_commit_idx  (bkend_ftq_commit_idx),
     .ftq_full              (ftq_full),

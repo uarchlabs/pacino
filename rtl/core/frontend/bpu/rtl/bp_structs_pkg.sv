@@ -180,10 +180,19 @@ package bp_structs_pkg;
   //   tag  the allocation generation of the entry at tosr, 0 when
   //        tosr == bos (B1). A restore whose entry has been reallocated
   //        since reads the stack empty.
+  // BP-153 adds the block's operation record (RAS-4: the undo of an
+  // off-path pop from the post-op snapshot, and an undo only of what the
+  // block did):
+  //   push   the block pushed (at p2, or by the C1 or backend operation
+  //          on a restore). 0 for the p1 snapshot.
+  //   pmode  how the pop changed the stack (bp_defines_pkg RAS_POP_*),
+  //          RAS_POP_NONE when the block made none.
+  //   ptosr  TOSR before the pop.
+  //   ptag   the generation of the entry at ptosr then, 0 when empty.
   // RAS_PTR_BITS = $clog2(16) = 4b, RAS_RCTR_WIDTH = 4b,
-  // RAS_DEPTH_BITS = 8b, RAS_TAG_BITS = 4b.
-  // Total snapshot = 3 * 4 + 4 + 8 + 4 = 28b (16b before BP-152, 12b
-  // before BP-142).
+  // RAS_DEPTH_BITS = 8b, RAS_TAG_BITS = 4b, RAS_PMODE_BITS = 2b.
+  // Total snapshot = 3 * 4 + 4 + 8 + 4 + 1 + 2 + 4 + 4 = 39b (28b before
+  // BP-153, 16b before BP-152, 12b before BP-142).
   // See planning/arch/ras_decisions.md section 4.
   typedef struct packed {
     logic [RAS_PTR_BITS-1:0]   tosr; // top-of-stack read pointer
@@ -192,6 +201,10 @@ package bp_structs_pkg;
     logic [RAS_RCTR_WIDTH-1:0] rctr; // count of the entry at tosr
     logic [RAS_DEPTH_BITS-1:0] dep;  // speculative call depth (BP-152)
     logic [RAS_TAG_BITS-1:0]   tag;  // generation of the tosr entry
+    logic                      push;  // the block pushed (BP-153)
+    logic [RAS_PMODE_BITS-1:0] pmode; // the block's pop (BP-153)
+    logic [RAS_PTR_BITS-1:0]   ptosr; // TOSR before the pop
+    logic [RAS_TAG_BITS-1:0]   ptag;  // generation at ptosr then
   } bp_ras_snapshot_t;
 
 //  // SC (Statistical Corrector) predictor metadata.

@@ -257,8 +257,9 @@ module tb;
     logic [FTB_JMP_TGT_BITS-1:0] disp;
     d    = tgt - base;
     disp = d[FTB_JMP_TGT_BITS-1:0];
-    exp_jmp_tgt = base
-      + {{(VA_WIDTH-FTB_JMP_TGT_BITS){disp[FTB_JMP_TGT_BITS-1]}}, disp};
+    // Sign-extend by a signed cast, the identity at the full width
+    // (FTB_JMP_TGT_BITS = VA_WIDTH since BP-153).
+    exp_jmp_tgt = base + VA_WIDTH'($signed(disp));
   endfunction
 
   // Expected fallthrough read-back from a full-VA block end written by
@@ -658,11 +659,19 @@ module tb;
     predict(pc);
     check("S9 jmp max in-range +0xFFFFF lossless (fit boundary)",
           ftb_jmp_target_p2 == base + VA_WIDTH'('hF_FFFF));
+    // +0x100000 was past the 21-bit reach and came back wrapped until
+    // BP-153; the field is the full VA displacement since, so it is
+    // exact, as is a target below the jump.
     upd_jmp(pc, 1'b1, 2'd0, base + VA_WIDTH'('h10_0000), 1'b1, 1'b0, 1'b0,
             4'd0, pc);
     predict(pc);
-    check("S9 jmp overflow +0x100000 wraps per encode",
-          ftb_jmp_target_p2 == exp_jmp_tgt(base + VA_WIDTH'('h10_0000), base));
+    check("S9 jmp +0x100000 (past the old 21-bit reach) is exact",
+          ftb_jmp_target_p2 == base + VA_WIDTH'('h10_0000));
+    upd_jmp(pc, 1'b1, 2'd0, base - VA_WIDTH'('h10_0002), 1'b1, 1'b0, 1'b0,
+            4'd0, pc);
+    predict(pc);
+    check("S9 jmp -0x100002 (past the old 21-bit reach) is exact",
+          ftb_jmp_target_p2 == base - VA_WIDTH'('h10_0002));
 
     // =============================================================
     // S10: fallthrough reduce/reconstruct -- in-block ends are
@@ -1166,12 +1175,15 @@ module tb;
     check("J1 jmp target round-trips", ftb_jmp_target_p2 == j1);
 
     // =============================================================
-    // J2: TD#137. The displacement is measured from the JUMP PC, so
-    // the forward reach ends at jump PC + 2**(FTB_JMP_TGT_BITS-1) - 2
-    // wherever the jump sits. The jump is at pos 15 of a start at
-    // region offset 2, jump PC base+32; the target is the last even
-    // address in reach of the jump PC, 32 bytes past the last one in
-    // reach of the region base.
+    // J2: TD#137 and BP-153. The displacement is measured from the JUMP
+    // PC; since BP-153 it is the full VA displacement, so a JALR target
+    // anywhere in the VA round-trips. The jump is at pos 15 of a start
+    // at region offset 2, jump PC base+32. The targets are the web_11
+    // shared-library call of BP-153 Phase 4 (0x3_C9C9_DF00 above the
+    // jump) and the same distance below it.
+    // OLD (until BP-153): the 21-bit reach. J2 checked the last even
+    // address in reach of the jump PC, jump PC + 2**20 - 2; a target
+    // past it came back with its displacement truncated.
     // OLD (until BP-140): also read from a second start at offset 30
     // sharing the entry (jump at its pos 1).
     // =============================================================
@@ -1179,14 +1191,20 @@ module tb;
     base = make_pc(26'h000616, 9'd135);
     pcA  = base + VA_WIDTH'('d2);
     jpc  = base + VA_WIDTH'('d32);
-    j1   = jpc + VA_WIDTH'((1 << (FTB_JMP_TGT_BITS - 1)) - 2);
+    j1   = jpc + VA_WIDTH'('h3_C9C9_DF00);
     upd_jmp(pcA, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd15,
             base + VA_WIDTH'('d34));
     predict(pcA);
     $display("J2 A jmp target got %h exp %h", ftb_jmp_target_p2, j1);
     check("J2 jmp valid, pos 15",
           ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd15));
-    check("J2 edge-of-reach target is exact",
+    check("J2 far JALR target (+0x3_C9C9_DF00) is exact",
+          ftb_jmp_target_p2 == j1);
+    j1   = jpc - VA_WIDTH'('h3_C9C9_DF00);
+    upd_jmp(pcA, 1'b1, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd15,
+            base + VA_WIDTH'('d34));
+    predict(pcA);
+    check("J2 far JALR target (-0x3_C9C9_DF00) is exact",
           ftb_jmp_target_p2 == j1);
 
     // =============================================================

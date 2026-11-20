@@ -565,9 +565,18 @@ module ittage_cntrl #(
     end
   end
 
+  // The p2 result is the PRED transaction of the cycle before: its read
+  // result flows to result formation (bp_arb_spec.md 4.6), registered
+  // in meta_p2_r and rdy_p2_r. trx_type is the arbiter's grant of THIS
+  // cycle, the next transaction, so it does not qualify the result.
+  // Before BP-153 it did (trx_type ? '0 : rdy_p2_r): a hit was dropped
+  // whenever an update was granted in its p2 cycle, and the cluster took
+  // the FTB jump target instead (BP-153 Phase 4, tb_ittage_cntrl
+  // TC-PRED-07). A prediction cannot enter in an update's grant cycle
+  // (the arbiter grants one), so no entry gate is needed here.
   always_comb begin : meta_out
     ittage_pred_meta_p2 = meta_p2_r;
-    ittage_pred_rdy_p2  = trx_type ? '0 : rdy_p2_r;
+    ittage_pred_rdy_p2  = rdy_p2_r;
   end
 
   // ================================================================

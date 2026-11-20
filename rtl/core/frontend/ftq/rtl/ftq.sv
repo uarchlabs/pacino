@@ -123,6 +123,11 @@ module ftq (
   input  logic [FTQ_IDX_BITS-1:0]     bpu_blk_idx_p2,
   input  bp_ras_snapshot_t            bpu_blk_ras_p2,
   input  logic [VA_WIDTH-1:0]         bpu_blk_pft_p2,
+  // BP-153 (TD#149): the p3 block's RAS snapshot after its p3 repair,
+  // for the entry bpu_slot_idx_p3 names; written over the p2 snapshot
+  // when the p3 slot group is accepted (w_ok_slot_p3).
+  input  logic                        bpu_blk_ras_val_p3,
+  input  bp_ras_snapshot_t            bpu_blk_ras_p3,
 
   // ---- 6. redirects, derived at the cluster boundary ---------------
   input  bp_redirect_t                bpu_redir_p2 [0:NUM_PRED_SLOTS-1],
@@ -180,6 +185,8 @@ module ftq (
   output logic [VA_WIDTH-1:0]         ras_pd_ret_addr,
   // BP-152: with the restore, undo the named block's off-path push.
   output logic                        ras_rs_undo,
+  // BP-153: with the restore, undo the named block's off-path pop.
+  output logic                        ras_rs_undo_pop,
   input  bp_ras_snapshot_t            ras_pd_snapshot,
 
   // ---- 8. updates, the per-predictor channels (TD#151, BP-119) -----
@@ -277,6 +284,12 @@ module ftq (
   // The resolved direction of the redirecting branch (BP-121, the
   // corrected history rollback; bp_history_decisions.md 3.5).
   input  logic                        bkend_ftq_redir_taken,
+  // BP-153 (RAS-4, TD#207): the resolved type of the redirecting branch
+  // and its length (1 for a 16-bit encoding). Read on RC_MISPREDICT
+  // with _self clear only: the RAS operation of a call or return the
+  // entry did not hold is applied on the restore (bk_ras below).
+  input  bp_br_type_e                 bkend_ftq_redir_type,
+  input  logic                        bkend_ftq_redir_rvc,
 
   // FTQ_PTR_BITS wide: it carries the wrap generation
   // (ftq_backend_interfaces.md 6, widened after BP-106).
@@ -367,6 +380,15 @@ module ftq (
   logic                     w_pd_ras_wr_val;
   logic                     w_pd_undo;
   logic                     w_bk_undo;
+  logic                     w_pd_undo_pop;     // BP-153
+  logic                     w_bk_undo_pop;     // BP-153
+  // BP-153: ftq_ifu's C1 operation, and the backend's (bk_ras); one
+  // restore takes at most one of the two (one redirect arm wins).
+  logic                     w_ifu_ras_pd_val;
+  bp_br_type_e              w_ifu_ras_pd_br_type;
+  logic [VA_WIDTH-1:0]      w_ifu_ras_pd_ret_addr;
+  logic                     w_bk_op_val;
+  logic [VA_WIDTH-1:0]      w_bk_ret_addr;
   logic                     w_ras_fix_wr_val;
   // BP-152, TD#211 (a): a backend redirect with _self clear, the entry
   // it names surviving, clears the entry's slots after its position.
@@ -551,22 +573,120 @@ module ftq (
   // retracts it on the restore (ras_rs_undo), and the snapshot after the
   // undo is written back into the entry (its later restores and its
   // commit read it). The predecode arm forms its own (ftq_ifu pd_ras).
-  // A taken return there is not undone: the post-op snapshot holds no
-  // pre-op TOSR (snap_offpath_op, BP-151 E).
-  always_comb begin : bk_undo
-    w_bk_undo = 1'b0;
-    if (ftq_rollback_val && w_arm_win[1] && w_bkr_clr_val) begin
-      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        if (w_redir_entry.slot[s].slot_valid && w_redir_entry.slot[s].taken &&
-            ((w_redir_entry.slot[s].br_type == DIRECT_CALL) ||
-             (w_redir_entry.slot[s].br_type == INDIRECT_CALL)) &&
-            (w_redir_entry.slot[s].pos > bkend_ftq_redir_pos))
-          w_bk_undo = 1'b1;
+  // A taken return there was not undone until BP-153: the post-op
+  // snapshot held no pre-op TOSR (snap_offpath_op, BP-151 E). It is
+  // undone since BP-153 (bk_ras below, w_bk_undo_pop).
+  //
+  // BP-153 (RAS-4, TD#207), THE BACKEND'S OPERATION. A call, return or
+  // return-call that the FTB did not give was never operated at p2
+  // (CB1), and predecode finds a JAL only, so before BP-153 such a
+  // branch reached the RAS only at its commit: an indirect call was not
+  // pushed (call_pd) and a return did not pop (ret_pd). On the restore
+  // of a winning RC_MISPREDICT redirect with _self clear whose
+  // bkend_ftq_redir_type is a RAS type, and whose entry holds no taken
+  // RAS operation the path keeps (before the position, or at it as the
+  // same operation), the RAS applies
+  // the operation to the restored state as it applies C1 (ras.sv
+  // restore_scan): the pop first, then the push of the branch's own pc
+  // plus its length. The post-op snapshot is written back into the entry
+  // (w_ras_fix_wr_val), which the entry's commit and later restores read.
+  // The resolution places or maps the branch's slot (a taken RAS type
+  // always writes, ftq_resolve w_occ_wr), so the commit walk pushes or
+  // pops it once (5.4).
+  //   - an entry slot holding a taken RAS operation before the position,
+  //     or at it as the operation the redirect resolves (a push, a pop or
+  //     both; any operation for a cause other than RC_MISPREDICT, whose
+  //     type names no branch): the RAS already operated for the block
+  //     (FE-11, one per block). Nothing is applied.
+  //   - a held push after the position, or at it as another operation:
+  //     undone first (w_bk_undo), then the operation applies.
+  //   - a held pop after the position, or at it as another operation
+  //     (BP-153, the undo of an off-path pop): undone first from the
+  //     snapshot's pop record
+  //     (w_bk_undo_pop, ras.sv ras_rs_undo_pop), then the operation
+  //     applies. A held return-call after the position is both, the
+  //     push undone first. Before BP-153 the pop stayed and no operation
+  //     was applied over it (snap_offpath_op).
+  // The held judgement reads the entry as the redirect finds it. The
+  // drivers present the redirecting branch's resolution with its redirect
+  // or after it; one accepted before would show its own slot here, read
+  // as held, and the branch would reach the RAS at commit only, as before
+  // BP-153 (no double operation).
+  always_comb begin : bk_ras
+    logic bk_win;
+    logic held_on;
+    logic ras_t;
+    logic r_push;
+    logic r_pop;
+    logic h_push;
+    logic h_pop;
+    logic at_kept;
+    w_bk_undo     = 1'b0;
+    w_bk_undo_pop = 1'b0;
+    held_on       = 1'b0;
+    h_push        = 1'b0;
+    h_pop         = 1'b0;
+    at_kept       = 1'b0;
+    // The resolved operation.
+    r_push        = (bkend_ftq_redir_type == DIRECT_CALL)   ||
+                    (bkend_ftq_redir_type == INDIRECT_CALL) ||
+                    (bkend_ftq_redir_type == RETURN_CALL);
+    r_pop         = (bkend_ftq_redir_type == RETURN)        ||
+                    (bkend_ftq_redir_type == RETURN_CALL);
+    bk_win        = ftq_rollback_val && w_arm_win[1] && w_bkr_clr_val;
+    ras_t         = (bkend_ftq_redir_type == DIRECT_CALL)   ||
+                    (bkend_ftq_redir_type == INDIRECT_CALL) ||
+                    (bkend_ftq_redir_type == RETURN)        ||
+                    (bkend_ftq_redir_type == RETURN_CALL);
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (w_redir_entry.slot[s].slot_valid && w_redir_entry.slot[s].taken &&
+          ((w_redir_entry.slot[s].br_type == DIRECT_CALL)   ||
+           (w_redir_entry.slot[s].br_type == INDIRECT_CALL) ||
+           (w_redir_entry.slot[s].br_type == RETURN)        ||
+           (w_redir_entry.slot[s].br_type == RETURN_CALL))) begin
+        // At the position, a mispredict whose resolved type is another
+        // operation (push, pop or both) shows the held one off the path,
+        // as a predecode correction does (ftq_ifu pd_ras).
+        // BP-153: held only for an operation the entry's snapshot records
+        // (ras.push, ras.pmode). A taken RAS slot the RAS did not operate
+        // (a p1 uBTB slot no p2 slot replaced; the RAS operates at p2 on
+        // the FTB's slots only) is not held: undoing it retracted another
+        // block's frame (commit_lost, infra_1 (8, 8) k 3689).
+        h_push = (w_redir_entry.slot[s].br_type != RETURN) &&
+                 w_redir_entry.ras.push;
+        h_pop  = ((w_redir_entry.slot[s].br_type == RETURN) ||
+                  (w_redir_entry.slot[s].br_type == RETURN_CALL)) &&
+                 (w_redir_entry.ras.pmode != RAS_POP_NONE);
+        at_kept = (w_redir_entry.slot[s].pos == bkend_ftq_redir_pos) &&
+                  ((bkend_ftq_redir_cause != RC_MISPREDICT) ||
+                   ((h_push == r_push) && (h_pop == r_pop)));
+        if (!h_push && !h_pop) begin
+          // not operated: neither held nor undone
+        end else if ((w_redir_entry.slot[s].pos < bkend_ftq_redir_pos) ||
+                     at_kept) begin
+          held_on = 1'b1;
+        end else begin
+          if (h_push) w_bk_undo     = bk_win;    // a call or return-call
+          if (h_pop)  w_bk_undo_pop = bk_win;    // BP-153
+        end
       end
     end
+    w_bk_op_val   = bk_win && (bkend_ftq_redir_cause == RC_MISPREDICT) &&
+                    ras_t && !held_on;
+    w_bk_ret_addr = w_redir_entry.pc +
+                    VA_WIDTH'({bkend_ftq_redir_pos, 1'b0}) +
+                    (bkend_ftq_redir_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
   end
   assign ras_rs_undo       = w_pd_undo | w_bk_undo;
-  assign w_ras_fix_wr_val  = w_pd_ras_wr_val | w_bk_undo;
+  assign ras_rs_undo_pop   = w_pd_undo_pop | w_bk_undo_pop;     // BP-153
+  assign w_ras_fix_wr_val  = w_pd_ras_wr_val | w_bk_undo | w_bk_undo_pop |
+                             w_bk_op_val;
+  // One arm wins a cycle, so at most one of the two operations is valid.
+  assign ras_pd_val        = w_ifu_ras_pd_val | w_bk_op_val;
+  assign ras_pd_br_type    = w_bk_op_val ? bkend_ftq_redir_type
+                                         : w_ifu_ras_pd_br_type;
+  assign ras_pd_ret_addr   = w_bk_op_val ? w_bk_ret_addr
+                                         : w_ifu_ras_pd_ret_addr;
 
   // -----------------------------------------------------------------
   // ftq_shadow. The four-deep response shadow, 5.6.
@@ -642,6 +762,8 @@ module ftq (
     .p3_wr_val           (w_ok_slot_p3),
     .p3_wr_idx           (bpu_slot_idx_p3),
     .p3_wr_slot          (bpu_slot_p3),
+    .p3_ras_wr_val       (w_ok_slot_p3 & bpu_blk_ras_val_p3),
+    .p3_ras_wr           (bpu_blk_ras_p3),
     .pd_wr_val           (w_pd_wr_val),
     .pd_wr_idx           (w_pd_wr_idx),
     .pd_wr_sel           (w_pd_wr_sel),
@@ -803,10 +925,11 @@ module ftq (
     .pd_wr_kill        (w_pd_wr_kill),
     .pd_wr_pft_val     (w_pd_wr_pft_val),
     .pd_wr_pft         (w_pd_wr_pft),
-    .ras_pd_val        (ras_pd_val),
-    .ras_pd_br_type    (ras_pd_br_type),
-    .ras_pd_ret_addr   (ras_pd_ret_addr),
+    .ras_pd_val        (w_ifu_ras_pd_val),
+    .ras_pd_br_type    (w_ifu_ras_pd_br_type),
+    .ras_pd_ret_addr   (w_ifu_ras_pd_ret_addr),
     .ras_pd_undo       (w_pd_undo),
+    .ras_pd_undo_pop   (w_pd_undo_pop),
     .pd_ras_wr_val     (w_pd_ras_wr_val),
     .pd_redir_val      (w_pd_redir_val),
     .pd_redir_idx      (w_pd_redir_idx),

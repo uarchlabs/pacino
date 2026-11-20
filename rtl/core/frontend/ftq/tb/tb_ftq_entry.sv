@@ -51,6 +51,9 @@ module tb;
   logic                     p3_wr_val;
   logic [FTQ_IDX_BITS-1:0]  p3_wr_idx;
   bp_ftq_slot_t             p3_wr_slot [0:NUM_PRED_SLOTS-1];
+  // BP-153 (TD#149): the snapshot the p3 repair corrected.
+  logic                     p3_ras_wr_val;
+  bp_ras_snapshot_t         p3_ras_wr;
 
   logic                     pd_wr_val;
   logic [FTQ_IDX_BITS-1:0]  pd_wr_idx;
@@ -114,6 +117,8 @@ module tb;
     .p3_wr_val           (p3_wr_val),
     .p3_wr_idx           (p3_wr_idx),
     .p3_wr_slot          (p3_wr_slot),
+    .p3_ras_wr_val       (p3_ras_wr_val),
+    .p3_ras_wr           (p3_ras_wr),
     .pd_wr_val           (pd_wr_val),
     .pd_wr_idx           (pd_wr_idx),
     .pd_wr_sel           (pd_wr_sel),
@@ -199,6 +204,8 @@ module tb;
     blk_wr_val      = 1'b0;
     p2_wr_val       = 1'b0;
     p3_wr_val       = 1'b0;
+    p3_ras_wr_val   = 1'b0;                              // BP-153
+    p3_ras_wr       = '0;
     pd_wr_val       = 1'b0;
     pd_wr_kill      = 1'b0;
     pd_wr_pft_val   = 1'b0;
@@ -1007,10 +1014,10 @@ module tb;
     commit_step_val = 1'b0;
     // J4
     rs      = '0;
-    rs.tosr = 4'd5;
-    rs.tosw = 4'd6;
+    rs.tosr = RAS_PTR_BITS'(5);                     // BP-153: widths
+    rs.tosw = RAS_PTR_BITS'(6);
     rs.dep  = 8'd9;
-    rs.tag  = 4'd3;
+    rs.tag  = RAS_TAG_BITS'(3);
     pd_wr_val     = 1'b1;
     pd_wr_idx     = 6'd51;
     pd_wr_sel     = '0;
@@ -1039,6 +1046,61 @@ module tb;
     tick();
     commit_step_val = 1'b0;
     clr();
+    // J5 (BP-153, TD#149): the p3 repair's snapshot is written over the
+    // p2 one (the p3 slot write's index), and a restore's write-back of the
+    // same cycle lands over it (the order of the header). The commit reads
+    // it: its depth sets the committed depth (A1, CO12).
+    begin
+      bp_ras_snapshot_t r2;
+      bp_ras_snapshot_t r3;
+      r2      = '0;
+      r2.tosr = RAS_PTR_BITS'(2);
+      r2.dep  = 8'd4;
+      r3      = r2;
+      r3.tosr = RAS_PTR_BITS'(3);
+      r3.tosw = RAS_PTR_BITS'(4);
+      r3.dep  = 8'd5;
+      r3.push = 1'b1;
+      blk_wr_val = 1'b1;
+      blk_wr_idx = 6'd51;
+      blk_wr_ras = r2;
+      tick();
+      clr();
+      p3_wr_val     = 1'b1;
+      p3_wr_idx     = 6'd51;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++)
+        p3_wr_slot[s] = fetch_rd_entry.slot[s];
+      p3_ras_wr_val = 1'b1;
+      p3_ras_wr     = r3;
+      tick();
+      clr();
+      fetch_rd_idx  = 6'd51;
+      commit_rd_idx = 6'd51;
+      commit_step_val = 1'b1;
+      #1;
+      chk("J5 TD#149 the p3 repair's snapshot replaces the p2 one",
+          fetch_rd_entry.ras == r3);
+      chk("J5 TD#149 the commit carries it (dep 5, not the p2 4)",
+          ras_commit_val && (ras_commit_snapshot.dep == 8'd5));
+      tick();
+      clr();
+      p3_wr_val     = 1'b1;
+      p3_wr_idx     = 6'd51;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++)
+        p3_wr_slot[s] = fetch_rd_entry.slot[s];
+      p3_ras_wr_val = 1'b1;
+      p3_ras_wr     = r2;
+      pd_wr_idx     = 6'd51;               // pd_ras_wr_idx in this bench
+      pd_ras_wr_val = 1'b1;
+      pd_ras_wr     = rs;
+      tick();
+      clr();
+      fetch_rd_idx = 6'd51;
+      #1;
+      chk("J5 the restore's write-back of the same cycle lands over it",
+          fetch_rd_entry.ras == rs);
+      clr();
+    end
   endtask
 
   // -----------------------------------------------------------------

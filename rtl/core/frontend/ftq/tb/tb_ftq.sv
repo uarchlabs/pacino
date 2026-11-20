@@ -118,6 +118,7 @@ module tb;
   bp_br_type_e              ras_pd_br_type;
   logic [VA_WIDTH-1:0]      ras_pd_ret_addr;
   logic                     ras_rs_undo;
+  logic                     ras_rs_undo_pop;       // BP-153
   // Section 8 per-predictor update ports (BP-119, TD#151). The
   // readies are the cluster's per-slot queue readies, held high here.
   // The config group (SYS-001, csr_decisions.md CSR-2): the
@@ -201,6 +202,8 @@ module tb;
   logic                     bkend_ftq_redir_self;
   ftq_redir_cause_e         bkend_ftq_redir_cause;
   logic                     bkend_ftq_redir_taken; // BP-121
+  bp_br_type_e              bkend_ftq_redir_type;  // BP-153
+  logic                     bkend_ftq_redir_rvc;   // BP-153
   logic                     bkend_ftq_commit_val;
   logic [FTQ_PTR_BITS-1:0]  bkend_ftq_commit_idx;
 
@@ -236,6 +239,8 @@ module tb;
     .bpu_blk_idx_p2        (bpu_blk_idx_p2),
     .bpu_blk_ras_p2        (bpu_blk_ras_p2),
     .bpu_blk_pft_p2        (bpu_blk_pft_p2),
+    .bpu_blk_ras_val_p3    (1'b0),                  // BP-153
+    .bpu_blk_ras_p3        ('0),
     .bpu_redir_p2          (bpu_redir_p2),
     .bpu_redir_idx_p2      (bpu_redir_idx_p2),
     .bpu_redir_p3          (bpu_redir_p3),
@@ -267,6 +272,7 @@ module tb;
     .ras_pd_br_type        (ras_pd_br_type),
     .ras_pd_ret_addr       (ras_pd_ret_addr),
     .ras_rs_undo           (ras_rs_undo),
+    .ras_rs_undo_pop       (ras_rs_undo_pop),
     .ras_pd_snapshot       ('0),
     .sc_enable             (fe_cfg.sc_enable),
     .ubtb_upd_u0           (ubtb_upd_u0),
@@ -335,6 +341,8 @@ module tb;
     .bkend_ftq_redir_self  (bkend_ftq_redir_self),
     .bkend_ftq_redir_cause (bkend_ftq_redir_cause),
     .bkend_ftq_redir_taken (bkend_ftq_redir_taken),
+    .bkend_ftq_redir_type  (bkend_ftq_redir_type),
+    .bkend_ftq_redir_rvc   (bkend_ftq_redir_rvc),
     .bkend_ftq_commit_val  (bkend_ftq_commit_val),
     .bkend_ftq_commit_idx  (bkend_ftq_commit_idx),
     .ftq_full              (ftq_full),
@@ -540,6 +548,8 @@ module tb;
     bkend_ftq_redir_self  = 1'b0;
     bkend_ftq_redir_cause = RC_MISPREDICT;
     bkend_ftq_redir_taken = 1'b0;
+    bkend_ftq_redir_type  = NO_BRANCH;
+    bkend_ftq_redir_rvc   = 1'b0;
     bkend_ftq_commit_val  = 1'b0;
     bkend_ftq_commit_idx  = '0;
     mdl_tkn_en            = 1'b0;
@@ -1790,6 +1800,189 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // M. THE BACKEND'S RAS OPERATION (BP-153, ftq.sv bk_ras). A winning
+  //    RC_MISPREDICT redirect with _self clear names a call, return or
+  //    return-call by bkend_ftq_redir_type; when the entry holds no taken
+  //    RAS operation at or before the redirect position, the FTQ presents
+  //    it to the RAS with the restore (ras_pd_*), the push address the
+  //    branch's own pc plus its length. The expected address is formed
+  //    here from the entry array's pc (ftq_entry's state), the position
+  //    and the length. Entry 4 is live after 20 cycles (group G).
+  // -----------------------------------------------------------------
+  localparam logic [VA_WIDTH-1:0] M_TGT = VA_WIDTH'('h00_C400_0000);
+  localparam logic [VA_WIDTH-1:0] M_HTGT = VA_WIDTH'('h00_C500_0000);
+
+  // One redirect cycle to entry 4 at pos with type ty and length rvc,
+  // then the checks of that cycle: the operation presented or not, its
+  // type and push address, and the undo of the entry's own push.
+  task automatic m_redirect(input string nm,
+                            input logic [FTB_BR_POS_BITS-1:0] pos,
+                            input bp_br_type_e ty, input logic rvc,
+                            input logic self_sq, input ftq_redir_cause_e c,
+                            input logic exp_op, input logic exp_undo,
+                            input logic exp_upop);
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] ra;
+    pc = dut.u_entry.r_arr[4].pc;
+    ra = pc + VA_WIDTH'({pos, 1'b0}) + (rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
+    bkend_ftq_redir_pos  = pos;
+    bkend_ftq_redir_type = ty;
+    bkend_ftq_redir_rvc  = rvc;
+    bkend_redirect(6'd4, self_sq, c, M_TGT);
+    chk($sformatf("%s: the restore is taken", nm), ras_restore_val);
+    chk($sformatf("%s: the RAS operation is %s presented (%0d)", nm,
+                  exp_op ? "" : "not", ras_pd_val), ras_pd_val == exp_op);
+    if (exp_op) begin
+      chk($sformatf("%s: with the resolved type (%0d)", nm, ras_pd_br_type),
+          ras_pd_br_type == ty);
+      if ((ty == DIRECT_CALL) || (ty == INDIRECT_CALL) ||
+          (ty == RETURN_CALL))
+        chk_va($sformatf("%s: and the branch's pc plus its length", nm),
+               ras_pd_ret_addr, ra);
+    end
+    chk($sformatf("%s: the entry's own push is %s undone (%0d)", nm,
+                  exp_undo ? "" : "not", ras_rs_undo),
+        ras_rs_undo == exp_undo);
+    // BP-153 phase 2: the undo of the entry's own pop.
+    chk($sformatf("%s: the entry's own pop is %s undone (%0d)", nm,
+                  exp_upop ? "" : "not", ras_rs_undo_pop),
+        ras_rs_undo_pop == exp_upop);
+    bkend_release();
+    bkend_ftq_redir_pos  = '0;
+    bkend_ftq_redir_type = NO_BRANCH;
+    bkend_ftq_redir_rvc  = 1'b0;
+  endtask
+
+  // Reset and run 20 cycles; with tk the model gives every entry a taken
+  // slot of type ty at pos 2 (cluster_model, mdl_tkn_*). BP-153: entry
+  // 4's p2 snapshot (the 4c override) records the slot's operation, as the
+  // RAS records what it did at p2, unless norec: a slot the RAS did not
+  // operate (a p1 uBTB slot no p2 slot replaced).
+  task automatic m_setup(input logic tk, input bp_br_type_e ty,
+                         input logic norec = 1'b0);
+    do_reset();
+    mdl_tkn_en   = tk;
+    mdl_tkn_type = ty;
+    mdl_tkn_tgt  = M_HTGT;
+    mdl_blk_ovr  = 1'b1;
+    mdl_blk_idx  = 6'd4;
+    mdl_blk_pft  = M_HTGT + VA_WIDTH'(FTB_BLOCK_BYTES);
+    mdl_blk_ras  = '0;
+    if (tk && !norec) begin
+      mdl_blk_ras.push  = (ty == DIRECT_CALL) || (ty == INDIRECT_CALL) ||
+                          (ty == RETURN_CALL);
+      mdl_blk_ras.pmode = ((ty == RETURN) || (ty == RETURN_CALL))
+                            ? RAS_POP_LINK : RAS_POP_NONE;
+    end
+    repeat (20) tick();
+    mdl_tkn_en   = 1'b0;
+    mdl_tkn_type = COND;
+    mdl_blk_ovr  = 1'b0;
+  endtask
+
+  task automatic group_m();
+    $display("-- M: the backend's RAS operation on the restore, BP-153 --");
+    // No RAS operation in the entry: each RAS type is presented.
+    m_setup(1'b0, COND);
+    chk("M0 fixture: entry 4 holds no slot",
+        !dut.u_entry.r_arr[4].slot[0].slot_valid);
+    m_redirect("M1 indirect call, pos 3", FTB_BR_POS_BITS'(3), INDIRECT_CALL,
+               1'b0, 1'b0, RC_MISPREDICT, 1'b1, 1'b0, 1'b0);
+    m_setup(1'b0, COND);
+    m_redirect("M2 direct call, 16-bit, pos 7", FTB_BR_POS_BITS'(7),
+               DIRECT_CALL, 1'b1, 1'b0, RC_MISPREDICT, 1'b1, 1'b0, 1'b0);
+    m_setup(1'b0, COND);
+    m_redirect("M3 return, pos 5", FTB_BR_POS_BITS'(5), RETURN, 1'b0, 1'b0,
+               RC_MISPREDICT, 1'b1, 1'b0, 1'b0);
+    m_setup(1'b0, COND);
+    m_redirect("M4 return-call, 16-bit, pos 1", FTB_BR_POS_BITS'(1),
+               RETURN_CALL, 1'b1, 1'b0, RC_MISPREDICT, 1'b1, 1'b0, 1'b0);
+    // Not a RAS operation, or not the redirect that carries one.
+    m_setup(1'b0, COND);
+    m_redirect("M5 a conditional", FTB_BR_POS_BITS'(3), COND, 1'b0, 1'b0,
+               RC_MISPREDICT, 1'b0, 1'b0, 1'b0);
+    m_setup(1'b0, COND);
+    m_redirect("M6 a call, _self set", FTB_BR_POS_BITS'(3), INDIRECT_CALL,
+               1'b0, 1'b1, RC_MISPREDICT, 1'b0, 1'b0, 1'b0);
+    m_setup(1'b0, COND);
+    m_redirect("M7 a call, RC_TRAP", FTB_BR_POS_BITS'(3), INDIRECT_CALL,
+               1'b0, 1'b0, RC_TRAP, 1'b0, 1'b0, 1'b0);
+    // The entry holds a taken call at pos 2 (the RAS pushed it at p2).
+    m_setup(1'b1, INDIRECT_CALL);
+    chk("M8 fixture: entry 4 holds a taken call at pos 2",
+        dut.u_entry.r_arr[4].slot[0].slot_valid &&
+        dut.u_entry.r_arr[4].slot[0].taken &&
+        (dut.u_entry.r_arr[4].slot[0].br_type == INDIRECT_CALL) &&
+        (dut.u_entry.r_arr[4].slot[0].pos == FTB_BR_POS_BITS'(2)));
+    m_redirect("M8 the held call at the redirect position", FTB_BR_POS_BITS'(2),
+               INDIRECT_CALL, 1'b0, 1'b0, RC_MISPREDICT, 1'b0, 1'b0, 1'b0);
+    m_setup(1'b1, INDIRECT_CALL);
+    m_redirect("M9 a return before the held call: undo, then pop",
+               FTB_BR_POS_BITS'(1), RETURN, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b1, 1'b1, 1'b0);
+    m_setup(1'b1, DIRECT_CALL);
+    m_redirect("M10 a call after the held call: nothing",
+               FTB_BR_POS_BITS'(6), DIRECT_CALL, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b0, 1'b0, 1'b0);
+    // BP-153 phase 2. The entry holds a taken return at pos 2 (the RAS
+    // popped it at p2): a redirect before it undoes the pop (before
+    // phase 2: no operation over it, and no undo).
+    m_setup(1'b1, RETURN);
+    m_redirect("M11 a call before the held return: undo the pop, then push",
+               FTB_BR_POS_BITS'(1), DIRECT_CALL, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b1, 1'b0, 1'b1);
+    m_setup(1'b1, RETURN);
+    m_redirect("M12 a conditional before the held return: undo the pop",
+               FTB_BR_POS_BITS'(0), COND, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b0, 1'b0, 1'b1);
+    m_setup(1'b1, RETURN);
+    m_redirect("M13 a trap before the held return: undo the pop",
+               FTB_BR_POS_BITS'(1), NO_BRANCH, 1'b0, 1'b0, RC_TRAP,
+               1'b0, 1'b0, 1'b1);
+    // At the held position: kept when the resolved operation is the same,
+    // undone when it is another (a mispredict only).
+    m_setup(1'b1, RETURN);
+    m_redirect("M14 the held return at its own position: kept",
+               FTB_BR_POS_BITS'(2), RETURN, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b0, 1'b0, 1'b0);
+    m_setup(1'b1, RETURN);
+    m_redirect("M15 a non-RAS branch where a return was held: undo the pop",
+               FTB_BR_POS_BITS'(2), INDIRECT_NONRET, 1'b0, 1'b0,
+               RC_MISPREDICT, 1'b0, 1'b0, 1'b1);
+    m_setup(1'b1, INDIRECT_CALL);
+    m_redirect("M16 a return where a call was held: undo the push, pop",
+               FTB_BR_POS_BITS'(2), RETURN, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b1, 1'b1, 1'b0);
+    m_setup(1'b1, RETURN_CALL);
+    m_redirect("M17 a conditional before a held return-call: undo both",
+               FTB_BR_POS_BITS'(1), COND, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b0, 1'b1, 1'b1);
+    m_setup(1'b1, RETURN);
+    m_redirect("M18 a trap at the held return: kept (no type to read)",
+               FTB_BR_POS_BITS'(2), NO_BRANCH, 1'b0, 1'b0, RC_TRAP,
+               1'b0, 1'b0, 1'b0);
+    // BP-153: a taken call slot whose snapshot records no push (the RAS
+    // did not operate it): neither undone nor held. Before, a redirect
+    // before it undid another block's push (commit_lost, infra_1 (8, 8)
+    // k 3689).
+    m_setup(1'b1, INDIRECT_CALL, 1'b1);
+    chk("M19 fixture: entry 4's snapshot records no operation",
+        !dut.u_entry.r_arr[4].ras.push &&
+        (dut.u_entry.r_arr[4].ras.pmode == RAS_POP_NONE));
+    m_redirect("M19 a return before an unoperated call slot: pop, no undo",
+               FTB_BR_POS_BITS'(1), RETURN, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b1, 1'b0, 1'b0);
+    m_setup(1'b1, RETURN, 1'b1);
+    m_redirect("M20 a conditional before an unoperated return: nothing",
+               FTB_BR_POS_BITS'(0), COND, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b0, 1'b0, 1'b0);
+    m_setup(1'b1, INDIRECT_CALL, 1'b1);
+    m_redirect("M21 a call at an unoperated call slot: the call is pushed",
+               FTB_BR_POS_BITS'(2), INDIRECT_CALL, 1'b0, 1'b0, RC_MISPREDICT,
+               1'b1, 1'b0, 1'b0);
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -1817,6 +2010,7 @@ module tb;
     group_j();
     group_k();
     group_l();
+    group_m();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

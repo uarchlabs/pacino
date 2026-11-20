@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-11-18
+ UPDATED: 2026-11-19
  CONTACT: Jeff Nye
 ```
 
@@ -656,17 +656,29 @@ TWO CASES BREAK IT, found by BP-151 (TD#211):
     the named entry survives and its slots after the trap's position
     are never cleared, so the walk commits a call there that did not
     execute (web_11, 4 and 5 per 2e6 run). No resolution covers it.
-    PROPOSED (PA, for Jeff's ruling; built by BP-152 for acceptance):
-    such a redirect clears the entry's slots after its position, as a
-    resolved end does.
+    BUILT BY BP-152 as proposed, for acceptance: every backend
+    redirect with _self clear, any cause but RC_UNSPEC, clears the
+    named entry's slots whose pos is after the redirect's pos, last
+    in the write order. For a mispredict the resolution clears the
+    same slots; for a trap or a replay at a non-branch it is the only
+    clear. The FTQ cannot tell a non-branch from the redirect, so it
+    applies to every cause.
 (b) Two resolutions of one entry in one cycle: ftq_resolve.sv
     place_slot plans the younger's placement on the older's slot
     write, which BP-139 suppresses (not taken, not a RAS op, not an
     end); ftq_entry.sv's end clear clears only the slots above the
     younger's slot, so a predecode-placed call below it survives and
-    commits (compress_1 and int_6, 1 to 2 per run). A defect. BP-152
-    makes the end clear positional: every slot whose pos is after the
-    resolved end's pos.
+    commits (compress_1 and int_6, 1 to 2 per run). A defect. BUILT
+    BY BP-152, for acceptance: a resolved end clears every slot whose
+    pos is after the resolved branch's pos, whatever its slot index,
+    judged on the slot as the cycle's earlier writes leave it. Chosen
+    over a younger view that matches the writes made: the clear
+    states the rule whatever the placement does. The younger
+    placement still lands one slot high; its training effect is not
+    measured.
+Measured after BP-152: commit_unexecuted 25 -> 0 over BP-151's 25
+runs (tb_ftq_entry J1 to J3; tb_fe_top rsv_twores, rsv_trapcall).
+TD#211 closed.
 
 ras_decisions.md 4.5 rules restore > commit > hold for BOS, so the
 FTQ SUPPRESSES the RAS commit it would have issued in a cycle where a
@@ -1601,4 +1613,8 @@ Section 1 counts six, since session-074.
 
   2026-11-18  session-086, after BP-151. 5.4: two cases in which the
               walk commits a call that did not execute (TD#211).
+
+  2026-11-19  session-086, after BP-152, for acceptance. 5.4: the
+              positional end clear and the backend redirect clear
+              built (TD#211 closed).
 ```

@@ -3073,6 +3073,190 @@ module tb;
         n_trap >= 1);
   endtask
 
+  // =================================================================
+  // BP-153 programs: calls and returns only the backend finds (RAS-4,
+  // TD#207; BP-152 residual causes call_pd, indirect, and ret_pd). The
+  // RAS operates at p2 only when the FTB gives the branch (CB1), and
+  // predecode finds a JAL only (ifu_f3 M1, M3), so before BP-153 a JALR
+  // call or return the FTB did not hold reached the RAS at its commit
+  // only. Since BP-153 the backend redirect carries the resolved type
+  // (bkend_ftq_redir_type, _rvc) and the restore applies the operation
+  // (ftq.sv bk_ras, ras.sv restore_scan).
+  // =================================================================
+
+  // -----------------------------------------------------------------
+  // ras_bkicall: AN INDIRECT CALL THE FTB DOES NOT HOLD. f is called six
+  // times from site A, a JAL at a block end, so the FTB holds the call
+  // and f's return. Then new code calls f with jalr x1, 0(x7): no FTB
+  // entry, and predecode does not raise a JALR, so the call is resolved
+  // by the backend, mispredicted (the block was predicted to fall
+  // through), and redirected with type INDIRECT_CALL. f's return, held
+  // by the FTB, pops at p2. Without the backend's push it pops the frame
+  // below and mispredicts; with it, it reads the call's link.
+  // -----------------------------------------------------------------
+  task automatic p_ras_bkicall();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] la;
+    logic [VA_WIDTH-1:0] lb;
+    logic [VA_WIDTH-1:0] fret;
+    begin_prog("ras_bkicall");
+    // The commit trails the redirect, as in the perf harness at C > 0:
+    // with cm_hold 0 the call's entry commits at its redirect, and the
+    // commit-stack fallback (A1) reads its frame without the push.
+    cm_hold = 40;
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 6; it++) begin
+      W.wp = top;
+      W.mixed(2);
+      while (W.wp != top + VA_WIDTH'('h1C)) W.i16();
+      la = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, f);                          // site A, at a block end
+      W.mixed(3);
+      fret = W.wp;
+      W.ret(la);
+      W.mixed(1);
+      W.bcc(it != 5, top);
+    end
+    W.mixed(24);
+    W.mixed(3);
+    warm_e = W.ne;
+    lb = W.wp + VA_WIDTH'(4);
+    W.jalr_to(5'd1, 5'd7, f);                  // site B, an indirect call
+    W.mixed(3);
+    W.ret(lb);                                 // f's return, FTB-held
+    W.mixed(3);
+    watch_pc = fret;
+    end_prog(80000);
+    chk($sformatf({"ras_bkicall: f's return after the indirect call only ",
+                   "the backend found is predicted (mispredicted %0d)"},
+                  mis_pc.exists(fret) ? mis_pc[fret] : 0),
+        !mis_pc.exists(fret));
+  endtask
+
+  // -----------------------------------------------------------------
+  // ras_bkret: A RETURN THE FTB DOES NOT HOLD. main calls a (a JAL); a
+  // calls b_it through jalr x1, 0(x7), b_it new code in each iteration,
+  // so b_it's return is at a PC the FTB has never seen: predicted to fall
+  // through, resolved by the backend, mispredicted, and redirected with
+  // type RETURN. a returns at once, at aret, a return the FTB holds after
+  // the first iteration. Without the backend's pop, b_it's frame is still
+  // the top when a's return pops at p2, and a's return mispredicts to
+  // b_it's link; with it, a's return reads main's link.
+  // -----------------------------------------------------------------
+  task automatic p_ras_bkret();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] a;
+    logic [VA_WIDTH-1:0] la;
+    logic [VA_WIDTH-1:0] lb;
+    logic [VA_WIDTH-1:0] aret;
+    begin_prog("ras_bkret");
+    cm_hold = 40;                              // as ras_bkicall
+    a = RESET_VECTOR + VA_WIDTH'('h800);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 12; it++) begin
+      if (it == 4) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      la = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, a);                          // main calls a
+      W.mixed(2);
+      lb = W.wp + VA_WIDTH'(4);
+      W.jalr_to(5'd1, 5'd7,                    // a calls b_it, new code
+                RESET_VECTOR + VA_WIDTH'('h2000 + it * 'h40));
+      W.mixed(2);
+      W.ret(lb);                               // b_it's return, new PC
+      aret = W.wp;
+      W.ret(la);                               // a returns at once
+      W.mixed(1);
+      W.bcc(it != 11, top);
+    end
+    W.mixed(3);
+    watch_pc = aret;
+    end_prog(120000);
+    chk($sformatf({"ras_bkret: a's return, right after a return only the ",
+                   "backend found, is predicted (mispredicted %0d of 8)"},
+                  mis_pc.exists(aret) ? mis_pc[aret] : 0),
+        !mis_pc.exists(aret));
+  endtask
+
+  // -----------------------------------------------------------------
+  // ras_offpop: A POP OFF THE PATH OF ITS OWN BLOCK (BP-153 phase 2,
+  // BP-151 cause snap_offpath_op). main calls g, g calls f. f's block
+  // holds a conditional (bne x6) and, right after it, f's return, both
+  // held by the FTB after the first iterations. In most iterations the
+  // conditional falls through and f returns; in iterations 6 and 9 it is
+  // taken to T, so it mispredicts: f's return popped at p2 in the same
+  // block, after the conditional's position, and the backend redirect
+  // restores the block's post-op snapshot. T returns to g (in iteration 6
+  // a return the FTB does not hold, popped by the backend's operation,
+  // phase 1; in iteration 9 an FTB-held one, popped at p2), and g returns
+  // to main at once, a return the FTB holds. Without the undo of the
+  // block's pop, the off-path pop has taken f's frame, T's return takes
+  // g's, and g's return mispredicts; with it, g's return reads main's
+  // link. Two slots only: at one slot the conditional and the return are
+  // in different blocks, so the return's pop is in a younger block the
+  // redirect squashes, and the case does not arise.
+  // -----------------------------------------------------------------
+  task automatic p_ras_offpop();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] g;
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] t;
+    logic [VA_WIDTH-1:0] lg;
+    logic [VA_WIDTH-1:0] lf;
+    logic [VA_WIDTH-1:0] gret;
+    logic [VA_WIDTH-1:0] tret;
+    logic                tk;
+    int                  nm;
+    begin_prog("ras_offpop");
+    cm_hold = 40;                              // as ras_bkicall
+    g = RESET_VECTOR + VA_WIDTH'('h800);
+    f = RESET_VECTOR + VA_WIDTH'('hC00);       // 32-byte aligned
+    t = RESET_VECTOR + VA_WIDTH'('h1000);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 12; it++) begin
+      if (it == 4) warm_e = W.ne;
+      tk = (it == 6) || (it == 9);
+      W.wp = top;
+      W.mixed(2);
+      lg = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, g);                          // main calls g
+      W.mixed(2);
+      lf = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, f);                          // g calls f
+      W.i32(ADDI_T0);                          // f+0
+      W.bcc(tk, t);                            // f+4, pos 2
+      if (!tk) begin
+        W.ret(lf);                             // f+8, pos 4: f returns
+      end else begin
+        W.mixed(1);                            // at T
+        tret = W.wp;
+        W.ret(lf);                             // T returns to g
+      end
+      gret = W.wp;
+      W.ret(lg);                               // g returns at once
+      W.mixed(1);
+      W.bcc(it != 11, top);
+    end
+    W.mixed(3);
+    watch_pc = gret;
+    end_prog(120000);
+    // T's return in iteration 6 is new to the FTB and mispredicts (its
+    // block was predicted to fall through); every other return of T and g
+    // after warm-up is predicted. Without the undo, T's FTB-held return of
+    // iteration 9 reads g's link (f's frame was taken by the off-path pop).
+    nm = (mis_pc.exists(tret) ? mis_pc[tret] : 0) +
+         (mis_pc.exists(gret) ? mis_pc[gret] : 0);
+    chk($sformatf({"ras_offpop: after f's off-path return, T's and g's ",
+                   "returns are predicted but T's first (mispredicted %0d, ",
+                   "1 expected)"}, nm), nm == 1);
+  endtask
+
 
   // =================================================================
   // BP-123 programs: maintenance (Problem 4).
@@ -4459,6 +4643,9 @@ module tb;
       "ras_pdcall": p_ras_pdcall();            // BP-151; passes BP-152 C1
       "rsv_twores": p_rsv_twores();            // BP-152, TD#211 b
       "rsv_trapcall": p_rsv_trapcall();        // BP-152, TD#211 a
+      "ras_bkicall": p_ras_bkicall();          // BP-153, bk_ras push
+      "ras_bkret":  p_ras_bkret();             // BP-153, bk_ras pop
+      "ras_offpop": p_ras_offpop();            // BP-153, the pop undo
       "fencei":     p_smc(1);
       "cboinval":   p_smc(2);
       "uc_nc":      p_uc(2'd1);
@@ -4488,7 +4675,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:46] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:49] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
@@ -4501,7 +4688,8 @@ module tb;
                               "zstar", "pt_gonly", "pt_vsonly",
                               "pt_upriv", "init_walk", "sv48", "sv57",
                               "h57", "pt_gonly_x4", "ras_fbstale",
-                              "ras_pdcall", "rsv_twores", "rsv_trapcall"};
+                              "ras_pdcall", "rsv_twores", "rsv_trapcall",
+                              "ras_bkicall", "ras_bkret", "ras_offpop"};
 
   // =================================================================
   initial begin

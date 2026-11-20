@@ -133,6 +133,8 @@ module tb;
   logic [FTQ_IDX_BITS-1:0] bpu_blk_idx_p2;
   bp_ras_snapshot_t        bpu_blk_ras_p2;
   logic [VA_WIDTH-1:0]     bpu_blk_pft_p2;
+  logic                    bpu_blk_ras_val_p3;   // BP-153
+  bp_ras_snapshot_t        bpu_blk_ras_p3;       // BP-153
 
   logic                    bpu_meta_val_p2;
   logic [FTQ_IDX_BITS-1:0] bpu_meta_idx_p2;
@@ -276,6 +278,8 @@ module tb;
     .bpu_blk_idx_p2        (bpu_blk_idx_p2),
     .bpu_blk_ras_p2        (bpu_blk_ras_p2),
     .bpu_blk_pft_p2        (bpu_blk_pft_p2),
+    .bpu_blk_ras_val_p3    (bpu_blk_ras_val_p3),
+    .bpu_blk_ras_p3        (bpu_blk_ras_p3),
     .bpu_meta_val_p2       (bpu_meta_val_p2),
     .bpu_meta_idx_p2       (bpu_meta_idx_p2),
     .bpu_meta_tage_p2      (bpu_meta_tage_p2),
@@ -323,6 +327,7 @@ module tb;
     .ras_pd_br_type        (NO_BRANCH),
     .ras_pd_ret_addr       ('0),
     .ras_rs_undo           (1'b0),
+    .ras_rs_undo_pop       (1'b0),                 // BP-153
     .ras_pd_snapshot       (ras_pd_snapshot),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
@@ -575,6 +580,24 @@ module tb;
     j.is_ret  = is_ret;
     j.is_jalr = is_jalr;
     return j;
+  endfunction
+
+  // BP-153: a snapshot {tosr, tosw, bos, rctr, dep, tag, push} with no
+  // pop record, at the package's field widths (CB4).
+  function automatic bp_ras_snapshot_t cb4_snap(
+      input int r, input int w, input int b, input int c, input int d,
+      input int t, input logic p);
+    bp_ras_snapshot_t s;
+    s       = '0;
+    s.tosr  = RAS_PTR_BITS'(r);
+    s.tosw  = RAS_PTR_BITS'(w);
+    s.bos   = RAS_PTR_BITS'(b);
+    s.rctr  = RAS_RCTR_WIDTH'(c);
+    s.dep   = RAS_DEPTH_BITS'(d);
+    s.tag   = RAS_TAG_BITS'(t);
+    s.push  = p;
+    s.pmode = RAS_POP_NONE;
+    return s;
   endfunction
 
   // -----------------------------------------------------------------
@@ -5810,22 +5833,23 @@ module tb;
     req(pc, 6'h07);
     tick();                                   // block 1 at p2
     // BP-152: all six fields; dep is the call depth (A1), tag the
-    // generation of the entry at tosr, idx1 allocated once (B1).
+    // generation of the entry at tosr, idx1 allocated once (B1). BP-153:
+    // and the pop record, none for a block with no pop ({NONE, 0, 0}).
     chk("CB4 block 1 (a valid p2 block): snapshot {1,2,0,0}, dep 1, tag 1",
         (bpu_blk_val_p2 === 1'b1) &&
-        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd0, 8'd1, 4'd1}));
+        (bpu_blk_ras_p2 === cb4_snap(1, 2, 0, 0, 1, 1, 1'b1)));
     req(VA_WIDTH'('h00_0A48_0000), 6'h08);
     tick();                                   // block 2 at p2
     norq();
     chk("CB4 block 2, the recursion push: snapshot {1,2,0,1}, dep 2, tag 1",
         (bpu_blk_val_p2 === 1'b1) &&
-        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1, 8'd2, 4'd1}));
+        (bpu_blk_ras_p2 === cb4_snap(1, 2, 0, 1, 2, 1, 1'b1)));
     tick();                                   // block 3 at p2
     chk("CB4 the RAS holds the count the snapshot carried",
         dut.u_ras.spec_rctr[1] === RAS_RCTR_WIDTH'(1));
     chk("CB4 block 3, no FTB entry: the current state, rctr 1, dep 2",
         (bpu_blk_val_p2 === 1'b1) &&
-        (bpu_blk_ras_p2 === {4'd1, 4'd2, 4'd0, 4'd1, 8'd2, 4'd1}));
+        (bpu_blk_ras_p2 === cb4_snap(1, 2, 0, 1, 2, 1, 1'b0)));
 
     // -- CB7. pred_src = PRED_RAS only when the RAS supplies a RETURN or
     //    RETURN_CALL target, and the RAS target is used for those types
@@ -5975,6 +5999,136 @@ module tb;
          (dut.u_ras.tosr === RAS_PTR_BITS'(1)));
     cfg_sc_enable(1'b0);
     clr_upd_chans();
+
+    // -- CB10 (BP-153; BP-151 causes call_p1_only, ret_nopop). A block
+    //    the FTB misses, whose call or return the uBTB predicts at p1:
+    //    the p1 prediction stands (no p2 redirect without the FTB), and
+    //    the RAS operates on the p1 slot at p2. The call pushes the p1
+    //    fall-through, the uBTB's block end (the call's own end). Before
+    //    BP-153 the RAS operated on the FTB's slots only and did nothing.
+    //    The p3 view of the block is the same p1 view: no repair undoes it.
+    begin : cb10
+      logic [VA_WIDTH-1:0] cpc;
+      logic [VA_WIDTH-1:0] cend;
+      do_reset();
+      clr_upd_chans();
+      cpc  = VA_WIDTH'('h00_0AB0_0000);
+      base = blk_base(cpc);
+      cend = base + VA_WIDTH'(12);                    // call at pos 4
+      e     = '0;
+      e.jmp = mk_jmp(1'b1, 4'd4, base + VA_WIDTH'('h400), base, 1'b1,
+                     1'b0, 1'b0);
+      e.pft = ub_pft_field(cend, base);
+      ubtb_install(cpc, e);
+      lp_clear_both(cpc);
+      req(cpc, 6'h10);
+      tick();
+      norq();
+      chk("CB10 fixture: the uBTB predicts the call taken at p1",
+          bpu_pred_slot_p1[0].slot_valid && bpu_pred_slot_p1[0].taken &&
+          (bpu_pred_slot_p1[0].br_type == DIRECT_CALL));
+      tick();                                         // at p2
+      chk("CB10 fixture: the FTB misses at p2", dut.w_ftb_valid_p2 === 1'b0);
+      chk("CB10 the RAS pushes the p1 call at p2",
+          (dut.w_ras_pred_val_p2[0] === 1'b1) &&
+          (dut.w_ras_br_type_p2[0] === DIRECT_CALL) &&
+          (dut.w_ras_fall_through_p2[0] === cend));
+      tick();                                         // at p3
+      chk("CB10 the call's end is the top (before BP-153: empty)",
+          (dut.u_ras.tosr !== dut.u_ras.bos) &&
+          (dut.u_ras.spec_ret_addr[dut.u_ras.tosr] === cend));
+      tick();
+      chk("CB10 no p3 repair undid it",
+          (dut.u_ras.tosr !== dut.u_ras.bos) &&
+          (dut.u_ras.spec_ret_addr[dut.u_ras.tosr] === cend));
+      // the return, a uBTB RETURN with the RAS top valid at p1
+      pc   = VA_WIDTH'('h00_0AC0_0000);
+      base = blk_base(pc);
+      e     = '0;
+      e.jmp = mk_jmp(1'b1, 4'd2, base + VA_WIDTH'('h400), base, 1'b0,
+                     1'b1, 1'b1);
+      e.pft = ub_pft_field(base + VA_WIDTH'(8), base);
+      ubtb_install(pc, e);
+      lp_clear_both(pc);
+      req(pc, 6'h11);
+      tick();
+      norq();
+      chk("CB10 fixture: the uBTB return takes the RAS top at p1",
+          bpu_pred_slot_p1[0].taken &&
+          (bpu_pred_slot_p1[0].pred_src == PRED_RAS) &&
+          (bpu_pred_slot_p1[0].target == cend));
+      tick();                                         // at p2
+      chk("CB10 the RAS pops the p1 return at p2 (FTB miss)",
+          (dut.w_ftb_valid_p2 === 1'b0) &&
+          (dut.w_ras_pred_val_p2[0] === 1'b1) &&
+          (dut.w_ras_br_type_p2[0] === RETURN));
+      tick();
+      tick();
+      chk("CB10 the stack is empty again (before BP-153: the call's end)",
+          dut.u_ras.tosr === dut.u_ras.bos);
+    end
+
+    // -- CB11 (BP-153; BP-151 causes p3_reach, snap_repair; TD#149). CB2-
+    //    RP4 reversed: TAGE says taken (tage_bim_fill 11) and SC strongly
+    //    not taken (sc_fill 100000). At p2 the conditional at pos 1 is
+    //    taken, the RETURN at pos 4 unreachable, and it does not pop; its
+    //    target is the peek, the RAS top (before BP-153 the FTB jump
+    //    target). At p3 SC reverses the conditional: the RETURN is
+    //    reached, the p3 redirect goes to the RAS top, the repair applies
+    //    the missed pop, and the corrected snapshot is presented for the
+    //    entry (bpu_blk_ras_*_p3; before BP-153 the entry kept the p2 one,
+    //    with the pop missing).
+    begin : cb11
+      logic [VA_WIDTH-1:0] cpc;
+      do_reset();
+      clr_upd_chans();
+      tage_bim_fill(2'b11);
+      sc_fill(6'b100000);
+      cfg_sc_enable(1'b1);
+      cpc  = VA_WIDTH'('h00_0AD0_0000);
+      base = blk_base(cpc);
+      ftb_alloc_jmp(cpc, 2'd0, base + VA_WIDTH'('h600), 4'd2, 1'b1, 1'b0,
+                    1'b0, cpc + VA_WIDTH'(8), 1'b0);
+      ubtb_clear_set(cpc);
+      lp_clear_both(cpc);
+      req(cpc, 6'h12);
+      tick();
+      norq();
+      repeat (3) tick();
+      chk("CB11 fixture: C pushed, its end the top",
+          (dut.u_ras.tosr !== dut.u_ras.bos) &&
+          (dut.u_ras.spec_ret_addr[dut.u_ras.tosr] === cpc + VA_WIDTH'(8)));
+      pc   = VA_WIDTH'('h00_0AE0_0000);
+      base = blk_base(pc);
+      ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1,
+                     base + VA_WIDTH'('d12), 1'b0);
+      ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h500), 4'd4, 1'b0, 1'b1,
+                    1'b1, base + VA_WIDTH'('d12), 1'b1);
+      ubtb_clear_set(pc);
+      lp_clear_both(pc);
+      req(pc, 6'h13);
+      tick();
+      norq();
+      tick();                                         // R at p2
+      chk2("CB11 p2: the conditional taken, the RETURN unreachable",
+           (dut.w_taken_p2[0] === 1'b1) &&
+           (dut.w_br_type_p2[S1] === RETURN) &&
+           (dut.w_ras_pred_val_p2[S1] === 1'b0));
+      chk2("CB11 p2: the RETURN's target is the RAS top (the peek)",
+           dut.w_tkn_tgt_p2[S1] === cpc + VA_WIDTH'(8));
+      tick();                                         // R at p3
+      chk2("CB11 p3: SC reverses the conditional, the RETURN reached",
+           (dut.w_taken_p3[0] === 1'b0) &&
+           (dut.w_ras_pred_val_p3[S1] === 1'b1));
+      chk2("CB11 p3: the redirect goes to the RAS top (before: base + 0x500)",
+           bpu_redir_p3[0].valid &&
+           (bpu_redir_p3[0].target_pc === cpc + VA_WIDTH'(8)));
+      chk2("CB11 TD#149: the repaired snapshot is presented, the pop in it",
+           bpu_blk_ras_val_p3 && (bpu_blk_ras_p3.tosr == bpu_blk_ras_p3.bos)
+           && (bpu_blk_ras_p3.pmode != RAS_POP_NONE));
+      cfg_sc_enable(1'b0);
+      clr_upd_chans();
+    end
 
     repeat (2) tick();
     $display("---- GROUP CB done (pass %0d fail %0d) ----",
@@ -6129,7 +6283,7 @@ module tb;
     ra_a = VA_WIDTH'('h00_0980_0010);
     ra_b = VA_WIDTH'('h00_0980_0124);
     ras_push_commit(ra_a);
-    chk("M2 one committed entry", (dut.u_ras.csp === 5'd1)
+    chk("M2 one committed entry", (dut.u_ras.csp === RAS_COMMIT_PTR_BITS'(1))
      && (dut.u_ras.commit_ret_addr[0] === ra_a));
     ras_commit_val      = 1'b1;
     ras_commit_br_type  = RETURN_CALL;
@@ -6144,7 +6298,7 @@ module tb;
     ras_commit_ret_addr = '0;
     #1;
     chk("M2 CSP is level after a pop then a push",
-        dut.u_ras.csp === 5'd1);
+        dut.u_ras.csp === RAS_COMMIT_PTR_BITS'(1));
     chk_eq("M2 the committed top is the return-call's address",
            dut.u_ras.commit_ret_addr[0], ra_b);
     chk_eq("M2 and the p0 top of stack serves it",
@@ -6165,7 +6319,7 @@ module tb;
     ras_commit_snapshot = '0;
     #1;
     chk("M2 empty commit stack: CSP 0 -> 1",
-        dut.u_ras.csp === 5'd1);
+        dut.u_ras.csp === RAS_COMMIT_PTR_BITS'(1));
     chk_eq("M2 the push wrote at 0",
            dut.u_ras.commit_ret_addr[0], ra_b);
     chk("M2 BOS took the commit snapshot TOSR",

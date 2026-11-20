@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-18
+ UPDATED: 2026-11-19
  CONTACT: Jeff Nye
 ```
 
@@ -172,6 +172,13 @@ module ras (
   // ----------------------------------------------------------
   input  logic             ras_restore_val,
   input  bp_ras_snapshot_t ras_restore_snapshot,
+  // The C1 operation and the undo (BP-152, for acceptance;
+  // ras_decisions.md 4.3, 7), all read only with ras_restore_val:
+  input  logic             ras_pd_val,
+  input  bp_br_type_e      ras_pd_br_type,
+  input  logic [VA_WIDTH-1:0] ras_pd_ret_addr,
+  input  logic             ras_rs_undo,
+  output bp_ras_snapshot_t ras_pd_snapshot,
 
   // ----------------------------------------------------------
   // Commit inputs (driven by FTQ at retire)
@@ -218,14 +225,20 @@ IC-RAS-10. Session-070.
 
 ### bp_ras_snapshot_t
 
-Packed struct, 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH wide:
+Packed struct, 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH + RAS_DEPTH_BITS +
+RAS_TAG_BITS wide (BP-152):
   tosr : RAS_PTR_BITS   -- speculative TOS read pointer
   tosw : RAS_PTR_BITS   -- speculative TOS write pointer
   bos  : RAS_PTR_BITS   -- committed boundary pointer
   rctr : RAS_RCTR_WIDTH -- recursion count of the entry at tosr,
                            0 when tosr == bos
+  dep  : RAS_DEPTH_BITS -- the speculative call depth after the
+                           block (ras_decisions.md 3.3, A1)
+  tag  : RAS_TAG_BITS   -- the generation of the entry at tosr, 0
+                           when tosr == bos (ras_decisions.md 3.2, B1)
 
-With RAS_PTR_BITS=4 and RAS_RCTR_WIDTH=4: total 16b per snapshot.
+With RAS_PTR_BITS=4, RAS_RCTR_WIDTH=4, RAS_DEPTH_BITS=8 and
+RAS_TAG_BITS=4: total 28b per snapshot (16b before BP-152).
 rctr is TD#194 option A, ruled session-084 (ras_decisions.md 4.1),
 built by BP-142; the snapshot was 12b, the three pointers.
 Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos,
@@ -286,6 +299,10 @@ ras_tos_valid_p0[s] = 0 -- speculative and commit stacks
 
   2026-11-18  session-086, after BP-151. IC-RAS-07: the commit top
               does not reflect uncommitted pops. 11: RI-4 opened.
+
+  2026-11-19  session-086, after BP-152, for acceptance. 4: the C1
+              and undo ports. 5: the 28-bit snapshot (dep, tag).
+              IC-RAS-07: the fallback at the speculative depth. RI-4.
 ```
 
 Both slots may have ras_pred_val_p2 asserted in the same
@@ -405,7 +422,9 @@ a speculative entry the stack does not hold.
 The commit stack top is the CSP-1 entry as commits have left it, not
 as the speculative pops since have: a pop that consumed a committed
 frame is not reflected until its return commits (ras_decisions.md
-3.3, MEASURED BP-151; RI-4).
+3.3, MEASURED BP-151; RI-4). Since BP-152 (A1, for acceptance) the
+fallback reads the commit stack's frame at the speculative depth,
+CSP-1-n (ras_decisions.md 3.3, 12.5 PO5), not its top.
 
 ### IC-RAS-08: Snapshot timing
 
@@ -653,7 +672,10 @@ While rstn is low (active low, synchronous):
 |        |                                       | history. No action.|
 | RI-4   | The fallback after a speculative pop  | OPEN.              |
 |        | of a committed frame, the reuse below | ras_decisions.md   |
-|        | BOS, the call and return only         | 10 RAS-4; BP-152.  |
+|        | BOS, the call and return only         | 10 RAS-4. BUILT    |
+|        |                                       | BP-152 (A1, B1,    |
+|        |                                       | C1); the rest      |
+|        |                                       | BP-153.            |
 |        | predecode finds (BP-151).             |                    |
 
 ---

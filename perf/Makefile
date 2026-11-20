@@ -36,6 +36,12 @@ include $(RVA_ROOT)/rtl/Vars.mk
 SRC_ROOT ?= $(RVA_ROOT)
 NAME     ?= head
 SLOTS    ?= 2
+# BP-153: RAS_COMMIT_ENTRIES of the SRC_ROOT tree, for the RAS
+# classification's commit-stack model (ras_class.h). 64 at head since
+# BP-153.
+RAS_COMMIT ?= 64
+# BP-153: and its RAS_SPEC_ENTRIES (32 at head since BP-153).
+RAS_SPEC   ?= 32
 # The build's -j: 75% of the hardware threads, at least 1 (PF-22).
 JOBS     ?= $(shell n=$$(( $$(nproc) * 3 / 4 )); [ $$n -ge 1 ] || n=1; \
               echo $$n)
@@ -116,7 +122,8 @@ H_VFLAGS  := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --no-timing \
              --x-assign fast --x-initial fast
 H_CFLAGS  := -O2 -std=c++17 -DPERF_SRC_ROOT=\\\"$(SRC_ROOT)\\\" \
              -DPERF_SRC_SHA=\\\"$(SRC_SHA)\\\" \
-             -DPERF_BUILD_NAME=\\\"$(NAME)\\\" -DPERF_SLOTS=$(SLOTS)
+             -DPERF_BUILD_NAME=\\\"$(NAME)\\\" -DPERF_SLOTS=$(SLOTS) \
+             -DPERF_RAS_COMMIT=$(RAS_COMMIT) -DPERF_RAS_SPEC=$(RAS_SPEC)
 H_CXX     := $(abspath $(HSRC)/perf_fe.cc) $(abspath $(HSRC)/supply.cc) \
              $(abspath $(PERFSRC)/cbp_trace.cc)
 H_DEPS    := $(wildcard $(HSRC)/*.cc $(HSRC)/*.h $(HSRC)/*.vlt) \

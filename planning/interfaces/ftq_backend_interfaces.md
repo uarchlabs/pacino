@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-11-19
  CONTACT: Jeff Nye
 ```
 
@@ -246,7 +246,9 @@ The FTQ's response:
       (ftq_decisions.md 5.5 R1). K's own fetch stands when it
       survives; refetching it would deliver its instructions twice.
       As built in ftq_ifu.sv. The index was unstated until
-      session-071.
+      session-071. With _self clear the FTQ also clears the named
+      entry's slots after _pos (TD#211 a, BP-152, for acceptance;
+      ftq_decisions.md 5.4).
 ```
 
 D1, D2 and D4 apply to RC_MISPREDICT, RC_TRAP and RC_REPLAY. They
@@ -655,4 +657,7 @@ Every one of these is unverifiable today. The backend does not exist.
 
   2026-10-09  session-076, recording BP-122. 5:
               bkend_ftq_redir_taken is one bit (as built).
+
+  2026-11-19  session-086, after BP-152, for acceptance. 5 D5: the
+              slot clear after _pos with _self clear (TD#211 a).
 ```

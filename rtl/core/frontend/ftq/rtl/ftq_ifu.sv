@@ -193,6 +193,10 @@ module ftq_ifu (
   // correction (after mis_pos, or at it and no longer a call): the RAS
   // undoes it on the restore first (ras.sv ras_rs_undo).
   output logic                     ras_pd_undo,
+  // BP-153: the entry's own pop (a taken return or return-call slot) is
+  // off the path of the correction: undone on the restore from the
+  // snapshot's pop record (ras.sv ras_rs_undo_pop).
+  output logic                     ras_pd_undo_pop,
   output logic                     pd_ras_wr_val,
 
   // ---- to ftq_npc, arm 2 -------------------------------------------
@@ -601,10 +605,13 @@ module ftq_ifu (
   //     mis_pos, or at it and no longer a call) is undone on the restore
   //     first (ras_pd_undo), then the new operation applies. A held push
   //     the correction keeps (a call at mis_pos retargeted, M3) needs
-  //     nothing. A held pop (a return or return-call) cannot be undone
-  //     from a post-op snapshot, which holds no pre-op TOSR: left
-  //     (snap_offpath_op, BP-151 E), and no C1 operation is applied over
-  //     it.
+  //     nothing. A held pop (a return or return-call) the correction
+  //     leaves off the path is undone from the snapshot's pop record
+  //     (BP-153, ras_pd_undo_pop), then the new operation applies; a held
+  //     pop the correction keeps blocks it. Before BP-153 a held pop was
+  //     never undone (the snapshot held no pre-op TOSR, snap_offpath_op,
+  //     BP-151 E) and no C1 operation was applied over it. A held
+  //     return-call is a push and a pop.
   // ifu_f3 raises a predecode mispredict for a JAL (M1, M3) and for a
   // position holding no control transfer (M2), never for a JALR: the
   // corrected slot is a DIRECT_CALL or DIRECT_UNC, or no branch. The
@@ -615,28 +622,57 @@ module ftq_ifu (
     logic held_push;
     logic held_pop;
     logic push_off;
+    logic pop_off;
     logic ras_t;
     logic new_push;
+    logic new_pop;
     logic win;
+    logic h_push;
+    logic h_pop;
+    logic h_off;
+    logic [FTB_BR_POS_BITS-1:0] mpos;
+    mpos      = FTB_BR_POS_BITS'(ifu_ftq_mis_pos);
+    h_push    = 1'b0;
+    h_pop     = 1'b0;
+    h_off     = 1'b0;
     held_push = 1'b0;
     held_pop  = 1'b0;
     push_off  = 1'b0;
+    pop_off   = 1'b0;
+    // The corrected slot's operation: push (a call), pop (a return), or
+    // both (a return-call).
     new_push  = w_new_slot.slot_valid && w_new_slot.taken &&
                 ((w_pd_br_type == DIRECT_CALL) ||
-                 (w_pd_br_type == INDIRECT_CALL));
+                 (w_pd_br_type == INDIRECT_CALL) ||
+                 (w_pd_br_type == RETURN_CALL));
+    new_pop   = w_new_slot.slot_valid && w_new_slot.taken &&
+                ((w_pd_br_type == RETURN) || (w_pd_br_type == RETURN_CALL));
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       if (pdwb_entry.slot[s].slot_valid && pdwb_entry.slot[s].taken) begin
-        if ((pdwb_entry.slot[s].br_type == DIRECT_CALL) ||
-            (pdwb_entry.slot[s].br_type == INDIRECT_CALL)) begin
+        // BP-153: held only for an operation the entry's snapshot records
+        // (ras.push, ras.pmode); a p1 slot the RAS never operated is not.
+        h_push = ((pdwb_entry.slot[s].br_type == DIRECT_CALL) ||
+                  (pdwb_entry.slot[s].br_type == INDIRECT_CALL) ||
+                  (pdwb_entry.slot[s].br_type == RETURN_CALL)) &&
+                 pdwb_entry.ras.push;
+        h_pop  = ((pdwb_entry.slot[s].br_type == RETURN) ||
+                  (pdwb_entry.slot[s].br_type == RETURN_CALL)) &&
+                 (pdwb_entry.ras.pmode != RAS_POP_NONE);
+        // Off the path: after mis_pos, or at it with the corrected slot
+        // another operation (BP-153: the same rule for a pop; a held
+        // operation at mis_pos is kept only when the correction is the
+        // same push, pop or both, a direct and an indirect call alike).
+        h_off  = (pdwb_entry.slot[s].pos > mpos) ||
+                 ((pdwb_entry.slot[s].pos == mpos) &&
+                  ((new_push != h_push) || (new_pop != h_pop)));
+        if (h_push) begin
           held_push = 1'b1;
-          if ((pdwb_entry.slot[s].pos > FTB_BR_POS_BITS'(ifu_ftq_mis_pos)) ||
-              ((pdwb_entry.slot[s].pos == FTB_BR_POS_BITS'(ifu_ftq_mis_pos))
-               && !new_push))
-            push_off = 1'b1;
+          if (h_off) push_off = 1'b1;
         end
-        if ((pdwb_entry.slot[s].br_type == RETURN) ||
-            (pdwb_entry.slot[s].br_type == RETURN_CALL))
+        if (h_pop) begin
           held_pop = 1'b1;
+          if (h_off) pop_off = 1'b1;
+        end
       end
     end
     win   = pd_redir_val && redir_val && redir_arm[ARM_PD];
@@ -653,11 +689,12 @@ module ftq_ifu (
                       w_new_slot.taken && (w_pd_br_type != COND);
 
     ras_pd_undo     = win && held_push && push_off;
-    ras_pd_val      = win && ras_t && !held_pop &&
+    ras_pd_undo_pop = win && held_pop && pop_off;               // BP-153
+    ras_pd_val      = win && ras_t && (!held_pop || pop_off) &&
                       (!held_push || push_off);
     ras_pd_br_type  = w_pd_br_type;
     ras_pd_ret_addr = pd_wr_pft;
-    pd_ras_wr_val   = ras_pd_val || ras_pd_undo;
+    pd_ras_wr_val   = ras_pd_val || ras_pd_undo || ras_pd_undo_pop;
   end
 
   // ifu_ftq_pd_range, ifu_ftq_cfi_val, ifu_ftq_cfi_pos and

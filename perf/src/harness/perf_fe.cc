@@ -739,8 +739,9 @@ int main(int argc, char** argv) {
     bool v = false; int64_t at = 0; uint8_t idx = 0, pos = 0;
     uint64_t pc = 0; bool self = false; uint8_t cause = 0; bool taken = false;
     uint64_t next_k = 0; uint32_t ptr = 0; bool unspec = false;
-    // BP-151, observation only: the named instruction's type (its class
-    // by rv::br_type_of), which THE RAS CLASSIFICATION reads.
+    // BP-151: the named instruction's type (its class by
+    // rv::br_type_of), which THE RAS CLASSIFICATION reads. Since BP-153
+    // it is also driven on the redirect (redir_type).
     uint8_t ty = rv::BT_NO_BRANCH;
   } rd;
   bool     redir_now = false;
@@ -1105,6 +1106,9 @@ int main(int argc, char** argv) {
       top->redir_self = rd.self;
       top->redir_cause = rd.cause;
       top->redir_taken = rd.taken;
+      // BP-153: the named instruction's resolved type rides with the
+      // redirect (ftq_backend_interfaces.md 5, _type), from its class.
+      top->redir_type = rd.ty;
       logf("REDIRECT cause %d idx %d pos %d pc %" PRIx64, rd.cause, rd.idx,
            rd.pos, rd.pc);
     }
@@ -1867,6 +1871,24 @@ int main(int argc, char** argv) {
                    std::to_string(rcl.opt_ctop[k])});
     row.push_back({std::string("rc_opt_cskip_") + rcls::cause_name(k),
                    std::to_string(rcl.opt_cskip[k])});
+  }
+  // BP-153: of rc_pd_push and rc_pd_pop, those on the restore of a
+  // backend redirect (ftq.sv bk_ras). Last, so the columns before them
+  // keep their order.
+  row.push_back({"rc_bk_push", std::to_string(rcl.n_bk_push)});
+  row.push_back({"rc_bk_pop", std::to_string(rcl.n_bk_pop)});
+  // BP-153 phase 2: restores that undid the named block's pop.
+  row.push_back({"rc_undo_pop", std::to_string(rcl.n_undo_pop)});
+  // BP-153 phase 3: ref_unmatched, target below the reference top / absent.
+  row.push_back({"rc_unm_deep", std::to_string(rcl.n_unm_deep)});
+  row.push_back({"rc_unm_closed", std::to_string(rcl.n_unm_closed)});
+  row.push_back({"rc_unm_none", std::to_string(rcl.n_unm_none)});
+  // BP-153 phase 3: bos_rewind by the rule it stands for.
+  {
+    static const char* bn[5] = {"fbu", "clost", "eclosed", "eoff", "edeep"};
+    for (int i = 0; i < 5; i++)
+      row.push_back({std::string("rc_brew_") + bn[i],
+                     std::to_string(rcl.n_brew[i])});
   }
   for (auto& kv : row)
     std::printf("%-22s %s\n", kv.first.c_str(), kv.second.c_str());

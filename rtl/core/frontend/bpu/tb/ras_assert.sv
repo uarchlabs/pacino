@@ -70,6 +70,7 @@ module ras_assert (
   input logic [RAS_PTR_BITS-1:0] bos,
   input logic [VA_WIDTH-1:0]     spec_ret_addr    [0:RAS_SPEC_ENTRIES-1],
   input logic [RAS_RCTR_WIDTH-1:0] spec_rctr      [0:RAS_SPEC_ENTRIES-1],
+  input logic [RAS_RCTR_WIDTH-1:0] spec_ncnt      [0:RAS_SPEC_ENTRIES-1],
   input logic [RAS_PTR_BITS-1:0] spec_nos         [0:RAS_SPEC_ENTRIES-1],
   input logic                    spec_bot         [0:RAS_SPEC_ENTRIES-1],
   input logic [VA_WIDTH-1:0]     commit_ret_addr  [0:RAS_COMMIT_ENTRIES-1],
@@ -78,7 +79,9 @@ module ras_assert (
   // BP-152, C1: the predecode operation on the restore.
   input logic                    ras_pd_val,
   input bp_br_type_e             ras_pd_br_type,
-  input logic                    ras_rs_undo
+  input logic                    ras_rs_undo,
+  // BP-153: the undo of the restored block's own pop.
+  input logic                    ras_rs_undo_pop
 );
 
   // The cycle before: the p2 pass was dropped and nothing else could
@@ -383,6 +386,7 @@ module ras_assert (
   typedef struct packed {
     logic [RAS_SPEC_ENTRIES-1:0][VA_WIDTH-1:0]       a;
     logic [RAS_SPEC_ENTRIES-1:0][RAS_RCTR_WIDTH-1:0] c;
+    logic [RAS_SPEC_ENTRIES-1:0][RAS_RCTR_WIDTH-1:0] nc;  // BP-153
     logic [RAS_SPEC_ENTRIES-1:0][RAS_PTR_BITS-1:0]   n;
     logic [RAS_SPEC_ENTRIES-1:0]                     b;
     logic [RAS_SPEC_ENTRIES-1:0][SEQ_W-1:0]          sq;
@@ -450,15 +454,20 @@ module ras_assert (
 
   // Remove the top by its link (PO2, PO3, RP1): TOSR to nos, or to BOS
   // for a bottom entry; the allocation named follows the link record.
+  // BP-153: PO2 to a live entry gives it the count the popped entry
+  // recorded at its allocation.
   function automatic sc_t f_unlink(input sc_t s);
-    sc_t r;
+    sc_t                       r;
+    logic [RAS_RCTR_WIDTH-1:0] k;
     r = s;
     if (r.b[r.t]) begin                                  // PO3
       r.rf = '0;
       r.t  = bos;
     end else begin                                       // PO2
+      k    = r.nc[r.t];
       r.rf = r.nr[r.t];
       r.t  = r.n[r.t];
+      if (r.t != bos) r.c[r.t] = k;
     end
     return r;
   endfunction
@@ -507,6 +516,7 @@ module ras_assert (
       self      = !emp && (al == r.t);
       for (int j = 0; j < RAS_SPEC_ENTRIES; j++)
         if ((RAS_PTR_BITS'(j) != al) && (r.n[j] == al)) r.b[j] = 1'b1;
+      r.nc[al]  = (skip | self | emp) ? '0 : r.c[r.t];  // BP-153
       r.a[al]   = ft;                                    // PU1, PU8
       r.c[al]   = '0;
       r.n[al]   = (skip | self) ? bos : r.t;
@@ -573,6 +583,7 @@ module ras_assert (
     for (int i = 0; i < RAS_SPEC_ENTRIES; i++) begin
       s.a[i]  = spec_ret_addr[i];
       s.c[i]  = spec_rctr[i];
+      s.nc[i] = spec_ncnt[i];
       s.n[i]  = spec_nos[i];
       s.b[i]  = spec_bot[i];
       s.sq[i] = w_seq[i];
@@ -773,6 +784,8 @@ module ras_assert (
       r_rtosw  <= ras_restore_snapshot.tosw;
       r_rpd    <= ras_restore_val &&
                   (ras_rs_undo ||
+                   (ras_rs_undo_pop &&                         // BP-153
+                    (ras_restore_snapshot.pmode != RAS_POP_NONE)) ||
                    (ras_pd_val && (f_ispush(1'b1, ras_pd_br_type) ||
                                    f_ispop(1'b1, ras_pd_br_type))));
       r_rstale <= (m_ep[f_key(ras_restore_snapshot)] == r_ep) &&
@@ -783,6 +796,9 @@ module ras_assert (
       if (ras_restore_val)
         r_dsp <= ras_restore_snapshot.dep
                - (ras_rs_undo ? RAS_DEPTH_BITS'(1) : '0)
+               + ((ras_rs_undo_pop &&                          // BP-153
+                   (ras_restore_snapshot.pmode != RAS_POP_NONE))
+                    ? RAS_DEPTH_BITS'(1) : '0)
                - ((ras_pd_val && f_ispop(1'b1, ras_pd_br_type))
                     ? RAS_DEPTH_BITS'(1) : '0)
                + ((ras_pd_val && f_ispush(1'b1, ras_pd_br_type))
@@ -996,6 +1012,7 @@ bind ras ras_assert u_assert (
   .bos                  (bos),
   .spec_ret_addr        (spec_ret_addr),
   .spec_rctr            (spec_rctr),
+  .spec_ncnt            (spec_ncnt),
   .spec_nos             (spec_nos),
   .spec_bot             (spec_bot),
   .commit_ret_addr      (commit_ret_addr),
@@ -1003,5 +1020,6 @@ bind ras ras_assert u_assert (
   .c_cnt                (c_cnt),
   .ras_pd_val           (ras_pd_val),
   .ras_pd_br_type       (ras_pd_br_type),
-  .ras_rs_undo          (ras_rs_undo)
+  .ras_rs_undo          (ras_rs_undo),
+  .ras_rs_undo_pop      (ras_rs_undo_pop)
 );

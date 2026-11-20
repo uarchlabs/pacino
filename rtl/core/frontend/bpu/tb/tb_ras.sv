@@ -108,6 +108,12 @@ module tb;
   logic [VA_WIDTH-1:0] pop_addr_p2  [0:NUM_PRED_SLOTS-1];
   logic                pop_valid_p2 [0:NUM_PRED_SLOTS-1];
   bp_ras_snapshot_t    snap_p2      [0:NUM_PRED_SLOTS-1];
+  // BP-153: the pop each slot would make, popping or not.
+  logic [VA_WIDTH-1:0] peek_addr_p2  [0:NUM_PRED_SLOTS-1];
+  logic                peek_valid_p2 [0:NUM_PRED_SLOTS-1];
+  // BP-153 (TD#149): the p3 block's snapshot after its repair.
+  logic                rep_val;
+  bp_ras_snapshot_t    rep_snap;
 
   logic                pred_val_p3  [0:NUM_PRED_SLOTS-1];
   bp_br_type_e         br_type_p3   [0:NUM_PRED_SLOTS-1];
@@ -131,6 +137,7 @@ module tb;
   bp_br_type_e         pd_type;
   logic [VA_WIDTH-1:0] pd_ret;
   logic                rs_undo;   // BP-152: undo the block's own push
+  logic                rs_undo_pop;   // BP-153: and its own pop
   bp_ras_snapshot_t    pd_snap;
 
   // -----------------------------------------------------------------
@@ -147,6 +154,10 @@ module tb;
     .ras_pop_addr_p2      (pop_addr_p2),
     .ras_pop_valid_p2     (pop_valid_p2),
     .ras_snapshot_p2      (snap_p2),
+    .ras_peek_addr_p2     (peek_addr_p2),          // BP-153
+    .ras_peek_valid_p2    (peek_valid_p2),
+    .ras_rep_val          (rep_val),               // BP-153, TD#149
+    .ras_rep_snapshot     (rep_snap),
     .ras_pred_val_p3      (pred_val_p3),
     .ras_br_type_p3       (br_type_p3),
     .ras_restore_val      (restore_val),
@@ -162,6 +173,7 @@ module tb;
     .ras_pd_br_type       (pd_type),
     .ras_pd_ret_addr      (pd_ret),
     .ras_rs_undo          (rs_undo),
+    .ras_rs_undo_pop      (rs_undo_pop),
     .ras_pd_snapshot      (pd_snap)
   );
 
@@ -285,6 +297,7 @@ module tb;
     flush_val   = 1'b0; flush_snap = '0;
     pd_val      = 1'b0; pd_type = NO_BRANCH; pd_ret = '0;      // BP-152
     rs_undo     = 1'b0;
+    rs_undo_pop = 1'b0;                                        // BP-153
     repeat (3) @(posedge clk);
     // BP-142: rstn rises after the edge, not at it, so the DUT and the
     // reference model see the same last reset edge (no race with the
@@ -437,6 +450,7 @@ module tb;
     logic [RAS_RCTR_WIDTH-1:0] rctr;
     logic [RAS_PTR_BITS-1:0]   nos;
     logic                      bot;
+    logic [RAS_RCTR_WIDTH-1:0] ncnt;   // BP-153: the count below
   } m_ent_t;
 
   typedef struct packed {
@@ -492,6 +506,8 @@ module tb;
   logic [VA_WIDTH-1:0] m_tos_addr;
   logic                m_pop_valid [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] m_pop_addr  [0:NUM_PRED_SLOTS-1];
+  logic                m_peek_valid [0:NUM_PRED_SLOTS-1];  // BP-153
+  logic [VA_WIDTH-1:0] m_peek_addr  [0:NUM_PRED_SLOTS-1];
   bp_ras_snapshot_t    m_snap      [0:NUM_PRED_SLOTS-1];
   bp_ras_snapshot_t    m_pd_snap;   // BP-152 C1, with restore_val
   // BP-152: pops that read a reused entry (B1 says none).
@@ -543,15 +559,20 @@ module tb;
 
   // Remove the top by its link (PO2, PO3, RP1): TOSR to nos, or to BOS
   // as it is then for a bottom entry; tref follows (BP-143).
+  // BP-153: PO2 to a live entry gives it the count the popped entry
+  // recorded at its allocation (ncnt).
   function automatic m_spec_t m_unlink(input m_spec_t s);
-    m_spec_t r;
+    m_spec_t                   r;
+    logic [RAS_RCTR_WIDTH-1:0] nc;
     r = s;
     if (r.e[r.tosr].bot) begin                           // PO3
       r.tref = '0;
       r.tosr = r.bos;
     end else begin                                       // PO2
+      nc     = r.e[r.tosr].ncnt;
       r.tref = r.nref[r.tosr];
       r.tosr = r.e[r.tosr].nos;
+      if (!m_empty(r)) r.e[r.tosr].rctr = nc;
     end
     return r;
   endfunction
@@ -604,6 +625,9 @@ module tb;
       for (int j = 0; j < RAS_SPEC_ENTRIES; j++)
         if ((RAS_PTR_BITS'(j) != al) && (r.e[j].nos == al))
           r.e[j].bot = 1'b1;
+      // BP-153: the count below, read before the entry is written (al
+      // may be TOSR itself, the self case, which is bottom: 0).
+      r.e[al].ncnt = (skip | self | m_empty(r)) ? '0 : r.e[r.tosr].rctr;
       r.e[al].ret  = ft;                                 // PU1, PU8
       r.e[al].rctr = '0;
       r.e[al].nos  = (skip | self) ? r.bos : r.tosr;
@@ -723,7 +747,12 @@ module tb;
     logic [1:0] k;
     logic [RAS_PTR_BITS-1:0] p;
     logic    cpop, cpush, cmove;
-    logic    ustale, rkeep;                                // BP-152 B1
+    logic    ustale, rkeep;                                // BP-153 B1
+    // BP-153: the pop record of this cycle's p2 block, and of the C1 pop.
+    logic [RAS_PMODE_BITS-1:0] pp_mode;
+    logic [RAS_PTR_BITS-1:0]   pp_tosr;
+    logic [RAS_TAG_BITS-1:0]   pp_tag;
+    logic                      pp_push;                    // BP-153
 
     // p0 (P01 to P05): from the state, combinationally; the fallback at
     // the speculative depth (BP-152 A1).
@@ -782,9 +811,16 @@ module tb;
     wr = w;
 
     // ---- p2 (CL1 to CL4, PO, PU, RC, SL), slot 0 first (SL1). ----
+    pp_mode = RAS_POP_NONE;
+    pp_tosr = '0;
+    pp_tag  = '0;
+    pp_push = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       m_pop_valid[s] = 1'b0;                               // PO9
       m_pop_addr[s]  = '0;
+      // BP-153: the peek, the pop this slot would make, popping or not.
+      m_peek_valid[s] = !m_empty(w) || m_fb_v(m_c, w.dsp);
+      m_peek_addr[s]  = !m_empty(w) ? w.e[w.tosr].ret : m_fb_a(m_c, w.dsp);
       m_nq[s]           = '0;
       m_nq[s].pop       = m_is_pop(pred_val_p2[s], br_type_p2[s]);
       m_nq[s].push      = m_is_push(pred_val_p2[s], br_type_p2[s]);
@@ -794,6 +830,11 @@ module tb;
       m_nq[s].pre_tref  = w.tref;
       m_nq[s].pre_empty = m_empty(w);
       if (m_nq[s].pop) begin                               // CL4: pop first
+        // BP-153: the pop record, from the state the pop finds.
+        pp_tosr = w.tosr;
+        pp_tag  = m_empty(w) ? '0 : w.gt[w.tosr];
+        pp_mode = m_empty(w)                 ? RAS_POP_EMPTY :
+                  (w.e[w.tosr].rctr != '0)   ? RAS_POP_DEC   : RAS_POP_LINK;
         m_iv(w, s, "p2 pop", 1'b1);                        // IV2, PO7
         if (!m_empty(w)) begin
           m_pop_valid[s] = 1'b1;                           // PO1 to PO3
@@ -807,6 +848,7 @@ module tb;
         w.dsp = w.dsp - 1'b1;                              // BP-152 A1
       end
       if (m_nq[s].push) begin                              // RC2
+        pp_push = 1'b1;                                    // BP-153
         w = m_push(w, fall_p2[s], 1'b1, k, p);
         w.dsp = w.dsp + 1'b1;                              // BP-152 A1
         m_nq[s].push_kind = k;
@@ -818,6 +860,10 @@ module tb;
       m_snap[s].rctr = m_empty(w) ? '0 : w.e[w.tosr].rctr;
       m_snap[s].dep  = w.dsp;                              // BP-152
       m_snap[s].tag  = m_empty(w) ? '0 : w.gt[w.tosr];
+      m_snap[s].push  = pp_push;                           // BP-153
+      m_snap[s].pmode = pp_mode;
+      m_snap[s].ptosr = pp_tosr;
+      m_snap[s].ptag  = pp_tag;
       if (p2_keep && !restore_val && (m_nq[s].pop || m_nq[s].push))
         m_dep_at[w.tosr] = w.dsp;
       // BP-143: the allocation this snapshot's TOSR names.
@@ -863,9 +909,33 @@ module tb;
         if (!m_empty(m_ns)) m_ns = m_pop_spec(m_ns, d);
         m_ns.dsp = m_ns.dsp - 1'b1;
       end
+      // BP-153: the undo of the restored block's own pop, from the
+      // snapshot's pop record, as the p3 undo-pop (RP4, RP5): LINK back
+      // to ptosr (empty if its generation moved, B1) with the count 0 the
+      // pop left; DEC the count at ptosr back up; the depth plus one.
+      if (rs_undo_pop && (restore_snap.pmode != RAS_POP_NONE)) begin
+        if (restore_snap.pmode == RAS_POP_LINK) begin
+          ustale    = (m_ns.gt[restore_snap.ptosr] != restore_snap.ptag);
+          m_ns.tosr = ustale ? m_ns.bos : restore_snap.ptosr;
+          m_ns.tref = ustale ? '0 : m_ns.seq[restore_snap.ptosr];
+          if (!m_empty(m_ns)) m_ns.e[m_ns.tosr].rctr = '0;
+        end else if ((restore_snap.pmode == RAS_POP_DEC) && !m_empty(m_ns) &&
+                     (m_ns.tosr == restore_snap.ptosr)) begin
+          m_ns = m_adj(m_ns, restore_snap.ptosr, 1'b1);
+        end
+        m_ns.dsp = m_ns.dsp + 1'b1;
+      end
       // BP-152 C1: the predecode operation on the restored state, by the
       // p2 rules: the pop first, then the push with recursion.
+      pp_mode = RAS_POP_NONE;
+      pp_tosr = '0;
+      pp_tag  = '0;
       if (pd_val && m_is_pop(1'b1, pd_type)) begin
+        pp_tosr = m_ns.tosr;                               // BP-153
+        pp_tag  = m_empty(m_ns) ? '0 : m_ns.gt[m_ns.tosr];
+        pp_mode = m_empty(m_ns)                    ? RAS_POP_EMPTY :
+                  (m_ns.e[m_ns.tosr].rctr != '0)   ? RAS_POP_DEC   :
+                                                     RAS_POP_LINK;
         if (!m_empty(m_ns)) m_ns = m_pop_spec(m_ns, d);
         m_ns.dsp = m_ns.dsp - 1'b1;
       end
@@ -879,7 +949,11 @@ module tb;
       m_pd_snap.rctr = m_empty(m_ns) ? '0 : m_ns.e[m_ns.tosr].rctr;
       m_pd_snap.dep  = m_ns.dsp;
       m_pd_snap.tag  = m_empty(m_ns) ? '0 : m_ns.gt[m_ns.tosr];
-      if (pd_val || rs_undo) begin
+      m_pd_snap.push  = pd_val && m_is_push(1'b1, pd_type); // BP-153
+      m_pd_snap.pmode = pp_mode;
+      m_pd_snap.ptosr = pp_tosr;
+      m_pd_snap.ptag  = pp_tag;
+      if (pd_val || rs_undo || rs_undo_pop) begin
         if (!m_empty(m_ns)) m_sref[m_pd_snap] = m_ns.tref;
         m_sbref[m_pd_snap] = m_ns.bref;
       end
@@ -972,6 +1046,8 @@ module tb;
             64'(dut.spec_ret_addr[i]), 64'(m_s.e[i].ret));
       m_cmp($sformatf("spec_rctr[%0d]", i),
             64'(dut.spec_rctr[i]), 64'(m_s.e[i].rctr));
+      m_cmp($sformatf("spec_ncnt[%0d]", i),                 // BP-153
+            64'(dut.spec_ncnt[i]), 64'(m_s.e[i].ncnt));
       m_cmp($sformatf("spec_nos[%0d]", i),
             64'(dut.spec_nos[i]), 64'(m_s.e[i].nos));
       m_cmp($sformatf("spec_bot[%0d]", i),
@@ -1003,14 +1079,40 @@ module tb;
             64'(snap_p2[s].dep), 64'(m_snap[s].dep));
       m_cmp($sformatf("ras_snapshot_p2[%0d].tag", s),
             64'(snap_p2[s].tag), 64'(m_snap[s].tag));
+      // BP-153: the pop record, and the peek (PO1 to PO6 for every slot).
+      m_cmp($sformatf("ras_snapshot_p2[%0d].push", s),
+            64'(snap_p2[s].push), 64'(m_snap[s].push));
+      m_cmp($sformatf("ras_snapshot_p2[%0d].pmode", s),
+            64'(snap_p2[s].pmode), 64'(m_snap[s].pmode));
+      if (m_snap[s].pmode != RAS_POP_NONE) begin
+        m_cmp($sformatf("ras_snapshot_p2[%0d].ptosr", s),
+              64'(snap_p2[s].ptosr), 64'(m_snap[s].ptosr));
+        m_cmp($sformatf("ras_snapshot_p2[%0d].ptag", s),
+              64'(snap_p2[s].ptag), 64'(m_snap[s].ptag));
+      end
+      m_cmp($sformatf("ras_peek_valid_p2[%0d]", s),
+            64'(peek_valid_p2[s]), 64'(m_peek_valid[s]));
+      if (m_peek_valid[s])
+        m_cmp($sformatf("ras_peek_addr_p2[%0d]", s),
+              64'(peek_addr_p2[s]), 64'(m_peek_addr[s]));
     end
   endtask
 
   // BP-152: the four fields a snapshot had before BP-152, {tosr, tosw,
   // bos, rctr}, for the cases that check those values; the model
   // compares dep and tag (m_compare).
-  function automatic logic [15:0] p4(input bp_ras_snapshot_t x);
+  localparam int P4_W = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH;
+  function automatic logic [P4_W-1:0] p4(input bp_ras_snapshot_t x);
     return {x.tosr, x.tosw, x.bos, x.rctr};
+  endfunction
+
+  // BP-153: the expected {tosr, tosw, bos, rctr} at the parameters'
+  // widths (RAS_PTR_BITS is 5 since BP-153; the cases wrote 4-bit
+  // literal concatenations before).
+  function automatic logic [P4_W-1:0] p4v(input int r, input int w,
+                                          input int b, input int c);
+    return {RAS_PTR_BITS'(r), RAS_PTR_BITS'(w), RAS_PTR_BITS'(b),
+            RAS_RCTR_WIDTH'(c)};
   endfunction
 
   // BP-152: a hand-built snapshot {tosr, tosw, bos, rctr}. dep and tag
@@ -1028,6 +1130,11 @@ module tb;
     x.rctr = RAS_RCTR_WIDTH'(c);
     x.dep  = m_s.dsp;
     x.tag  = (r == b) ? '0 : m_s.gt[r];
+    // BP-153: a hand-built snapshot holds no operation record.
+    x.push  = 1'b0;
+    x.pmode = RAS_POP_NONE;
+    x.ptosr = '0;
+    x.ptag  = '0;
     return x;
   endfunction
 
@@ -1084,7 +1191,7 @@ module tb;
   localparam logic [VA_WIDTH-1:0] ADDR_R = VA_WIDTH'('h00_000A_0000);
   localparam logic [VA_WIDTH-1:0] ADDR_Y68 = VA_WIDTH'('h00_0000_6800);
 
-  logic [VA_WIDTH-1:0] fill_addr [0:15];
+  logic [VA_WIDTH-1:0] fill_addr [0:RAS_SPEC_ENTRIES-1];   // BP-153
 
   // Saturated recursion count (TC-38d).
   localparam logic [RAS_RCTR_WIDTH-1:0] RCTR_MAX_TB =
@@ -1096,7 +1203,7 @@ module tb;
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < RAS_SPEC_ENTRIES; i++)
       fill_addr[i] = VA_WIDTH'('h0001_0000) + (i * VA_WIDTH'('h100));
 
     // =============================================================
@@ -1121,9 +1228,9 @@ module tb;
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     #1;
     // Post-push snapshot: entry at idx1 (sentinel skip), tosr=1, tosw=2.
-    check("TC-02 snap[0].tosr==1", snap_p2[0].tosr == 4'd1);
-    check("TC-02 snap[0].tosw==2", snap_p2[0].tosw == 4'd2);
-    check("TC-02 snap[0].bos==0",  snap_p2[0].bos  == 4'd0);
+    check("TC-02 snap[0].tosr==1", snap_p2[0].tosr == 'd1);
+    check("TC-02 snap[0].tosw==2", snap_p2[0].tosw == 'd2);
+    check("TC-02 snap[0].bos==0",  snap_p2[0].bos  == 'd0);
     tick();
     check("TC-02 tos_valid_p0[0]==1 next cycle", tos_valid_p0[0] == 1'b1);
     check("TC-02 tos_addr_p0[0]==ADDR_A",        tos_addr_p0[0] == ADDR_A);
@@ -1138,8 +1245,8 @@ module tb;
     check("TC-03 pop_valid_p2[0]==1", pop_valid_p2[0] == 1'b1);
     check("TC-03 pop_addr_p2[0]==ADDR_A", pop_addr_p2[0] == ADDR_A);
     // Post-pop snapshot: tosr back to 0, tosw monotonic at 2.
-    check("TC-03 snap[0].tosr==0", snap_p2[0].tosr == 4'd0);
-    check("TC-03 snap[0].tosw==2", snap_p2[0].tosw == 4'd2);
+    check("TC-03 snap[0].tosr==0", snap_p2[0].tosr == 'd0);
+    check("TC-03 snap[0].tosw==2", snap_p2[0].tosw == 'd2);
     tick();
 
     // TC-04 .. TC-07 drive both slots in one cycle: they need two slots
@@ -1157,11 +1264,11 @@ module tb;
         drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, DIRECT_CALL, ADDR_B);
         tick();
         check("TC-04 TOSW advanced by 2",
-              (dut.tosw - tosw_before) == 4'd2);
+              (dut.tosw - tosw_before) == 'd2);
         // Slot 0 -> idx2, slot 1 -> idx3 (in order).
         check("TC-04 spec[2]==ADDR_A", dut.spec_ret_addr[2] == ADDR_A);
         check("TC-04 spec[3]==ADDR_B", dut.spec_ret_addr[3] == ADDR_B);
-        check("TC-04 tosr==3 (top is B)", dut.tosr == 4'd3);
+        check("TC-04 tosr==3 (top is B)", dut.tosr == 'd3);
       end
 
       // =============================================================
@@ -1193,9 +1300,9 @@ module tb;
       check("TC-06 array idx1 not yet written (pre-edge)",
             dut.spec_ret_addr[1] != ADDR_A);
       // slot1 snapshot: entry present (tosw=2) but TOSR back to pre-push.
-      check("TC-06 snap[1].tosr==0 (pre-push)", snap_p2[S1].tosr == 4'd0);
+      check("TC-06 snap[1].tosr==0 (pre-push)", snap_p2[S1].tosr == 'd0);
       check("TC-06 snap[1].tosw==2 (entry present)",
-            snap_p2[S1].tosw == 4'd2);
+            snap_p2[S1].tosw == 'd2);
       tick();
       check("TC-06 spec[1]==ADDR_A after edge", dut.spec_ret_addr[1] == ADDR_A);
 
@@ -1210,8 +1317,8 @@ module tb;
       check("TC-07 pop_addr_p2[0]==ADDR_X", pop_addr_p2[0] == ADDR_X);
       // slot1 push lands at frontier (idx2); no bypass.
       check("TC-07 snap[1].tosr==2 (push at new TOSW)",
-            snap_p2[S1].tosr == 4'd2);
-      check("TC-07 snap[1].tosw==3", snap_p2[S1].tosw == 4'd3);
+            snap_p2[S1].tosr == 'd2);
+      check("TC-07 snap[1].tosw==3", snap_p2[S1].tosw == 'd3);
       tick();
       check("TC-07 spec[2]==ADDR_B", dut.spec_ret_addr[2] == ADDR_B);
     end else begin
@@ -1231,8 +1338,8 @@ module tb;
       check("TC-08 TOSW did not advance (recursion)",
             dut.tosw == tosw_before);
       check("TC-08 rctr at idx1 incremented to 1",
-            dut.spec_rctr[1] == 4'd1);
-      check("TC-08 tosr still 1", dut.tosr == 4'd1);
+            dut.spec_rctr[1] == 'd1);
+      check("TC-08 tosr still 1", dut.tosr == 'd1);
     end
 
     // =============================================================
@@ -1242,18 +1349,18 @@ module tb;
     push_one(ADDR_A);                       // rctr=0
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0); tick(); // rctr=1
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0); tick(); // rctr=2
-    check("TC-09 seeded rctr==2", dut.spec_rctr[1] == 4'd2);
+    check("TC-09 seeded rctr==2", dut.spec_rctr[1] == 'd2);
     // First RETURN: rctr 2->1, TOSR holds.
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0); tick();
-    check("TC-09 rctr==1 after pop1", dut.spec_rctr[1] == 4'd1);
-    check("TC-09 tosr holds at 1 (pop1)", dut.tosr == 4'd1);
+    check("TC-09 rctr==1 after pop1", dut.spec_rctr[1] == 'd1);
+    check("TC-09 tosr holds at 1 (pop1)", dut.tosr == 'd1);
     // Second RETURN: rctr 1->0, TOSR holds.
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0); tick();
-    check("TC-09 rctr==0 after pop2", dut.spec_rctr[1] == 4'd0);
-    check("TC-09 tosr holds at 1 (pop2)", dut.tosr == 4'd1);
+    check("TC-09 rctr==0 after pop2", dut.spec_rctr[1] == 'd0);
+    check("TC-09 tosr holds at 1 (pop2)", dut.tosr == 'd1);
     // Third RETURN: actual pop, TOSR moves.
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0); tick();
-    check("TC-09 tosr moves to 0 (pop3)", dut.tosr == 4'd0);
+    check("TC-09 tosr moves to 0 (pop3)", dut.tosr == 'd0);
 
     // =============================================================
     // TC-10: Recursion counter saturation (2^RAS_RCTR_WIDTH pushes)
@@ -1266,7 +1373,7 @@ module tb;
     end
     check("TC-10 rctr saturated at max",
           dut.spec_rctr[1] == {RAS_RCTR_WIDTH{1'b1}});
-    check("TC-10 tosw not advanced past idx2", dut.tosw == 4'd2);
+    check("TC-10 tosw not advanced past idx2", dut.tosw == 'd2);
     // One more push must not overflow rctr.
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0); tick();
     check("TC-10 rctr stays at max after extra push",
@@ -1283,10 +1390,10 @@ module tb;
       push_one(ADDR_X);                       // tosr=1, tosw=2
       drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, DIRECT_CALL, ADDR_B);
       #1;
-      check("TC-11 snap[0].tosr==2 (post slot0)", snap_p2[0].tosr == 4'd2);
-      check("TC-11 snap[0].tosw==3 (post slot0)", snap_p2[0].tosw == 4'd3);
-      check("TC-11 snap[1].tosr==3 (post both)",  snap_p2[S1].tosr == 4'd3);
-      check("TC-11 snap[1].tosw==4 (post both)",  snap_p2[S1].tosw == 4'd4);
+      check("TC-11 snap[0].tosr==2 (post slot0)", snap_p2[0].tosr == 'd2);
+      check("TC-11 snap[0].tosw==3 (post slot0)", snap_p2[0].tosw == 'd3);
+      check("TC-11 snap[1].tosr==3 (post both)",  snap_p2[S1].tosr == 'd3);
+      check("TC-11 snap[1].tosw==4 (post both)",  snap_p2[S1].tosw == 'd4);
       tick();
     end else begin
       $display("SKIP TC-11 dual-slot snapshot: needs NUM_PRED_SLOTS > 1");
@@ -1308,9 +1415,9 @@ module tb;
     tick();
     restore_val       = 1'b0;
     restore_snap      = '0;
-    check("TC-12 tosr restored to 1", dut.tosr == 4'd1);
-    check("TC-12 tosw restored to 2", dut.tosw == 4'd2);
-    check("TC-12 bos restored to 0",  dut.bos  == 4'd0);
+    check("TC-12 tosr restored to 1", dut.tosr == 'd1);
+    check("TC-12 tosw restored to 2", dut.tosw == 'd2);
+    check("TC-12 bos restored to 0",  dut.bos  == 'd0);
     check("TC-12 p2 push blocked (idx4 not written)",
           dut.spec_ret_addr[4] != ADDR_X);
 
@@ -1318,8 +1425,8 @@ module tb;
     // TC-13: Commit stack push
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
-    check("TC-13 csp advanced to 1", dut.csp == 5'd1);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
+    check("TC-13 csp advanced to 1", int'(dut.csp) == 1);
     check("TC-13 commit_ret_addr[0]==ADDR_R",
           dut.commit_ret_addr[0] == ADDR_R);
 
@@ -1327,10 +1434,10 @@ module tb;
     // TC-14: Commit stack pop
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);   // seed commit entry
-    check("TC-14 csp==1 after seed", dut.csp == 5'd1);
-    commit_op(RETURN, '0, 4'd0);
-    check("TC-14 csp decremented to 0", dut.csp == 5'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);   // seed commit entry
+    check("TC-14 csp==1 after seed", int'(dut.csp) == 1);
+    commit_op(RETURN, '0, 'd0);
+    check("TC-14 csp decremented to 0", int'(dut.csp) == 0);
 
     // =============================================================
     // TC-15: Empty fallback
@@ -1343,7 +1450,7 @@ module tb;
           pop_valid_p2[0] == 1'b0);
     tick();
     // Seed commit stack only.
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-15 pop_valid_p2[0]==1 (commit fallback)",
@@ -1351,7 +1458,7 @@ module tb;
     check("TC-15 pop_addr_p2[0]==ADDR_R (commit top)",
           pop_addr_p2[0] == ADDR_R);
     tick();
-    check("TC-15 commit entry NOT consumed (csp==1)", dut.csp == 5'd1);
+    check("TC-15 commit entry NOT consumed (csp==1)", int'(dut.csp) == 1);
 
     // =============================================================
     // TC-16: p3 repair -- undo push (p2=push, p3=no-op)
@@ -1360,12 +1467,12 @@ module tb;
     push_one(ADDR_X);                       // baseline, tosr=1, tosw=2
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0); // push A -> idx2
     tick();
-    check("TC-16 pre-repair tosr==2", dut.tosr == 4'd2);
+    check("TC-16 pre-repair tosr==2", dut.tosr == 'd2);
     // Repair cycle: p2 idle, p3 disagrees (no-op vs the push).
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
-    check("TC-16 tosr returned to pre-push (1)", dut.tosr == 4'd1);
+    check("TC-16 tosr returned to pre-push (1)", dut.tosr == 'd1);
     check("TC-16 top is baseline X", dut.spec_ret_addr[dut.tosr] == ADDR_X);
 
     // =============================================================
@@ -1375,12 +1482,12 @@ module tb;
     push_one(ADDR_X);                       // idx1, tosr=1, tosw=2
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0); // pop -> tosr=0
     tick();
-    check("TC-17 pre-repair tosr==0 (after pop)", dut.tosr == 4'd0);
+    check("TC-17 pre-repair tosr==0 (after pop)", dut.tosr == 'd0);
     // Repair cycle: p2 idle, p3 disagrees (no-op vs the pop).
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
-    check("TC-17 tosr returned to pre-pop (1)", dut.tosr == 4'd1);
+    check("TC-17 tosr returned to pre-pop (1)", dut.tosr == 'd1);
     check("TC-17 top re-exposed as X", dut.spec_ret_addr[dut.tosr] == ADDR_X);
 
     // =============================================================
@@ -1430,11 +1537,11 @@ module tb;
     // =============================================================
     do_reset();
     check("TC-20 deasserted after reset", tos_valid_p0[0] == 1'b0);
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);   // seed commit only
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);   // seed commit only
     #1;
     check("TC-20 asserted with commit-only", tos_valid_p0[0] == 1'b1);
     check("TC-20 tos_addr from commit top", tos_addr_p0[0] == ADDR_R);
-    commit_op(RETURN, '0, 4'd0);            // clear commit
+    commit_op(RETURN, '0, 'd0);            // clear commit
     #1;
     check("TC-20 deasserted when both empty", tos_valid_p0[0] == 1'b0);
 
@@ -1453,30 +1560,30 @@ module tb;
     // Second push of ADDR_A -> recursion: rctr[1] 0->1, TOSR holds.
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
-    check("TC-21 seeded recursion rctr[1]==1", dut.spec_rctr[1] == 4'd1);
-    check("TC-21 seeded tosr==1 (recursion holds top)", dut.tosr == 4'd1);
+    check("TC-21 seeded recursion rctr[1]==1", dut.spec_rctr[1] == 'd1);
+    check("TC-21 seeded tosr==1 (recursion holds top)", dut.tosr == 'd1);
     // p2 RETURN with p3 agreeing (drive) -> recursion-decrement pop:
     // rctr[1] 1->0, TOSR holds at 1 (TOSR not moved by this pop).
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-21 recursion pop decremented rctr[1] 1->0",
-          dut.spec_rctr[1] == 4'd0);
-    check("TC-21 recursion pop held tosr at 1", dut.tosr == 4'd1);
+          dut.spec_rctr[1] == 'd0);
+    check("TC-21 recursion pop held tosr at 1", dut.tosr == 'd1);
     // Repair cycle: p2 idle, p3 forced no-op so it disagrees with the
     // registered OP_POP -> undo-pop fires.
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     // OLD (BP-064 to BP-132): "TC-21 pins TD #78: rctr[1] NOT
-    // restored, stays 0 (count lost)", dut.spec_rctr[1] == 4'd0.
+    // restored, stays 0 (count lost)", dut.spec_rctr[1] == 'd0.
     check("TC-21 undo-pop restored the recursion count, rctr[1]==1",
-          dut.spec_rctr[1] == 4'd1);
+          dut.spec_rctr[1] == 'd1);
     // OLD (BP-064 to BP-119): "TC-21 pins TD #78: undo-pop moved tosr
-    // to 2, not restored to 1", dut.tosr == 4'd2 (TOSR + 1).
+    // to 2, not restored to 1", dut.tosr == 'd2 (TOSR + 1).
     check("TC-21 undo-pop restored the pre-pop tosr (1)",
-          dut.tosr == 4'd1);
+          dut.tosr == 'd1);
     check("TC-21 tosw held at 2 (no allocation on the undo)",
-          dut.tosw == 4'd2);
+          dut.tosw == 'd2);
     // OLD (BP-064 to BP-119): "TC-21 pins TD #78: re-exposed top idx2
     // is empty (0), not ADDR_A", dut.spec_ret_addr[2] == '0 -- the
     // TOSR + 1 slot.
@@ -1503,16 +1610,16 @@ module tb;
     do_reset();
     push_one(ADDR_A);
     check("TC-22 seeded tosr==1 tosw==2",
-          (dut.tosr == 4'd1) && (dut.tosw == 4'd2));
+          (dut.tosr == 'd1) && (dut.tosw == 'd2));
     drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-22 the pop is valid", pop_valid_p2[0] == 1'b1);
     check("TC-22 the pop returns A", pop_addr_p2[0] == ADDR_A);
     check("TC-22 snap[0] is after the pop and the push (tosr 2)",
-          snap_p2[0].tosr == 4'd2);
-    check("TC-22 snap[0].tosw==3", snap_p2[0].tosw == 4'd3);
+          snap_p2[0].tosr == 'd2);
+    check("TC-22 snap[0].tosw==3", snap_p2[0].tosw == 'd3);
     tick();
-    check("TC-22 tosr==2 after the edge", dut.tosr == 4'd2);
+    check("TC-22 tosr==2 after the edge", dut.tosr == 'd2);
     check("TC-22 spec[2]==B (the pushed return address)",
           dut.spec_ret_addr[2] == ADDR_B);
     check("TC-22 A still resident at idx1 (pop does not overwrite)",
@@ -1521,7 +1628,7 @@ module tb;
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-22 p3 agrees with p2: no repair (tosr 2, tosw 3)",
-          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+          (dut.tosr == 'd2) && (dut.tosw == 'd3));
 
     // =============================================================
     // TC-23: RETURN_CALL with the speculative stack empty. The pop
@@ -1529,17 +1636,17 @@ module tb;
     // allocates at BOS+1 (cold start).
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
-    check("TC-23 commit seeded csp==1", dut.csp == 5'd1);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
+    check("TC-23 commit seeded csp==1", int'(dut.csp) == 1);
     drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-23 pop valid from the commit stack", pop_valid_p2[0] == 1'b1);
     check("TC-23 pop addr is the commit top R", pop_addr_p2[0] == ADDR_R);
     tick();
     check("TC-23 push allocated at idx1: tosr 1, tosw 2",
-          (dut.tosr == 4'd1) && (dut.tosw == 4'd2));
+          (dut.tosr == 'd1) && (dut.tosw == 'd2));
     check("TC-23 spec[1]==B", dut.spec_ret_addr[1] == ADDR_B);
-    check("TC-23 commit entry NOT consumed (csp==1)", dut.csp == 5'd1);
+    check("TC-23 commit entry NOT consumed (csp==1)", int'(dut.csp) == 1);
 
     // =============================================================
     // TC-24: RETURN_CALL over a recursion count -- TWO array writes in
@@ -1551,17 +1658,17 @@ module tb;
     push_one(ADDR_A);
     push_one(ADDR_A);
     check("TC-24 seeded rctr[1]==1 tosr==1 tosw==2",
-          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1)
-          && (dut.tosw == 4'd2));
+          (dut.spec_rctr[1] == 'd1) && (dut.tosr == 'd1)
+          && (dut.tosw == 'd2));
     drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-24 the pop returns A", pop_addr_p2[0] == ADDR_A);
     tick();
     check("TC-24 write 1: rctr[1] decremented 1->0",
-          dut.spec_rctr[1] == 4'd0);
+          dut.spec_rctr[1] == 'd0);
     check("TC-24 write 1: spec[1] still A", dut.spec_ret_addr[1] == ADDR_A);
     check("TC-24 write 2: spec[2]==B", dut.spec_ret_addr[2] == ADDR_B);
-    check("TC-24 tosr 2, tosw 3", (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+    check("TC-24 tosr 2, tosw 3", (dut.tosr == 'd2) && (dut.tosw == 'd3));
 
     // =============================================================
     // TC-25: RETURN_CALL whose push equals the top the pop exposes:
@@ -1573,15 +1680,15 @@ module tb;
     push_one(ADDR_A);
     push_one(ADDR_B);
     check("TC-25 seeded tosr==2 tosw==3",
-          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+          (dut.tosr == 'd2) && (dut.tosw == 'd3));
     drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-25 the pop returns B", pop_addr_p2[0] == ADDR_B);
     tick();
     check("TC-25 tosr==1 (recursion holds the exposed top)",
-          dut.tosr == 4'd1);
-    check("TC-25 rctr[1]==1", dut.spec_rctr[1] == 4'd1);
-    check("TC-25 tosw unchanged at 3", dut.tosw == 4'd3);
+          dut.tosr == 'd1);
+    check("TC-25 rctr[1]==1", dut.spec_rctr[1] == 'd1);
+    check("TC-25 tosw unchanged at 3", dut.tosw == 'd3);
 
     // =============================================================
     // TC-26: p3 repair -- undo a whole RETURN_CALL (p2 pop+push, p3
@@ -1595,13 +1702,13 @@ module tb;
     drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-26 pre-repair tosr==2 tosw==3",
-          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+          (dut.tosr == 'd2) && (dut.tosw == 'd3));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
-    check("TC-26 tosr restored to the pre-op value (1)", dut.tosr == 4'd1);
+    check("TC-26 tosr restored to the pre-op value (1)", dut.tosr == 'd1);
     check("TC-26 top is X again", dut.spec_ret_addr[dut.tosr] == ADDR_X);
-    check("TC-26 tosw held at 3", dut.tosw == 4'd3);
+    check("TC-26 tosw held at 3", dut.tosw == 'd3);
     check("TC-26 p0 TOS reads X", tos_addr_p0[0] == ADDR_X);
 
     // =============================================================
@@ -1616,12 +1723,12 @@ module tb;
     drive(1'b0, NO_BRANCH, ADDR_B, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-27 seeded tosr==1 tosw==2",
-          (dut.tosr == 4'd1) && (dut.tosw == 4'd2));
+          (dut.tosr == 'd1) && (dut.tosw == 'd2));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b1, RETURN_CALL, 1'b0, NO_BRANCH);
     tick();
     check("TC-27 missed pop then missed push: tosr 2, tosw 3",
-          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+          (dut.tosr == 'd2) && (dut.tosw == 'd3));
     check("TC-27 spec[2]==B (registered fall-through)",
           dut.spec_ret_addr[2] == ADDR_B);
     check("TC-27 p0 TOS reads B", tos_addr_p0[0] == ADDR_B);
@@ -1632,20 +1739,20 @@ module tb;
     // commit snapshot.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_A, 4'd0);
-    commit_op(DIRECT_CALL, ADDR_C, 4'd0);
-    check("TC-28 seeded csp==2", dut.csp == 5'd2);
-    commit_op(RETURN_CALL, ADDR_B, 4'd5);
-    check("TC-28 csp level at 2 (pop then push)", dut.csp == 5'd2);
+    commit_op(DIRECT_CALL, ADDR_A, 'd0);
+    commit_op(DIRECT_CALL, ADDR_C, 'd0);
+    check("TC-28 seeded csp==2", int'(dut.csp) == 2);
+    commit_op(RETURN_CALL, ADDR_B, 'd5);
+    check("TC-28 csp level at 2 (pop then push)", int'(dut.csp) == 2);
     check("TC-28 committed top replaced: commit[1]==B",
           dut.commit_ret_addr[1] == ADDR_B);
     check("TC-28 entry below untouched: commit[0]==A",
           dut.commit_ret_addr[0] == ADDR_A);
-    check("TC-28 bos took the snapshot tosr (5)", dut.bos == 4'd5);
+    check("TC-28 bos took the snapshot tosr (5)", dut.bos == 'd5);
     // Empty commit stack: the pop does nothing, the push writes at 0.
     do_reset();
-    commit_op(RETURN_CALL, ADDR_B, 4'd0);
-    check("TC-28 from empty: csp 0 -> 1", dut.csp == 5'd1);
+    commit_op(RETURN_CALL, ADDR_B, 'd0);
+    check("TC-28 from empty: csp 0 -> 1", int'(dut.csp) == 1);
     check("TC-28 from empty: commit[0]==B", dut.commit_ret_addr[0] == ADDR_B);
 
     // =============================================================
@@ -1657,7 +1764,7 @@ module tb;
     // from, and predicted B.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);                       // idx1, nos 0
     push_one(ADDR_B);                       // idx2, nos 1
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
@@ -1666,7 +1773,7 @@ module tb;
     tick();
     push_one(ADDR_C);                       // idx3, nos 1 (A)
     check("TC-29 C allocated at idx3, links to A at idx1",
-          (dut.tosr == 4'd3) && (dut.spec_nos[3] == 4'd1));
+          (dut.tosr == 'd3) && (dut.spec_nos[3] == 'd1));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-29 pop 2 predicts C", pop_addr_p2[0] == ADDR_C);
@@ -1682,7 +1789,7 @@ module tb;
     check("TC-29 pop 4 falls back to the commit top R",
           pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_R));
     tick();
-    check("TC-29 the commit entry is not consumed", dut.csp == 5'd1);
+    check("TC-29 the commit entry is not consumed", int'(dut.csp) == 1);
 
     // =============================================================
     // TC-30: TC-29 with a recursion count on A. A is pushed twice
@@ -1691,12 +1798,12 @@ module tb;
     // falls back to R. Recursion counter rules (section 5) unchanged.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);
     push_one(ADDR_A);                       // rctr[1] 1
     push_one(ADDR_B);                       // idx2
     check("TC-30 seeded: A rctr 1 at idx1, B at idx2",
-          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd2));
+          (dut.spec_rctr[1] == 'd1) && (dut.tosr == 'd2));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();                                 // pop B
     push_one(ADDR_C);                       // idx3, nos 1
@@ -1710,7 +1817,7 @@ module tb;
           pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_A));
     tick();
     check("TC-30 the recursion pop decremented A's count, tosr holds",
-          (dut.spec_rctr[1] == 4'd0) && (dut.tosr == 4'd1));
+          (dut.spec_rctr[1] == 'd0) && (dut.tosr == 'd1));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-30 pop predicts A again", pop_addr_p2[0] == ADDR_A);
@@ -1737,13 +1844,13 @@ module tb;
     push_one(ADDR_C);
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);   // p2 pop C
     tick();
-    check("TC-31a pop followed the link: tosr 1", dut.tosr == 4'd1);
+    check("TC-31a pop followed the link: tosr 1", dut.tosr == 'd1);
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     check("TC-31a undo-pop restores the pre-op tosr 3 (C), not 2 (B)",
-          (dut.tosr == 4'd3) && (dut.spec_ret_addr[dut.tosr] == ADDR_C));
-    check("TC-31a tosw held at 4", dut.tosw == 4'd4);
+          (dut.tosr == 'd3) && (dut.spec_ret_addr[dut.tosr] == ADDR_C));
+    check("TC-31a tosw held at 4", dut.tosw == 'd4);
 
     // b. missed pop (p2 none, p3 pop) follows the link to A.
     do_reset();
@@ -1758,7 +1865,7 @@ module tb;
     force_p3(1'b1, RETURN, 1'b0, NO_BRANCH);
     tick();
     check("TC-31b missed pop follows nos: tosr 1 (A), not 2 (B)",
-          (dut.tosr == 4'd1) && (dut.spec_ret_addr[dut.tosr] == ADDR_A));
+          (dut.tosr == 'd1) && (dut.spec_ret_addr[dut.tosr] == ADDR_A));
 
     // c. undo-push (p2 push, p3 none) follows the pushed entry's nos.
     do_reset();
@@ -1768,13 +1875,13 @@ module tb;
     tick();
     drive(1'b1, DIRECT_CALL, ADDR_C, 1'b0, NO_BRANCH, '0);  // p2 push C
     tick();
-    check("TC-31c C pushed at idx3", dut.tosr == 4'd3);
+    check("TC-31c C pushed at idx3", dut.tosr == 'd3);
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     check("TC-31c undo-push returns to the pre-push top, tosr 1 (A)",
-          (dut.tosr == 4'd1) && (dut.spec_ret_addr[dut.tosr] == ADDR_A));
-    check("TC-31c tosw stays monotonic at 4", dut.tosw == 4'd4);
+          (dut.tosr == 'd1) && (dut.spec_ret_addr[dut.tosr] == ADDR_A));
+    check("TC-31c tosw stays monotonic at 4", dut.tosw == 'd4);
 
     // d. missed push (p2 none, p3 call) allocates the registered
     //    fall-through at TOSW, linked to the current top.
@@ -1789,8 +1896,8 @@ module tb;
     force_p3(1'b1, DIRECT_CALL, 1'b0, NO_BRANCH);
     tick();
     check("TC-31d missed push: C at idx3, linked to A",
-          (dut.tosr == 4'd3) && (dut.spec_ret_addr[3] == ADDR_C)
-          && (dut.spec_nos[3] == 4'd1) && (dut.tosw == 4'd4));
+          (dut.tosr == 'd3) && (dut.spec_ret_addr[3] == ADDR_C)
+          && (dut.spec_nos[3] == 'd1) && (dut.tosw == 'd4));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
@@ -1806,7 +1913,7 @@ module tb;
     // links to A, not to the slot below it.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);                       // idx1
     push_one(ADDR_B);                       // idx2
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
@@ -1816,8 +1923,8 @@ module tb;
     restore_snap = snap_p2[0];              // {tosr 3, tosw 4, bos 0}
     tick();
     check("TC-32 snapshot taken: tosr 3 tosw 4 bos 0",
-          (restore_snap.tosr == 4'd3) && (restore_snap.tosw == 4'd4)
-          && (restore_snap.bos == 4'd0));
+          (restore_snap.tosr == 'd3) && (restore_snap.tosw == 'd4)
+          && (restore_snap.bos == 'd0));
     // Wrong path: pop C, pop A, push X, push Y, pop Y.
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();
@@ -1828,13 +1935,13 @@ module tb;
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-32 wrong path left tosr off the snapshot top",
-          dut.tosr != 4'd3);
+          dut.tosr != 'd3);
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     restore_val = 1'b1;
     tick();
     restore_val = 1'b0;
     check("TC-32 restore: pointers are the snapshot's",
-          (dut.tosr == 4'd3) && (dut.tosw == 4'd4) && (dut.bos == 4'd0));
+          (dut.tosr == 'd3) && (dut.tosw == 'd4) && (dut.bos == 'd0));
     check("TC-32 restore: the p0 top is C exactly",
           tos_valid_p0[0] && (tos_addr_p0[0] == ADDR_C));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
@@ -1898,7 +2005,7 @@ module tb;
     force_p3(1'b1, DIRECT_CALL, 1'b0, NO_BRANCH);
     tick();
     check("TC-33c AS BUILT p2 RC / p3 call: X on top, B dropped",
-          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+          (dut.tosr == 'd1) && (dut.spec_ret_addr[1] == ADDR_X));
     // d. p2 call, p3 RETURN_CALL: the missed pop removes the pushed
     //    B. AS BUILT: X on top. p3 result would be X popped and B
     //    pushed over empty.
@@ -1910,7 +2017,7 @@ module tb;
     force_p3(1'b1, RETURN_CALL, 1'b0, NO_BRANCH);
     tick();
     check("TC-33d AS BUILT p2 call / p3 RC: X on top, X not popped",
-          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+          (dut.tosr == 'd1) && (dut.spec_ret_addr[1] == ADDR_X));
 
     // =============================================================
     // TC-34 (BP-121, FE-14): ras_p2_keep low drops the p2 pass of a
@@ -1931,12 +2038,12 @@ module tb;
     tick();
     p2_keep = 1'b1;
     check("TC-34a B's push undone by the repair, C's push dropped: X on top",
-          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+          (dut.tosr == 'd1) && (dut.spec_ret_addr[1] == ADDR_X));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     check("TC-34b the dropped push is not repaired a cycle later: X on top",
-          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+          (dut.tosr == 'd1) && (dut.spec_ret_addr[1] == ADDR_X));
 
     // =============================================================
     // TC-35 (BP-122, TD#170): ras_p2_keep low with no p3 repair in the
@@ -1965,7 +2072,7 @@ module tb;
     // =============================================================
     do_reset();
     for (int i = 0; i < RAS_COMMIT_ENTRIES; i++)
-      commit_op(DIRECT_CALL, cs_ad(32'h4_0000, i), 4'd0);
+      commit_op(DIRECT_CALL, cs_ad(32'h4_0000, i), 'd0);
     #1;
     check("TC-36a full commit stack: p0 TOS valid", tos_valid_p0[0] == 1'b1);
     check("TC-36b full commit stack: p0 TOS is the last push",
@@ -1977,7 +2084,7 @@ module tb;
     check("TC-36d empty-pop fallback is the last push",
           pop_addr_p2[0] == cs_ad(32'h4_0000, RAS_COMMIT_ENTRIES-1));
     tick();
-    commit_op(RETURN, '0, 4'd0);                     // commit pop
+    commit_op(RETURN, '0, 'd0);                     // commit pop
     #1;
     check("TC-36e after one commit pop: still valid", tos_valid_p0[0] == 1'b1);
     check("TC-36f after one commit pop: the 31st push is on top",
@@ -1991,26 +2098,26 @@ module tb;
     // =============================================================
     do_reset();
     for (int i = 0; i <= RAS_COMMIT_ENTRIES; i++)
-      commit_op(DIRECT_CALL, cs_ad(32'h5_0000, i), 4'd0);
+      commit_op(DIRECT_CALL, cs_ad(32'h5_0000, i), 'd0);
     #1;
     check("TC-37a 33 pushes: TOS valid, the 33rd push",
           (tos_valid_p0[0] == 1'b1) &&
           (tos_addr_p0[0] == cs_ad(32'h5_0000, RAS_COMMIT_ENTRIES)));
     for (int i = 0; i < RAS_COMMIT_ENTRIES - 1; i++)
-      commit_op(RETURN, '0, 4'd0);
+      commit_op(RETURN, '0, 'd0);
     #1;
     check("TC-37b 31 pops: one entry left, the second push",
           (tos_valid_p0[0] == 1'b1) &&
           (tos_addr_p0[0] == VA_WIDTH'('h5_0000 + 4)));
-    commit_op(RETURN, '0, 4'd0);
+    commit_op(RETURN, '0, 'd0);
     #1;
     check("TC-37c 32 pops: empty", tos_valid_p0[0] == 1'b0);
-    commit_op(RETURN, '0, 4'd0);                     // pop on empty
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(RETURN, '0, 'd0);                     // pop on empty
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     #1;
     check("TC-37d a pop on empty is ignored: one push reads back",
           (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_R));
-    commit_op(RETURN, '0, 4'd0);
+    commit_op(RETURN, '0, 'd0);
     #1;
     check("TC-37e and one pop empties it again", tos_valid_p0[0] == 1'b0);
 
@@ -2027,18 +2134,18 @@ module tb;
     push_one(ADDR_A);
     push_one(ADDR_A);
     check("TC-38a seeded rctr[1]==1 tosr==1",
-          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
+          (dut.spec_rctr[1] == 'd1) && (dut.tosr == 'd1));
     drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-38a pre-repair: rctr[1]==0, B on top at idx2",
-          (dut.spec_rctr[1] == 4'd0) && (dut.tosr == 4'd2) &&
+          (dut.spec_rctr[1] == 'd0) && (dut.tosr == 'd2) &&
           (dut.spec_ret_addr[2] == ADDR_B));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     // Before BP-133: tosr 1 and rctr[1] 0 (one recursion level lost).
     check("TC-38a undo: tosr 1, rctr[1] restored to 1",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == 'd1));
     // b. The pop moved TOSR, the push incremented the count of the
     //    entry below: the count is decremented back. Seed A (idx1),
     //    then X (idx2). RETURN_CALL with fall-through A pops X (TOSR to
@@ -2049,13 +2156,13 @@ module tb;
     drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-38b pre-repair: tosr 1, rctr[1]==1",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == 'd1));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     // Before BP-133: tosr 2 and rctr[1] 1 (a level that never was).
     check("TC-38b undo: tosr 2 (X), rctr[1] restored to 0",
-          (dut.tosr == 4'd2) && (dut.spec_rctr[1] == 4'd0) &&
+          (dut.tosr == 'd2) && (dut.spec_rctr[1] == 'd0) &&
           (dut.spec_ret_addr[2] == ADDR_X));
     // c. Both on one entry: seed A twice (rctr[1] 1), RETURN_CALL with
     //    fall-through A: the pop takes rctr[1] to 0 holding TOSR, the
@@ -2067,13 +2174,13 @@ module tb;
     drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-38c pre-repair: tosr 1, rctr[1]==1, tosw 2",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1) &&
-          (dut.tosw == 4'd2));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == 'd1) &&
+          (dut.tosw == 'd2));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     check("TC-38c undo: tosr 1, rctr[1] still 1",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == 'd1));
     // d. A saturated count the push could not move is not decremented
     //    by the undo. Seed A with rctr 15 through the push path (one
     //    allocation, 15 recursion pushes), X above it, then the b case.
@@ -2085,12 +2192,12 @@ module tb;
     drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-38d pre-repair: tosr 1, rctr[1] held at 15",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     check("TC-38d undo: tosr 2, rctr[1] still 15",
-          (dut.tosr == 4'd2) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+          (dut.tosr == 'd2) && (dut.spec_rctr[1] == RCTR_MAX_TB));
 
     // =============================================================
     // TC-39 (BP-133, TD #79): the commit stack has no recursion
@@ -2102,21 +2209,21 @@ module tb;
     // BP-134.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_A, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_A, 'd0);
     for (int i = 0; i < 3; i++)
-      commit_op(DIRECT_CALL, ADDR_B, 4'd0);
+      commit_op(DIRECT_CALL, ADDR_B, 'd0);
     check("TC-39 four committed calls, four entries",
           int'(dut.c_cnt) == 4);
     for (int i = 0; i < 3; i++) begin
       #1;
       check($sformatf("TC-39 fallback at depth %0d is B", 4 - i),
             (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_B));
-      commit_op(RETURN, '0, 4'd0);
+      commit_op(RETURN, '0, 'd0);
     end
     #1;
     check("TC-39 fallback at depth 1 is A",
           (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_A));
-    commit_op(RETURN, '0, 4'd0);
+    commit_op(RETURN, '0, 'd0);
     #1;
     check("TC-39 then empty", tos_valid_p0[0] == 1'b0);
 
@@ -2135,20 +2242,20 @@ module tb;
     for (int i = 0; i <= int'(RCTR_MAX_TB); i++)
       push_one(ADDR_A);
     check("TC-40a seeded rctr[1]==15 tosr 1 tosw 2",
-          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 4'd1) &&
-          (dut.tosw == 4'd2));
+          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 'd1) &&
+          (dut.tosw == 'd2));
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-40a pre-repair: the saturated push moved nothing",
-          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 4'd1) &&
-          (dut.tosw == 4'd2));
+          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 'd1) &&
+          (dut.tosw == 'd2));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     // Before BP-134: rctr[1] 14.
     check("TC-40a undo-push: rctr[1] still 15, tosr 1, tosw 2",
-          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 4'd1) &&
-          (dut.tosw == 4'd2));
+          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 'd1) &&
+          (dut.tosw == 'd2));
     // All 16 levels still pop as A, then the stack is empty.
     for (int i = 0; i <= int'(RCTR_MAX_TB); i++) begin
       drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
@@ -2170,13 +2277,13 @@ module tb;
     drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-40b pre-repair: tosr 1, rctr[1] held at 15",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b1, RETURN, 1'b0, NO_BRANCH);
     tick();
     // Before BP-134: rctr[1] 14.
     check("TC-40b undo of the push half: tosr 1, rctr[1] still 15",
-          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+          (dut.tosr == 'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
     // c. Below saturation the undo-push still removes the level the
     //    push added: A twice (rctr 1), push A (rctr 2), undo -> 1.
     do_reset();
@@ -2185,12 +2292,12 @@ module tb;
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-40c pre-repair: rctr[1]==2",
-          (dut.spec_rctr[1] == 4'd2) && (dut.tosr == 4'd1));
+          (dut.spec_rctr[1] == 'd2) && (dut.tosr == 'd1));
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     check("TC-40c undo-push: rctr[1] back to 1, tosr 1",
-          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
+          (dut.spec_rctr[1] == 'd1) && (dut.tosr == 'd1));
 
     // =============================================================
     // TC-41 (BP-138, D2): a commit moves BOS while the speculative
@@ -2206,7 +2313,7 @@ module tb;
     // =============================================================
     // a. The old BOS slot is the reset sentinel, index 0.
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);   // commit stack R, bos 0
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);   // commit stack R, bos 0
     push_one(ADDR_A);                       // idx1 (sentinel skip)
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
@@ -2214,12 +2321,12 @@ module tb;
           (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
     tick();
     check("TC-41a then the speculative stack is empty (tosr 0, bos 0)",
-          (dut.tosr == 4'd0) && (dut.bos == 4'd0));
-    commit_op(DIRECT_CALL, ADDR_A, 4'd1);   // the call commits
+          (dut.tosr == 'd0) && (dut.bos == 'd0));
+    commit_op(DIRECT_CALL, ADDR_A, 'd1);   // the call commits
     check("TC-41a the commit moved BOS to 1 and TOSR with it",
-          (dut.bos == 4'd1) && (dut.tosr == 4'd1));
+          (dut.bos == 'd1) && (dut.tosr == 'd1));
     check("TC-41a the commit-stack top is A",
-          (dut.c_cnt == 6'd2) && (dut.commit_ret_addr[1] == ADDR_A));
+          (int'(dut.c_cnt) == 2) && (dut.commit_ret_addr[1] == ADDR_A));
     check("TC-41a the sentinel slot 0 was never written",
           dut.spec_ret_addr[0] == '0);
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
@@ -2234,14 +2341,14 @@ module tb;
           (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_R));
     tick();
     check("TC-41a the fallback is not consumed: tosr 1, tosw 2, csp 2",
-          (dut.tosr == 4'd1) && (dut.tosw == 4'd2) && (dut.csp == 5'd2));
+          (dut.tosr == 'd1) && (dut.tosw == 'd2) && (int'(dut.csp) == 2));
 
     // b. The old BOS slot is a committed entry, X (fd07's shape: BOS
     //    was a real slot, so the stale pop returned a real address and
     //    then followed X's link down the stack).
     do_reset();
     push_one(ADDR_X);                       // idx1
-    commit_op(DIRECT_CALL, ADDR_X, 4'd1);   // bos 1, commit top X
+    commit_op(DIRECT_CALL, ADDR_X, 'd1);   // bos 1, commit top X
     push_one(ADDR_A);                       // idx2, bottom
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
@@ -2249,10 +2356,10 @@ module tb;
           (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
     tick();
     check("TC-41b then tosr 1 == bos 1, empty",
-          (dut.tosr == 4'd1) && (dut.bos == 4'd1));
-    commit_op(DIRECT_CALL, ADDR_A, 4'd2);   // bos 2, commit [X, A]
+          (dut.tosr == 'd1) && (dut.bos == 'd1));
+    commit_op(DIRECT_CALL, ADDR_A, 'd2);   // bos 2, commit [X, A]
     check("TC-41b the commit moved BOS to 2 and TOSR with it",
-          (dut.bos == 4'd2) && (dut.tosr == 4'd2));
+          (dut.bos == 'd2) && (dut.tosr == 'd2));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     // BP-152 A1: as TC-41a, A's frame was popped first; the next frame
@@ -2262,7 +2369,7 @@ module tb;
           (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_X));
     tick();
     check("TC-41b the fallback moved nothing: tosr 2, tosw 3",
-          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+          (dut.tosr == 'd2) && (dut.tosw == 'd3));
 
     // c. A push onto the empty stack before the commit: B is pushed
     //    after A's pop, links to slot 1 (BOS then) and is a bottom
@@ -2272,23 +2379,23 @@ module tb;
     //    to slot 1, which read non-empty, and the next pop returned X.
     do_reset();
     push_one(ADDR_X);                       // idx1
-    commit_op(DIRECT_CALL, ADDR_X, 4'd1);   // bos 1, commit top X
+    commit_op(DIRECT_CALL, ADDR_X, 'd1);   // bos 1, commit top X
     push_one(ADDR_A);                       // idx2
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();                                 // A popped, tosr 1
     push_one(ADDR_B);                       // idx3, links to 1
     check("TC-41c B is idx3, pushed onto the empty stack, linked to slot 1",
-          (dut.tosr == 4'd3) && (dut.spec_nos[3] == 4'd1));
-    commit_op(DIRECT_CALL, ADDR_A, 4'd2);   // A's call commits
+          (dut.tosr == 'd3) && (dut.spec_nos[3] == 'd1));
+    commit_op(DIRECT_CALL, ADDR_A, 'd2);   // A's call commits
     check("TC-41c BOS 2, TOSR still B",
-          (dut.bos == 4'd2) && (dut.tosr == 4'd3));
+          (dut.bos == 'd2) && (dut.tosr == 'd3));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-41c the pop returns B from the speculative stack",
           (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_B));
     tick();
     check("TC-41c B's pop went to BOS as it is now (tosr 2), empty",
-          (dut.tosr == 4'd2) && (dut.bos == 4'd2));
+          (dut.tosr == 'd2) && (dut.bos == 'd2));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     // BP-152 A1: the first return popped A's frame, which then committed,
@@ -2319,7 +2426,7 @@ module tb;
         // sequence's TOSW would let the wrong path overwrite B.
         do_reset();
         push_one(ADDR_X);                   // idx1
-        commit_op(DIRECT_CALL, ADDR_X, 4'd1); // bos 1, commit top X
+        commit_op(DIRECT_CALL, ADDR_X, 'd1); // bos 1, commit top X
         push_one(ADDR_A);                   // idx2
         drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
         #1;
@@ -2331,7 +2438,7 @@ module tb;
           sn[2] = snap_p2[NUM_PRED_SLOTS-1]; // s3: after B's push
           tick();
         end
-        commit_op(DIRECT_CALL, ADDR_A, 4'd2); // bos 2, commit [X, A]
+        commit_op(DIRECT_CALL, ADDR_A, 'd2); // bos 2, commit [X, A]
         drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
         #1;
         sn[2*q+1] = snap_p2[NUM_PRED_SLOTS-1]; // s2 / s4: after
@@ -2341,12 +2448,12 @@ module tb;
         // with no recursion match (PU1), in s3 and s4.
         if (q == 0)
           check("TC-42 snapshots s1 (1,3,1,0) s2 (2,3,2,0)",
-                (p4(sn[0]) == {4'd1, 4'd3, 4'd1, 4'd0}) &&
-                (p4(sn[1]) == {4'd2, 4'd3, 4'd2, 4'd0}));
+                (p4(sn[0]) == p4v(1, 3, 1, 0)) &&
+                (p4(sn[1]) == p4v(2, 3, 2, 0)));
         else
           check("TC-42 snapshots s3 (3,4,1,0) s4 (3,4,2,0)",
-                (p4(sn[2]) == {4'd3, 4'd4, 4'd1, 4'd0}) &&
-                (p4(sn[3]) == {4'd3, 4'd4, 4'd2, 4'd0}));
+                (p4(sn[2]) == p4v(3, 4, 1, 0)) &&
+                (p4(sn[3]) == p4v(3, 4, 2, 0)));
         for (int k = 2 * q; k < 2 * q + 2; k++) begin
           // Wrong path: two pushes, then restore snapshot k.
           push_one(ADDR_C);
@@ -2394,7 +2501,7 @@ module tb;
     for (int v = 0; v < 2; v++) begin
       do_reset();
       push_one(ADDR_X);                     // idx1
-      commit_op(DIRECT_CALL, ADDR_X, 4'd1); // bos 1, commit top X
+      commit_op(DIRECT_CALL, ADDR_X, 'd1); // bos 1, commit top X
       push_one(ADDR_A);                     // idx2
       drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
       tick();                               // A popped: tosr 1 == bos
@@ -2404,7 +2511,7 @@ module tb;
       commit_val       = 1'b1;
       commit_br_type   = DIRECT_CALL;
       commit_ret_addr  = ADDR_A;
-      commit_snap.tosr = 4'd2;
+      commit_snap.tosr = 'd2;
       #1;
       check($sformatf("TC-43%s p2 on the empty stack pops the fallback X",
                       (v == 0) ? "a" : "b"),
@@ -2415,14 +2522,14 @@ module tb;
       commit_ret_addr  = '0;
       commit_snap      = '0;
       check($sformatf("TC-43%s the commit moved BOS to 2",
-                      (v == 0) ? "a" : "b"), dut.bos == 4'd2);
+                      (v == 0) ? "a" : "b"), dut.bos == 'd2);
       // p3: the operation is not there; the repair undoes it.
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
       force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
       tick();
       check($sformatf("TC-43%s the undo left the stack empty (tosr 2)",
                       (v == 0) ? "a" : "b"),
-            (dut.tosr == 4'd2) && (dut.bos == 4'd2));
+            (dut.tosr == 'd2) && (dut.bos == 'd2));
       drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
       #1;
       check($sformatf("TC-43%s a return then pops the fallback A, not X",
@@ -2455,23 +2562,23 @@ module tb;
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-44 the return emptied the stack (tosr 0, bos 0)",
-          (dut.tosr == 4'd0) && (dut.bos == 4'd0));
-    commit_op(DIRECT_CALL, ADDR_A, 4'd1);   // the call commits
+          (dut.tosr == 'd0) && (dut.bos == 'd0));
+    commit_op(DIRECT_CALL, ADDR_A, 'd1);   // the call commits
     check("TC-44 the call commit moved BOS to 1, TOSR with it",
-          (dut.bos == 4'd1) && (dut.tosr == 4'd1));
+          (dut.bos == 'd1) && (dut.tosr == 'd1));
     for (int i = 2; i < RAS_SPEC_ENTRIES; i++) begin
       push_one(fill_addr[i]);
       drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
       tick();
     end
     check("TC-44 TOSW wrapped to the old BOS slot 0",
-          (dut.tosw == 4'd0) && (dut.tosr == 4'd1));
+          (dut.tosw == 'd0) && (dut.tosr == 'd1));
     push_one(ADDR_B);
-    check("TC-44 B is pushed into idx 0", (dut.tosr == 4'd0)
+    check("TC-44 B is pushed into idx 0", (dut.tosr == 'd0)
           && (dut.spec_ret_addr[0] == ADDR_B));
-    commit_op(RETURN, '0, 4'd0);            // the return commits
+    commit_op(RETURN, '0, 'd0);            // the return commits
     check("TC-44 the empty-snapshot return commit keeps BOS 1",
-          (dut.bos == 4'd1) && (dut.tosr == 4'd0));
+          (dut.bos == 'd1) && (dut.tosr == 'd0));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-44 the pop returns B from the speculative stack",
@@ -2521,12 +2628,12 @@ module tb;
       idle();                                 // p3 of the push agrees
       c45 = dut.spec_rctr[1];
       check("TC-45a the correct path: A at idx1, count 0, S {1,2,0,0}",
-            (dut.tosr == 4'd1) && (c45 == 4'd0) &&
-            (p4(s45) == {4'd1, 4'd2, 4'd0, 4'd0}));
+            (dut.tosr == 'd1) && (c45 == 'd0) &&
+            (p4(s45) == p4v(1, 2, 0, 0)));
       push_one(ADDR_A);                       // wrong path: recursion
       idle();
       check("TC-45a the wrong path raised the count 0 -> 1, TOSR held",
-            (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
+            (dut.spec_rctr[1] == 'd1) && (dut.tosr == 'd1));
       restore_val  = 1'b1;
       restore_snap = s45;
       tick();
@@ -2551,13 +2658,13 @@ module tb;
       idle();
       c45 = dut.spec_rctr[1];
       check("TC-45b the correct path: A at idx1, count 1, S {1,2,0,1}",
-            (dut.tosr == 4'd1) && (c45 == 4'd1) &&
-            (p4(s45) == {4'd1, 4'd2, 4'd0, 4'd1}));
+            (dut.tosr == 'd1) && (c45 == 'd1) &&
+            (p4(s45) == p4v(1, 2, 0, 1)));
       drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);  // wrong path
       tick();
       idle();
       check("TC-45b the wrong path lowered the count 1 -> 0, TOSR held",
-            (dut.spec_rctr[1] == 4'd0) && (dut.tosr == 4'd1));
+            (dut.spec_rctr[1] == 'd0) && (dut.tosr == 'd1));
       restore_val  = 1'b1;
       restore_snap = s45;
       tick();
@@ -2608,7 +2715,7 @@ module tb;
                         (tt == RETURN_CALL));
       po = (v == 1) && ((tt == RETURN) || (tt == RETURN_CALL));
       do_reset();
-      commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+      commit_op(DIRECT_CALL, ADDR_R, 'd0);
       push_one(ADDR_A);
       drv(sl, v[0], tt, ADDR_B);
       tick();
@@ -2643,7 +2750,7 @@ module tb;
     // ras_pop_valid_p2 and ras_tos_valid_p0 low (RT2, PO6, P03).
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);
     push_one(ADDR_A);                           // rctr[1] 1
     push_one(ADDR_B);                           // idx2, nos 1
@@ -2719,8 +2826,8 @@ module tb;
     #1;
     check("TC-48 P03 both stacks empty: p0 valid 0",
           !tos_valid_p0[0] && !tos_valid_p0[S1]);
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
-    commit_op(DIRECT_CALL, ADDR_X, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
+    commit_op(DIRECT_CALL, ADDR_X, 'd0);
     #1;
     check("TC-48 P02 commit only: the CSP-1 entry X, valid",
           tos_valid_p0[0] && (tos_addr_p0[0] == ADDR_X));
@@ -2766,17 +2873,17 @@ module tb;
                       sl), ptr_is(3, 4, 0) && ent_is(3, ADDR_C, 0, 0, 1));
       // (c) PU7: TC-41a's path: A pushed, popped, its call commits.
       do_reset();
-      commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+      commit_op(DIRECT_CALL, ADDR_R, 'd0);
       push_one(ADDR_A);                       // idx1
       pop_chk("TC-49c pop A", 0, 1'b1, ADDR_A);
-      commit_op(DIRECT_CALL, ADDR_A, 4'd1);   // bos 1, tosr dragged (CO6)
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);   // bos 1, tosr dragged (CO6)
       check("TC-49c empty at bos 1, ret[1] == A", ptr_is(1, 2, 1) &&
             (dut.spec_ret_addr[1] == ADDR_A));
       drv(sl, 1'b1, DIRECT_CALL, ADDR_A);
       tick();
       check($sformatf("TC-49c PU7 slot %0d: no match on empty, A at idx2",
                       sl), ptr_is(2, 3, 1) && ent_is(2, ADDR_A, 0, 1, 1) &&
-            (dut.spec_rctr[1] == 4'd0));
+            (dut.spec_rctr[1] == 'd0));
     end
 
     // =============================================================
@@ -2792,15 +2899,19 @@ module tb;
     // pop is the commit fallback R (PO5); idx2..15 stay resident.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(fill_addr[0]);
     check("TC-50 one entry: tosr 1, tosw 2", ptr_is(1, 2, 0));
     for (int i = 1; i < RAS_SPEC_ENTRIES - 2; i++) push_one(fill_addr[i]);
+    // BP-153: the counts are RAS_SPEC_ENTRIES' (32 since BP-153; the
+    // names keep the 16-entry numbers).
     check("TC-50 PU4 14 allocations: tosw + 1 == bos (full, one push left)",
-          (dut.tosw + 4'd1) == dut.bos);
+          RAS_PTR_BITS'(dut.tosw + 1) == dut.bos);
     push_one(fill_addr[RAS_SPEC_ENTRIES - 2]);
-    check("TC-50 15 entries: tosr 15, tosw 0 == bos", ptr_is(15, 0, 0) &&
-          ent_is(15, fill_addr[14], 0, 14, 0));
+    check("TC-50 15 entries: tosr 15, tosw 0 == bos",
+          ptr_is(RAS_SPEC_ENTRIES - 1, 0, 0) &&
+          ent_is(RAS_SPEC_ENTRIES - 1, fill_addr[RAS_SPEC_ENTRIES - 2], 0,
+                 RAS_PTR_BITS'(RAS_SPEC_ENTRIES - 2), 0));
     push_one(ADDR_X);
     check("TC-50 PU2 the wrap: X at idx1 {X,0,0,1}, tosr 1, tosw 2",
           ptr_is(1, 2, 0) && ent_is(1, ADDR_X, 0, 0, 1));
@@ -2891,7 +3002,7 @@ module tb;
     do_reset();
     pop_chk("TC-53 PO5 count 0: valid 0", 0, 1'b0, '0);
     for (int k = 1; k <= RAS_COMMIT_ENTRIES; k++) begin
-      commit_op(DIRECT_CALL, cs_ad(32'h6_0000, k - 1), 4'd0);
+      commit_op(DIRECT_CALL, cs_ad(32'h6_0000, k - 1), 'd0);
       if ((k == 1) || (k == RAS_COMMIT_ENTRIES - 1) ||
           (k == RAS_COMMIT_ENTRIES)) begin
         check($sformatf("TC-53 CO2 count %0d", k), int'(dut.c_cnt) == k);
@@ -2901,19 +3012,19 @@ module tb;
               ptr_is(0, 0, 0) && (int'(dut.c_cnt) == k));
       end
     end
-    commit_op(DIRECT_CALL, ADDR_X, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_X, 'd0);
     check("TC-53 CO2 a call on a full stack: count holds at 32, X on top",
           (int'(dut.c_cnt) == RAS_COMMIT_ENTRIES) && tos_valid_p0[0] &&
           (tos_addr_p0[0] == ADDR_X));
     for (int k = RAS_COMMIT_ENTRIES; k > 0; k--)
-      commit_op(RETURN, '0, 4'd0);
+      commit_op(RETURN, '0, 'd0);
     #1;
     check("TC-53 CO10 32 returns empty it", !tos_valid_p0[0] &&
           (dut.c_cnt == '0));
     // 33 pushes and 32 returns leave CSP at 33 - 32 = 1 (mod 32).
-    commit_op(RETURN, '0, 4'd0);
+    commit_op(RETURN, '0, 'd0);
     check("TC-53 CO3 a return on an empty commit stack does nothing",
-          (dut.c_cnt == '0) && (dut.csp == 5'd1));
+          (dut.c_cnt == '0) && (int'(dut.csp) == 1));
 
     // =============================================================
     // TC-54 RC1, RC2: RETURN_CALL whose push meets the sentinel skip and
@@ -2929,8 +3040,10 @@ module tb;
     for (int i = 0; i < RAS_SPEC_ENTRIES - 1; i++) push_one(fill_addr[i]);
     drv(0, 1'b1, RETURN_CALL, ADDR_B);
     #1;
+    // BP-153: the last fill, fill_addr[RAS_SPEC_ENTRIES - 2] (f14 at 16).
     check("TC-54a RC1 the pop returns f14",
-          pop_valid_p2[0] && (pop_addr_p2[0] == fill_addr[14]));
+          pop_valid_p2[0] &&
+          (pop_addr_p2[0] == fill_addr[RAS_SPEC_ENTRIES - 2]));
     tick();
     check("TC-54a RC2 the push takes the skip: idx1 {B,0,0,1}",
           ptr_is(1, 2, 0) && ent_is(1, ADDR_B, 0, 0, 1));
@@ -2945,7 +3058,7 @@ module tb;
     check("TC-54b RC2 the push meets A at 15: nothing changes",
           ptr_is(1, 3, 0) && ent_is(1, ADDR_A, M_RCTR_MAX, 0, 1));
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     drv(S1, 1'b1, RETURN_CALL, ADDR_B);
     #1;
     check("TC-54c RC1 the fallback R", pop_valid_p2[S1] &&
@@ -2973,25 +3086,25 @@ module tb;
     drv(0, 1'b1, DIRECT_CALL, ADDR_B);
     #1;
     check("TC-55b SL2 after the recursion push: {2,3,0,3}",
-          p4(snap_p2[0]) == {4'd2, 4'd3, 4'd0, 4'd3});
+          p4(snap_p2[0]) == p4v(2, 3, 0, 3));
     tick();
     drv(0, 1'b1, RETURN, '0);
     #1;
     check("TC-55c SL2 after a count pop: {2,3,0,2}",
-          p4(snap_p2[0]) == {4'd2, 4'd3, 4'd0, 4'd2});
+          p4(snap_p2[0]) == p4v(2, 3, 0, 2));
     tick();
     drv(0, 1'b0, RETURN, '0);
     #1;
     check("TC-55e SL2 pred_val 0: the current state {2,3,0,2}",
-          (p4(snap_p2[0]) == {4'd2, 4'd3, 4'd0, 4'd2}) &&
-          (p4(snap_p2[S1]) == {4'd2, 4'd3, 4'd0, 4'd2}));
+          (p4(snap_p2[0]) == p4v(2, 3, 0, 2)) &&
+          (p4(snap_p2[S1]) == p4v(2, 3, 0, 2)));
     tick();
     pop_chk("TC-55 pop", 0, 1'b1, ADDR_B);
     pop_chk("TC-55 pop", 0, 1'b1, ADDR_B);
     drv(0, 1'b1, RETURN, '0);
     #1;
     check("TC-55d SL2 after B is popped to A (count 0): {1,3,0,0}",
-          p4(snap_p2[0]) == {4'd1, 4'd3, 4'd0, 4'd0});
+          p4(snap_p2[0]) == p4v(1, 3, 0, 0));
     tick();
 
     // =============================================================
@@ -3009,13 +3122,13 @@ module tb;
       #1;
       check("TC-56 SL3 slot 0 push, slot 1 COND: snap[1] == snap[0]",
             (snap_p2[S1] == snap_p2[0]) &&
-            (p4(snap_p2[0]) == {4'd2, 4'd3, 4'd0, 4'd0}));
+            (p4(snap_p2[0]) == p4v(2, 3, 0, 0)));
       tick();
       check("TC-56 SL3 only B was pushed", ptr_is(2, 3, 0));
       drive(1'b1, DIRECT_UNC, ADDR_C, 1'b1, RETURN, '0);
       #1;
       check("TC-56 SL3 slot 0 DIRECT_UNC: snap[0] is the state",
-            p4(snap_p2[0]) == {4'd2, 4'd3, 4'd0, 4'd0});
+            p4(snap_p2[0]) == p4v(2, 3, 0, 0));
       check("TC-56 SL3 slot 1 pops B", pop_valid_p2[S1] &&
             (pop_addr_p2[S1] == ADDR_B));
       tick();
@@ -3025,8 +3138,8 @@ module tb;
       #1;
       check("TC-56 SL1 slot 1 pops the A slot 0's recursion push raised",
             pop_valid_p2[S1] && (pop_addr_p2[S1] == ADDR_A) &&
-            (p4(snap_p2[0]) == {4'd1, 4'd2, 4'd0, 4'd1}) &&
-            (p4(snap_p2[S1]) == {4'd1, 4'd2, 4'd0, 4'd0}));
+            (p4(snap_p2[0]) == p4v(1, 2, 0, 1)) &&
+            (p4(snap_p2[S1]) == p4v(1, 2, 0, 0)));
       tick();
       check("TC-56 SL1 the count is back to 0, tosr 1",
             ptr_is(1, 2, 0) && ent_is(1, ADDR_A, 0, 0, 1));
@@ -3099,7 +3212,7 @@ module tb;
     tick();
     restore_val = 1'b0; restore_snap = '0;
     check("TC-58a RE6 empty snapshot: no count written, rctr[1] stays 2",
-          ptr_is(1, 2, 1) && (dut.spec_rctr[1] == 4'd2));
+          ptr_is(1, 2, 1) && (dut.spec_rctr[1] == 'd2));
     do_reset();
     push_one(ADDR_A);
     drv(0, 1'b1, DIRECT_CALL, ADDR_B);
@@ -3108,18 +3221,18 @@ module tb;
       bp_ras_snapshot_t s58;
       s58 = snap_p2[NUM_PRED_SLOTS-1];
       tick();
-      check("TC-58b S = {2,3,0,0}", p4(s58) == {4'd2, 4'd3, 4'd0, 4'd0});
+      check("TC-58b S = {2,3,0,0}", p4(s58) == p4v(2, 3, 0, 0));
       pop_chk("TC-58b wrong path pops B", 0, 1'b1, ADDR_B);
       push_one(ADDR_A);                       // recursion on A: 0 -> 1
       check("TC-58b the wrong path raised rctr[1] to 1",
-            dut.spec_rctr[1] == 4'd1);
+            dut.spec_rctr[1] == 'd1);
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
       restore_val = 1'b1; restore_snap = s58;
       tick();
       restore_val = 1'b0; restore_snap = '0;
       check("TC-58b RE6 rctr[2] from S (0), rctr[1] keeps the wrong path's 1",
-            ptr_is(2, 3, 0) && (dut.spec_rctr[2] == 4'd0) &&
-            (dut.spec_rctr[1] == 4'd1));
+            ptr_is(2, 3, 0) && (dut.spec_rctr[2] == 'd0) &&
+            (dut.spec_rctr[1] == 'd1));
     end
     do_reset();
     push_one(ADDR_A);
@@ -3128,7 +3241,7 @@ module tb;
     tick();
     restore_val = 1'b0; restore_snap = '0;
     check("TC-58c RE6 a non-empty snapshot writes its rctr (5) at tosr",
-          ptr_is(1, 2, 0) && (dut.spec_rctr[1] == 4'd5));
+          ptr_is(1, 2, 0) && (dut.spec_rctr[1] == 'd5));
 
     // =============================================================
     // TC-59 RE7, RE8. RE7: snapshot S after A {1,2,0,0}; the wrong path
@@ -3139,7 +3252,7 @@ module tb;
     // the model, which ignores them, still agrees everywhere.
     // =============================================================
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     drv(0, 1'b1, DIRECT_CALL, ADDR_A);
     #1;
     begin
@@ -3198,7 +3311,7 @@ module tb;
       // goes to BOS as it is at the undo, 0 -- not to its link, 1.
       do_reset();
       push_one(ADDR_X);
-      commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+      commit_op(DIRECT_CALL, ADDR_X, 'd1);
       check("TC-60a X committed: tosr 1 == bos 1", ptr_is(1, 2, 1));
       drv(sl, 1'b1, DIRECT_CALL, ADDR_A);
       commit_val = 1'b1; commit_br_type = RETURN_CALL;
@@ -3220,7 +3333,7 @@ module tb;
       force_p3(sl == 0, RETURN, sl != 0, RETURN);
       tick();
       check($sformatf("TC-60b RP6 by PO1 slot %0d: count 1 -> 0, tosr held",
-                      sl), ptr_is(1, 2, 0) && (dut.spec_rctr[1] == 4'd0));
+                      sl), ptr_is(1, 2, 0) && (dut.spec_rctr[1] == 'd0));
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
       force_p3(sl == 0, RETURN, sl != 0, RETURN);
       tick();
@@ -3235,7 +3348,7 @@ module tb;
       tick();
       check($sformatf("TC-60c RP7 slot %0d: no recursion match, A at idx2",
                       sl), ptr_is(2, 3, 0) && ent_is(2, ADDR_A, 0, 1, 0) &&
-            (dut.spec_rctr[1] == 4'd0));
+            (dut.spec_rctr[1] == 'd0));
       do_reset();
       for (int i = 0; i < RAS_SPEC_ENTRIES - 1; i++) push_one(fill_addr[i]);
       drv(sl, 1'b0, NO_BRANCH, ADDR_B);
@@ -3267,7 +3380,7 @@ module tb;
     idle();
     check("TC-61a RP0 no repair after the agreeing pop", ptr_is(0, 3, 0));
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);
     drv(0, 1'b1, DIRECT_CALL, ADDR_B);
     #1;
@@ -3279,7 +3392,7 @@ module tb;
       force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
       tick();
       check("TC-61b RP10 undo-push: tosr 1, commit stack unchanged",
-            ptr_is(1, 3, 0) && (dut.c_cnt == 6'd1) && (dut.csp == 5'd1));
+            ptr_is(1, 3, 0) && (int'(dut.c_cnt) == 1) && (int'(dut.csp) == 1));
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
       restore_val = 1'b1; restore_snap = s61;
       tick();
@@ -3312,17 +3425,17 @@ module tb;
     drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
     check("TC-62 pre-repair: tosr 1, rctr[1] 1", ptr_is(1, 3, 0) &&
-          (dut.spec_rctr[1] == 4'd1));
+          (dut.spec_rctr[1] == 'd1));
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     #1;
     check("TC-62 RP11 the p2 pop after the undo returns X",
           pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_X));
     check("TC-62 RP11 RP8 snapshot {1,3,0,0}: A's count is back to 0",
-          p4(snap_p2[0]) == {4'd1, 4'd3, 4'd0, 4'd0});
+          p4(snap_p2[0]) == p4v(1, 3, 0, 0));
     tick();
     check("TC-62 RP11 after the edge: tosr 1, rctr[1] 0",
-          ptr_is(1, 3, 0) && (dut.spec_rctr[1] == 4'd0));
+          ptr_is(1, 3, 0) && (dut.spec_rctr[1] == 'd0));
     if (NUM_PRED_SLOTS > 1) begin
       do_reset();
       push_one(ADDR_A);
@@ -3334,10 +3447,10 @@ module tb;
       #1;
       check("TC-62 RP11 slot 1 pops A from count 0 (bottom): {0,3,0,0}",
             pop_valid_p2[S1] && (pop_addr_p2[S1] == ADDR_A) &&
-            (p4(snap_p2[S1]) == {4'd0, 4'd3, 4'd0, 4'd0}));
+            (p4(snap_p2[S1]) == p4v(0, 3, 0, 0)));
       tick();
       check("TC-62 RP11 the stack is empty, rctr[1] 0",
-            ptr_is(0, 3, 0) && (dut.spec_rctr[1] == 4'd0));
+            ptr_is(0, 3, 0) && (dut.spec_rctr[1] == 'd0));
     end
 
     // =============================================================
@@ -3366,10 +3479,10 @@ module tb;
     tick();
     commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
     check("TC-63a CO1 after the edge: csp 1, bos 1, A committed",
-          (dut.csp == 5'd1) && (dut.bos == 4'd1) &&
+          (int'(dut.csp) == 1) && (dut.bos == 'd1) &&
           (dut.commit_ret_addr[0] == ADDR_A));
     check("TC-63c CO7 entry 1 and tosw untouched by the commit",
-          ent_is(1, ADDR_A, 0, 0, 1) && (dut.tosw == 4'd2));
+          ent_is(1, ADDR_A, 0, 0, 1) && (dut.tosw == 'd2));
     do_reset();
     push_one(ADDR_A);
     push_one(ADDR_B);
@@ -3379,15 +3492,15 @@ module tb;
                                                                 1, 0);
     tick();
     check("TC-63b CO5 a RETURN with a non-empty snapshot moves BOS to 3",
-          dut.bos == 4'd3);
+          dut.bos == 'd3);
     commit_br_type = RETURN_CALL; commit_ret_addr = ADDR_X;
     commit_snap = snp(2, 4, 2, 0);
     tick();
     commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
     check("TC-63b CO5 a RETURN_CALL with an empty snapshot moves BOS to 2",
-          dut.bos == 4'd2);
+          dut.bos == 'd2);
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);
     for (int ti = 0; ti < 8; ti++) begin
       bp_br_type_e tt;
@@ -3401,7 +3514,7 @@ module tb;
       commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
       check($sformatf("TC-63d CO8 commit_val with %s changes nothing",
                       tt.name()),
-            ptr_is(1, 2, 0) && (dut.csp == 5'd1) && (dut.c_cnt == 6'd1));
+            ptr_is(1, 2, 0) && (int'(dut.csp) == 1) && (int'(dut.c_cnt) == 1));
     end
     do_reset();
     push_one(ADDR_A);                         // tosr 1, bos 0
@@ -3414,7 +3527,7 @@ module tb;
     restore_val = 1'b0; restore_snap = '0;
     commit_val = 1'b0; commit_br_type = NO_BRANCH; commit_snap = '0;
     check("TC-63e CO11 restore wins: tosr 1 tosw 2 bos 0, commit stack 1",
-          ptr_is(1, 2, 0) && (dut.c_cnt == 6'd1) &&
+          ptr_is(1, 2, 0) && (int'(dut.c_cnt) == 1) &&
           (dut.commit_ret_addr[0] == ADDR_A));
     // (f) commits beside each operation. Seed: A(1) B(2), tosr 2, bos 0.
     for (int op = 0; op < 6; op++) begin
@@ -3449,13 +3562,13 @@ module tb;
       // TOSR stays the scan's (CO6 does not apply).
       case (op)
         0: check("TC-63f push C beside a commit: tosr 3, bos 1",
-                 ptr_is(3, 4, 1) && (dut.c_cnt == 6'd1));
+                 ptr_is(3, 4, 1) && (int'(dut.c_cnt) == 1));
         1: check("TC-63f pop B beside a commit: tosr 1 == bos 1, empty",
                  ptr_is(1, 3, 1));
         2: check("TC-63f RETURN_CALL beside a commit: tosr 3, bos 1",
                  ptr_is(3, 4, 1) && ent_is(3, ADDR_C, 0, 1, 0));
         3: check("TC-63f recursion push beside a commit: rctr[2] 1, bos 1",
-                 ptr_is(2, 3, 1) && (dut.spec_rctr[2] == 4'd1));
+                 ptr_is(2, 3, 1) && (dut.spec_rctr[2] == 'd1));
         4: check("TC-63f undo-push beside a commit: tosr 2, bos 1",
                  ptr_is(2, 4, 1));
         default: check("TC-63f keep low beside a commit: tosr 2, bos 1",
@@ -3488,14 +3601,19 @@ module tb;
     check("TC-64 PM1 commit count to RAS_COMMIT_ENTRIES",
           $bits(dut.c_cnt) == RAS_COMMIT_PTR_BITS + 1);
     // BP-152: PM2 adds the depth (A1) and the tag (B1); 16 before.
-    check({"TC-64 PM2 snapshot 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH + ",
-           "RAS_DEPTH_BITS + RAS_TAG_BITS = 28"},
-          ($bits(bp_ras_snapshot_t) == 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-                                       RAS_DEPTH_BITS + RAS_TAG_BITS) &&
-          ($bits(bp_ras_snapshot_t) == 28));
-    check("TC-64 PM2 depth $clog2(FTQ_DEPTH) + 2 = 8, tag 4",
+    // BP-153: and the operation record, push, pmode, ptosr and ptag; 28
+    // before. With 32 speculative entries (BP-153) RAS_PTR_BITS is 5 and
+    // RAS_TAG_BITS 3: 4 * 5 + 4 + 8 + 2 * 3 + 2 + 1 = 41.
+    check({"TC-64 PM2 snapshot 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH + ",
+           "RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1 = 41"},
+          ($bits(bp_ras_snapshot_t) == 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
+                                       RAS_DEPTH_BITS + 2 * RAS_TAG_BITS +
+                                       RAS_PMODE_BITS + 1) &&
+          ($bits(bp_ras_snapshot_t) == 41));
+    check({"TC-64 PM2 depth $clog2(FTQ_DEPTH) + 2 = 8, tag ",
+           "$clog2(64 / 31 + 1) + 1 = 3"},
           (RAS_DEPTH_BITS == $clog2(FTQ_DEPTH) + 2) && (RAS_DEPTH_BITS == 8) &&
-          (RAS_TAG_BITS == 4) && ($bits(dut.spec_gen[0]) == RAS_TAG_BITS));
+          (RAS_TAG_BITS == 3) && ($bits(dut.spec_gen[0]) == RAS_TAG_BITS));
 
     // =============================================================
     // TC-65 IV1, IV2, PO7: TOSR below BOS names a chain entry (BP-142
@@ -3533,10 +3651,10 @@ module tb;
       #1;
       s65 = snap_p2[NUM_PRED_SLOTS-1];        // block E
       tick();
-      check("TC-65 S = {2,3,0,1}", p4(s65) == {4'd2, 4'd3, 4'd0, 4'd1});
-      commit_op(DIRECT_CALL, ADDR_A, 4'd1);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
+      check("TC-65 S = {2,3,0,1}", p4(s65) == p4v(2, 3, 0, 1));
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
       check("TC-65 IV1 three commits: tosr 2 == bos 2, empty",
             ptr_is(2, 3, 2));
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
@@ -3580,7 +3698,7 @@ module tb;
     do_reset();
     push_one(ADDR_X);
     pop_chk("TC-66 X's return pops X to empty", 0, 1'b1, ADDR_X);
-    commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+    commit_op(DIRECT_CALL, ADDR_X, 'd1);
     check("TC-66 CO5 CO6 X's call commit: tosr 1 == bos 1, empty",
           ptr_is(1, 2, 1) && !m_chain(m_s));
     // BP-152 A1: X's only frame was popped before its call committed, so
@@ -3629,9 +3747,9 @@ module tb;
       #1;
       s67 = snap_p2[NUM_PRED_SLOTS-1];
       tick();
-      commit_op(DIRECT_CALL, ADDR_A, 4'd1);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
       restore_val = 1'b1; restore_snap = s67;
       tick();
@@ -3642,7 +3760,7 @@ module tb;
       check("TC-67 R1 pops B (count 1 -> 0)",
             pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_B));
       check("TC-67 R1's snapshot {2,3,0,0}, dep 2 (A1)",
-            (p4(s67r) == {4'd2, 4'd3, 4'd0, 4'd0}) && (s67r.dep == 8'd2));
+            (p4(s67r) == p4v(2, 3, 0, 0)) && (s67r.dep == 8'd2));
       tick();
       pop_chk("TC-67 R2 pops B to A", 0, 1'b1, ADDR_B);
       drv(0, 1'b0, NO_BRANCH, '0);
@@ -3653,19 +3771,23 @@ module tb;
       check("TC-67 TC-65's state: tosr 1 below bos 2, tosw 3, A at idx1",
             ptr_is(1, 3, 2) && m_chain(m_s) &&
             (dut.spec_ret_addr[1] == ADDR_A));
-      for (int k = 1; k <= 14; k++) push_one(fill_addr[k]);
+      // BP-153: RAS_SPEC_ENTRIES - 2 allocations (14 at 16 entries, the
+      // names keep those numbers), then one more onto idx1.
+      for (int k = 1; k <= RAS_SPEC_ENTRIES - 2; k++) push_one(fill_addr[k]);
       check("TC-67 PU4 14 allocations: tosw 1, tosw + 1 == bos 2, full",
-            ptr_is(0, 1, 2) && (dut.spec_ret_addr[0] == fill_addr[14]) &&
-            (dut.spec_nos[3] == 4'd1) && !dut.spec_bot[3]);
-      push_one(fill_addr[15]);
+            ptr_is(0, 1, 2) &&
+            (dut.spec_ret_addr[0] == fill_addr[RAS_SPEC_ENTRIES - 2]) &&
+            (dut.spec_nos[3] == 'd1) && !dut.spec_bot[3]);
+      push_one(fill_addr[RAS_SPEC_ENTRIES - 1]);
       check("TC-67 PU2 P15 allocates idx1 (A's), no skip: tosw 2 == bos",
-            ptr_is(1, 2, 2) && ent_is(1, fill_addr[15], 0, 0, 0));
+            ptr_is(1, 2, 2) &&
+            ent_is(1, fill_addr[RAS_SPEC_ENTRIES - 1], 0, 0, 0));
       check("TC-67 B1 P15's allocation of idx1 kills P1's link: P1 bottom",
-            (dut.spec_nos[3] == 4'd1) && dut.spec_bot[3] &&
-            (dut.spec_gen[1] == 4'd2));
+            (dut.spec_nos[3] == 'd1) && dut.spec_bot[3] &&
+            (dut.spec_gen[1] == 'd2));
       pop_chk("TC-67 the pop of P15 at idx1 returns P15", 0, 1'b1,
-              fill_addr[15]);
-      for (int k = 14; k >= 1; k--)
+              fill_addr[RAS_SPEC_ENTRIES - 1]);
+      for (int k = RAS_SPEC_ENTRIES - 2; k >= 1; k--)
         pop_chk($sformatf("TC-67 the pop of P%0d returns P%0d", k, k), 0,
                 1'b1, fill_addr[k]);
       check("TC-67 B1 P1's pop leaves TOSR at BOS 2: empty, no reuse",
@@ -3702,7 +3824,7 @@ module tb;
       do_reset();
       push_one(ADDR_X);
       push_one(ADDR_Y68);
-      commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+      commit_op(DIRECT_CALL, ADDR_X, 'd1);
       check("TC-68 CO5 CO6 X's call commit: tosr 2, tosw 3, bos 1",
             ptr_is(2, 3, 1) && m_chain(m_s));
       c0 = m_nconv;
@@ -3810,7 +3932,7 @@ module tb;
       check("TC-69d then empty", ptr_is(0, 2, 0));
       // e
       do_reset();
-      commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+      commit_op(DIRECT_CALL, ADDR_R, 'd0);
       push_one(ADDR_X);
       pop_chk("TC-69e pop X, empty at 0", 0, 1'b1, ADDR_X);
       drv(sl, 1'b1, RETURN, '0);
@@ -3844,7 +3966,8 @@ module tb;
       force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
       tick();
       check($sformatf("TC-69f slot %0d RP8 the undo: tosr 2 (X), tosw 4, %s",
-                      sl, "B kept"), ptr_is(2, 4, 0) && ent_is(3, ADDR_B, 0, 1, 0) &&
+                      sl, "B kept"),
+            ptr_is(2, 4, 0) && ent_is(3, ADDR_B, 0, 1, 0) &&
             ent_is(2, ADDR_X, 0, 1, 0));
       pop_chk("TC-69f PO2 the pop returns X", sl, 1'b1, ADDR_X);
       pop_chk("TC-69f PO3 the pop returns A", sl, 1'b1, ADDR_A);
@@ -3863,7 +3986,7 @@ module tb;
       do_reset();
       push_one(ADDR_X);
       pop_chk("TC-69i X's return pops X to empty", 0, 1'b1, ADDR_X);
-      commit_op(DIRECT_CALL, ADDR_X, 4'd1);
+      commit_op(DIRECT_CALL, ADDR_X, 'd1);
       check("TC-69i CO5 CO6 X's call commit: tosr 1 == bos 1, empty",
             ptr_is(1, 2, 1));
       drv(sl, 1'b0, NO_BRANCH, '0);
@@ -3876,7 +3999,7 @@ module tb;
     end
     // h
     do_reset();
-    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_R, 'd0);
     push_one(ADDR_A);
     drv(0, 1'b1, DIRECT_CALL, ADDR_B);
     tick();
@@ -3903,13 +4026,13 @@ module tb;
     // =============================================================
     do_reset();
     for (int i = 0; i < 3; i++) push_one(ADDR_A);
-    commit_op(DIRECT_CALL, ADDR_A, 4'd1);
+    commit_op(DIRECT_CALL, ADDR_A, 'd1);
     drv(0, 1'b0, NO_BRANCH, '0);
     #1;
     check("TC-70 SL2 empty with rctr[BOS] 2: snapshot {1,2,1,0}",
-          (p4(snap_p2[0]) == {4'd1, 4'd2, 4'd1, 4'd0}) &&
-          (p4(snap_p2[S1]) == {4'd1, 4'd2, 4'd1, 4'd0}) &&
-          (dut.spec_rctr[1] == 4'd2));
+          (p4(snap_p2[0]) == p4v(1, 2, 1, 0)) &&
+          (p4(snap_p2[S1]) == p4v(1, 2, 1, 0)) &&
+          (dut.spec_rctr[1] == 'd2));
     check("TC-70 P02 the p0 read is the commit top A",
           tos_valid_p0[0] && (tos_addr_p0[0] == ADDR_A));
     tick();
@@ -3976,7 +4099,7 @@ module tb;
       tick();
       do_reset();
       push_one(VA_WIDTH'(64'h500_0200_0000_9ABC));
-      commit_op(DIRECT_CALL, VA_WIDTH'(64'h500_0200_0000_9ABC), 4'd1);
+      commit_op(DIRECT_CALL, VA_WIDTH'(64'h500_0200_0000_9ABC), 'd1);
       drv(0, 1'b0, NO_BRANCH, '0);
       #1;
       check("TC-72b the p0 read is the commit top, whole",
@@ -4012,8 +4135,8 @@ module tb;
       do_reset();
       push_one(ADDR_A);                                    // a's call
       push_one(ADDR_B);                                    // b's call
-      commit_op(DIRECT_CALL, ADDR_A, 4'd1);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
       check("TC-73a both calls committed: tosr 2 == bos 2, dcm 2, dsp 2",
             ptr_is(2, 3, 2) && (dut.dcm == 8'd2) && (dut.dsp == 8'd2));
       drv(0, 1'b1, RETURN, '0);
@@ -4025,7 +4148,7 @@ module tb;
       pop_chk("TC-73a a's return: fallback n 1, A (BP-151 RTL: B)", 0, 1'b1,
               ADDR_A);
       check("TC-73a two pops: dsp 0, nothing consumed (csp 2)",
-            (dut.dsp == 8'd0) && (dut.csp == 5'd2));
+            (dut.dsp == 8'd0) && (int'(dut.csp) == 2));
       // (b) back to the snapshot after b's return: the depth is its dep.
       drv(0, 1'b0, NO_BRANCH, '0);
       restore_val = 1'b1; restore_snap = s73;
@@ -4073,9 +4196,9 @@ module tb;
       #1;
       s74 = snap_p2[NUM_PRED_SLOTS-1];
       tick();
-      commit_op(DIRECT_CALL, ADDR_A, 4'd1);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
-      commit_op(DIRECT_CALL, ADDR_B, 4'd2);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
       drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
       restore_val = 1'b1; restore_snap = s74;
       tick();
@@ -4094,20 +4217,24 @@ module tb;
       s74 = snap_p2[NUM_PRED_SLOTS-1];      // TOSR 1 (A), tag 1
       tick();
       check("TC-74 TC-65's state: tosr 1 below bos 2, tosw 3; snapshot tag 1",
-            ptr_is(1, 3, 2) && (s74.tosr == 4'd1) && (s74.tag == 4'd1));
-      for (int k = 1; k <= 14; k++) begin
+            ptr_is(1, 3, 2) && (s74.tosr == 'd1) && (s74.tag == 'd1));
+      // BP-153: RAS_SPEC_ENTRIES - 2 pairs (14 at 16 entries, the names
+      // keep those numbers).
+      for (int k = 1; k <= RAS_SPEC_ENTRIES - 2; k++) begin
         push_one(fill_addr[k]);
         pop_chk($sformatf("TC-74a pair %0d: P%0d pops back to A's idx1", k, k),
                 0, 1'b1, fill_addr[k]);
       end
       check("TC-74a 14 pairs: tosr 1, tosw 1, bos 2",
             ptr_is(1, 1, 2));
-      push_one(fill_addr[15]);
+      push_one(fill_addr[RAS_SPEC_ENTRIES - 1]);
       check("TC-74a B1 the push onto TOSR's own entry is bottom, nos BOS",
-            ptr_is(1, 2, 2) && ent_is(1, fill_addr[15], 0, 2, 1));
+            ptr_is(1, 2, 2) &&
+            ent_is(1, fill_addr[RAS_SPEC_ENTRIES - 1], 0, 2, 1));
       check("TC-74c B1 every link that named idx1 is killed (idx3..idx0)",
             dut.spec_bot[3] && dut.spec_bot[9] && dut.spec_bot[0]);
-      pop_chk("TC-74a its pop returns it once", 0, 1'b1, fill_addr[15]);
+      pop_chk("TC-74a its pop returns it once", 0, 1'b1,
+              fill_addr[RAS_SPEC_ENTRIES - 1]);
       check("TC-74a then TOSR is BOS: empty (BP-151 RTL: tosr 1 again)",
             ptr_is(2, 2, 2));
       pop_chk("TC-74a the next pop falls back to A (A1)", 0, 1'b1, ADDR_A);
@@ -4118,7 +4245,7 @@ module tb;
       tick();
       restore_val = 1'b0; restore_snap = '0;
       check("TC-74b B1 the restore of a reallocated TOSR entry reads empty",
-            (dut.spec_gen[1] == 4'd2) && ptr_is(2, 3, 2));
+            (dut.spec_gen[1] == 'd2) && ptr_is(2, 3, 2));
       pop_chk("TC-74b the pop falls back to A, not P15", 0, 1'b1, ADDR_A);
     end
 
@@ -4147,9 +4274,9 @@ module tb;
       pd_val = 1'b1; pd_type = DIRECT_CALL; pd_ret = ADDR_C;
       #1;
       check("TC-75a C1 pd snapshot: C at idx2, tosw 3, dep 2, its tag",
-            (pd_snap.tosr == 4'd2) && (pd_snap.tosw == 4'd3) &&
-            (pd_snap.bos == 4'd0) && (pd_snap.dep == 8'd2) &&
-            (pd_snap.tag == 4'd2));
+            (pd_snap.tosr == 'd2) && (pd_snap.tosw == 'd3) &&
+            (pd_snap.bos == 'd0) && (pd_snap.dep == 8'd2) &&
+            (pd_snap.tag == 'd2));
       tick();
       restore_val = 1'b0; restore_snap = '0; pd_val = 1'b0;
       check("TC-75a C1 C pushed on the restored A, linked to idx1",
@@ -4171,7 +4298,7 @@ module tb;
       pd_val = 1'b1; pd_type = RETURN; pd_ret = '0;
       #1;
       check("TC-75b C1 pd snapshot after the pop: tosr 1, dep 1",
-            (pd_snap.tosr == 4'd1) && (pd_snap.dep == 8'd1));
+            (pd_snap.tosr == 'd1) && (pd_snap.dep == 8'd1));
       tick();
       restore_val = 1'b0; restore_snap = '0; pd_val = 1'b0;
       check("TC-75b C1 the restored top B popped: tosr 1",
@@ -4207,7 +4334,7 @@ module tb;
       pd_val = 1'b1; pd_type = DIRECT_CALL; pd_ret = ADDR_A;
       #1;
       check("TC-75d C1 pd snapshot carries the count 1",
-            (pd_snap.tosr == 4'd1) && (pd_snap.rctr == 4'd1) &&
+            (pd_snap.tosr == 'd1) && (pd_snap.rctr == 'd1) &&
             (pd_snap.dep == 8'd2));
       tick();
       restore_val = 1'b0; restore_snap = '0; pd_val = 1'b0;
@@ -4245,7 +4372,7 @@ module tb;
       restore_val = 1'b1; restore_snap = s76; rs_undo = 1'b1;
       #1;
       check("TC-76a undo pd snapshot: tosr 1 (A), dep 1",
-            (pd_snap.tosr == 4'd1) && (pd_snap.dep == 8'd1));
+            (pd_snap.tosr == 'd1) && (pd_snap.dep == 8'd1));
       tick();
       restore_val = 1'b0; restore_snap = '0; rs_undo = 1'b0;
       check("TC-76a undo: TOSR back to A, TOSW kept, dsp 1",
@@ -4282,6 +4409,425 @@ module tb;
       check("TC-76c undo of a recursion increment: count 0, dsp 1",
             ptr_is(1, 2, 0) && ent_is(1, ADDR_A, 0, 0, 1) &&
             (dut.dsp == 8'd1));
+    end
+
+    // =============================================================
+    // TC-77 (BP-153, RAS-4, TD#207): the restore operations the backend
+    // redirect presents (ftq.sv bk_ras) on the C1 ports, which TC-75 did
+    // not reach, since predecode raises a JAL only.
+    //   (a) an indirect call: C pushed on the restored A, dep 2.
+    //   (b) a return on an empty restored stack: no array change, the
+    //       depth one less, so the next fallback reads the committed frame
+    //       one deeper (A1). From TC-73a's state (A and B committed, the
+    //       stack empty, dcm 2): after the backend's pop, b's return is
+    //       accounted for, and a's return reads A, not B.
+    //   (c) a return-call on an empty restored stack: the pop takes the
+    //       depth, the push allocates C on the empty stack, bottom; the
+    //       pop of C then leaves the stack empty at depth 1, whose
+    //       fallback is A.
+    // =============================================================
+    begin
+      bp_ras_snapshot_t s77;
+      // (a)
+      do_reset();
+      push_one(ADDR_A);                                    // idx1
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      s77 = snap_p2[NUM_PRED_SLOTS-1];
+      tick();
+      push_one(ADDR_B);                                    // wrong path
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s77;
+      pd_val = 1'b1; pd_type = INDIRECT_CALL; pd_ret = ADDR_C;
+      #1;
+      check("TC-77a backend indirect call: pd snapshot C at idx2, dep 2",
+            (pd_snap.tosr == 'd2) && (pd_snap.tosw == 'd3) &&
+            (pd_snap.dep == 8'd2));
+      tick();
+      restore_val = 1'b0; restore_snap = '0; pd_val = 1'b0;
+      check("TC-77a C pushed on the restored A, linked to idx1",
+            ptr_is(2, 3, 0) && ent_is(2, ADDR_C, 0, 1, 0) &&
+            (dut.dsp == 8'd2));
+      pop_chk("TC-77a pop C", 0, 1'b1, ADDR_C);
+      pop_chk("TC-77a pop A", 0, 1'b1, ADDR_A);
+      // (b)
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      s77 = snap_p2[NUM_PRED_SLOTS-1];                    // empty, dep 2
+      check("TC-77b fixture: the snapshot is an empty stack at dep 2",
+            (s77.tosr == s77.bos) && (s77.dep == 8'd2) && (dut.dcm == 8'd2));
+      tick();
+      restore_val = 1'b1; restore_snap = s77;
+      pd_val = 1'b1; pd_type = RETURN; pd_ret = '0;
+      #1;
+      check("TC-77b backend return on an empty stack: pd snapshot dep 1",
+            (pd_snap.tosr == pd_snap.bos) && (pd_snap.dep == 8'd1));
+      tick();
+      restore_val = 1'b0; restore_snap = '0; pd_val = 1'b0;
+      check("TC-77b no pointer moves, dsp 1, csp 2",
+            ptr_is(2, 3, 2) && (dut.dsp == 8'd1) && (int'(dut.csp) == 2));
+      pop_chk("TC-77b a's return: fallback n 1, A (without the pop: B)", 0,
+              1'b1, ADDR_A);
+      // (c)
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      s77 = snap_p2[NUM_PRED_SLOTS-1];
+      tick();
+      restore_val = 1'b1; restore_snap = s77;
+      pd_val = 1'b1; pd_type = RETURN_CALL; pd_ret = ADDR_C;
+      #1;
+      check("TC-77c backend return-call on an empty stack: C pushed, dep 2",
+            (pd_snap.tosr == 'd3) && (pd_snap.dep == 8'd2));
+      tick();
+      restore_val = 1'b0; restore_snap = '0; pd_val = 1'b0;
+      check("TC-77c C at idx3, bottom, linked to BOS",
+            ptr_is(3, 4, 2) && ent_is(3, ADDR_C, 0, 2, 1) &&
+            (dut.dsp == 8'd2));
+      pop_chk("TC-77c pop C", 0, 1'b1, ADDR_C);
+      pop_chk("TC-77c then the fallback at depth 1: A", 0, 1'b1, ADDR_A);
+    end
+
+    // =============================================================
+    // TC-78 (BP-153, RAS-4, TD#207; BP-151 cause snap_offpath_op): the
+    // undo of the restored block's own pop (ras_rs_undo_pop) from the
+    // snapshot's pop record. The block's snapshot is post-op; a redirect
+    // that leaves the block before its return restores a stack the
+    // return has popped. Before BP-153 nothing undid it: the snapshot held
+    // no pre-op TOSR, and with A1 the depth was one low.
+    //   (a) THE DEPTH HALF: a pop on an empty stack (EMPTY). From TC-73a's
+    //       state (A and B committed, empty, dcm 2) b's return pops, the
+    //       fallback B. Its snapshot, restored with the undo, is at depth
+    //       2 again, so the next return reads B (n 0), not A.
+    //   (b) THE POINTER HALF: a pop that followed the link (LINK). A, B
+    //       pushed; B's return pops to A. Restored with the undo, TOSR is
+    //       back at B.
+    //   (c) a pop that decremented a count (DEC): A pushed twice (count
+    //       1); the pop takes the count to 0. Restored with the undo, the
+    //       count is 1 again.
+    //   (d) the pointer half to a reallocated entry: B's return pops to
+    //       A; the wrong path pushes C, D, ... until B's index is
+    //       allocated again. Restored with the undo, the generation at B's
+    //       index moved: the stack reads empty (B1), the depth restored.
+    //   (e) a snapshot with no pop record (pmode NONE): the undo changes
+    //       nothing.
+    // =============================================================
+    begin
+      bp_ras_snapshot_t s78;
+      // (a)
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      drv(0, 1'b1, RETURN, '0);                            // b's return
+      #1;
+      s78 = snap_p2[NUM_PRED_SLOTS-1];
+      check("TC-78a the snapshot's pop record: EMPTY, dep 1",
+            (s78.pmode == RAS_POP_EMPTY) && (s78.dep == 8'd1));
+      tick();
+      pop_chk("TC-78a wrong path: a second pop reads A", 0, 1'b1, ADDR_A);
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s78; rs_undo_pop = 1'b1;
+      #1;
+      check("TC-78a undo pd snapshot: dep 2, no pop record",
+            (pd_snap.dep == 8'd2) && (pd_snap.pmode == RAS_POP_NONE));
+      tick();
+      restore_val = 1'b0; restore_snap = '0; rs_undo_pop = 1'b0;
+      check("TC-78a THE DEPTH HALF: dsp 2 after the undo (without it: 1)",
+            ptr_is(2, 3, 2) && (dut.dsp == 8'd2));
+      pop_chk("TC-78a the next return reads B (n 0; without the undo: A)", 0,
+              1'b1, ADDR_B);
+      // (b)
+      do_reset();
+      push_one(ADDR_A);                                    // idx1
+      push_one(ADDR_B);                                    // idx2
+      drv(0, 1'b1, RETURN, '0);                            // B's return
+      #1;
+      s78 = snap_p2[NUM_PRED_SLOTS-1];
+      check("TC-78b the snapshot's pop record: LINK from idx2, its tag",
+            (s78.pmode == RAS_POP_LINK) && (s78.ptosr == 'd2) &&
+            (s78.ptag == dut.spec_gen[2]) && (s78.tosr == 'd1) &&
+            (s78.dep == 8'd1));
+      tick();
+      pop_chk("TC-78b wrong path: A popped", 0, 1'b1, ADDR_A);
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s78; rs_undo_pop = 1'b1;
+      tick();
+      restore_val = 1'b0; restore_snap = '0; rs_undo_pop = 1'b0;
+      check("TC-78b THE POINTER HALF: TOSR back at B (idx2), dsp 2",
+            ptr_is(2, 3, 0) && (dut.dsp == 8'd2) &&
+            ent_is(2, ADDR_B, 0, 1, 0));
+      pop_chk("TC-78b pop B (without the undo: A)", 0, 1'b1, ADDR_B);
+      pop_chk("TC-78b pop A", 0, 1'b1, ADDR_A);
+      // (c)
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_A);                                    // count 1
+      drv(0, 1'b1, RETURN, '0);
+      #1;
+      s78 = snap_p2[NUM_PRED_SLOTS-1];
+      check("TC-78c the snapshot's pop record: DEC at idx1, count 0",
+            (s78.pmode == RAS_POP_DEC) && (s78.ptosr == 'd1) &&
+            (s78.tosr == 'd1) && (s78.rctr == 'd0));
+      tick();
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s78; rs_undo_pop = 1'b1;
+      tick();
+      restore_val = 1'b0; restore_snap = '0; rs_undo_pop = 1'b0;
+      check("TC-78c the count back to 1, dsp 2",
+            ptr_is(1, 2, 0) && ent_is(1, ADDR_A, 1, 0, 1) &&
+            (dut.dsp == 8'd2));
+      // (d)
+      do_reset();
+      push_one(ADDR_A);                                    // idx1
+      push_one(ADDR_B);                                    // idx2
+      drv(0, 1'b1, RETURN, '0);
+      #1;
+      s78 = snap_p2[NUM_PRED_SLOTS-1];
+      tick();
+      // The wrong path: push and pop until the allocator is round to idx2
+      // again (TOSW runs 3..15, 0 is BOS, skipped, then 1 and 2 are not
+      // reached while the pushes pop again; push on A until TOSW is 2).
+      for (int k = 0; k < RAS_SPEC_ENTRIES; k++) begin
+        if (dut.tosw == 'd2) break;
+        push_one(ADDR_X);
+        pop_chk($sformatf("TC-78d wrong path %0d", k), 0, 1'b1, ADDR_X);
+      end
+      push_one(ADDR_X);                                    // reallocates idx2
+      check("TC-78d fixture: idx2 reallocated (generation moved)",
+            dut.spec_gen[2] != s78.ptag);
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s78; rs_undo_pop = 1'b1;
+      tick();
+      restore_val = 1'b0; restore_snap = '0; rs_undo_pop = 1'b0;
+      check("TC-78d the undo to a reallocated entry reads empty, dsp 2",
+            (dut.tosr == dut.bos) && (dut.dsp == 8'd2));
+      // (e)
+      do_reset();
+      push_one(ADDR_A);
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      s78 = snap_p2[NUM_PRED_SLOTS-1];
+      tick();
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s78; rs_undo_pop = 1'b1;
+      tick();
+      restore_val = 1'b0; restore_snap = '0; rs_undo_pop = 1'b0;
+      check("TC-78e no pop record: the undo changes nothing",
+            (s78.pmode == RAS_POP_NONE) && ptr_is(1, 2, 0) &&
+            (dut.dsp == 8'd1));
+    end
+
+    // =============================================================
+    // TC-79 (BP-153, BP-151 cause p3_reach): the peek. ras_peek_*_p2 is
+    // the pop a slot would make, from the state the earlier slots leave,
+    // whether or not the slot pops; nothing moves. bp_cluster takes a
+    // return's target from it, so a return unreachable at p2 that SC
+    // makes reachable at p3 has the RAS target. Before BP-153 there was
+    // no peek, and the target of such a return was the FTB jump target.
+    //   (a) a slot that does not pop: the top, and nothing moves.
+    //   (b) a slot that pops: the peek equals the pop.
+    //   (c) an empty stack: the fallback at the speculative depth.
+    //   (d) two slots: slot 0 pushes C, slot 1 does not pop; slot 1's
+    //       peek is C, the state slot 0 leaves.
+    // =============================================================
+    begin
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      // (a)
+      drv(0, 1'b0, RETURN, '0);
+      #1;
+      check("TC-79a a slot that does not pop: peek B, no pop",
+            peek_valid_p2[0] && (peek_addr_p2[0] == ADDR_B) &&
+            !pop_valid_p2[0]);
+      tick();
+      check("TC-79a nothing moves", ptr_is(2, 3, 0) && (dut.dsp == 8'd2));
+      // (b)
+      drv(0, 1'b1, RETURN, '0);
+      #1;
+      check("TC-79b a slot that pops: peek == pop == B",
+            peek_valid_p2[0] && pop_valid_p2[0] &&
+            (peek_addr_p2[0] == ADDR_B) && (pop_addr_p2[0] == ADDR_B));
+      tick();
+      // (c)
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      commit_op(DIRECT_CALL, ADDR_A, 'd1);
+      commit_op(DIRECT_CALL, ADDR_B, 'd2);
+      drv(0, 1'b0, RETURN, '0);
+      #1;
+      check("TC-79c an empty stack: the fallback, B (n 0)",
+            peek_valid_p2[0] && (peek_addr_p2[0] == ADDR_B));
+      tick();
+      // (d)
+      if (NUM_PRED_SLOTS > 1) begin : tc79d
+        do_reset();
+        push_one(ADDR_A);
+        drive(1'b1, DIRECT_CALL, ADDR_C, 1'b0, RETURN, '0);
+        #1;
+        check("TC-79d slot 1's peek is slot 0's push, C",
+              peek_valid_p2[NUM_PRED_SLOTS-1] &&
+              (peek_addr_p2[NUM_PRED_SLOTS-1] == ADDR_C) &&
+              !pop_valid_p2[NUM_PRED_SLOTS-1]);
+        tick();
+      end
+    end
+
+    // =============================================================
+    // TC-80 (BP-153, TD#149): the p3 block's snapshot after its repair
+    // (ras_rep_val, ras_rep_snapshot). The block's p2 snapshot does not
+    // hold a p3 repair; before BP-153 the entry kept it, so the block's
+    // commit set the committed depth one off and its restores lost the
+    // repair (fb_stale_top, web_11 (8, 8) k 51522).
+    //   (a) a missed push (p2 none, p3 call): the snapshot holds C on top,
+    //       dep + 1, push recorded.
+    //   (b) a missed pop (p2 none, p3 return): B popped, dep - 1, the pop
+    //       record LINK from B's index.
+    //   (c) no repair: not valid.
+    //   (d) a restore in the repair's cycle drops it: not valid.
+    // =============================================================
+    begin
+      // (a)
+      do_reset();
+      push_one(ADDR_A);                                    // idx1
+      drive(1'b0, NO_BRANCH, ADDR_C, 1'b0, NO_BRANCH, '0);
+      tick();                                              // op NONE
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b1, DIRECT_CALL, 1'b0, NO_BRANCH);
+      #1;
+      check("TC-80a missed push: the repaired snapshot is valid",
+            rep_val);
+      check("TC-80a C at idx2 on top, dep 2, push recorded",
+            (rep_snap.tosr == 'd2) && (rep_snap.tosw == 'd3) &&
+            (rep_snap.dep == 8'd2) && rep_snap.push &&
+            (rep_snap.pmode == RAS_POP_NONE) &&
+            (rep_snap.tag == RAS_TAG_BITS'(dut.spec_gen[2] + 1)));
+      tick();
+      check("TC-80a the state is the snapshot's", ptr_is(2, 3, 0) &&
+            (dut.dsp == 8'd2) && (dut.spec_gen[2] == rep_snap.tag));
+      // (b)
+      do_reset();
+      push_one(ADDR_A);                                    // idx1
+      push_one(ADDR_B);                                    // idx2
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      tick();
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b1, RETURN, 1'b0, NO_BRANCH);
+      #1;
+      check("TC-80b missed pop: B popped, dep 1, LINK record from idx2",
+            rep_val && (rep_snap.tosr == 'd1) && (rep_snap.dep == 8'd1) &&
+            !rep_snap.push && (rep_snap.pmode == RAS_POP_LINK) &&
+            (rep_snap.ptosr == 'd2) && (rep_snap.ptag == dut.spec_gen[2]));
+      tick();
+      // (c)
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      check("TC-80c no repair: not valid", !rep_val);
+      tick();
+      // (d)
+      do_reset();
+      push_one(ADDR_A);
+      drive(1'b0, NO_BRANCH, ADDR_C, 1'b0, NO_BRANCH, '0);
+      tick();
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b1, DIRECT_CALL, 1'b0, NO_BRANCH);
+      restore_val = 1'b1; restore_snap = snp(1, 2, 0, 0);
+      #1;
+      check("TC-80d a restore in the repair's cycle: not valid", !rep_val);
+      tick();
+      restore_val = 1'b0; restore_snap = '0;
+    end
+
+    // =============================================================
+    // TC-81 (BP-153, BP-151 causes depth, pop_empty): a call depth of 40,
+    // committed, read back by 40 returns through the fallback (A1).
+    // Every frame is held: RAS_COMMIT_ENTRIES 64 since BP-153. With 32
+    // entries the 9th return onward read nothing (frames 8 .. 1 were
+    // overwritten by the full stack's wrap, 3.3).
+    // =============================================================
+    begin
+      do_reset();
+      // Committed only (no speculative push, as TC-36): the speculative
+      // stack stays empty and every return reads the fallback, n = 0, 1,
+      // 2 ... as its pop takes the depth down.
+      for (int i = 0; i < 40; i++)
+        commit_op(DIRECT_CALL, cs_ad(32'h7_0000, i), 'd0);
+      for (int i = 39; i >= 0; i--)
+        pop_chk($sformatf("TC-81 return %0d of 40 reads frame %0d", 40 - i, i),
+                0, 1'b1, cs_ad(32'h7_0000, i));
+    end
+
+    // =============================================================
+    // TC-82 (BP-153, BP-151 causes wrap, fb_uncommitted): an uncommitted
+    // call A, then 20 call-return pairs. The allocator only advances
+    // (TOSW, PU1), so each pair allocates a new entry; A's entry is
+    // reused after RAS_SPEC_ENTRIES - 1 allocations. With 32 entries A is
+    // still held and its return reads it; with 16 (before BP-153) the
+    // 16th allocation reused A's entry, B1 killed the link, and A's return
+    // read the empty stack's fallback (nothing committed: not valid).
+    // =============================================================
+    begin
+      do_reset();
+      push_one(ADDR_A);
+      for (int k = 0; k < 20; k++) begin
+        push_one(fill_addr[k]);
+        pop_chk($sformatf("TC-82 pair %0d", k), 0, 1'b1, fill_addr[k]);
+      end
+      pop_chk("TC-82 A's return after 20 pairs reads A (16 entries: not valid)",
+              0, 1'b1, ADDR_A);
+    end
+
+    // =============================================================
+    // TC-83 (BP-153, the count below, spec_ncnt; BP-151 cause
+    // bos_rewind, infra_1 (0, 8) k 531556): a count the wrong path
+    // changed in place on the entry BELOW the restored top. A at idx1,
+    // B at idx2 (nos 1), the snapshot S after B. The wrong path pops B
+    // (TOSR to idx1) and calls with fall-through A: the recursion match
+    // raises idx1's count to 1. The restore of S puts back idx2's count
+    // (RE6) and not idx1's. The pop of B then lands on idx1 with the
+    // count B recorded at its allocation, 0: the pop of A follows the
+    // link and the stack is empty, nothing committed: not valid. Before
+    // BP-153 idx1 kept count 1 and the pop of A only decremented it:
+    // TOSR stayed at idx1, and a third pop read A again.
+    // =============================================================
+    begin
+      bp_ras_snapshot_t s83;
+      do_reset();
+      push_one(ADDR_A);
+      push_one(ADDR_B);
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      s83 = snap_p2[NUM_PRED_SLOTS-1];
+      tick();
+      pop_chk("TC-83 wrong path: the pop of B", 0, 1'b1, ADDR_B);
+      push_one(ADDR_A);
+      check("TC-83 wrong path: the call matching A raises idx1's count to 1",
+            ptr_is(1, 3, 0) && (dut.spec_rctr[1] == 'd1) &&
+            (dut.spec_ncnt[2] == 'd0));
+      drv(0, 1'b0, NO_BRANCH, '0);
+      restore_val = 1'b1; restore_snap = s83;
+      tick();
+      restore_val = 1'b0; restore_snap = '0;
+      check("TC-83 the restore of S: tosr 2 (B), idx1's count still 1",
+            ptr_is(2, 3, 0) && (dut.spec_rctr[1] == 'd1));
+      pop_chk("TC-83 the pop of B returns B", 0, 1'b1, ADDR_B);
+      check("TC-83 it lands on idx1 with B's recorded count 0 (was 1)",
+            ptr_is(1, 3, 0) && (dut.spec_rctr[1] == 'd0));
+      pop_chk("TC-83 the pop of A returns A", 0, 1'b1, ADDR_A);
+      pop_chk("TC-83 then the stack is empty: not valid (before: A again)",
+              0, 1'b0, '0);
     end
 
     // -------------------------------------------------------------

@@ -16,6 +16,70 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-086, continued: BP-152 recorded; BP-153 written.
+
+BP-152 (0588b7b), Status as delivered: complete in the header,
+in-progress in the Summary; the Summary is right. regress.sh: 295
+targets, 0 new failures; the four TD#207 waivers removed.
+- BUILT, FOR ACCEPTANCE (seven rule changes): A1, the fallback at the
+  speculative depth (ras_decisions.md 3.3); B1, the link kill on reuse
+  and the generation tag (3.2); C1, the predecode push (7); the undo
+  of the restored block's own push (4.3); TD#211 (b) the positional
+  end clear and (a) the backend redirect clear (ftq_decisions.md 5.4);
+  the FTQ entry 304b -> 316b (ftq_entry_formats.md 1). Text recorded
+  in each document, marked for acceptance.
+- MEASURED: slot-held return mispredicts 123,712 -> 6,335 over 25
+  runs; fb_stale_top 89,894 -> 113; stale_below_bos 11,213 -> 30;
+  call_pd 19,864 -> 704 (all indirect); media_2 returns 4,815 -> 62,
+  flat over the sweep; MPKI media_2 3.79 -> 1.41, infra_1 17.01 ->
+  11.51, web_11 28.17 -> 25.88. Found and fixed on the way: a push onto
+  its own TOSR entry linked to itself; the entry-width header (232,
+  was 304).
+- NOT DONE: calls and returns only the backend finds (3,105) need the
+  redirect to carry the branch type; the off-path pop undo (988); 381
+  located, not explained; the mpki_ftb rise (infra_1, web_11) and 1 to
+  3 extra mispredicts in five tb_fe_top programs, untraced.
+PA assessment: accept what is built; the task is not complete. PA
+ERRORS: the backend-interface stop (an exception the PA added to
+Jeff's ruling, corrected above); a pre-approval naming fields instead
+of "the fields the fixes need"; NO TOLERANCE without a procedure, so
+"located" was met and "explained" was not; asking Jeff where the stop
+line belonged instead of deciding it.
+
+RULINGS (Jeff, session-086):
+- THE STANDING TASK TEXT. The IA's freedom to fix, and the duty to
+  investigate what it cannot explain, are written into each task by
+  the PA, not into PROJECT_CORE or CLAUDE.md: they are per-task grants
+  bounded by the task's area, and self-directed changes must not reach
+  design RTL or planning outside it. The PA keeps the text as a
+  reference (claude/pa_standing_task_text.md in the claude.ai
+  project).
+- FEWER, LARGER TASKS, with a done checklist and phase gates inside
+  the task (PA proposal, accepted).
+
+examples/fe_demo: BP-152 changed the shared backend models, and BP-153
+adds a fe_top port. FDT-2a: the demonstrations describe the tagged RTL
+(fe-1.0.0) and are brought to the RTL only when the tag moves. Not
+built now.
+
+TECHNICAL DEBT. TD#207 updated: mostly fixed, the rest in BP-153.
+Closed: TD#211, moved to CLOSED_TECH_DEBT.md.
+
+BP-153 WRITTEN: the backend-found RAS operations (the redirect carries
+the resolved branch type, pre-approved), both halves of the off-path
+pop undo, the 381 unexplained returns and the untraced side effects,
+under the standing text with a done checklist; then the measurements
+again.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, ras_decisions.md,
+ras_interfaces.md, ftq_decisions.md, ftq_entry_formats.md,
+ftq_ifu_interfaces.md, ftq_backend_interfaces.md.
+
+Next free: BP-154, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-004,
+TD#212.
+
+---
 ## Session-086, continued: BP-151 recorded; BP-152 written.
 
 BP-151 COMPLETE (d5694a0). regress.sh RESULT: PASS with four known
@@ -51,10 +115,14 @@ an area; within it the IA fixes what it finds, rule changes included,
 proposes the planning text, and marks each change for acceptance at
 review. A rule change is listed as one. The constraints that stay:
 planning files read only, no git, CLAUDE.md's command rules, exact
-measurement, a test that fails before and passes after. Only an
-irreversible or interface-wide change (a new port between top-level
-units, a size change outside the area) stops for a ruling first.
+measurement, a test that fails before and passes after.
 tools/known_failures.txt stays Jeff's (CLAUDE.md).
+CORRECTED after BP-152 (PA): this entry read, after "passes after",
+"Only an irreversible or interface-wide change (a new port between
+top-level units, a size change outside the area) stops for a ruling
+first." That exception was the PA's, not Jeff's ruling. BP-152 carried
+it as "a change to the backend interface stops for a ruling", which
+blocked 3,105 residuals.
 
 TECHNICAL DEBT. TD#207 updated: cause found, BP-152. TD#149 measured on
 traces: 7, left. Opened: TD#211 (the walk commits a call that did not
@@ -5641,6 +5709,19 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | and RS2/RS3 at every slot and    |
 |                         |             |                   | repair cycle. sim_ras 598/0,     |
 |                         |             |                   | 498/0 at 1 slot.                 |
+|                         |             |                   | BP-152 (for acceptance): A1 the  |
+|                         |             |                   | fallback at the speculative      |
+|                         |             |                   | depth, B1 the link kill on reuse |
+|                         |             |                   | and the generation tag, C1 the   |
+|                         |             |                   | predecode push, the undo of a    |
+|                         |             |                   | restored block's own push;       |
+|                         |             |                   | snapshot 16b -> 28b. tb_ras      |
+|                         |             |                   | 656/0 and 556/0. PD: the restore |
+|                         |             |                   | path now carries the undo, the   |
+|                         |             |                   | C1 pop and push and the          |
+|                         |             |                   | generation test, and each        |
+|                         |             |                   | allocation drives 16             |
+|                         |             |                   | comparators; no timing measured. |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -7190,22 +7271,20 @@ moves there in the planning update that closes it.
 |     |          | Suspected at ftq_ifu.sv:256-258, a request only for an   |
 |     |          | entry whose translation has been presented. Opened       |
 |     |          | session-086 (Jeff).                                      |
-| 207 | bpu, ras | OPEN, CAUSE FOUND (BP-151), FIX IN BP-152. RETURN        |
-|     |          | MISPREDICTS DEPEND ON BACKEND TIMING (PERF-003's sweep:  |
-|     |          | media_2 4,815 at immediate, 84 at (5, 5), 604 at (8, 8); |
-|     |          | infra_1 rises with resolve to commit). CAUSE: the        |
-|     |          | commit-stack fallback reads a frame an uncommitted       |
-|     |          | return has already popped (ras_decisions.md 3.3, RAS-4), |
-|     |          | 85 to 99 percent of mispredicted slot-held returns at    |
-|     |          | most points; every rule is met. The faster commit runs,  |
-|     |          | the more returns depend on the fallback. Second: reuse   |
-|     |          | of an entry below BOS (3.2; media_2 513 of 543 at (8,    |
-|     |          | 8)). Third: a call only predecode finds is never pushed  |
-|     |          | (7; web_11 2,585 to 3,383). Not causes: the wrap (H1, at |
-|     |          | most 1), the restore's BOS (H2), TD#149 (7), true depth  |
-|     |          | (0). tb_fe_top ras_fbstale and ras_pdcall fail, waived   |
-|     |          | (known_failures.txt). BP-152: options A1, B1, C1. Opened |
-|     |          | session-086 (Jeff).                                      |
+| 207 | bpu, ras | OPEN, MOSTLY FIXED (BP-152), REST IN BP-153. RETURN      |
+|     |          | MISPREDICTS DEPEND ON BACKEND TIMING. Cause (BP-151):    |
+|     |          | the commit-stack fallback reads a frame an uncommitted   |
+|     |          | return has popped; second, reuse below BOS; third, calls |
+|     |          | only predecode finds. BP-152 built A1, B1, C1 and the    |
+|     |          | undo (ras_decisions.md 3.2, 3.3, 4.3, 7; for             |
+|     |          | acceptance): slot-held return mispredicts 123,712 ->     |
+|     |          | 6,335 over BP-151's 25 runs; media_2 returns 4,815 ->    |
+|     |          | 62, 61 to 73 over the whole sweep; infra_1 MPKI 17.01 -> |
+|     |          | 11.51. Left: calls and returns only the backend finds    |
+|     |          | (3,105), the snapshot's off-path pops (988, raised from  |
+|     |          | 235 by A1), 381 located and not explained; returns still |
+|     |          | rise slowly with resolve to commit (infra_1 2,950 to     |
+|     |          | 3,547). BP-153. Opened session-086 (Jeff).               |
 | 208 | perf     | OPEN, PERFORMANCE, INVESTIGATE, AFTER TD#207. MPKI AND   |
 |     |          | mis_sc RISE ON SOME TRACES AFTER BP-150 (web_11 +37      |
 |     |          | immediate, +166 latency; compress_1 +45; int_6 +21;      |
@@ -7236,18 +7315,6 @@ moves there in the planning update that closes it.
 |     |          | to a stamp file rewritten only when the value changes,   |
 |     |          | and the binary depends on the stamp. PERF-004. Opened    |
 |     |          | session-086 (PA).                                        |
-| 211 | ftq      | OPEN, CORRECTNESS, BP-152. THE COMMIT WALK COMMITS A     |
-|     |          | CALL THAT DID NOT EXECUTE, against ftq_decisions.md 5.4. |
-|     |          | (a) A redirect with _self clear at a non-branch (a trap) |
-|     |          | leaves the slots after its position; proposed (PA): such |
-|     |          | a redirect clears them, for Jeff's ruling, built by      |
-|     |          | BP-152 for acceptance. (b) Two resolutions of one entry  |
-|     |          | in one cycle: the end clear clears only the slots above  |
-|     |          | the younger's slot, and a predecode-placed call below it |
-|     |          | survives (ftq_resolve.sv place_slot, ftq_entry.sv end    |
-|     |          | clear); a defect; BP-152 makes the clear positional. 1   |
-|     |          | to 5 per 2e6 run. Found by BP-151. Opened session-086    |
-|     |          | (PA).                                                    |
 ---
 
 ## Open Items
