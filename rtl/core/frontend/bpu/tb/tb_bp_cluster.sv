@@ -6068,6 +6068,112 @@ module tb;
           dut.u_ras.tosr === dut.u_ras.bos);
     end
 
+    // -- CB12 (BP-154; the p1_only return, web_11 (5, 5) k 1574749). Two
+    //    calls X then Y, then two uBTB returns R1 and R2 in back-to-back
+    //    blocks, all FTB misses (CB10's p1 operation, RC9). R2's p0 TOS
+    //    read is made while R1 is at p1, before R1's pop at p2, so R2's p1
+    //    target is Y. At p2 R1 has popped Y and R2's pop reads X. With no
+    //    FTB entry the p1 view stands, so before BP-154 no p2 redirect was
+    //    made and fetch went to Y. Pass: R1 makes no redirect (its p1
+    //    target and its pop agree, Y); R2 redirects at p2 to X.
+    begin : cb12
+      logic [VA_WIDTH-1:0] xpc, ypc, xend, yend, r1, r2;
+      logic                r1_redir;
+      do_reset();
+      clr_upd_chans();
+      // the two calls, each a uBTB call at pos 4 of its own block. The four
+      // blocks are 0x100 apart in the low bits, so each has its own uBTB
+      // set (ubtb_install clears the set it writes).
+      xpc  = VA_WIDTH'('h00_0B10_0100);
+      ypc  = VA_WIDTH'('h00_0B20_0200);
+      xend = blk_base(xpc) + VA_WIDTH'(12);
+      yend = blk_base(ypc) + VA_WIDTH'(12);
+      e     = '0;
+      e.jmp = mk_jmp(1'b1, 4'd4, blk_base(xpc) + VA_WIDTH'('h400),
+                     blk_base(xpc), 1'b1, 1'b0, 1'b0);
+      e.pft = ub_pft_field(xend, blk_base(xpc));
+      ubtb_install(xpc, e);
+      lp_clear_both(xpc);
+      e     = '0;
+      e.jmp = mk_jmp(1'b1, 4'd4, blk_base(ypc) + VA_WIDTH'('h400),
+                     blk_base(ypc), 1'b1, 1'b0, 1'b0);
+      e.pft = ub_pft_field(yend, blk_base(ypc));
+      ubtb_install(ypc, e);
+      lp_clear_both(ypc);
+      // the two returns, each a uBTB RETURN at pos 2 of its own block
+      r1 = VA_WIDTH'('h00_0B30_0300);
+      r2 = VA_WIDTH'('h00_0B40_0400);
+      e     = '0;
+      e.jmp = mk_jmp(1'b1, 4'd2, blk_base(r1) + VA_WIDTH'('h400),
+                     blk_base(r1), 1'b0, 1'b1, 1'b1);
+      e.pft = ub_pft_field(blk_base(r1) + VA_WIDTH'(8), blk_base(r1));
+      ubtb_install(r1, e);
+      lp_clear_both(r1);
+      e     = '0;
+      e.jmp = mk_jmp(1'b1, 4'd2, blk_base(r2) + VA_WIDTH'('h400),
+                     blk_base(r2), 1'b0, 1'b1, 1'b1);
+      e.pft = ub_pft_field(blk_base(r2) + VA_WIDTH'(8), blk_base(r2));
+      ubtb_install(r2, e);
+      lp_clear_both(r2);
+      req(xpc, 6'h14);
+      tick();
+      norq();
+      repeat (3) tick();
+      req(ypc, 6'h15);
+      tick();
+      norq();
+      repeat (3) tick();
+      chk("CB12 fixture: X then Y pushed, Y the top, X below it",
+          (dut.u_ras.tosr !== dut.u_ras.bos) &&
+          (dut.u_ras.spec_ret_addr[dut.u_ras.tosr] === yend) &&
+          (dut.u_ras.spec_ret_addr[dut.u_ras.spec_nos[dut.u_ras.tosr]] ===
+           xend));
+      req(r1, 6'h16);
+      tick();                                         // R1 at p1
+      req(r2, 6'h17);
+      chk("CB12 fixture: R1's p1 target is the top, Y",
+          bpu_pred_slot_p1[0].taken &&
+          (bpu_pred_slot_p1[0].pred_src == PRED_RAS) &&
+          (bpu_pred_slot_p1[0].target == yend));
+      tick();                                         // R1 p2, R2 p1
+      norq();
+      chk("CB12 fixture: R2's p1 target is the stale top, Y",
+          bpu_pred_slot_p1[0].taken &&
+          (bpu_pred_slot_p1[0].pred_src == PRED_RAS) &&
+          (bpu_pred_slot_p1[0].target == yend));
+      chk("CB12 fixture: R1 is popped at p2 on the FTB miss, Y",
+          (dut.w_ftb_valid_p2 === 1'b0) &&
+          (dut.w_ras_pred_val_p2[0] === 1'b1) &&
+          (dut.w_ras_pop_valid_p2[0] === 1'b1) &&
+          (dut.w_ras_pop_addr_p2[0] === yend));
+      r1_redir = bpu_redir_p2[0].valid;
+      chk("CB12 R1 makes no p2 redirect (its p1 target is its pop)",
+          !r1_redir);
+      chk("CB12 R1 writes no p2 slot (FTB miss, no redirect)",
+          !bpu_slot_val_p2);
+      tick();                                         // R2 at p2
+      chk("CB12 fixture: R2 is popped at p2 on the FTB miss, X",
+          (dut.w_ftb_valid_p2 === 1'b0) &&
+          (dut.w_ras_pred_val_p2[0] === 1'b1) &&
+          (dut.w_ras_pop_valid_p2[0] === 1'b1) &&
+          (dut.w_ras_pop_addr_p2[0] === xend));
+      chk("CB12 R2 redirects at p2 to its pop, X (before BP-154: none)",
+          bpu_redir_p2[0].valid && (bpu_redir_p2[0].target_pc === xend) &&
+          (bpu_redir_idx_p2 === 6'h17));
+      chk("CB12 R2's entry slot takes the pop as its target (before: Y kept)",
+          bpu_slot_val_p2 && (bpu_slot_idx_p2 === 6'h17) &&
+          bpu_slot_p2[0].slot_valid && bpu_slot_p2[0].taken &&
+          (bpu_slot_p2[0].br_type == RETURN) &&
+          (bpu_slot_p2[0].target === xend) &&
+          (bpu_slot_p2[0].pred_src == PRED_RAS));
+      chk({"CB12 R2's history bundle is its p1 view's: one branch, taken ",
+           "(before: none)"},
+          (dut.w_rb_corr === 1'b1) && (dut.w_rb_n === RB_CNT_BITS'(1)) &&
+          (dut.w_rb_tkn[0] === 1'b1));
+      repeat (2) tick();
+      clr_upd_chans();
+    end
+
     // -- CB11 (BP-153; BP-151 causes p3_reach, snap_repair; TD#149). CB2-
     //    RP4 reversed: TAGE says taken (tage_bim_fill 11) and SC strongly
     //    not taken (sc_fill 100000). At p2 the conditional at pos 1 is

@@ -198,8 +198,8 @@ module tb;
     end
     pass_count++;
 
-    // BP-153 (RAS-4): the pop record, pmode, ptosr and ptag (38 bits;
-    // 28 before).
+    // BP-153 (RAS-4): the pop record, pmode, ptosr and ptag (the snapshot
+    // 39 bits with the push bit at 16 speculative entries; 28 before).
     if (($bits(entry_a.ras.pmode) !== RAS_PMODE_BITS) ||
         ($bits(entry_a.ras.ptosr) !== RAS_PTR_BITS) ||
         ($bits(entry_a.ras.ptag) !== RAS_TAG_BITS)) begin

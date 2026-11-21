@@ -1191,7 +1191,13 @@ module tb;
   localparam logic [VA_WIDTH-1:0] ADDR_R = VA_WIDTH'('h00_000A_0000);
   localparam logic [VA_WIDTH-1:0] ADDR_Y68 = VA_WIDTH'('h00_0000_6800);
 
-  logic [VA_WIDTH-1:0] fill_addr [0:RAS_SPEC_ENTRIES-1];   // BP-153
+  // TC-82's call-return pairs (BP-154): more than RAS_SPEC_ENTRIES - 2
+  // at 16 entries, so the allocator laps the first call; fewer at 32.
+  localparam int TC82_PAIRS = 20;
+  // BP-153; BP-154 sizes it for TC-82, whose pairs outnumber the
+  // entries at 16.
+  localparam int FILL_N = RAS_SPEC_ENTRIES + TC82_PAIRS;
+  logic [VA_WIDTH-1:0] fill_addr [0:FILL_N-1];
 
   // Saturated recursion count (TC-38d).
   localparam logic [RAS_RCTR_WIDTH-1:0] RCTR_MAX_TB =
@@ -1203,7 +1209,7 @@ module tb;
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
-    for (int i = 0; i < RAS_SPEC_ENTRIES; i++)
+    for (int i = 0; i < FILL_N; i++)
       fill_addr[i] = VA_WIDTH'('h0001_0000) + (i * VA_WIDTH'('h100));
 
     // =============================================================
@@ -1494,13 +1500,17 @@ module tb;
     // TC-18: Overflow graceful degradation
     // =============================================================
     do_reset();
-    // Fill the speculative stack (idx1..15 with the sentinel model).
-    for (int i = 0; i < 15; i++) begin
+    // Fill the speculative stack (idx1 .. RAS_SPEC_ENTRIES - 1 with the
+    // sentinel model). BP-154: the counts are RAS_SPEC_ENTRIES'; they were
+    // the literals 15 and 15, which at BP-153's 32 entries filled half.
+    for (int i = 0; i < RAS_SPEC_ENTRIES - 1; i++) begin
       drive(1'b1, DIRECT_CALL, fill_addr[i], 1'b0, NO_BRANCH, '0);
       tick();
     end
     // One more push -> circular wrap, no fault.
-    drive(1'b1, DIRECT_CALL, fill_addr[15], 1'b0, NO_BRANCH, '0);
+    check("TC-18 the stack is full: TOSW back at BOS", dut.tosw == dut.bos);
+    drive(1'b1, DIRECT_CALL, fill_addr[RAS_SPEC_ENTRIES - 1], 1'b0,
+          NO_BRANCH, '0);
     tick();
     check("TC-18 pointers remain known (no X, graceful wrap)",
           (^{dut.tosr, dut.tosw, dut.bos} !== 1'bx));
@@ -2903,8 +2913,8 @@ module tb;
     push_one(fill_addr[0]);
     check("TC-50 one entry: tosr 1, tosw 2", ptr_is(1, 2, 0));
     for (int i = 1; i < RAS_SPEC_ENTRIES - 2; i++) push_one(fill_addr[i]);
-    // BP-153: the counts are RAS_SPEC_ENTRIES' (32 since BP-153; the
-    // names keep the 16-entry numbers).
+    // BP-153: the counts are RAS_SPEC_ENTRIES' (16; 32 in BP-153, RC11,
+    // reverted by BP-154; the names keep the 16-entry numbers).
     check("TC-50 PU4 14 allocations: tosw + 1 == bos (full, one push left)",
           RAS_PTR_BITS'(dut.tosw + 1) == dut.bos);
     push_one(fill_addr[RAS_SPEC_ENTRIES - 2]);
@@ -3013,13 +3023,15 @@ module tb;
       end
     end
     commit_op(DIRECT_CALL, ADDR_X, 'd0);
-    check("TC-53 CO2 a call on a full stack: count holds at 32, X on top",
+    check({"TC-53 CO2 a call on a full stack: count holds at ",
+           "RAS_COMMIT_ENTRIES, X on top"},
           (int'(dut.c_cnt) == RAS_COMMIT_ENTRIES) && tos_valid_p0[0] &&
           (tos_addr_p0[0] == ADDR_X));
     for (int k = RAS_COMMIT_ENTRIES; k > 0; k--)
       commit_op(RETURN, '0, 'd0);
     #1;
-    check("TC-53 CO10 32 returns empty it", !tos_valid_p0[0] &&
+    check("TC-53 CO10 RAS_COMMIT_ENTRIES returns empty it",
+          !tos_valid_p0[0] &&
           (dut.c_cnt == '0));
     // 33 pushes and 32 returns leave CSP at 33 - 32 = 1 (mod 32).
     commit_op(RETURN, '0, 'd0);
@@ -3602,18 +3614,34 @@ module tb;
           $bits(dut.c_cnt) == RAS_COMMIT_PTR_BITS + 1);
     // BP-152: PM2 adds the depth (A1) and the tag (B1); 16 before.
     // BP-153: and the operation record, push, pmode, ptosr and ptag; 28
-    // before. With 32 speculative entries (BP-153) RAS_PTR_BITS is 5 and
-    // RAS_TAG_BITS 3: 4 * 5 + 4 + 8 + 2 * 3 + 2 + 1 = 41.
-    check({"TC-64 PM2 snapshot 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH + ",
-           "RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1 = 41"},
-          ($bits(bp_ras_snapshot_t) == 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-                                       RAS_DEPTH_BITS + 2 * RAS_TAG_BITS +
-                                       RAS_PMODE_BITS + 1) &&
-          ($bits(bp_ras_snapshot_t) == 41));
-    check({"TC-64 PM2 depth $clog2(FTQ_DEPTH) + 2 = 8, tag ",
-           "$clog2(64 / 31 + 1) + 1 = 3"},
-          (RAS_DEPTH_BITS == $clog2(FTQ_DEPTH) + 2) && (RAS_DEPTH_BITS == 8) &&
-          (RAS_TAG_BITS == 3) && ($bits(dut.spec_gen[0]) == RAS_TAG_BITS));
+    // before. BP-154: every width is derived here from RAS_SPEC_ENTRIES
+    // and FTQ_DEPTH, not restated as a literal (BP-153 checked 41 and 3,
+    // its 32 entries): the pointer $clog2(RAS_SPEC_ENTRIES), the tag the
+    // B1 bound $clog2(FTQ_DEPTH / (RAS_SPEC_ENTRIES - 1) + 1) + 1, the
+    // depth $clog2(FTQ_DEPTH) + 2. At 16 entries 4, 4, 8: 39 bits; at 32
+    // 5, 3, 8: 41.
+    begin
+      int e_ptr, e_tag, e_dep, e_snap;
+      e_ptr  = $clog2(RAS_SPEC_ENTRIES);
+      e_tag  = $clog2(FTQ_DEPTH / (RAS_SPEC_ENTRIES - 1) + 1) + 1;
+      e_dep  = $clog2(FTQ_DEPTH) + 2;
+      e_snap = 4 * e_ptr + RAS_RCTR_WIDTH + e_dep + 2 * e_tag +
+               RAS_PMODE_BITS + 1;
+      $display("TC-64 RAS_SPEC_ENTRIES %0d: pointer %0d, tag %0d, depth %0d,",
+               RAS_SPEC_ENTRIES, RAS_PTR_BITS, RAS_TAG_BITS, RAS_DEPTH_BITS);
+      $display("TC-64   snapshot $bits %0d (derived %0d)",
+               $bits(bp_ras_snapshot_t), e_snap);
+      check({"TC-64 PM2 snapshot 4 * ptr + RAS_RCTR_WIDTH + depth + ",
+             "2 * tag + RAS_PMODE_BITS + 1, from RAS_SPEC_ENTRIES"},
+            $bits(bp_ras_snapshot_t) == e_snap);
+      check("TC-64 PM2 pointer $clog2(RAS_SPEC_ENTRIES)",
+            (RAS_PTR_BITS == e_ptr) && ($bits(dut.tosr) == e_ptr) &&
+            ($bits(dut.spec_nos[0]) == e_ptr));
+      check({"TC-64 PM2 depth $clog2(FTQ_DEPTH) + 2, tag ",
+             "$clog2(FTQ_DEPTH / (RAS_SPEC_ENTRIES - 1) + 1) + 1"},
+            (RAS_DEPTH_BITS == e_dep) && (RAS_TAG_BITS == e_tag) &&
+            ($bits(dut.spec_gen[0]) == e_tag));
+    end
 
     // =============================================================
     // TC-65 IV1, IV2, PO7: TOSR below BOS names a chain entry (BP-142
@@ -4770,23 +4798,60 @@ module tb;
     end
 
     // =============================================================
-    // TC-82 (BP-153, BP-151 causes wrap, fb_uncommitted): an uncommitted
-    // call A, then 20 call-return pairs. The allocator only advances
-    // (TOSW, PU1), so each pair allocates a new entry; A's entry is
-    // reused after RAS_SPEC_ENTRIES - 1 allocations. With 32 entries A is
-    // still held and its return reads it; with 16 (before BP-153) the
-    // 16th allocation reused A's entry, B1 killed the link, and A's return
-    // read the empty stack's fallback (nothing committed: not valid).
+    // TC-82 (BP-153; a capacity case since BP-154; BP-151 causes wrap,
+    // fb_uncommitted): an uncommitted call A, then TC82_PAIRS (20)
+    // call-return pairs. The allocator only advances (TOSW, PU1), so each
+    // pair allocates a new entry. From reset A is the sentinel skip's
+    // idx1 (TOSW 0 == BOS 0) and pair k allocates idx k + 2, so pair
+    // RAS_SPEC_ENTRIES - 2 finds TOSW back at BOS 0 and the skip lands on
+    // idx1: the RAS_SPEC_ENTRIES-th allocation reuses A's entry. The
+    // outcome follows from the parameter:
+    //   - RAS_SPEC_ENTRIES - 2 < TC82_PAIRS (16 entries, pair 14): A's
+    //     entry is reused, the allocation lands on the TOSR entry itself
+    //     and is bottom (B1), and A's return reads the empty stack's
+    //     fallback. Nothing is committed, so it is not valid: A's return
+    //     is mispredicted. This is the wrap of RAS-2 (ras_decisions.md
+    //     3.2), at 16 entries since RC11's revert (BP-154).
+    //   - otherwise (32 entries, BP-153 RC11): A is still held and its
+    //     return reads A.
     // =============================================================
     begin
+      int idx_a, k_reuse, first_reuse;
+      bit lapped;
+      k_reuse     = RAS_SPEC_ENTRIES - 2;
+      lapped      = (k_reuse < TC82_PAIRS);
+      first_reuse = -1;
+      $display("TC-82 RAS_SPEC_ENTRIES %0d, %0d pairs, lap at pair %0d:",
+               RAS_SPEC_ENTRIES, TC82_PAIRS, k_reuse);
+      if (lapped)
+        $display("TC-82   checks the reuse of A's entry and A's return %s",
+                 "mispredicted");
+      else
+        $display("TC-82   checks A's return read right");
       do_reset();
       push_one(ADDR_A);
-      for (int k = 0; k < 20; k++) begin
+      idx_a = int'(dut.tosr);
+      check("TC-82 A is allocated at idx1 (the sentinel skip from reset)",
+            (idx_a == 1) && (dut.spec_ret_addr[1] == ADDR_A));
+      for (int k = 0; k < TC82_PAIRS; k++) begin
         push_one(fill_addr[k]);
+        if ((first_reuse < 0) && (dut.spec_ret_addr[idx_a] != ADDR_A)) begin
+          first_reuse = k;
+          $display("TC-82   pair %0d allocates idx%0d: A's entry holds %h",
+                   k, idx_a, dut.spec_ret_addr[idx_a]);
+        end
         pop_chk($sformatf("TC-82 pair %0d", k), 0, 1'b1, fill_addr[k]);
       end
-      pop_chk("TC-82 A's return after 20 pairs reads A (16 entries: not valid)",
-              0, 1'b1, ADDR_A);
+      if (lapped) begin
+        check($sformatf("TC-82 A's entry reused by pair %0d (ENTRIES - 2)",
+                        k_reuse), first_reuse == k_reuse);
+        pop_chk("TC-82 A's return after the lap is not valid (mispredicted)",
+                0, 1'b0, ADDR_A);
+      end else begin
+        check("TC-82 A's entry is not reused within the pairs",
+              first_reuse == -1);
+        pop_chk("TC-82 A's return after the pairs reads A", 0, 1'b1, ADDR_A);
+      end
     end
 
     // =============================================================

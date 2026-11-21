@@ -573,7 +573,7 @@ package bp_defines_pkg;
   // ============================================================
   // :RAS parameters:
   // ============================================================
-  // Dual-stack RAS. Static partition: 32 speculative entries,
+  // Dual-stack RAS. Static partition: 16 speculative entries,
   // 64 commit entries. The speculative stack is circular with a
   // next-on-stack link per entry (BP-120, TD#159, ras_decisions.md
   // 3.2); the commit stack is a plain circular stack. It read "Simple
@@ -584,14 +584,16 @@ package bp_defines_pkg;
   // 25 classified runs, every return of the causes depth (10) and
   // pop_empty (1) was in a recursion more than 32 frames deep (web_11),
   // and 64 entries remove them.
-  // BP-153 (RAS-4, for acceptance): 32 speculative entries, 16 before.
-  // The allocator only advances (TOSW is monotonic, PU1), so a call's
-  // entry is reused after RAS_SPEC_ENTRIES - 1 younger allocations,
-  // popped or not; with 16 the allocator lapped an uncommitted call's
-  // entry in the 25 classified runs (causes wrap 8, fb_uncommitted 1),
-  // and 32 entries remove them. RAS_PTR_BITS 4 -> 5, RAS_TAG_BITS 4 -> 3.
+  // 16 speculative entries. BP-153 built 32 (RC11), REJECTED session-086
+  // (Jeff) and reverted by BP-154: 32 doubles the B1 link-kill
+  // comparators of every allocation and widens the restore path, for 5
+  // returns over the 25 classified runs. The allocator only advances
+  // (TOSW is monotonic, PU1), so a call's entry is reused after
+  // RAS_SPEC_ENTRIES - 1 younger allocations, popped or not: at 16 the
+  // allocator laps an uncommitted call's entry (causes wrap and
+  // fb_uncommitted, BP-151). RAS_PTR_BITS 4, RAS_TAG_BITS 4.
   // See planning/arch/ras_decisions.md section 3.
-  parameter int RAS_SPEC_ENTRIES    = 32;
+  parameter int RAS_SPEC_ENTRIES    = 16;
   parameter int RAS_COMMIT_ENTRIES  = 64;
   parameter int RAS_RCTR_WIDTH      = 4;
   parameter int RAS_ADDR_WIDTH      = VA_WIDTH;
@@ -684,7 +686,7 @@ package bp_defines_pkg;
 
   // RAS_PTR_BITS: $clog2(16) = 4
   localparam int RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES);
-  // RAS_COMMIT_PTR_BITS: $clog2(32) = 5
+  // RAS_COMMIT_PTR_BITS: $clog2(64) = 6
   localparam int RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES);
   // RAS_DEPTH_BITS (BP-152, A1): the width of the speculative call
   // depth (in the snapshot) and of the last committed block's copy of

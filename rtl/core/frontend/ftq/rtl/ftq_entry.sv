@@ -6,11 +6,12 @@
 // FTQ fast-path entry array (BP-107).
 //
 // Owns bp_ftq_entry_t x FTQ_DEPTH, ftq_entry_formats.md 1 and 2.
-// 329 bits per entry at two slots (254 at one), 64 entries, 21,056 bits
-// ($bits(bp_ftq_entry_t), measured by BP-153). BP-153 adds 13 bits to the
-// RAS snapshot (RAS-4): the push bit and the pop record (11), and one
-// more pointer bit and one fewer tag bit for 32 speculative entries (4
-// pointers, 2 tags: +2): 316 and 20,224 before. BP-152 added
+// 327 bits per entry at two slots (252 at one), 64 entries, 20,928 bits
+// ($bits(bp_ftq_entry_t), measured by BP-154). BP-153 added 11 bits to
+// the RAS snapshot (RAS-4): the push bit and the pop record; it built
+// 329 / 254 with 32 speculative entries (RC11), which BP-154 reverted to
+// 16 (one pointer bit fewer, one tag bit more: 4 pointers, 2 tags, -2).
+// 316 and 20,224 before BP-153. BP-152 added
 // 12 bits, the RAS snapshot's depth and tag: 304 and 19,456 before. Until
 // BP-152 this read 232 bits and 14,848, which was not $bits of the
 // entry (BP-142 had added the recursion count, 4 bits, TD#194, to a

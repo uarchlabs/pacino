@@ -1890,6 +1890,11 @@ int main(int argc, char** argv) {
       row.push_back({std::string("rc_brew_") + bn[i],
                      std::to_string(rcl.n_brew[i])});
   }
+  // BP-154: the speculative allocations in flight, unwrapped (ras_class.h
+  // max_inflight), and the cycles they stood at RAS_SPEC_ENTRIES - 1 or
+  // more. Last, so the columns before them keep their order.
+  row.push_back({"rc_max_inflight", std::to_string(rcl.max_inflight)});
+  row.push_back({"rc_cyc_lap", std::to_string(rcl.n_cyc_lap)});
   for (auto& kv : row)
     std::printf("%-22s %s\n", kv.first.c_str(), kv.second.c_str());
   if (!o.out.empty()) {

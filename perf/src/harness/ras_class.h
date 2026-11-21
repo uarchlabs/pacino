@@ -56,6 +56,7 @@
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -69,9 +70,9 @@ namespace rcls {
 
 constexpr int      NS   = PERF_SLOTS;     // NUM_PRED_SLOTS
 // RAS_SPEC_ENTRIES. BP-153: a build constant (perf/Makefile RAS_SPEC),
-// as RC below.
+// as RC below. 16 at head (BP-154 reverted BP-153's 32).
 #ifndef PERF_RAS_SPEC
-#define PERF_RAS_SPEC 32
+#define PERF_RAS_SPEC 16
 #endif
 constexpr int      RS   = PERF_RAS_SPEC;
 // RAS_COMMIT_ENTRIES. BP-153: a build constant (perf/Makefile
@@ -114,6 +115,9 @@ struct Evict {
   uint64_t by_inst = 0, cyc = 0;
   bool     victim_cmt = false;   // the evicted push's block had committed
   bool     skip = false;         // the allocation was the sentinel skip
+  // BP-154: the reusing allocation's sequence number, and the allocations
+  // in flight (not yet passed by a commit) when it was made.
+  uint64_t by_seq = 0, inflight = 0;
 };
 
 // One FTQ instance's RAS observation.
@@ -244,6 +248,16 @@ class RasClass {
   // 1 commit_lost, 2 extra_closed, 3 extra_offpath, 4 extra_deep.
   uint64_t n_brew[5] = {};
   uint64_t n_call_pd_ind = 0;   // BP-152: call_pd whose call is a JALR
+  // BP-154: THE ALLOCATIONS IN FLIGHT. rc_max_spec_depth is TOSW - BOS
+  // modulo RAS_SPEC_ENTRIES and cannot show a lap. This is the same
+  // distance unwrapped: the speculative allocations (p2 pushes, p3
+  // missed pushes, C1 and backend pushes) whose FTQ instance a commit
+  // has not yet passed (inst > the last committed instance). Squashed
+  // instances count until a younger commit passes them, as their entries
+  // are held until BOS passes them. max_inflight is its largest value;
+  // n_cyc_lap the cycles it stood at RAS_SPEC_ENTRIES - 1 or more (the
+  // allocator can reach an entry no commit has released).
+  uint64_t max_inflight = 0, n_cyc_lap = 0;
   int      dump = 0;              // RC_DUMP: lines to print per cause
   int      dumped[C_N] = {};
   uint64_t tr_from = 0, tr_to = 0;  // RC_TRACE=from:to, the RAS events
@@ -438,9 +452,12 @@ class RasClass {
           e.cyc = cyc;
           e.victim_cmt = v.inst <= last_cmt_inst_;
           e.skip = (uint8_t(t->rc_tosw) == uint8_t(t->rc_bos));
+          e.by_seq = seq_ + 1;
+          e.inflight = fl_.size() + 1;
           evict_[v.seq] = e;
         }
         a.o.seq = ++seq_;
+        fl_.push_back(a.o.inst);                     // BP-154
         v = a.o;
         IObs& o = inst_obs(a.o.inst);
         if (a.o.repair) { o.rep_seq = v.seq; o.rep_aidx = i; }
@@ -531,12 +548,15 @@ class RasClass {
               e.cyc = cyc;
               e.victim_cmt = v.inst <= last_cmt_inst_;
               e.skip = (uint8_t(t->rc_rs_tosw) == uint8_t(t->rc_rs_bos));
+              e.by_seq = seq_ + 1;
+              e.inflight = fl_.size() + 1;
               evict_[v.seq] = e;
             }
             Occ oc;
             oc.inst = o.inst; oc.addr = o.pd_ft; oc.cyc = cyc;
             oc.pos = o.pd_pos;
             oc.seq = ++seq_;
+            fl_.push_back(o.inst);                   // BP-154
             v = oc;
             o.pd_seq = oc.seq;
             o.pd_aidx = i;
@@ -570,6 +590,11 @@ class RasClass {
       }
       last_cmt_inst_ = ci;
     }
+    // BP-154: the allocations in flight, after this cycle's allocations
+    // and commit (allocations are appended in sequence order).
+    while (!fl_.empty() && fl_.front() <= last_cmt_inst_) fl_.pop_front();
+    if (fl_.size() > max_inflight) max_inflight = fl_.size();
+    if (fl_.size() >= uint64_t(RS - 1)) n_cyc_lap++;
     // (5) allocation of a new FTQ instance (p1), after the events above
     if (t->ew_alloc_val) {
       IObs& o = cur(t->ew_alloc_idx);
@@ -703,6 +728,7 @@ class RasClass {
   std::vector<RefEnt>                    ref_;
   std::vector<Rst>                       rst_log_;
   std::vector<uint64_t>                  skip_cyc_;
+  std::deque<uint64_t>                   fl_;   // BP-154: in flight, by inst
   Rst                                    last_rst_;
   IObs                                   dummy_;
 
@@ -942,6 +968,26 @@ class RasClass {
           last_rst_.cyc, int(last_rst_.pd), int(last_rst_.op_after),
           int(last_rst_.rep), ref_.size(), int(o.cocc.v), o.cocc.inst,
           o.cocc.addr, o.cmt_inst, top.obs.inst);
+      // BP-154: the call's allocation and the allocation that reused its
+      // entry, if any: cycle, sequence numbers and the allocations then in
+      // flight.
+      {
+        const IObs& ct = top.obs;
+        uint64_t cs = (ct.push_s >= 0 && ct.kind == 0) ? ct.aseq
+                    : ct.rep_seq ? ct.rep_seq : ct.pd_seq;
+        auto pr = pd_by_inst_.find(ct.inst);
+        if (cs == 0 && pr != pd_by_inst_.end()) cs = pr->second.seq;
+        auto ev = evict_.find(cs);
+        std::fprintf(stderr, "   ALLOC call p2_cyc %" PRIu64 " seq %" PRIu64
+                     " ret p2_cyc %" PRIu64 " seq_now %" PRIu64,
+                     ct.p2_cyc, cs, o.p2_cyc, seq_);
+        if (cs != 0 && ev != evict_.end())
+          std::fprintf(stderr, " | REUSED cyc %" PRIu64 " by_seq %" PRIu64
+                       " by_inst %" PRIu64 " inflight %" PRIu64 " skip %d",
+                       ev->second.cyc, ev->second.by_seq, ev->second.by_inst,
+                       ev->second.inflight, int(ev->second.skip));
+        std::fprintf(stderr, "\n");
+      }
       // BP-152: for a fallback, the index read and the commit stack's
       // top entries, newest first, each with its reference state (L live,
       // C closed, - not on the path).

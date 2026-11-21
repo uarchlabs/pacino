@@ -586,6 +586,9 @@ module bp_cluster (
   logic                w_reach_p2   [0:NUM_PRED_SLOTS-1];
   logic                w_tage_hit_p2[0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_tkn_tgt_p2 [0:NUM_PRED_SLOTS-1];
+  // BP-154: an FTB-miss p1 return whose p2 pop differs from its p1 target.
+  logic                w_p1ret_redir_p2 [0:NUM_PRED_SLOTS-1];
+  logic                w_p1ret_any_p2;   // any slot of the block
   // The p2 block fall-through: the FTB fall-through when the FTB
   // answered, else the p1 value carried forward. ONE net serves the
   // not-taken term of every p2 successor, the p3 carry and
@@ -1294,10 +1297,30 @@ module bp_cluster (
     // not redirect (BP-121; before, an unreachable slot whose successor
     // differed could win the FTQ's lowest-slot selection over nothing
     // and steer to a branch past the block's end).
+    //
+    // BP-154 (RAS-4; the p1_only return, web_11 (5, 5) k 1574749). On an
+    // FTB miss the p1 view stands, and the RAS pops its taken return at
+    // p2 (BP-153, RC9). The p1 target of that return is the p0 TOS read,
+    // taken before the pops of the blocks ahead of it reached the stack
+    // at p2, so it can be an entry one of them has popped. The p2 pop is
+    // then the right address and fetch went to the stale one: a return
+    // mispredict with the RAS right. Such a return redirects at p2 to
+    // its pop when the two differ, and the entry's slot takes the pop as
+    // its target (p2_slot_comb). Before BP-154 no p2 redirect was made
+    // without the FTB.
+    w_p1ret_any_p2 = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      w_redir_p2[s].valid     = r_val_p2 & w_ftb_valid_p2 & w_reach_p2[s]
-                              & (w_succ_p2[s] != r_succ_p1_p2[s]);
-      w_redir_p2[s].target_pc = w_succ_p2[s];
+      w_p1ret_redir_p2[s] = r_val_p2 & ~w_ftb_valid_p2
+                          & w_ras_pred_val_p2[s] & w_ras_pop_valid_p2[s]
+                          & ((r_slot_p2[s].br_type == RETURN) ||
+                             (r_slot_p2[s].br_type == RETURN_CALL))
+                          & (w_ras_pop_addr_p2[s] != r_succ_p1_p2[s]);
+      w_p1ret_any_p2      = w_p1ret_any_p2 | w_p1ret_redir_p2[s];
+      w_redir_p2[s].valid     = (r_val_p2 & w_ftb_valid_p2 & w_reach_p2[s]
+                                 & (w_succ_p2[s] != r_succ_p1_p2[s]))
+                              | w_p1ret_redir_p2[s];
+      w_redir_p2[s].target_pc = w_ftb_valid_p2 ? w_succ_p2[s]
+                                               : w_ras_pop_addr_p2[s];
     end
   end
 
@@ -1331,7 +1354,19 @@ module bp_cluster (
 
       // w_br_val_p2 already carries r_val_p2 and w_ftb_valid_p2; the
       // explicit r_val_p2 term keeps a flop in this block's read set.
-      if (r_val_p2 & w_br_val_p2[s]) begin
+      // BP-154: on an FTB miss with the p1 return redirect (p2_succ_comb)
+      // the entry's slots are the p1 view's, as allocated, with that
+      // return's target the RAS pop the redirect went to. Without this
+      // the entry kept the stale p1 target while fetch went to the pop,
+      // and the resolve of the return read a mispredict that fetch had
+      // not made (perf err_fetch_rule).
+      if (r_val_p2 & ~w_ftb_valid_p2 & w_p1ret_any_p2) begin
+        w_slot_p2[s] = r_slot_p2[s];
+        if (w_p1ret_redir_p2[s]) begin
+          w_slot_p2[s].target   = w_ras_pop_addr_p2[s];
+          w_slot_p2[s].pred_src = PRED_RAS;
+        end
+      end else if (r_val_p2 & w_br_val_p2[s]) begin
         w_slot_p2[s].slot_valid = 1'b1;
         w_slot_p2[s].target     = w_tkn_tgt_p2[s];
         w_slot_p2[s].br_type    = w_br_type_p2[s];
@@ -1342,7 +1377,8 @@ module bp_cluster (
     end
   end
 
-  assign bpu_slot_val_p2 = r_val_p2 & w_ftb_valid_p2;
+  // BP-154: and on an FTB miss whose p1 return redirects at p2.
+  assign bpu_slot_val_p2 = r_val_p2 & (w_ftb_valid_p2 | w_p1ret_any_p2);
   assign bpu_slot_idx_p2 = r_idx_p2;
 
   // ================================================================
@@ -1560,13 +1596,28 @@ module bp_cluster (
     stop      = ~r_val_p2;
     w_c2_tkn  = '0;
     w_c2_pbit = '0;
+    // BP-154: the p1 return redirect on an FTB miss (p2_succ_comb) keeps
+    // the p1 view's branches, so its bundle is the p1 view's (r_slot_p2),
+    // the history the block had at p1. Built from the FTB's slots (none on
+    // a miss) the rollback cleared the block's taken return from the
+    // history, and later conditionals were predicted from that.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      bpc = r_pc_p2 + (VA_WIDTH'(w_pos_p2[s]) << POS_OFFSET_BITS);
-      if (!stop && w_br_val_p2[s] && (n < NUM_PRED_SLOTS)) begin
-        w_c2_tkn[n]  = w_taken_p2[s];
-        w_c2_pbit[n] = bpc[2] ^ bpc[3];
-        n            = n + 1;
-        stop         = w_taken_p2[s];
+      if (!w_ftb_valid_p2 && w_p1ret_any_p2) begin
+        bpc = r_pc_p2 + (VA_WIDTH'(r_slot_p2[s].pos) << POS_OFFSET_BITS);
+        if (!stop && r_slot_p2[s].slot_valid && (n < NUM_PRED_SLOTS)) begin
+          w_c2_tkn[n]  = r_slot_p2[s].taken;
+          w_c2_pbit[n] = bpc[2] ^ bpc[3];
+          n            = n + 1;
+          stop         = r_slot_p2[s].taken;
+        end
+      end else begin
+        bpc = r_pc_p2 + (VA_WIDTH'(w_pos_p2[s]) << POS_OFFSET_BITS);
+        if (!stop && w_br_val_p2[s] && (n < NUM_PRED_SLOTS)) begin
+          w_c2_tkn[n]  = w_taken_p2[s];
+          w_c2_pbit[n] = bpc[2] ^ bpc[3];
+          n            = n + 1;
+          stop         = w_taken_p2[s];
+        end
       end
     end
     w_c2_n = PRED_CNT_BITS'(n);

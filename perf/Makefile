@@ -40,8 +40,9 @@ SLOTS    ?= 2
 # classification's commit-stack model (ras_class.h). 64 at head since
 # BP-153.
 RAS_COMMIT ?= 64
-# BP-153: and its RAS_SPEC_ENTRIES (32 at head since BP-153).
-RAS_SPEC   ?= 32
+# BP-153: and its RAS_SPEC_ENTRIES (16 at head: BP-153's 32, RC11, was
+# reverted by BP-154).
+RAS_SPEC   ?= 16
 # The build's -j: 75% of the hardware threads, at least 1 (PF-22).
 JOBS     ?= $(shell n=$$(( $$(nproc) * 3 / 4 )); [ $$n -ge 1 ] || n=1; \
               echo $$n)

@@ -1,0 +1,9 @@
+# BP-154 Phase 2: THE WRAP AT LONG RESOLVE TO COMMIT. The classified runs'
+# backend (bp151_p2.sets) with every stage immediate (decode, rename,
+# dispatch and execute fixed:0), the fetch rule, 2e6 instructions, and
+# resolve to commit fixed at 50, 100 and 200 cycles. Run at
+# RAS_SPEC_ENTRIES 16 (the tree, head_s2) and 32 (a scratch copy with
+# BP-153's RC11, s32_s2). Every value is named, as in the sweep.
+rc50  --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:50 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+rc100 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:100 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+rc200 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:200 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
