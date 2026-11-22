@@ -1,83 +1,122 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="780" height="510" viewBox="0 0 780 510" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+<svg width="780" height="606" viewBox="0 0 780 606" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
   <title>Figure 2 - RAS dual-stack structure</title>
-  <rect x="0" y="0" width="780" height="510" fill="#ffffff"/>
+  <rect x="0" y="0" width="780" height="606" fill="#ffffff"/>
   <defs>
     <marker id="ahL" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#0d9488"/></marker>
     <marker id="ahP" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#475569"/></marker>
+    <marker id="ahN" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2563eb"/></marker>
   </defs>
 
   <text x="390" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">RAS dual-stack structure: two independent register-file arrays</text>
 
   <!-- ============ LEFT PANEL: speculative stack ============ -->
-  <rect x="24" y="46" width="320" height="312" rx="10" fill="#f8fafc" stroke="#2563eb" stroke-width="1.5"/>
-  <text x="184" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#1d4ed8">Speculative stack — 16 entries</text>
-  <text x="184" y="87" text-anchor="middle" font-size="11" fill="#64748b">simple circular buffer</text>
+  <rect x="24" y="46" width="340" height="356" rx="10" fill="#f8fafc" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="194" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#1d4ed8">Speculative stack - 16 entries</text>
+  <text x="194" y="87" text-anchor="middle" font-size="11" fill="#64748b">circular buffer with a next-on-stack link (nos)</text>
 
   <g font-size="11" fill="#1e293b">
-    <rect x="48" y="100" width="150" height="26" fill="#eef2ff" stroke="#94a3b8"/><text x="123" y="117" text-anchor="middle">idx 0  (BOS sentinel)</text>
-    <rect x="48" y="126" width="150" height="26" fill="#dbeafe" stroke="#2563eb"/><text x="123" y="143" text-anchor="middle">idx 1   ret_addr</text>
-    <rect x="48" y="152" width="150" height="26" fill="#dbeafe" stroke="#2563eb"/><text x="123" y="169" text-anchor="middle">idx 2   ret_addr</text>
-    <rect x="48" y="178" width="150" height="26" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/><text x="123" y="195" text-anchor="middle" font-weight="700">idx 3   ret_addr</text>
-    <rect x="48" y="204" width="150" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="123" y="221" text-anchor="middle">idx 4   (free)</text>
-    <rect x="48" y="230" width="150" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="123" y="247" text-anchor="middle">…       …</text>
-    <rect x="48" y="256" width="150" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="123" y="273" text-anchor="middle">idx 15  (free)</text>
+    <rect x="70" y="104" width="170" height="26" fill="#eef2ff" stroke="#94a3b8"/><text x="155" y="121" text-anchor="middle">idx 0   BOS sentinel</text>
+    <rect x="70" y="130" width="170" height="26" fill="#dbeafe" stroke="#2563eb"/><text x="155" y="147" text-anchor="middle">idx 1   A   nos 0, bot</text>
+    <rect x="70" y="156" width="170" height="26" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="3,2"/><text x="155" y="173" text-anchor="middle" fill="#64748b">idx 2   B   (popped)</text>
+    <rect x="70" y="182" width="170" height="26" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/><text x="155" y="199" text-anchor="middle" font-weight="700">idx 3   C   nos 1</text>
+    <rect x="70" y="208" width="170" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="155" y="225" text-anchor="middle">idx 4   (free)</text>
+    <rect x="70" y="234" width="170" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="155" y="251" text-anchor="middle">...</text>
+    <rect x="70" y="260" width="170" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="155" y="277" text-anchor="middle">idx 15  (free)</text>
   </g>
 
-  <!-- spec pointers (inside panel, to the right of slots) -->
+  <!-- link: C (idx 3) -> A (idx 1), past the popped B -->
+  <path d="M70,195 C40,190 40,148 66,143" fill="none" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ahN)"/>
+  <text x="27" y="173" font-size="10" font-weight="700" fill="#1d4ed8">nos</text>
+
+  <!-- spec pointers -->
   <g font-size="11" font-weight="700">
-    <line x1="244" y1="113" x2="202" y2="113" stroke="#d97706" stroke-width="1.5"/>
-    <text x="248" y="117" fill="#b45309">BOS</text>
-    <line x1="244" y1="191" x2="202" y2="191" stroke="#dc2626" stroke-width="1.5"/>
-    <text x="248" y="195" fill="#dc2626">TOSR (top)</text>
-    <line x1="244" y1="217" x2="202" y2="217" stroke="#7c3aed" stroke-width="1.5"/>
-    <text x="248" y="221" fill="#7c3aed">TOSW</text>
+    <line x1="284" y1="117" x2="244" y2="117" stroke="#d97706" stroke-width="1.5"/>
+    <text x="288" y="121" fill="#b45309">BOS</text>
+    <line x1="284" y1="195" x2="244" y2="195" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="288" y="199" fill="#dc2626">TOSR</text>
+    <line x1="284" y1="221" x2="244" y2="221" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="288" y="225" fill="#7c3aed">TOSW</text>
   </g>
 
+  <text x="48" y="304" font-size="9.5" fill="#64748b">push A, push B, pop, push C (TC-29): C links past B to A</text>
   <g font-size="10" fill="#475569">
-    <text x="48" y="304">empty: TOSR == BOS   ·   overflow: TOSW+1 == BOS</text>
-    <text x="48" y="320">usable depth = 15 (one slot reserved as sentinel)</text>
-    <text x="48" y="336">TOSW monotonic across pops — popped data survives</text>
-    <text x="48" y="352">→ enables pointer-only restore</text>
+    <text x="48" y="324">entry: ret_addr, rctr, nos, bot, gen, ncnt</text>
+    <text x="48" y="339">empty: TOSR == BOS        full: TOSW+1 == BOS</text>
+    <text x="48" y="354">usable depth 15: the BOS slot is a sentinel</text>
+    <text x="48" y="369">TOSW monotonic: popped entries stay resident</text>
+    <text x="48" y="384">allocating idx a kills every link naming a; gen[a]++</text>
   </g>
 
   <!-- ============ RIGHT PANEL: commit stack ============ -->
-  <rect x="436" y="46" width="320" height="312" rx="10" fill="#f8fafc" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="596" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">Commit stack — 32 entries</text>
-  <text x="596" y="87" text-anchor="middle" font-size="11" fill="#64748b">conventional circular stack</text>
+  <rect x="416" y="46" width="340" height="356" rx="10" fill="#f8fafc" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="586" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">Commit stack - 64 entries</text>
+  <text x="586" y="87" text-anchor="middle" font-size="11" fill="#64748b">conventional circular stack, return address only</text>
 
   <g font-size="11" fill="#1e293b">
-    <rect x="460" y="100" width="150" height="26" fill="#ccfbf1" stroke="#0d9488"/><text x="535" y="117" text-anchor="middle">committed</text>
-    <rect x="460" y="126" width="150" height="26" fill="#ccfbf1" stroke="#0d9488"/><text x="535" y="143" text-anchor="middle">committed</text>
-    <rect x="460" y="152" width="150" height="26" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/><text x="535" y="169" text-anchor="middle" font-weight="700">committed  ← top</text>
-    <rect x="460" y="178" width="150" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="535" y="195" text-anchor="middle">(free)</text>
-    <rect x="460" y="204" width="150" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="535" y="221" text-anchor="middle">…</text>
+    <rect x="440" y="104" width="170" height="26" fill="#ccfbf1" stroke="#0d9488"/><text x="525" y="121" text-anchor="middle">committed X</text>
+    <rect x="440" y="130" width="170" height="26" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/><text x="525" y="147" text-anchor="middle" font-weight="700">committed Y</text>
+    <rect x="440" y="156" width="170" height="26" fill="#ccfbf1" stroke="#0d9488"/><text x="525" y="173" text-anchor="middle">committed Z</text>
+    <rect x="440" y="182" width="170" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="525" y="199" text-anchor="middle">(free)</text>
+    <rect x="440" y="208" width="170" height="26" fill="#f1f5f9" stroke="#cbd5e1"/><text x="525" y="225" text-anchor="middle">...</text>
   </g>
-  <g font-size="11" font-weight="700">
-    <line x1="656" y1="191" x2="614" y2="191" stroke="#0d9488" stroke-width="1.5"/>
-    <text x="660" y="195" fill="#0f766e">CSP</text>
+  <g font-size="10.5" font-weight="700">
+    <line x1="652" y1="143" x2="614" y2="143" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="656" y="147" fill="#0f766e">CSP-1-n, n = 1</text>
+    <line x1="652" y1="169" x2="614" y2="169" stroke="#64748b" stroke-width="1.5"/>
+    <text x="656" y="173" fill="#475569">top, CSP-1</text>
+    <line x1="652" y1="195" x2="614" y2="195" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="656" y="199" fill="#0f766e">CSP</text>
   </g>
+
   <g font-size="10" fill="#475569">
-    <text x="460" y="258">updated at retire (one commit / cycle); top = CSP-1</text>
-    <text x="460" y="274">read-only fallback when speculative empty</text>
-    <text x="460" y="290">commit advances BOS to committing TOSR</text>
+    <text x="440" y="262">CSP = next free; top = CSP-1; count 0 to 64</text>
+    <text x="440" y="277">updated at commit only, one per cycle</text>
+    <text x="440" y="292">full: a call overwrites the oldest entry</text>
+    <text x="440" y="312">dsp: speculative call depth (+1 push, -1 pop)</text>
+    <text x="440" y="327">dcm: dep of the last committed block</text>
+    <text x="440" y="342">fallback: frame at CSP-1-n, n = dcm - dsp</text>
+    <text x="440" y="357">(committed frames popped, not yet committed)</text>
+    <text x="440" y="372">not valid when n &gt;= count; never consumed</text>
+    <text x="440" y="387">commit moves BOS to the block's post-op TOSR</text>
   </g>
 
   <!-- fallback arrow in the gap, commit -> spec -->
-  <line x1="436" y1="330" x2="346" y2="330" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ahL)"/>
-  <text x="391" y="324" text-anchor="middle" font-size="9.5" fill="#0f766e">fallback</text>
+  <line x1="416" y1="143" x2="368" y2="143" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ahL)"/>
+  <text x="390" y="135" text-anchor="middle" font-size="9.5" fill="#0f766e">fallback</text>
+  <text x="390" y="160" text-anchor="middle" font-size="9" fill="#0f766e">when</text>
+  <text x="390" y="171" text-anchor="middle" font-size="9" fill="#0f766e">empty</text>
 
   <!-- ============ BOTTOM PANEL: FTQ snapshot ============ -->
-  <rect x="24" y="378" width="732" height="118" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-  <text x="40" y="400" font-size="13" font-weight="700" fill="#b45309">FTQ entry snapshot — bp_ras_snapshot_t (12 b, one per prediction)</text>
-  <g font-size="11.5" fill="#92400e">
-    <rect x="40"  y="410" width="170" height="30" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="125" y="430" text-anchor="middle">tosr (4 b)</text>
-    <rect x="225" y="410" width="170" height="30" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="310" y="430" text-anchor="middle">tosw (4 b)</text>
-    <rect x="410" y="410" width="170" height="30" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="495" y="430" text-anchor="middle">bos (4 b)</text>
+  <rect x="24" y="420" width="732" height="172" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="40" y="442" font-size="13" font-weight="700" fill="#b45309">FTQ entry snapshot - bp_ras_snapshot_t, 39 b, one per FTQ entry</text>
+
+  <g font-size="10" fill="#b45309" text-anchor="middle">
+    <line x1="40" y1="462" x2="456" y2="462" stroke="#d97706" stroke-width="1"/>
+    <text x="248" y="457">state after the block</text>
+    <line x1="460" y1="462" x2="736" y2="462" stroke="#d97706" stroke-width="1"/>
+    <text x="598" y="457">operation record (BP-153)</text>
   </g>
-  <text x="40" y="462" font-size="11" fill="#92400e">Restore reloads all three pointers (pointer-only); circular array data is never cleared.</text>
-  <text x="40" y="479" font-size="11" fill="#92400e">BOS priority: restore &gt; commit &gt; hold.</text>
+  <g font-size="11" fill="#92400e" text-anchor="middle">
+    <rect x="40"  y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="73"  y="483">tosr</text><text x="73"  y="498">4 b</text>
+    <rect x="110" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="143" y="483">tosw</text><text x="143" y="498">4 b</text>
+    <rect x="180" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="213" y="483">bos</text><text x="213" y="498">4 b</text>
+    <rect x="250" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="283" y="483">rctr</text><text x="283" y="498">4 b</text>
+    <rect x="320" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="353" y="483">dep</text><text x="353" y="498">8 b</text>
+    <rect x="390" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="423" y="483">tag</text><text x="423" y="498">4 b</text>
+    <rect x="460" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="493" y="483">push</text><text x="493" y="498">1 b</text>
+    <rect x="530" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="563" y="483">pmode</text><text x="563" y="498">2 b</text>
+    <rect x="600" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="633" y="483">ptosr</text><text x="633" y="498">4 b</text>
+    <rect x="670" y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="703" y="483">ptag</text><text x="703" y="498">4 b</text>
+  </g>
+
+  <g font-size="11" fill="#92400e">
+    <text x="40" y="526">Restore: pointers and dep reloaded; TOSR = BOS if the TOSR entry's gen is not the tag.</text>
+    <text x="40" y="542">rctr written back into the top entry. Then the block's own push / pop is undone from</text>
+    <text x="40" y="558">the record when off the path, then any predecode / backend operation. BOS: restore &gt; commit &gt; hold.</text>
+  </g>
+  <text x="40" y="580" font-size="9.5" fill="#64748b">16-entry design. Until BP-154 the tree is built at 32 entries: 5 b pointers, 3 b tags, a 41 b snapshot.</text>
 
   <!-- snapshot link from spec panel down to FTQ panel -->
-  <line x1="184" y1="358" x2="184" y2="376" stroke="#475569" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#ahP)"/>
+  <line x1="194" y1="402" x2="194" y2="418" stroke="#475569" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#ahP)"/>
 </svg>
