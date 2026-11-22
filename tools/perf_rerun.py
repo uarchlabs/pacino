@@ -31,8 +31,10 @@ perf/cbp2025_rv_rerun.csv, one row per predictor and trace:
   predictor, set (rv: changed, orig: as it is), group, trace, Status,
   Instr, NumBr, MispBr, MPKI, 50PercInstr, 50PercNumBr, 50PercMPKI,
   ExecTime, the golden result's Instr, NumBr, MPKI and 50PercMPKI on the
-  original trace, MPKI - golden MPKI, and for set orig whether every
-  column equals the golden row (golden_equal).
+  original trace, MPKI - golden MPKI, for set orig whether every
+  column equals the golden row (golden_equal), and (PERF-004) the
+  SHA-256 of the predictor binary that ran (bin_sha256), so that each
+  row says what it measured.
 
 Usage, from the repository root:
   python3 tools/perf_rerun.py [-j N] [--plan full|fallback] [--only P]
@@ -228,6 +230,8 @@ def main():
     gold = {}
     rows = []
     bad_equal = 0
+    bin_sha = {p: sha256_of(os.path.join(CBP, "bin", "cbp." + p))
+               for p in preds}
     for pred, tset, group, trace, rc, row, sec in sorted(results):
         g = gold.setdefault((pred, group), golden(pred, group)).get(trace)
         out = {"predictor": pred, "set": tset, "group": group,
@@ -250,10 +254,12 @@ def main():
                 bad_equal += 1
         else:
             out["golden_equal"] = ""
+        out["bin_sha256"] = bin_sha[pred]
         rows.append(out)
     cols = ["predictor", "set", "group", "trace", "Status"] + COLS + [
         "ExecTime", "golden_Instr", "golden_NumBr", "golden_MPKI",
-        "golden_50PercMPKI", "MPKI_minus_golden", "golden_equal"]
+        "golden_50PercMPKI", "MPKI_minus_golden", "golden_equal",
+        "bin_sha256"]
     with open(OUT, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols, lineterminator="\n")
         w.writeheader()

@@ -43,11 +43,17 @@
 //            not the trace's next PC (as fe_tb_backend.svh): the next
 //            slot of its bundle, or, when it ended its bundle, the next
 //            slot taken, which it then waits for (decide()); the record's
-//            verdict decides a waiting branch only when the FTQ is full or
-//            the ibuf stays empty (decided_by_slot). The record's verdict
+//            verdict decides a waiting branch only when the ibuf stays
+//            empty (decided_by_slot). The record's verdict
 //            is compared with the stream's on every branch, by case
 //            (fr_*). pred_src is the record's slot at the branch's
 //            position under either rule (PF-6).
+//            A TRAP AFTER A BRANCH (the trace's next record is not the
+//            branch's own outcome, PERF-004, PF-18): under either rule the
+//            branch is judged on its own outcome, its target when taken and
+//            pc + 4 when not, from the record in its resolve cycle, and the
+//            trap is a separate RC_TRAP redirect to the trace's next PC in
+//            that cycle, as after a non-branch (trap_after_branch).
 //   RESOLVE  every instruction resolves at its take cycle plus a resolve
 //            latency, the sum of four drawn backend stages (decode,
 //            rename, dispatch, execute, PF-18); a branch's resolution
@@ -106,11 +112,23 @@
 #include "rv_encode.h"
 #include "supply.h"
 
+// THE BUILD STAMP (PERF-004, TD#210): the sha, the dirty mark and the
+// input digest, written by perf/src/stamp.py into the build directory
+// (perf/Makefile), and written to every result row.
+#if __has_include("perf_stamp.h")
+#include "perf_stamp.h"
+#endif
 #ifndef PERF_SRC_ROOT
 #define PERF_SRC_ROOT "unknown"
 #endif
 #ifndef PERF_SRC_SHA
 #define PERF_SRC_SHA "unknown"
+#endif
+#ifndef PERF_SRC_DIRTY
+#define PERF_SRC_DIRTY "unknown"
+#endif
+#ifndef PERF_INPUT_DIGEST
+#define PERF_INPUT_DIGEST "unknown"
 #endif
 #ifndef PERF_BUILD_NAME
 #define PERF_BUILD_NAME "head"
@@ -203,6 +221,8 @@ void usage() {
 "  --mem-lat <n>             L1I memory latency, default 6\n"
 "  --ptw-lat <n>             walker memory latency, default 2\n"
 "  --out <csv>               append the result row (header if new)\n"
+"  --stamp                   print the build stamp (sha, dirty mark, input\n"
+"                            digest, PERF-004) and exit\n"
 "  --log <n>                 print the backend's events for n cycles\n"
 "  <dist>: fixed:V | uniform:MIN:MAX | geometric:MIN:MAX:MEAN |\n"
 "          table:FILE\n");
@@ -269,6 +289,20 @@ struct Ro {
   // equal to the trace's next PC (the fetched-stream check under fetch).
   bool     nxt_seen = false, nxt_ok = false;
   bool     in_slot = false;      // the record held it in a slot
+  // PERF-004: and the request's slot at its position was of the other
+  // kind, conditional against unconditional (an alias: the predictor's
+  // entry describes another branch). The request's type is the one the
+  // predictors gave: a predecode correction may rewrite it (M3 keeps the
+  // alias's taken). A slot's type is never forced (PF-11), so its
+  // mispredict under the oracle is not a forcing failure
+  // (orc_slot_kind_alias).
+  bool     kind_alias = false;
+  // A TRAP AFTER A BRANCH (PERF-004, PF-18, Jeff session-086): the trace's
+  // next record is not the branch's own outcome (an exception entry). The
+  // branch is judged on own_next, its target when taken and pc + 4 when
+  // not; the trap is a separate RC_TRAP redirect, as for a non-branch.
+  bool     trap_after = false;
+  uint64_t own_next = 0;
   bool     orc_forced = false;   // its entry was allocated on the path
   uint8_t  src = SRC_NONE;
   int64_t  take_c, res_c, commit_c;
@@ -295,6 +329,7 @@ struct Counts {
   uint64_t stream_bad = 0, instr_bad = 0, faults = 0;
   uint64_t illegal = 0, idx_bad = 0, opcode_bad = 0, class_conflict = 0;
   uint64_t reopen = 0, traps = 0, unspec_repair = 0, slot_decided = 0;
+  uint64_t conflict_unspec = 0;   // RC_UNSPEC after a class conflict
   uint64_t res_sched = 0, res_wait = 0, commit_dly = 0, commit_wait = 0;
   uint64_t ic_installs = 0, cond_target_bad = 0;
   // The fetch rule (PERF-003): its mispredicts, the agreement with the
@@ -309,7 +344,15 @@ struct Counts {
   // misses (no slot at the branch's position) by class, cond, direct,
   // indirect, return, and the mispredicts among them.
   uint64_t orc_on = 0, orc_off = 0, orc_slot_mis = 0, orc_path_unforced = 0;
-  uint64_t orc_realign = 0, orc_slot_trap = 0, br_trap_after = 0;
+  uint64_t orc_kind_alias = 0;   // PERF-004: slot of the other kind, mis
+  uint64_t orc_realign = 0;
+  uint64_t br_traps = 0;        // RC_TRAP redirects after a branch (PERF-004)
+  // PERF-004 Phase 4, the configuration probes: fast-path directions, SC
+  // answers, epoch advances (summed over slots) and decayed lookups per
+  // tagged table (TAGE T1-T4, ITTAGE T1-T5).
+  uint64_t cf_fp = 0, cf_sc = 0, cf_tg_ep = 0, cf_it_ep = 0;
+  uint64_t cf_tg_dec[4] = {}, cf_it_dec[5] = {};
+  uint8_t  tg_ep_last[2] = {}, it_ep_last[2] = {};
   uint64_t miss[4] = {}, miss_mis[4] = {};
   std::vector<uint64_t> ep_instr, ep_numbr, ep_mis_cond, ep_mis;
 };
@@ -324,6 +367,10 @@ struct FSlot {
   bool     val = false, taken = false;
   uint8_t  pos = 0, type = 0, src = SRC_NONE;
   uint64_t tgt = 0;
+  // PERF-004: the slot as the request carried it, which a correction
+  // does not change: what the predictors gave (orc_slot_kind_alias).
+  bool     rq_val = false;
+  uint8_t  rq_pos = 0, rq_type = 0;
 };
 struct FRec {
   bool     valid = false;
@@ -346,9 +393,18 @@ struct FVerdict {
   uint8_t  src;
   bool     beyond;
   bool     in_slot;       // a slot of the record is at pos
+  // PERF-004: a slot of the request was at pos, and its branch type
+  bool     rq_at_pos;
+  uint8_t  rq_type;
 };
 FVerdict fr_verdict(const FRec& e, uint8_t pos, uint64_t pc) {
-  FVerdict v{(pc + 4) & VA_MASK, SRC_NONE, false, false};
+  FVerdict v{(pc + 4) & VA_MASK, SRC_NONE, false, false, false, 0};
+  for (int s = 0; s < NPS; s++)
+    if (e.s[s].rq_val && e.s[s].rq_pos == pos) {
+      v.rq_at_pos = true;
+      v.rq_type = e.s[s].rq_type;
+      break;
+    }
   for (int s = 0; s < NPS; s++)
     if (e.s[s].val && e.s[s].pos == pos) {
       v.src = e.s[s].src;
@@ -424,6 +480,12 @@ int main(int argc, char** argv) {
     };
     auto u64 = [&]() { return std::strtoull(val().c_str(), nullptr, 0); };
     if (a == "--help" || a == "-h") { usage(); return 0; }
+    else if (a == "--stamp") {
+      std::printf("sha     %s\ndirty   %s\ndigest  %s\nbuild   %s_s%d\n",
+                  PERF_SRC_SHA, PERF_SRC_DIRTY, PERF_INPUT_DIGEST,
+                  PERF_BUILD_NAME, PERF_SLOTS);
+      return 0;
+    }
     else if (a == "--trace") o.trace = val();
     else if (a == "--set") o.set = val();
     else if (a == "--config") o.config = val();
@@ -589,6 +651,26 @@ int main(int argc, char** argv) {
   // the first n returns of each cause to stderr.
   rcls::RasClass rcl;
   if (const char* dv = std::getenv("RC_DUMP")) rcl.dump = std::atoi(dv);
+  // THE EVENT LOG (PERF-004, diagnostic only; nothing in a run reads it):
+  // PERF_EVLOG=<file> writes one line per event, for finding the first
+  // divergence of two runs (A MOVE FROM A TIMING CHANGE):
+  //   C k cycle mis idx pos src cls
+  //                       an instruction committed: its FTQ index and
+  //                       position, pred_src and trace class
+  //   W cycle ptr         the watermark presented to the FTQ changed
+  //   E cycle ptr full    the eager close of the newest entry, and
+  //                       whether the FTQ was full
+  //   D cycle k full      a stream-rule branch decided by the record
+  //   T cycle k           a trap after branch k, at its take
+  //   S cycle idx slot pos p2tk p3tk hold final lcl ttkn thi tmed sum thr
+  //     chi cmed          an SC answer at p3 for a conditional slot
+  //                       (perf_top sd_*, PERF-004 Phase 5)
+  FILE* evlog = nullptr;
+  if (const char* ev = std::getenv("PERF_EVLOG")) {
+    evlog = std::fopen(ev, "w");
+    if (evlog == nullptr) die(std::string("cannot write ") + ev);
+  }
+  uint32_t ev_wm = 0xffffffffu;
   if (const char* tv = std::getenv("RC_TRACE")) {
     // RC_TRACE=from:to, the RAS events of those cycles on stderr
     rcl.tr_from = std::strtoull(tv, nullptr, 0);
@@ -701,7 +783,25 @@ int main(int argc, char** argv) {
       // taken to its own pc + 4 leaves it sequential and does not.
       bool taken = cbp::is_branch(x.cls) && x.taken;
       bool seq = (nx.pc & VA_MASK) == ((x.pc + 4) & VA_MASK);
-      if (o + 1 < n && !seq) { osucc_why = 6; return false; }
+      if (o + 1 < n && !seq) {
+        // PERF-004: the trace leaves the block early by a taken branch to
+        // pc itself, the block's predicted successor. A later stage sets
+        // the block's end at that branch without changing its successor,
+        // so with no redirect (BP-150), and the block at pc is on the
+        // path after it. Refused, the block at pc was off the path at p1
+        // and its p1 slots were not forced; the realign at p2 put it on
+        // the path, with no FTB slot to force there (err_orc_slot_mispred
+        // on 7 traces of the PERF-004 baseline). When no later stage moves
+        // the end, fetch leaves the path inside the block and the redirect
+        // squashes the block at pc.
+        if (taken && (nx.pc & VA_MASK) == (pc & VA_MASK)) {
+          k = e.k + o + 1;
+          osucc_why = 0;
+          return true;
+        }
+        osucc_why = 6;
+        return false;
+      }
       if (o + 1 == n && tk && !taken) { osucc_why = 7; return false; }
     }
     if ((nx.pc & VA_MASK) != (pc & VA_MASK)) { osucc_why = 8; return false; }
@@ -711,6 +811,7 @@ int main(int argc, char** argv) {
   };
   int64_t cyc = 0;
   int n_frdis_log = 0;                 // fetch-rule disagreements printed
+  int n_diag_log = 0;                  // STREAMERR and UNSPEC lines printed
   // Backend state.
   std::deque<Ro>  rob;
   std::deque<Ent> ents;
@@ -743,6 +844,10 @@ int main(int argc, char** argv) {
     // rv::br_type_of), which THE RAS CLASSIFICATION reads. Since BP-153
     // it is also driven on the redirect (redir_type).
     uint8_t ty = rv::BT_NO_BRANCH;
+    // PERF-004: the repair follows a PC of a class conflict (supply.h),
+    // where fetch follows the image; its RC_UNSPEC form is counted with
+    // the conflicts (conflict_unspec_repair), not as err_unspec_repair.
+    bool conflict = false;
   } rd;
   bool     redir_now = false;
   bool     started = false;           // the path's first redirect fired
@@ -969,6 +1074,27 @@ int main(int argc, char** argv) {
               }
             }
           }
+        // PERF-004: on an FTB miss the p1 view stands, and the RAS pops its
+        // taken return at p2 and redirects to the pop (BP-154 R2,
+        // bp_cluster w_p1ret_redir_p2). That pop is the forced
+        // w_ras_pop_addr_p2; its enable came only from the FTB slots above,
+        // so these returns were not forced (err_orc_slot_mispred on
+        // compress_1, infra_1 and web_11 since BP-154).
+        if (e.valid && e.on && (e.pc & VA_MASK) == (top->os_p2_pc & VA_MASK) &&
+            !top->rc_ftb_p2)
+          for (int s = 0; s < NPS; s++) {
+            if (!((top->os_p2_p1_s_val >> s) & 1)) continue;
+            uint8_t ty = top->os_p2_p1_s_type[s];
+            if (ty != rv::BT_RETURN && ty != rv::BT_RETURN_CALL) continue;
+            bool isbr = false, dir = false;
+            uint64_t tgt = 0;
+            uint8_t cls = 0;
+            if (!o_slot(e.k, e.pc, top->os_p2_p1_s_pos[s], isbr, dir, tgt,
+                        cls) || !dir)
+              continue;
+            p2_ten |= uint8_t(1u << s);
+            top->orc_p2_tgt[s] = tgt;
+          }
       }
       if (o.oracle && top->os_p3_val) {
         const OEnt& e = oent[top->os_p3_idx];
@@ -1026,15 +1152,20 @@ int main(int argc, char** argv) {
       pw_pend = false;
     }
 
-    // THE STREAM RULE: a pending branch with nothing coming. When the FTQ
-    // is full or the ibuf has been empty for EAGER_IDLE cycles, the fetch
-    // record's verdict decides it (decided_by_slot; before PERF-003 the
-    // FTQ slot read at the take did), so that no commit waits on a fetch
-    // that waits on commit.
-    if (pend != nullptr && top->pd_valid == 0 &&
-        (top->ftq_full || idle >= EAGER_IDLE)) {
+    // THE STREAM RULE: a pending branch with nothing coming. When the ibuf
+    // has been empty for EAGER_IDLE cycles, the fetch record's verdict
+    // decides it (decided_by_slot; before PERF-003 the FTQ slot read at
+    // the take did), so that the path's last branch, and one whose next
+    // block is not yet fetched, do not wait for ever. PERF-004 (TD#206)
+    // removed the term "the FTQ is full": with the FTQ full, fetch still
+    // translates, fetches and delivers every allocated entry (tb_fe_top
+    // ftq_full), so no commit waits on a fetch that waits on commit.
+    if (pend != nullptr && top->pd_valid == 0 && idle >= EAGER_IDLE) {
       c.slot_decided++;
       pend->slot_dec = true;
+      if (evlog)
+        std::fprintf(evlog, "D %" PRId64 " %" PRIu64 " %d\n", cyc, pend->k,
+                     int(top->ftq_full));
       FVerdict v = fr_verdict(frec[pend->idx], pend->pos, pend->in.pc);
       decide(pend, v.pnext != (expect_next & VA_MASK), cyc);
       pend = nullptr;
@@ -1057,14 +1188,26 @@ int main(int argc, char** argv) {
       uint64_t tnext = has_next ? nx.pc : b->in.pc + 4;
       FVerdict v = fr_verdict(fe, b->pos, b->in.pc);
       // The path's last branch has no next instruction to compare with
-      // (C3): it is not judged, as the stream rule does not judge it.
-      b->fr_mis = has_next && v.pnext != (tnext & VA_MASK);
+      // (C3): it is not judged, as the stream rule does not judge it. A
+      // branch with a trap after it is judged on its own outcome (PERF-004).
+      uint64_t judged = b->trap_after ? b->own_next : tnext;
+      b->fr_mis = has_next && v.pnext != (judged & VA_MASK);
       b->fr_src = v.src;
       // pred_src comes from the record under either rule (PF-6).
       b->src = v.src;
       b->in_slot = v.in_slot;
+      b->kind_alias = v.in_slot && v.rq_at_pos &&
+                      ((v.rq_type == rv::BT_COND) !=
+                       (b->in.cls == cbp::C_COND));
       if (v.beyond) c.fr_beyond++;
-      if (drive) {
+      if (b->trap_after) {
+        // A TRAP AFTER A BRANCH, under either rule: the verdict on its own
+        // outcome is the branch's; the RC_TRAP redirect formed at the take
+        // stands, and what fetch gave after the branch is off the trace's
+        // path (the handler's), so neither stream check applies.
+        b->mis = b->fr_mis;
+        logf("VERDICT k %" PRIu64 " mis %d trap after", b->k, int(b->mis));
+      } else if (drive) {
         // THE FETCH RULE DRIVES: the verdict decides, here, with no wait.
         b->mis = b->fr_mis;
         if (b->mis && b->nxt_seen && b->nxt_ok) {
@@ -1085,6 +1228,14 @@ int main(int argc, char** argv) {
             c.class_conflict++;
           else
             c.stream_bad++;
+          if (n_diag_log < 20) {
+            n_diag_log++;
+            std::fprintf(stderr, "STREAMERR verdict cyc %" PRId64 " k %"
+                         PRIu64 " pc %" PRIx64 " cls %d idx %d pos %d next %"
+                         PRIx64 " pnext %" PRIx64 "\n", cyc, b->k, b->in.pc,
+                         int(b->in.cls), int(b->idx), int(b->pos), tnext,
+                         v.pnext);
+          }
           rd.v = true; rd.at = cyc; rd.idx = b->idx; rd.pos = b->pos;
           rd.pc = tnext; rd.self = false; rd.cause = 2; rd.taken = false;
           rd.next_k = b->k + 1; rd.ptr = b->ptr; rd.unspec = false;
@@ -1131,13 +1282,19 @@ int main(int argc, char** argv) {
     // redirect, or, as fe_tb_backend.svh's eager mode, when the ibuf
     // presents nothing: the IFU writes a block's slots to the ibuf
     // together, so every slot of the last entry has then been taken.
-    // The eager close waits until the FTQ is full or the ibuf has been
-    // empty for EAGER_IDLE cycles, so that an entry stays nameable by a
-    // repair redirect while fetch may still show it was left early.
+    // The eager close waits until the ibuf has been empty for EAGER_IDLE
+    // cycles, so that an entry stays nameable by a repair redirect while
+    // fetch may still show it was left early. PERF-004 (TD#206) removed
+    // the term "or the FTQ is full", a workaround for a fetch stall the
+    // RTL does not have (tb_fe_top ftq_full).
     idle = (top->pd_valid == 0) ? idle + 1 : 0;
     if (started && !wrong && !rd.v && top->pd_valid == 0 && !ents.empty() &&
-        (top->ftq_full || idle >= EAGER_IDLE))
+        idle >= EAGER_IDLE) {
+      if (evlog && !ents.back().closed)
+        std::fprintf(evlog, "E %" PRId64 " %u %d\n", cyc, ents.back().ptr,
+                     int(top->ftq_full));
       ents.back().closed = true;
+    }
     // The watermark.
     while (!ents.empty() && ents.front().closed &&
            ents.front().n_commit == ents.front().n_taken &&
@@ -1145,6 +1302,10 @@ int main(int argc, char** argv) {
       wm = ents.front().ptr;
       wm_val = true;
       ents.pop_front();
+    }
+    if (evlog && wm_val && wm != ev_wm) {
+      std::fprintf(evlog, "W %" PRId64 " %u\n", cyc, wm);
+      ev_wm = wm;
     }
     top->commit_val = wm_val;
     top->commit_idx = wm;
@@ -1192,6 +1353,32 @@ int main(int argc, char** argv) {
       if (top->obs_pd_redir) c.pd_redir++;
       if (top->obs_p2_redir) c.p2_redir++;
       if (top->obs_p3_redir) c.p3_redir++;
+      // PERF-004 Phase 5: the SC decisions, to the event log only.
+      for (int s = 0; evlog && s < NPS; s++) {
+        if (!((top->sd_hit >> s) & 1)) continue;
+        std::fprintf(evlog, "S %" PRId64 " %d %d %d %d %d %d %d %d %d %d %d "
+                     "%d %d %d %d\n", cyc, int(top->sd_idx), s,
+                     int(top->sd_pos[s]), int((top->sd_p2tk >> s) & 1),
+                     int((top->sd_p3tk >> s) & 1), int((top->sd_hold >> s) & 1),
+                     int((top->sd_final >> s) & 1), int((top->sd_lcl >> s) & 1),
+                     int((top->sd_ttkn >> s) & 1), int((top->sd_thi >> s) & 1),
+                     int((top->sd_tmed >> s) & 1), int(int16_t(top->sd_sum[s])),
+                     int(top->sd_thr), int(int8_t(top->sd_chi)),
+                     int(int8_t(top->sd_cmed)));
+      }
+      // PERF-004 Phase 4: the configuration probes (perf_top cf_*).
+      for (int s = 0; s < NPS; s++) {
+        if ((top->cf_fp_use >> s) & 1) c.cf_fp++;
+        if ((top->cf_sc_hit >> s) & 1) c.cf_sc++;
+        if (top->cf_tg_epoch[s] != c.tg_ep_last[s]) c.cf_tg_ep++;
+        if (top->cf_it_epoch[s] != c.it_ep_last[s]) c.cf_it_ep++;
+        c.tg_ep_last[s] = top->cf_tg_epoch[s];
+        c.it_ep_last[s] = top->cf_it_epoch[s];
+        for (int t = 0; t < 4; t++)
+          if ((top->cf_tg_decay[s] >> t) & 1) c.cf_tg_dec[t]++;
+        for (int t = 0; t < 5; t++)
+          if ((top->cf_it_decay[s] >> t) & 1) c.cf_it_dec[t]++;
+      }
     }
     // ---- THE RECORD (PERF-003), at this edge, before the take ----
     {
@@ -1233,6 +1420,9 @@ int main(int argc, char** argv) {
           e.s[s].type = top->fr_s_type[s];
           e.s[s].src = top->fr_s_src[s];
           e.s[s].tgt = top->fr_s_tgt[s];
+          e.s[s].rq_val = e.s[s].val;
+          e.s[s].rq_pos = e.s[s].pos;
+          e.s[s].rq_type = e.s[s].type;
         }
         e.seq++;
         e.req_seq++;
@@ -1339,6 +1529,16 @@ int main(int argc, char** argv) {
             // path instruction has retired, the window is empty, and the
             // repair is RC_UNSPEC, every entry squashed.
             bool freed = lc.v && wm_val && ((wm - lc.ptr) & 127u) < 64u;
+            if (n_diag_log < 20) {
+              n_diag_log++;
+              std::fprintf(stderr, "STREAMERR fetch cyc %" PRId64 " tp %"
+                           PRIu64 " pc %" PRIx64 " exp %" PRIx64 " last pc %"
+                           PRIx64 " cls %d v %d conflict %d freed %d idx %d "
+                           "pos %d ptr %u wm %u\n", cyc, tp, pc, in.pc,
+                           lc.pc, int(lc.cls), int(lc.v),
+                           int(lc.v && sup.conflict(lc.pc)), int(freed),
+                           int(lc.idx), int(lc.pos), lc.ptr, wm);
+            }
             if (lc.v && !freed) {
               rd.v = true; rd.at = hold_c; rd.idx = lc.idx;
               rd.pos = lc.pos; rd.pc = in.pc; rd.self = false;
@@ -1348,6 +1548,7 @@ int main(int argc, char** argv) {
             } else {
               rd.v = true; rd.at = hold_c; rd.pc = in.pc; rd.cause = 3;
               rd.unspec = true; rd.next_k = tp;
+              rd.conflict = lc.v && sup.conflict(lc.pc);
             }
           }
           logf("OFFPATH pc %" PRIx64 " exp %" PRIx64, pc, in.pc);
@@ -1441,6 +1642,11 @@ int main(int argc, char** argv) {
           r.fr_seq = frec[idx].seq;
           r.orc_forced = oent[idx].valid && oent[idx].on;
           r.fr_req_seq = frec[idx].req_seq;
+          // A TRAP AFTER A BRANCH (PERF-004): the trace's next PC is not
+          // the branch's own outcome.
+          r.own_next = (in.taken ? in.target : in.pc + 4) & VA_MASK;
+          r.trap_after = tp + 1 < path_len &&
+                         (next_pc & VA_MASK) != r.own_next;
         }
         // A deque keeps references across push_back, and an entry leaves
         // only by commit, after its resolution: res_at's pointer stays
@@ -1448,9 +1654,11 @@ int main(int argc, char** argv) {
         rob.push_back(r);
         Ro* rp = &rob.back();
         bool pending = false;
-        if (rp->is_br && drive) {
+        if (rp->is_br && (drive || rp->trap_after)) {
           // THE FETCH RULE: decided in the resolve cycle from the record,
-          // with no wait for the next slot.
+          // with no wait for the next slot. A branch with a trap after it
+          // is decided so under either rule: the slot fetch delivers after
+          // it is not the trace's (PERF-004).
           res_at.emplace(rp->res_c, rp);
         } else if (rp->is_br) {
           // THE STREAM RULE: the next slot of this bundle decides, else the
@@ -1476,6 +1684,26 @@ int main(int argc, char** argv) {
         tp++;
         if (pending) {
           pend = rp;
+        } else if (rp->is_br && rp->trap_after) {
+          // A TRAP AFTER A BRANCH (PERF-004; PF-18, Jeff session-086): "the
+          // branch is judged on its own outcome, and the trap is a separate
+          // RC_TRAP redirect, as for a non-branch." The redirect names the
+          // branch, in its resolve cycle, self clear, to the trace's next
+          // PC; it carries the branch's type and direction, as every
+          // redirect carries the named instruction's (BP-153). What fetch
+          // takes after the branch is off the trace's path. Before PERF-004
+          // the branch was judged against the trace's next PC, so its
+          // prediction counted as mispredicted (mispred_trap_after) and the
+          // RC_MISPREDICT redirect went to the handler.
+          c.traps++;
+          c.br_traps++;
+          if (evlog)
+            std::fprintf(evlog, "T %" PRId64 " %" PRIu64 "\n", cyc, rp->k);
+          wrong = true;
+          rd.v = true; rd.at = rp->res_c; rd.idx = idx; rd.pos = rp->pos;
+          rd.pc = next_pc; rd.self = false; rd.cause = 1;
+          rd.taken = in.taken; rd.next_k = tp; rd.ptr = ptr;
+          rd.unspec = false; rd.ty = rv::br_type_of(in.cls);
         } else if (rp->is_br && rp->mis) {
           // The redirect, in its resolve cycle; what follows is wrong.
           wrong = true;
@@ -1511,7 +1739,14 @@ int main(int argc, char** argv) {
       if (rd.unspec && wm_val) {
         // Mid-run: every entry squashed; allocation resumes after the
         // last committed entry.
-        c.unspec_repair++;
+        if (rd.conflict) c.conflict_unspec++;
+        else c.unspec_repair++;
+        rd.conflict = false;
+        if (n_diag_log < 20) {
+          n_diag_log++;
+          std::fprintf(stderr, "UNSPEC cyc %" PRId64 " pc %" PRIx64 " k %"
+                       PRIu64 " wm %u\n", cyc, rd.pc, rd.next_k, wm);
+        }
         ents.clear();
         after_redir = true;
         redir_next = (wm + 1) & 127u;
@@ -1566,18 +1801,16 @@ int main(int argc, char** argv) {
                : (r.in.cls == cbp::C_JMP_DIR || r.in.cls == cbp::C_CALL_DIR)
                    ? 1
                : r.in.cls == cbp::C_RET ? 3 : 2;
-        // A mispredict whose trace next PC is not the branch's own outcome
-        // (its target when taken, pc + 4 when not) is a trace discontinuity
-        // after the branch, an exception entry the trace records as the
-        // next PC: it counts as a mispredict (THE VERDICT compares with the
-        // trace's next PC) and is counted apart here (orc_slot_trap).
-        perf::Inst nxo;
-        uint64_t own = ((r.in.taken ? r.in.target : r.in.pc + 4) & VA_MASK);
-        bool trap_after = sup.at(r.k + 1, nxo) && (nxo.pc & VA_MASK) != own;
-        if (r.is_br && r.mis && trap_after) c.br_trap_after++;
-        if (r.in_slot) {
-          if (r.mis && trap_after) c.orc_slot_trap++;
-          else if (r.mis) c.orc_slot_mis++;
+        // A branch with a trap after it was judged on its own outcome
+        // (PERF-004), so its mispredict, if any, is its own and counts with
+        // the rest. PERF-003 counted it apart (orc_slot_trap,
+        // mispred_trap_after); both are removed.
+        if (r.in_slot && r.kind_alias) {
+          // PERF-004: held by a slot of the other kind (an alias), counted
+          // apart; under the oracle as under the predictors.
+          if (r.mis) c.orc_kind_alias++;
+        } else if (r.in_slot) {
+          if (r.mis) c.orc_slot_mis++;
           if (o.oracle && r.mis && n_frdis_log < 20) {
             n_frdis_log++;
             const FRec& e = frec[r.idx];
@@ -1604,7 +1837,7 @@ int main(int argc, char** argv) {
                           r.in.cls == cbp::C_CALL_IND);
         else if (r.in.cls == cbp::C_RET)
           rcl.commit_ret(r.k, r.in.pc, r.in.target, r.pos, r.src,
-                         r.mis && r.in_slot, trap_after, r.rco, 0);
+                         r.mis && r.in_slot, false, r.rco, 0);
       }
       if (r.is_br && drive && r.fr_mis) c.fr_mis++;
       if (r.is_br && !drive) {
@@ -1640,6 +1873,10 @@ int main(int argc, char** argv) {
         }
       }
       r.ent->n_commit++;
+      if (evlog)
+        std::fprintf(evlog, "C %" PRIu64 " %" PRId64 " %d %d %d %d %d\n",
+                     r.k, cyc + 1, int(r.mis), int(r.idx), int(r.pos),
+                     int(r.src), int(r.in.cls));
       c.commit_wait += uint64_t(cyc + 1 - r.commit_c);
       logf("COMMIT k %" PRIu64 " in cycle %" PRId64 " (take %" PRId64
            " resolve %" PRId64 " drawn commit %" PRId64 ")", r.k, cyc + 1,
@@ -1701,6 +1938,7 @@ int main(int argc, char** argv) {
   double tot_s = std::chrono::duration<double>(
                      std::chrono::steady_clock::now() - t_start).count();
   top->final();
+  if (evlog) std::fclose(evlog);
 
   // ---- the result row (PF-9) ---------------------------------------------
   uint64_t hi, hb, hmc, hm;
@@ -1723,6 +1961,8 @@ int main(int argc, char** argv) {
   std::vector<std::pair<std::string, std::string>> row = {
     {"trace", o.trace}, {"set", o.set}, {"config", o.config},
     {"revision", PERF_BUILD_NAME}, {"sha", PERF_SRC_SHA},
+    // PERF-004 (TD#210): what the build measured, beside its sha.
+    {"dirty", PERF_SRC_DIRTY}, {"input_digest", PERF_INPUT_DIGEST},
     {"src_root", PERF_SRC_ROOT}, {"seed", std::to_string(o.seed)},
     {"num_pred_slots", std::to_string(NPS)},
     {"mispredict_rule", o.mrule},
@@ -1806,8 +2046,10 @@ int main(int argc, char** argv) {
     {"orc_path_unforced", std::to_string(c.orc_path_unforced)},
     {"orc_realigned", std::to_string(c.orc_realign)},
     {"err_orc_slot_mispred", std::to_string(c.orc_slot_mis)},
-    {"orc_slot_trap", std::to_string(c.orc_slot_trap)},
-    {"mispred_trap_after", std::to_string(c.br_trap_after)},
+    {"orc_slot_kind_alias", std::to_string(c.orc_kind_alias)},
+    // PERF-004: the RC_TRAP redirects after a branch (of trap_redirects),
+    // in the place of orc_slot_trap and mispred_trap_after.
+    {"trap_after_branch", std::to_string(c.br_traps)},
     {"miss_cond", std::to_string(c.miss[0])},
     {"miss_cond_mis", std::to_string(c.miss_mis[0])},
     {"miss_direct", std::to_string(c.miss[1])},
@@ -1834,6 +2076,7 @@ int main(int argc, char** argv) {
     {"fr_corrections", std::to_string(c.fr_corr)},
     {"class_conflict_passes", std::to_string(c.class_conflict)},
     {"class_conflict_pcs", std::to_string(sup.conflicts())},
+    {"conflict_unspec_repair", std::to_string(c.conflict_unspec)},
     {"static_pcs", std::to_string(sup.static_pcs())},
     {"stubs", std::to_string(sup.stub_count())},
     {"pages", std::to_string(vmap.size())},
@@ -1895,6 +2138,18 @@ int main(int argc, char** argv) {
   // more. Last, so the columns before them keep their order.
   row.push_back({"rc_max_inflight", std::to_string(rcl.max_inflight)});
   row.push_back({"rc_cyc_lap", std::to_string(rcl.n_cyc_lap)});
+  // PERF-004 Phase 4: the configuration probes, last, so the columns
+  // before them keep their order.
+  row.push_back({"cf_fastpath_dirs", std::to_string(c.cf_fp)});
+  row.push_back({"cf_sc_answers", std::to_string(c.cf_sc)});
+  row.push_back({"cf_tage_epoch_adv", std::to_string(c.cf_tg_ep)});
+  row.push_back({"cf_ittage_epoch_adv", std::to_string(c.cf_it_ep)});
+  for (int t = 0; t < 4; t++)
+    row.push_back({"cf_tage_decay_t" + std::to_string(t + 1),
+                   std::to_string(c.cf_tg_dec[t])});
+  for (int t = 0; t < 5; t++)
+    row.push_back({"cf_ittage_decay_t" + std::to_string(t + 1),
+                   std::to_string(c.cf_it_dec[t])});
   for (auto& kv : row)
     std::printf("%-22s %s\n", kv.first.c_str(), kv.second.c_str());
   if (!o.out.empty()) {

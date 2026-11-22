@@ -4613,6 +4613,101 @@ module tb;
         n_pa_rd[1] > 0);
   endtask
 
+  // -----------------------------------------------------------------
+  // ftq_full: THE FTQ FILLED WITH COMMIT HELD (PERF-004 Phase 2, TD#206).
+  // TD#206 read: with the FTQ full, fetch delivered nothing until the
+  // oldest entry committed (PERF-002 Other Notes 4). FF_N straight-line
+  // 32-bit instructions, translated, no branch until the halt: the
+  // predictor runs ahead one block per cycle, so allocation outruns
+  // fetch and fills the queue. The commit is held from reset (cm_until)
+  // and the
+  // backend takes whatever the ibuf presents, so the ibuf always has
+  // room. Once the FTQ is full and has stayed full FF_WAIT cycles:
+  //   - every allocated entry was presented for translation (xlate_ptr
+  //     == alloc_ptr) and fetched (fetch_ptr == alloc_ptr);
+  //   - every instruction of every allocated entry was delivered: the
+  //     backend's next expected instruction is the first one after the
+  //     newest entry's block (its pft_addr), and the ibuf presents
+  //     nothing;
+  //   - nothing committed (commit_ptr is where it started).
+  // Then the commit is released and the program runs to its end. The
+  // stall TD#206 describes fails the first two checks.
+  // -----------------------------------------------------------------
+  localparam int FF_N    = 1024;         // 4 KiB of addi, 128 blocks
+  localparam int FF_WAIT = 300;
+
+  task automatic p_ftq_full();
+    int                      c;
+    int                      ep_full;
+    int                      n_full;
+    logic [FTQ_PTR_BITS-1:0] ap;
+    logic [FTQ_PTR_BITS-1:0] xp;
+    logic [FTQ_PTR_BITS-1:0] fp;
+    logic [FTQ_PTR_BITS-1:0] cp0;
+    logic [FTQ_IDX_BITS-1:0] last;
+    logic [VA_WIDTH-1:0]     end_pc;
+    // Translated, as the perf harness runs (S-mode, the PT_MODE knob's
+    // mode, Sv57 by default): the reset vector's two pages mapped to
+    // themselves, so every block's translation is presented to the ITLB
+    // and the first fetch of each page walks.
+    tname = "ftq_full";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    W.map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
+    W.map4k(RESET_VECTOR + VA_WIDTH'('h1000),
+            PA_WIDTH'(RESET_VECTOR + VA_WIDTH'('h1000)));
+    W.wp = RESET_VECTOR;
+    for (int k = 0; k < FF_N; k++) W.i32(ADDI_T0);
+    warm_e = W.ne + 1;
+    W.halt();
+    cm_until = 32'h7FFF_FFFF;                  // commit held from reset
+    release_reset();
+    cp0 = dut.u_ftq.w_commit_ptr;
+    c   = 0;
+    while (!dut.ftq_full && (c < 20000) && (n_err < 20)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    ep_full = ep;
+    n_full  = 0;
+    repeat (FF_WAIT) begin
+      @(posedge clk);
+      #1;
+      if (dut.ftq_full) n_full++;
+    end
+    ap     = dut.u_ftq.u_ptr.alloc_ptr;
+    xp     = dut.u_ftq.u_ptr.xlate_ptr;
+    fp     = dut.u_ftq.u_ptr.fetch_ptr;
+    last   = FTQ_IDX_BITS'(ap - FTQ_PTR_BITS'(1));
+    end_pc = dut.u_ftq.u_entry.r_arr[last].pft_addr;
+    $display("%s", $sformatf(
+      {"   FTQFULL %s full at cycle %0d (retired %0d then), full %0d of %0d ",
+       "cycles after; alloc %0d xlate %0d fetch %0d commit %0d; newest ",
+       "entry %0d ends at %011h; retired %0d, next expected %011h"},
+      tname, c, ep_full, n_full, FF_WAIT, ap, xp, fp,
+      dut.u_ftq.w_commit_ptr, last, end_pc, ep, W.ex[ep].pc));
+    chk($sformatf("ftq_full: the FTQ filled with commit held (cycle %0d)", c),
+        dut.ftq_full && (n_full == FF_WAIT));
+    chk($sformatf("ftq_full: nothing committed during the hold (%0d, %0d)",
+                  cp0, dut.u_ftq.w_commit_ptr),
+        dut.u_ftq.w_commit_ptr == cp0);
+    chk($sformatf({"ftq_full: every allocated entry presented for ",
+                   "translation (xlate %0d alloc %0d)"}, xp, ap), xp == ap);
+    chk($sformatf({"ftq_full: every allocated entry fetched (fetch %0d ",
+                   "alloc %0d)"}, fp, ap), fp == ap);
+    chk($sformatf({"ftq_full: every instruction of every allocated entry ",
+                   "delivered (next %011h, the newest block ends at %011h)"},
+                  W.ex[ep].pc, end_pc),
+        (ep < W.ne) && (W.ex[ep].pc == end_pc));
+    chk("ftq_full: the ibuf presents nothing at the end of the hold",
+        !pd_out[0].valid);
+    // The commit released, the program runs to its end. The RESULT line's
+    // cycles are those after the release (run_and_check counts them).
+    cm_until = 0;
+    run_and_check(20000);
+  endtask
+
   // Program selection. +PROG=<name> runs one program; without it,
   // every program runs.
   // =================================================================
@@ -4646,6 +4741,7 @@ module tb;
       "ras_bkicall": p_ras_bkicall();          // BP-153, bk_ras push
       "ras_bkret":  p_ras_bkret();             // BP-153, bk_ras pop
       "ras_offpop": p_ras_offpop();            // BP-153, the pop undo
+      "ftq_full":   p_ftq_full();              // PERF-004, TD#206
       "fencei":     p_smc(1);
       "cboinval":   p_smc(2);
       "uc_nc":      p_uc(2'd1);
@@ -4675,7 +4771,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:49] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:50] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "t0_uaon", "deep",
                               "indir", "region",
@@ -4689,7 +4785,8 @@ module tb;
                               "pt_upriv", "init_walk", "sv48", "sv57",
                               "h57", "pt_gonly_x4", "ras_fbstale",
                               "ras_pdcall", "rsv_twores", "rsv_trapcall",
-                              "ras_bkicall", "ras_bkret", "ras_offpop"};
+                              "ras_bkicall", "ras_bkret", "ras_offpop",
+                              "ftq_full"};
 
   // =================================================================
   initial begin

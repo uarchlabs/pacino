@@ -1,0 +1,13 @@
+# PERF-004 Phase 4: THE CONFIGURATION REACHES THE DESIGN. One run per
+# --cfg key of PF-5 changed from its PF-5 value (each enable off, each
+# interval 1), and the PF-5 run, 2e6 instructions, the immediate backend.
+# The rows' cf_* columns are the design's own state (perf_top config
+# probes): fast-path directions, SC answers, epoch advances and the
+# decayed lookups per tagged table.
+pf5            --max-instr 2000000
+sc_off         --max-instr 2000000 --config head/sc_off --cfg sc_enable=0
+fp_off         --max-instr 2000000 --config head/fp_off --cfg ftb_fastpath_en=0
+tage_age_off   --max-instr 2000000 --config head/tage_age_off --cfg tage_enable_aging=0
+ittage_age_off --max-instr 2000000 --config head/ittage_age_off --cfg ittage_enable_aging=0
+tage_int1      --max-instr 2000000 --config head/tage_int1 --cfg tage_aging_interval=1
+ittage_int1    --max-instr 2000000 --config head/ittage_int1 --cfg ittage_aging_interval=1

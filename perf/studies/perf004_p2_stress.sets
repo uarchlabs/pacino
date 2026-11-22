@@ -1,0 +1,11 @@
+# PERF-004 Phase 2: THE FTQ HELD FULL. bp154_p2.sets's backend (every
+# stage immediate, the fetch rule, 2e6 instructions) at resolve to commit
+# 500 and 1000 cycles, so that the FTQ is full for most of the run. Run
+# before and after the harness's FTQ-full workaround is removed (the
+# "top->ftq_full ||" term of both eager-close sites, TD#206): every run
+# must complete with no stall. st200 is rc200 of bp154_p2.sets under the
+# stream rule, whose pending-branch decision is the first of the two
+# sites.
+st200  --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:200 --take-rate fixed:8 --window 0 --icache real --mispredict-rule stream
+rc500 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:500 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+rc1000 --max-instr 2000000 --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:1000 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch

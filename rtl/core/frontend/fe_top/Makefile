@@ -167,6 +167,8 @@ PT_ARG  := $(if $(strip $(PT_MODE)),+PT_MODE=$(strip $(PT_MODE)))
 # executed). BP-153 added ras_bkicall and ras_bkret (an indirect call
 # and a return the FTB does not hold, applied on the backend redirect's
 # restore, TD#207), and ras_offpop (the undo of a block's off-path pop).
+# PERF-004 added ftq_full (the FTQ filled with commit held: every
+# allocated entry is still translated, fetched and delivered, TD#206).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             recur t0_uaon deep indir region multistart cross rvc \
             misp_call sc_nored jals fencei cboinval uc_nc uc_io pt_faults_s \
@@ -174,7 +176,7 @@ FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
             zstar pt_gonly pt_vsonly pt_upriv sv48 sv57 h57 pt_gonly_x4 \
             ras_fbstale ras_pdcall rsv_twores rsv_trapcall ras_bkicall \
-            ras_bkret ras_offpop
+            ras_bkret ras_offpop ftq_full
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \

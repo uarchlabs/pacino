@@ -234,6 +234,12 @@ module ftq_ifu (
   // The corrected slot array, and the successor re-derived over it.
   bp_ftq_slot_t        w_corr_slot [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_corr_succ;
+  // W3M (PERF-004): the correction leaves no taken slot and no control
+  // transfer at mis_pos (M2), so the block ends where fetch cut it, at
+  // the end of the last instruction delivered (w_cut_end).
+  logic                w_corr_tkn;
+  logic                w_m2_cut;
+  logic [VA_WIDTH-1:0] w_cut_end;
 
   logic [TRX_SLOT_BITS-1:0] w_sel;
   logic                     w_sel_found;
@@ -414,6 +420,9 @@ module ftq_ifu (
   //     the redirect this module publishes to ftq_npc and comes back
   //     as redir_idx, so W3's flush is the section 5 group above and
   //     not a second one.
+  // W3M (PERF-004) under M2 the block ends at the end of the last
+  //     instruction delivered (fetch cut it at mis_pos), not at
+  //     pft_addr; the successor and pft_addr are that end.
   // W4  restore the history pointers and the RAS snapshot from this
   //     entry. Also falls out: ftq_npc drives rollback_val and
   //     ras_restore_val from the winning redirect, and the predecode
@@ -531,10 +540,33 @@ module ftq_ifu (
 
     // W3. fe_decisions.md 2.4 over the corrected slots.
     w_corr_succ = pdwb_entry.pft_addr;
+    w_corr_tkn  = 1'b0;
     for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
       if (w_corr_slot[s].slot_valid && w_corr_slot[s].taken) begin
         w_corr_succ = w_corr_slot[s].target;
+        w_corr_tkn  = 1'b1;
       end
+    end
+    // W3M (PERF-004). M2: the predicted taken position holds no control
+    // transfer (or is not an instruction start). The IFU delivered the
+    // block only up to mis_pos (IFU-15, IB-2), so the block ends at the
+    // end of the last instruction delivered -- the last start at or
+    // before mis_pos, plus its length -- and fetch resumes there. The
+    // block's pft_addr is its fall-through when it is fetched whole; the
+    // positions between mis_pos and pft_addr were never delivered, and a
+    // redirect to pft_addr stepped over them (perf err_stream, 260 on
+    // infra_6 in the PERF-004 baseline). A faulting block is cut at the
+    // fault and traps (M4), and is left as it was.
+    w_m2_cut  = ifu_ftq_mis_val && !w_pd_is_cfi && !w_corr_tkn &&
+                !ifu_ftq_fault_val;
+    w_cut_end = pdwb_entry.pft_addr;
+    for (int i = 0; i < FTQ_PD_WIDTH; i++) begin
+      if ((FTQ_PD_POS_BITS'(i) <= ifu_ftq_mis_pos) && ifu_ftq_pd[i].valid)
+        w_cut_end = pdwb_entry.pc + VA_WIDTH'(2 * i) +
+                    (ifu_ftq_pd[i].is_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
+    end
+    if (w_m2_cut) begin
+      w_corr_succ = w_cut_end;
     end
     // W3U (BP-123). An uncached block delivers one instruction and ends
     // after it (IFU-23): fetch resumes at the next sequential
@@ -687,6 +719,13 @@ module ftq_ifu (
                       (w_pd_at_mis.is_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
     pd_wr_pft_val   = pd_wr_val && w_new_slot.slot_valid &&
                       w_new_slot.taken && (w_pd_br_type != COND);
+    // W3M (PERF-004): an M2 block ends where fetch cut it, and pft_addr
+    // says so, as for the taken jump above. No RAS operation is formed
+    // (ras_t needs a valid taken slot), so ras_pd_ret_addr is not read.
+    if (pd_wr_val && w_m2_cut) begin
+      pd_wr_pft     = w_cut_end;
+      pd_wr_pft_val = 1'b1;
+    end
 
     ras_pd_undo     = win && held_push && push_off;
     ras_pd_undo_pop = win && held_pop && pop_off;               // BP-153

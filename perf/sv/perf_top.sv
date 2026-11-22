@@ -161,6 +161,48 @@ module perf_top (
   output logic                        obs_l1i_rdy,
   output logic                        ftq_full,
   output logic                        ftq_empty,
+  // PERF-004 Phase 4, THE CONFIGURATION PROBES: the design's own state
+  // that shows each PF-5 setting taking effect, per slot, this cycle.
+  //   cf_fp_use     a p2 conditional slot whose direction the FTB fast
+  //                 path supplied (bp_cluster w_fp_use_p2, ftb_fastpath_en)
+  //   cf_sc_hit     a p3 slot SC answered (bp_cluster w_sc_hit_p3,
+  //                 sc_enable)
+  //   cf_tg_epoch, cf_it_epoch
+  //                 the TAGE and ITTAGE epochs (tage_cntrl, ittage_cntrl
+  //                 lcl_epoch; aging enable and interval)
+  //   cf_tg_decay, cf_it_decay
+  //                 per tagged table, bit t-1: a p1 lookup whose entry's
+  //                 effective useful value is below its stored one, the
+  //                 decay the epoch applies (tage_cntrl ueff_p1 against
+  //                 t_use_p1; ittage_cntrl u_eff against the USE field)
+  output logic [NUM_PRED_SLOTS-1:0]   cf_fp_use,
+  output logic [NUM_PRED_SLOTS-1:0]   cf_sc_hit,
+  output logic [1:0]                  cf_tg_epoch [NUM_PRED_SLOTS],
+  output logic [1:0]                  cf_it_epoch [NUM_PRED_SLOTS],
+  output logic [TAGE_NUM_TABLES-2:0]  cf_tg_decay [NUM_PRED_SLOTS],
+  output logic [IT_NUM_TABLES-2:0]    cf_it_decay [NUM_PRED_SLOTS],
+  // PERF-004 Phase 5, THE SC DECISION at p3, per slot, for the event log
+  // (PERF_EVLOG S lines): an SC answer for the p3 block (bp_cluster
+  // w_sc_hit_p3), the block's index and the slot's position, the p2
+  // direction and the p3 one the cluster takes (r_taken_p3, w_taken_p3),
+  // the loop or fast-path hold (r_lp_use_p3 | r_fp_use_p3), and SC's
+  // inputs and result (sc_cntrl: final_pred, lcl_tkn, TAGE's direction,
+  // strong and medium bits, sc_sum, the threshold and the two choosers).
+  output logic [NUM_PRED_SLOTS-1:0]   sd_hit,
+  output logic [FTQ_IDX_BITS-1:0]     sd_idx,
+  output logic [FTB_BR_POS_BITS-1:0]  sd_pos [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   sd_p2tk,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_p3tk,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_hold,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_final,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_lcl,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_ttkn,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_thi,
+  output logic [NUM_PRED_SLOTS-1:0]   sd_tmed,
+  output logic [15:0]                 sd_sum [NUM_PRED_SLOTS],
+  output logic [15:0]                 sd_thr,
+  output logic [7:0]                  sd_chi,
+  output logic [7:0]                  sd_cmed,
 
   // ---- the fetch record (PERF-003, PF-18), by hierarchical reference
   // The fetch request (dut.ftq_ifu_*, ftq_ifu.sv request) and the
@@ -222,6 +264,12 @@ module perf_top (
   output logic [NUM_PRED_SLOTS-1:0]   os_p2_s_val,
   output logic [FTB_BR_POS_BITS-1:0]  os_p2_s_pos [NUM_PRED_SLOTS],
   output logic [2:0]                  os_p2_s_type [NUM_PRED_SLOTS],
+  // PERF-004: the p1 view at p2 (bp_cluster r_slot_p2), whose returns
+  // the RAS pops at p2 on an FTB miss and redirects to (BP-154 R2,
+  // w_p1ret_redir_p2); the gasket forces that pop as the FTB slots' one.
+  output logic [NUM_PRED_SLOTS-1:0]   os_p2_p1_s_val,
+  output logic [FTB_BR_POS_BITS-1:0]  os_p2_p1_s_pos [NUM_PRED_SLOTS],
+  output logic [2:0]                  os_p2_p1_s_type [NUM_PRED_SLOTS],
   output logic                        os_p3_val,
   output logic [VA_WIDTH-1:0]         os_p3_pc,
   output logic [FTQ_IDX_BITS-1:0]     os_p3_idx,
@@ -533,6 +581,53 @@ module perf_top (
     obs_l1i_rdy   = dut.ifu_l1i_req_rdy;
   end
 
+  // ---- PERF-004 Phase 4: the configuration probes (read only) --------
+  always_comb begin : config_probes
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      cf_fp_use[s] = dut.u_bpu.r_val_p2 && dut.u_bpu.w_br_val_p2[s] &&
+                     dut.u_bpu.w_fp_use_p2[s];
+      cf_sc_hit[s] = dut.u_bpu.r_val_p3 && dut.u_bpu.w_sc_hit_p3[s];
+      cf_tg_epoch[s] = dut.u_bpu.u_tage.u_tage_cntrl.lcl_epoch[s];
+      cf_it_epoch[s] = dut.u_bpu.u_ittage.u_cntrl.lcl_epoch[s];
+      for (int t = 1; t < TAGE_NUM_TABLES; t++)
+        cf_tg_decay[s][t-1] =
+          dut.u_bpu.u_tage.u_tage_cntrl.pred_val_p1[s] &&
+          (dut.u_bpu.u_tage.u_tage_cntrl.ueff_p1[t][s] <
+           dut.u_bpu.u_tage.u_tage_cntrl.t_use_p1[t][s]);
+      for (int t = 1; t < IT_NUM_TABLES; t++)
+        cf_it_decay[s][t-1] =
+          dut.u_bpu.u_ittage.u_cntrl.pred_val_p1[s] &&
+          (dut.u_bpu.u_ittage.u_cntrl.u_eff[t][s] <
+           dut.u_bpu.u_ittage.u_cntrl.t_cntrl_bits_p1[t][s]
+             [IT_MAX_CTR_WIDTH + IT_MAX_USE_WIDTH : IT_MAX_CTR_WIDTH + 1]);
+    end
+  end
+
+  // ---- PERF-004 Phase 5: the SC decision probes (read only) ----------
+  always_comb begin : sc_probes
+    sd_idx  = dut.u_bpu.r_idx_p3;
+    sd_thr  = 16'(dut.u_bpu.u_sc.u_sc_cntrl.threshold);
+    sd_chi  = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.choose_hi_vlo));
+    sd_cmed = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.choose_med_vvlo));
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      sd_hit[s]   = dut.u_bpu.r_val_p3 && dut.u_bpu.w_sc_hit_p3[s] &&
+                    dut.u_bpu.r_slot_p3[s].slot_valid &&
+                    (dut.u_bpu.r_slot_p3[s].br_type == COND);
+      sd_pos[s]   = dut.u_bpu.r_slot_p3[s].pos;
+      sd_p2tk[s]  = dut.u_bpu.r_taken_p3[s];
+      sd_p3tk[s]  = dut.u_bpu.w_taken_p3[s];
+      sd_hold[s]  = dut.u_bpu.r_lp_use_p3[s] | dut.u_bpu.r_fp_use_p3[s];
+      sd_final[s] = dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_pred_tkn;
+      sd_lcl[s]   = dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_lcl_pred_tkn;
+      sd_ttkn[s]  = dut.u_bpu.u_sc.u_sc_cntrl.tage_meta_p3[s].tage_pred_tkn;
+      sd_thi[s]   = dut.u_bpu.u_sc.u_sc_cntrl.tage_meta_p3[s]
+                      .tage_pred_strong;
+      sd_tmed[s]  = dut.u_bpu.u_sc.u_sc_cntrl.tage_meta_p3[s]
+                      .tage_pred_medium;
+      sd_sum[s]   = 16'(signed'(dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_sum));
+    end
+  end
+
   // ---- the fetch record (PERF-003), by hierarchical reference ------
   always_comb begin : fetch_record
     fr_req_val   = dut.ftq_ifu_req_val;
@@ -639,6 +734,9 @@ module perf_top (
       os_p2_s_val[s]  = dut.u_bpu.w_br_val_p2[s];
       os_p2_s_pos[s]  = dut.u_bpu.w_pos_p2[s];
       os_p2_s_type[s] = 3'(dut.u_bpu.w_br_type_p2[s]);
+      os_p2_p1_s_val[s]  = dut.u_bpu.r_slot_p2[s].slot_valid;
+      os_p2_p1_s_pos[s]  = dut.u_bpu.r_slot_p2[s].pos;
+      os_p2_p1_s_type[s] = 3'(dut.u_bpu.r_slot_p2[s].br_type);
       os_p3_s_val[s]  = dut.u_bpu.r_slot_p3[s].slot_valid;
       os_p3_s_pos[s]  = dut.u_bpu.r_slot_p3[s].pos;
       os_p3_s_type[s] = 3'(dut.u_bpu.r_slot_p3[s].br_type);
@@ -659,6 +757,12 @@ module perf_top (
   logic                 o_p2_ftk  [NUM_PRED_SLOTS];
   logic [VA_WIDTH-1:0]  o_p2_ftg  [NUM_PRED_SLOTS];
   logic [VA_WIDTH-1:0]  o_p2_ras  [NUM_PRED_SLOTS];
+  // PERF-004: the RAS peek, the p2 target of an FTB return since BP-153
+  // (bp_cluster p2 classification, p3_reach); before PERF-004 only the pop
+  // was forced, so a return the trace takes off the RAS's top mispredicted
+  // under the oracle (err_orc_slot_mispred).
+  logic [VA_WIDTH-1:0]  o_p2_peek [NUM_PRED_SLOTS];
+  logic                 o_p2_pkv  [NUM_PRED_SLOTS];
   ittage_pred_meta_t    o_p2_it   [NUM_PRED_SLOTS];
   logic [VA_WIDTH-1:0]  o_p2_jt;
   sc_pred_meta_t        o_p3_sc   [NUM_PRED_SLOTS];
@@ -690,6 +794,12 @@ module perf_top (
       o_p2_ras[s]  = (orc_on && orc_p2_ten[s])
                    ? orc_p2_tgt[s]
                    : dut.u_bpu.u_ras.ras_pop_addr_p2[s];
+      o_p2_peek[s] = (orc_on && orc_p2_ten[s])
+                   ? orc_p2_tgt[s]
+                   : dut.u_bpu.u_ras.ras_peek_addr_p2[s];
+      o_p2_pkv[s]  = (orc_on && orc_p2_ten[s])
+                   ? 1'b1
+                   : dut.u_bpu.u_ras.ras_peek_valid_p2[s];
       o_p2_it[s] = dut.u_bpu.u_ittage.ittage_pred_meta_p2[s];
       if (orc_on && orc_p2_ten[s]) begin
         o_p2_it[s].ittage_prm_tgt = orc_p2_tgt[s][VA_WIDTH-1:1];
@@ -707,7 +817,8 @@ module perf_top (
   //   p2 (p2_class_comb, p2_succ_comb): w_lp_pred_p2 (.lp_pred_taken),
   //      w_tage_pred_meta_p2 (.tage_pred_tkn), the FTB br direction and
   //      target w_ftb_br_taken_p2 and _target_p2, the FTB jump target
-  //      w_ftb_jmp_target_p2, the RAS pop address w_ras_pop_addr_p2,
+  //      w_ftb_jmp_target_p2, the RAS pop address w_ras_pop_addr_p2 and
+  //      (PERF-004) its peek, w_ras_peek_addr_p2 and _valid_p2,
   //      w_ittage_pred_meta_p2 (.ittage_prm_tgt, .ittage_alt_tgt)
   //   p3 (p3_redir_comb, p3_slot_comb): w_sc_pred_meta_p3 (.sc_pred_tkn)
   initial begin : oracle_p1_ubtb
@@ -723,6 +834,8 @@ module perf_top (
       force dut.u_bpu.w_ftb_br_taken_p2[gs]     = o_p2_ftk[gs];
       force dut.u_bpu.w_ftb_br_target_p2[gs]    = o_p2_ftg[gs];
       force dut.u_bpu.w_ras_pop_addr_p2[gs]     = o_p2_ras[gs];
+      force dut.u_bpu.w_ras_peek_addr_p2[gs]    = o_p2_peek[gs];   // PERF-004
+      force dut.u_bpu.w_ras_peek_valid_p2[gs]   = o_p2_pkv[gs];
       force dut.u_bpu.w_ittage_pred_meta_p2[gs] = o_p2_it[gs];
       force dut.u_bpu.w_sc_pred_meta_p3[gs]     = o_p3_sc[gs];
     end

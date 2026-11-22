@@ -20,7 +20,16 @@ A trace list holds one <group>/<trace> per line, or is given with
 Each run appends its row to its own CSV in the work directory; at the end
 the rows are gathered into --out, with the set name as the first column
 (study_set). Every row carries the trace, the configuration name, the
-revision sha, the seed and every run parameter (PF-9).
+revision sha, the dirty mark, the input digest, the seed and every run
+parameter (PF-9).
+
+THE DIGEST RULE (PERF-004, TD#210). Each build's stamp (perf_fe --stamp)
+is read before the runs. The rows are gathered only when every row's
+input_digest is its build's, and, when the parameter-set file names one
+build, when every row has the same digest. Otherwise nothing is written
+to --out (the per-run CSVs stay in the work directory) and the exit is
+non-zero: rows of different inputs are not one study unless the file
+says so by naming more than one build.
 
 Usage, from the repository root:
   python3 tools/perf_study.py --traces <list or file> --sets <file>
@@ -52,6 +61,20 @@ def run(job):
                        capture_output=True, text=True)
     return (name, trace, p.returncode, out, time.time() - t0,
             p.stderr.strip().splitlines()[-1:] if p.stderr else [])
+
+
+def stamp(binp):
+    """The build's stamp (PERF-004): sha, dirty, digest, build."""
+    p = subprocess.run([binp, "--stamp"], capture_output=True, text=True)
+    out = {}
+    for ln in p.stdout.splitlines():
+        f = ln.split(None, 1)
+        if len(f) == 2:
+            out[f[0]] = f[1].strip()
+    if p.returncode != 0 or "digest" not in out:
+        sys.exit("perf_study.py: %s gives no build stamp (built before "
+                 "PERF-004?); rebuild it (make -C perf harness)" % binp)
+    return out
 
 
 def default_jobs():
@@ -98,6 +121,13 @@ def main():
         for t in traces:
             out = os.path.join(work, "%s__%s.csv" % (name, t.replace("/", "_")))
             jobs.append((name, t, binp, argv, out))
+    stamps = {}
+    for name, binp, argv in sets:
+        if binp not in stamps:
+            stamps[binp] = stamp(binp)
+            s = stamps[binp]
+            print("perf_study.py: build %s: sha %s, %s, digest %s" %
+                  (binp, s.get("sha"), s.get("dirty"), s["digest"]))
     nproc = min(args.jobs, len(jobs))
     print("perf_study.py: %d traces x %d sets = %d runs, %d processes "
           "(-j %d)" % (len(traces), len(sets), len(jobs), nproc, args.jobs))
@@ -110,6 +140,7 @@ def main():
                                                         " ".join(err)))
             sys.stdout.flush()
             done.append(r)
+    set_bin = {name: binp for name, binp, argv in sets}
     cols, rows = None, []
     for name, trace, rc, out, sec, err in sorted(done):
         if not os.path.isfile(out):
@@ -122,6 +153,24 @@ def main():
                 rows.append(r)
     if cols is None:
         sys.exit("perf_study.py: no run wrote a row")
+    # THE DIGEST RULE (PERF-004): one set of inputs per build, and one in
+    # all unless the parameter-set file names more than one build.
+    bad = []
+    for r in rows:
+        want = stamps[set_bin[r["study_set"]]]["digest"]
+        if r.get("input_digest", "") != want:
+            bad.append("%s %s: input_digest %s, its build's %s" % (
+                r["study_set"], r["trace"], r.get("input_digest", "none"),
+                want))
+    digests = sorted({r.get("input_digest", "") for r in rows})
+    if len(digests) > 1 and len(stamps) < 2:
+        bad.append("%d input digests (%s) from one build" %
+                   (len(digests), ", ".join(digests)))
+    if bad:
+        for b in bad[:20]:
+            print("perf_study.py: " + b)
+        sys.exit("perf_study.py: rows of different inputs; %s not written "
+                 "(the runs' rows are in %s)" % (args.out, work))
     with open(args.out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols, lineterminator="\n",
                            extrasaction="ignore")

@@ -807,14 +807,38 @@ module tb;
     chk("D16 the kill fires", pd_wr_kill);
 
     // M2. The predicted taken position holds NO CONTROL TRANSFER.
-    // The slot becomes invalid and the block runs to its
-    // fall-through.
+    // The slot becomes invalid. The IFU delivered the block only up to
+    // mis_pos (IFU-15, IB-2), so the block ends after the instruction
+    // there and fetch resumes at its end, not at the fall-through
+    // (W3M, PERF-004): a 32-bit instruction at position 1 ends at
+    // start + 2 + 4. Before PERF-004 the successor was BLK_PFT, and
+    // the positions after mis_pos were never delivered.
     ifu_ftq_pd[1]   = mk_pd(1'b1, 1'b0, 2'b00, 1'b0, 1'b0);
     settle();
     chk   ("D17 a non-CFI position invalidates the slot",
            !pd_wr_slot.slot_valid);
-    chk_va("D18 and fetch resumes at the fall-through",
-           pd_redir_pc, BLK_PFT);
+    chk_va("D18 and fetch resumes after the instruction at mis_pos",
+           pd_redir_pc, BLK_PC + VA_WIDTH'(6));
+    chk   ("D18a the block's pft_addr is written to that end",
+           pd_wr_pft_val && (pd_wr_pft == BLK_PC + VA_WIDTH'(6)));
+    // M2 where mis_pos is not an instruction start: the tail of a 32-bit
+    // instruction at position 0. The block ends at that instruction's
+    // end, start + 0 + 4.
+    ifu_ftq_pd[0]   = mk_pd(1'b1, 1'b0, 2'b00, 1'b0, 1'b0);
+    ifu_ftq_pd[1]   = mk_pd(1'b0, 1'b0, 2'b00, 1'b0, 1'b0);
+    settle();
+    chk_va("D18b not a start: resumes after the instruction covering it",
+           pd_redir_pc, BLK_PC + VA_WIDTH'(4));
+    // A faulting block is cut at the fault and traps: the correction is
+    // left as it was, to the fall-through, and pft_addr is not written.
+    ifu_ftq_pd[0]     = mk_pd(1'b0, 1'b0, 2'b00, 1'b0, 1'b0);
+    ifu_ftq_pd[1]     = mk_pd(1'b1, 1'b0, 2'b00, 1'b0, 1'b0);
+    ifu_ftq_fault_val = 1'b1;
+    settle();
+    chk_va("D18c a faulting block keeps the fall-through", pd_redir_pc,
+           BLK_PFT);
+    chk   ("D18d and writes no pft_addr", !pd_wr_pft_val);
+    ifu_ftq_fault_val = 1'b0;
 
     // M4. The position was never fetched, so its predecode slot is
     // not valid. Same outcome.

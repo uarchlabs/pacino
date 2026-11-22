@@ -1,0 +1,11 @@
+# PERF-004 Phase 7 / Phase 8: THE BASELINE. Every trace of
+# perf/studies/baseline.traces (the 105 of perf/cbp2025_rv_counts.csv),
+# full length, at NUM_PRED_SLOTS 2 (perf/build/head_s2), the PF-5
+# configuration (the harness's --cfg defaults), the default backend
+# (every PF-18 event immediate, take rate fixed:8, no window), the fetch
+# rule and the real I-cache; and the same with the FTB-slot oracle
+# (PF-11). Every value is named, as in the sweep, so that the sets keep
+# their meaning whatever the harness defaults become. The baseline's CSV
+# rows carry the build's sha, dirty mark and input digest (TD#210).
+baseline        --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+baseline_oracle --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch --oracle
