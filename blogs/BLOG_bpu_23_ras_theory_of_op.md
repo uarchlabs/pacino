@@ -254,7 +254,7 @@ FE-19; tb_ras TC-72a/b hold addresses above 2^41 in both stacks). The
 commit-stack occupancy count is `RAS_COMMIT_PTR_BITS + 1` = 7 bits, a
 `localparam` of `ras.sv` (`ras.sv:215`).
 
-![Figure 2. RAS dual-stack structure](diagrams/fig2_dual_stack_structure.svg)
+![Figure 2. RAS dual-stack structure](diagrams/fig3_dual_stack_structure.svg)
 
 *Figure 2. Two register-file stacks. The speculative stack is a
 circular buffer with a next-on-stack link and a bottom mark per entry,

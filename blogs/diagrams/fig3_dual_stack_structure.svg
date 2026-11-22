@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="780" height="606" viewBox="0 0 780 606" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+<svg width="780" height="584" viewBox="0 0 780 584" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
   <title>Figure 2 - RAS dual-stack structure</title>
   <rect x="0" y="0" width="780" height="606" fill="#ffffff"/>
   <defs>
@@ -39,10 +39,10 @@
     <text x="288" y="225" fill="#7c3aed">TOSW</text>
   </g>
 
-  <text x="48" y="304" font-size="9.5" fill="#64748b">push A, push B, pop, push C (TC-29): C links past B to A</text>
+  <text x="48" y="304" font-size="9.5" fill="#64748b">push A, push B, pop, push C: C links past B to A</text>
   <g font-size="10" fill="#475569">
     <text x="48" y="324">entry: ret_addr, rctr, nos, bot, gen, ncnt</text>
-    <text x="48" y="339">empty: TOSR == BOS        full: TOSW+1 == BOS</text>
+    <text x="48" y="339">empty: TOSR == BOS        full: TOSW == BOS</text>
     <text x="48" y="354">usable depth 15: the BOS slot is a sentinel</text>
     <text x="48" y="369">TOSW monotonic: popped entries stay resident</text>
     <text x="48" y="384">allocating idx a kills every link naming a; gen[a]++</text>
@@ -95,7 +95,7 @@
     <line x1="40" y1="462" x2="456" y2="462" stroke="#d97706" stroke-width="1"/>
     <text x="248" y="457">state after the block</text>
     <line x1="460" y1="462" x2="736" y2="462" stroke="#d97706" stroke-width="1"/>
-    <text x="598" y="457">operation record (BP-153)</text>
+    <text x="598" y="457">operation record</text>
   </g>
   <g font-size="11" fill="#92400e" text-anchor="middle">
     <rect x="40"  y="468" width="66" height="36" rx="4" fill="#fef3c7" stroke="#d97706"/><text x="73"  y="483">tosr</text><text x="73"  y="498">4 b</text>
@@ -115,7 +115,6 @@
     <text x="40" y="542">rctr written back into the top entry. Then the block's own push / pop is undone from</text>
     <text x="40" y="558">the record when off the path, then any predecode / backend operation. BOS: restore &gt; commit &gt; hold.</text>
   </g>
-  <text x="40" y="580" font-size="9.5" fill="#64748b">16-entry design. Until BP-154 the tree is built at 32 entries: 5 b pointers, 3 b tags, a 41 b snapshot.</text>
 
   <!-- snapshot link from spec panel down to FTQ panel -->
   <line x1="194" y1="402" x2="194" y2="418" stroke="#475569" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#ahP)"/>

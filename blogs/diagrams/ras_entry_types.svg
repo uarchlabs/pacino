@@ -1,0 +1,93 @@
+<svg viewBox="0 0 780 360" xmlns="http://www.w3.org/2000/svg" style="background:#fff">
+
+  <!--
+    RAS entry types (ras.sv arrays, widths from bp_defines_pkg.sv):
+      speculative entry: spec_ret_addr 59, spec_rctr 4, spec_nos 4,
+                         spec_bot 1, spec_gen 4, spec_ncnt 4 = 76b
+      commit entry:      commit_ret_addr 59 = 59b
+    Each field is its own array, so the order shown is not a bit layout.
+    Box widths are not to scale: ret_addr 320px, other fields 80px each.
+  -->
+
+  <!-- Title -->
+  <text x="390" y="18" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">RAS Entry Types</text>
+
+  <!-- ============ Speculative stack entry ============ -->
+  <text x="36" y="44" font-family="monospace" font-size="11" font-weight="bold" fill="#111">Speculative stack entry  (RAS_SPEC_ENTRIES = 16)</text>
+
+  <!-- ret_addr: x=36, w=320 -->
+  <rect x="36"  y="52" width="320" height="48" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="196" y="72" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#1e40af">ret_addr</text>
+  <text x="196" y="88" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">59b</text>
+
+  <!-- rctr: x=356, w=80 -->
+  <rect x="356" y="52" width="80" height="48" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="396" y="72" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#9a3412">rctr</text>
+  <text x="396" y="88" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">4b</text>
+
+  <!-- nos: x=436, w=80 -->
+  <rect x="436" y="52" width="80" height="48" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="476" y="72" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#4c1d95">nos</text>
+  <text x="476" y="88" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">4b</text>
+
+  <!-- bot: x=516, w=80 -->
+  <rect x="516" y="52" width="80" height="48" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="556" y="72" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#991b1b">bot</text>
+  <text x="556" y="88" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">1b</text>
+
+  <!-- gen: x=596, w=80 -->
+  <rect x="596" y="52" width="80" height="48" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+  <text x="636" y="72" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">gen</text>
+  <text x="636" y="88" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">4b</text>
+
+  <!-- ncnt: x=676, w=80 -->
+  <rect x="676" y="52" width="80" height="48" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="716" y="72" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#713f12">ncnt</text>
+  <text x="716" y="88" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">4b</text>
+
+  <!-- Speculative field notes -->
+  <text x="196" y="118" text-anchor="middle" font-family="monospace" font-size="9" fill="#1e40af">return address</text>
+  <text x="196" y="131" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">(VA_WIDTH)</text>
+
+  <text x="396" y="118" text-anchor="middle" font-family="monospace" font-size="9" fill="#9a3412">recursion</text>
+  <text x="396" y="131" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">counter</text>
+
+  <text x="476" y="118" text-anchor="middle" font-family="monospace" font-size="9" fill="#4c1d95">next-on-stack</text>
+  <text x="476" y="131" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">link</text>
+
+  <text x="556" y="118" text-anchor="middle" font-family="monospace" font-size="9" fill="#991b1b">bottom</text>
+  <text x="556" y="131" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">mark</text>
+
+  <text x="636" y="118" text-anchor="middle" font-family="monospace" font-size="9" fill="#065f46">allocation</text>
+  <text x="636" y="131" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">generation</text>
+
+  <text x="716" y="118" text-anchor="middle" font-family="monospace" font-size="9" fill="#713f12">count of the</text>
+  <text x="716" y="131" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">entry below</text>
+
+  <!-- Speculative total -->
+  <line x1="36"  y1="150" x2="756" y2="150" stroke="#aaa" stroke-width="1"/>
+  <line x1="36"  y1="146" x2="36"  y2="154" stroke="#aaa" stroke-width="1"/>
+  <line x1="756" y1="146" x2="756" y2="154" stroke="#aaa" stroke-width="1"/>
+  <text x="396" y="166" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">76b per entry  (59 + 4 + 4 + 1 + 4 + 4)</text>
+
+  <!-- ============ Commit stack entry ============ -->
+  <text x="36" y="200" font-family="monospace" font-size="11" font-weight="bold" fill="#111">Commit stack entry  (RAS_COMMIT_ENTRIES = 64)</text>
+
+  <!-- ret_addr: x=36, w=320, aligned with the speculative ret_addr -->
+  <rect x="36"  y="208" width="320" height="48" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="196" y="228" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#1e40af">ret_addr</text>
+  <text x="196" y="244" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">59b</text>
+
+  <text x="196" y="274" text-anchor="middle" font-family="monospace" font-size="9" fill="#1e40af">return address</text>
+  <text x="196" y="287" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">(VA_WIDTH)</text>
+
+  <!-- Commit total -->
+  <line x1="36"  y1="306" x2="356" y2="306" stroke="#aaa" stroke-width="1"/>
+  <line x1="36"  y1="302" x2="36"  y2="310" stroke="#aaa" stroke-width="1"/>
+  <line x1="356" y1="302" x2="356" y2="310" stroke="#aaa" stroke-width="1"/>
+  <text x="196" y="322" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">59b per entry</text>
+
+  <!-- Note -->
+  <text x="396" y="348" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">Each field is a separate register-file array indexed by entry. The order shown is not a bit layout. Widths not to scale.</text>
+
+</svg>
