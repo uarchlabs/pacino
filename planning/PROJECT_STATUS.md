@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-18
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,90 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-086, continued: BP-154 and PERF-004 recorded.
+
+BP-154 COMPLETE (e7002b7). regress.sh: 301 targets, 0 failures.
+- RC11 REVERTED (Jeff's ruling): RAS_SPEC_ENTRIES 16, snapshot 39b,
+  bp_ftq_entry_t 327b at two slots and 252b at one ($bits); tb_ras
+  TC-18, TC-64 and TC-82 state their outcome from the parameter.
+  Slot-held return mispredicts 1,059 -> 1,063 over the 25 runs
+  (ref_unmatched 1,005, unwound 50, wrap 7, fb_uncommitted 1).
+- R2, AN FTB-MISS RETURN REDIRECTS AT P2 TO ITS POP (ras_decisions.md
+  CB11): the PA recommended rejecting it on RC11's cost test (1 return
+  over the 25 runs), then accepting it as built to spare an IA cycle;
+  Jeff committed it as built.
+- RAS-2 MEASURED at resolve to commit 50, 100 and 200: wrap-type
+  returns 22, 859 and 6,860 at 16 entries, 2, 9 and 79 at 32; cycles
+  within 0.146%. RAS-2 CLOSED at 16 (ras_decisions.md 10). THE BOS
+  JUMP, a committing return setting BOS with no generation check, is
+  recorded there as a known limitation, not scheduled.
+- pt_gonly_x4 398 -> 363: RC13 alone (the 21-bit jump field could not
+  hold its far targets).
+PA assessment: complete; the IA's "3" at 50 cycles and 32 entries is
+2 by its own rows. The PA wrote BP-154 as a revert plus a study and
+a trace without telling Jeff so plainly (PA error), and its "trace
+every new mispredict" with THE IA FIXES WHAT IT FINDS made R2
+certain. RULED (Jeff, session-086): no further BP task.
+
+PERF-004 COMPLETE (2d1e330). regress.sh: 303 targets, 0 failures.
+THE BASELINE: 210 runs (105 traces, plain and oracle), full length,
+every PF-11 check passing, digest 0c66fed0 (perf_decisions.md PF-9).
+- TD#210: the build stamp and the input digest; rows of one digest
+  only (PF-9).
+- TD#206: no RTL stall (tb_fe_top ftq_full); the harness's FTQ-full
+  term removed (PF-18).
+- Jeff's trap-after-branch ruling built (PF-18).
+- THE ORACLE HAD LAPSED since BP-153 (the RAS peek was not forced;
+  52, 93, 70 on three traces): BP-153 and BP-154 did not run it, and
+  the PA's tasks did not require it (PA error). Fixed, with the
+  alignment and kind-alias counts (PF-11).
+- TD#197: every PF-5 key reaches the design (PF-5).
+- TD#208: the cost of a correct SC; 3.3M answers re-derived, 0
+  deviations.
+- The full CBP rerun, 1,155 runs (PF-15); cai and jimenez are one
+  binary.
+- AN RTL DEFECT FIXED, W3M (ftq_ifu_interfaces.md 7): after a
+  predecode kill fetch resumed at the block's fall-through and skipped
+  the instructions between; 260 wrong PCs on infra_6 at full length
+  only. tb_ftq_ifu D18, D18a, D18b fail before and pass after, both
+  slot counts.
+RESULT (PF-10): pacino / TAGE192 conditional MPKI 2.48 at 50Perc
+(8.4173 against 3.3992), 1.55 compress to 4.62 media; not steady, so
+the SPEC extrapolation does not hold. PA reading: of 9.1253 MPKI,
+1.3677 remain under the oracle (the FTB's misses, a cost R does not
+pay); the FTB's base counter decides 4.0420 MPKI, more than TAGE and
+SC together, most on traces R predicts nearly perfectly (TD#218).
+Investigate that before enlarging the TAGE.
+PA assessment: complete; accept R1 to R13. PA ERROR: session-086
+told Jeff the MPKI could be trusted before PERF-004; PERF-004 then
+found the RTL defect and the oracle lapse. Process: 1h35m of IA
+time, 13.9 hours of runs, 40 hours of wall time, most of the rest
+waiting on permission prompts; the PA proposes an allow list for the
+repository's Claude Code settings, from the prompts the IA hit.
+
+FOR JEFF: R1 to R13 (PERF-004 Results Capture), recorded here for
+acceptance; TD#218's investigation task; the allow list.
+
+TECHNICAL DEBT. Closed: TD#206, TD#208, TD#210, moved to
+CLOSED_TECH_DEBT.md. Opened: TD#215 (predecode M3 keeps a taken no
+predictor gave), TD#216 (cai = jimenez), TD#217 (a baseline
+comparison tool), TD#218 (the base counter decides most mispredicts).
+TD#197 and TD#209 noted.
+
+PLANNING CORRECTIONS: ras_interfaces.md 2 read commit 32 and 5b
+(stale since BP-153, the PA's recording missed it); ftq_entry_formats.md
+2 read 41 for VA_WIDTH, which is 59; ras_interfaces.md held three
+history entries inside 6's Semantics block (the PA's recordings).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, ras_decisions.md,
+ras_interfaces.md, ftq_entry_formats.md, ftq_bpu_interfaces.md,
+ftq_ifu_interfaces.md, perf_decisions.md.
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-005,
+TD#219.
 
 ---
 ## Session-086, continued: BP-153 recorded; BP-154 written.
@@ -7243,6 +7327,10 @@ moves there in the planning update that closes it.
 |     |          | receives each value (fe_cfg_seen); at interval 1 that    |
 |     |          | suggests aging does not reach the tables. Opened         |
 |     |          | session-084 (Jeff).                                      |
+|     |          | PERF-004 Phase 4: every PF-5 key reaches the design at   |
+|     |          | both slot counts, shown by the design's own counts       |
+|     |          | (perf_decisions.md PF-5); PERF-002's finding does not    |
+|     |          | reproduce. The aging design options stay open.           |
 | 198 | mmu, csr | OPEN, FEATURE. BUILD debug_support (csr_decisions.md     |
 |     |          | CSR-8, mmu_decisions.md MMU-33). csr_pkg: CSR 0x7C2,     |
 |     |          | bits 31 allow_all_satp_writes and 30                     |
@@ -7313,25 +7401,6 @@ moves there in the planning update that closes it.
 |     |          | been tested. Needed for B, pacino matched to R           |
 |     |          | (perf_decisions.md PF-10), which is not built until this |
 |     |          | closes. Was PF-U7. Opened session-086 (Jeff).            |
-| 206 | ftq, ifu | OPEN, CORRECTNESS (forward progress) until shown         |
-|     |          | otherwise. WITH THE FTQ FULL, FETCH DELIVERS NOTHING     |
-|     |          | UNTIL ITS OLDEST ENTRY COMMITS: the ibuf stayed empty    |
-|     |          | 200,000 cycles on web_11 with 64 entries allocated ahead |
-|     |          | (PERF-002 Other Notes 4). The harness works around it    |
-|     |          | with fe_tb_backend's eager commit, which hides it.       |
-|     |          | Suspected at ftq_ifu.sv:256-258, a request only for an   |
-|     |          | entry whose translation has been presented. Opened       |
-|     |          | session-086 (Jeff).                                      |
-| 208 | perf     | OPEN, PERFORMANCE, INVESTIGATE, AFTER TD#207. MPKI AND   |
-|     |          | mis_sc RISE ON SOME TRACES AFTER BP-150 (web_11 +37      |
-|     |          | immediate, +166 latency; compress_1 +45; int_6 +21;      |
-|     |          | tb_fe_top 1-slot indir mispredicts 44 -> 53). PERF-003   |
-|     |          | fixed the harness's not-taken resolution target: mis_sc  |
-|     |          | moves both ways again (infra_1 +147 and +47, compress_1  |
-|     |          | +23 and +19, int_6 +10 and +56; fp_1 -254, web_11 -52    |
-|     |          | and -62). Investigate after TD#207: a RAS defect changes |
-|     |          | the global history SC and TAGE see. Opened session-086   |
-|     |          | (PA).                                                    |
 | 209 | fe tb    | OPEN, VERIFICATION. TB_FE_TOP'S BACKEND HIDES FETCH      |
 |     |          | DEFECTS. It counts a wrong PC after a conditional as a   |
 |     |          | mispredict by design (fe_tb_backend.svh:210-235), so a   |
@@ -7341,17 +7410,9 @@ moves there in the planning update that closes it.
 |     |          | checks each branch against the entry's stored prediction |
 |     |          | and fails a disagreement, the tb_fe_top counterpart of   |
 |     |          | PERF-003's observe step. Opened session-086 (PA).        |
-
-| 210 | perf     | OPEN, PROVENANCE. THE BUILD'S SHA CAN BE STALE.          |
-|     |          | perf/Makefile:104-116 compiles the sha into the binary   |
-|     |          | (-DPERF_SRC_SHA), but the binary does not depend on it:  |
-|     |          | a commit that changes no source leaves the old sha on    |
-|     |          | every new result row, and a dirty tree is not marked.    |
-|     |          | Found by PERF-003 (head_s2 carried 2fe4b61 at 7c61093).  |
-|     |          | Proposed: the build writes the sha, with a -dirty mark,  |
-|     |          | to a stamp file rewritten only when the value changes,   |
-|     |          | and the binary depends on the stamp. PERF-004. Opened    |
-|     |          | session-086 (PA).                                        |
+|     |          | PERF-004: W3M, an RTL defect that skipped instructions   |
+|     |          | after a predecode kill, also passed tb_fe_top; only a    |
+|     |          | full-length perf run found it.                           |
 | 212 | bpu, ftb | OPEN, PERFORMANCE. THE FTB NEVER HOLDS SOME BLOCKS.      |
 |     |          | BP-153's count of backend-found branches by why the FTB  |
 |     |          | missed them (six traces, immediate): cold 15,250,        |
@@ -7377,6 +7438,37 @@ moves there in the planning update that closes it.
 |     |          | over the six traces, and whether a field of about 40     |
 |     |          | bits gives the same mispredicts. Opened session-086      |
 |     |          | (PA).                                                    |
+| 215 | ifu, ftq | OPEN, CORRECTNESS (minor). PREDECODE M3 KEEPS A TAKEN NO |
+|     |          | PREDICTOR GAVE. When M3 rewrites an aliased FTB jump     |
+|     |          | slot into a conditional, the slot keeps the jump's       |
+|     |          | taken. Found by PERF-004 (R12, infra_6 k 65709094, entry |
+|     |          | 12): counted as orc_slot_kind_alias, 3 in the baseline's |
+|     |          | 4.36e9 instructions. Proposed: the rewritten conditional |
+|     |          | takes a predictor's direction, or not taken. Opened      |
+|     |          | session-086 (PA).                                        |
+| 216 | perf     | OPEN, REFERENCE. CAI AND JIMENEZ ARE ONE PREDICTOR in    |
+|     |          | tools/cbp2025: the same binary SHA-256, equal MispBr on  |
+|     |          | every trace, in the published results too (PERF-004      |
+|     |          | Phase 6). The reference field is ten predictors under    |
+|     |          | eleven names; outside pacino, report upstream if wanted. |
+|     |          | Opened session-086 (PA).                                 |
+| 217 | perf     | OPEN, TOOLS. A BASELINE COMPARISON TOOL: row by row by   |
+|     |          | study_set and trace, every column exact but the stamp    |
+|     |          | and timing (perf_decisions.md PF-9). Proposed by         |
+|     |          | PERF-004. Opened session-086 (PA).                       |
+| 218 | bpu      | OPEN, PERFORMANCE, INVESTIGATE. THE FTB'S BASE COUNTER   |
+|     |          | DECIDES MORE MISPREDICTS THAN TAGE AND SC TOGETHER (the  |
+|     |          | baseline: ftb 4.0420, tage 2.0694, sc 1.2519 MPKI), most |
+|     |          | on traces TAGE192 predicts nearly perfectly (int_31 88%  |
+|     |          | of 10.12 MPKI, fp_6 76%, infra_7 72%, infra_1 79%).      |
+|     |          | Suspected: how TAGE takes over from the base prediction  |
+|     |          | (allocation on a base mispredict, the tag and index      |
+|     |          | history, the p2 and p3 override, training at commit).    |
+|     |          | Proposed: count per base-counter mispredict whether a    |
+|     |          | tagged table hit and whether its last mispredict         |
+|     |          | allocated, and a software twin of pacino's TAGE in the   |
+|     |          | CBP framework (perf_decisions.md PF-10). Before any      |
+|     |          | table or history enlargement. Opened session-086 (PA).   |
 ---
 
 ## Open Items

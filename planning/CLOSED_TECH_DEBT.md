@@ -1553,6 +1553,34 @@
 |     |          | tb_fe_top.sv:3436 reads the oracle by FE_RVC_ORACLE, an  |
 |     |          | absolute path the Makefile defines, and slot1 runs make  |
 |     |          | in slot1/. Opened session-085 (Jeff).                    |
+| 206 | ftq, ifu | CLOSED by PERF-004 (2d1e330), session-086: not a defect. |
+|     |          | tb_fe_top ftq_full fills the FTQ with commit held; every |
+|     |          | entry is translated, fetched and delivered at both slot  |
+|     |          | counts, and a copy with the stall put in fails 3 checks. |
+|     |          | The harness's FTQ-full term is removed                   |
+|     |          | (perf_decisions.md PF-18); rc50 to rc1000 rows are       |
+|     |          | identical and no run hangs. PERF-002's stall was on its  |
+|     |          | first backend and does not occur on this tree. Was:      |
+|     |          | OPEN, CORRECTNESS (forward progress), with the FTQ full  |
+|     |          | fetch delivered nothing until the oldest entry           |
+|     |          | committed.                                               |
+| 208 | perf     | CLOSED by PERF-004 (2d1e330), session-086: the cost of a |
+|     |          | correct SC. BP-150's fix knocked out on the current      |
+|     |          | tree: mis_sc 28,689 with the fix against 29,211 without  |
+|     |          | over p5's 12 runs, and the knockout fails its checks on  |
+|     |          | 3 runs (the TD#205 skip). At every moved run's first     |
+|     |          | divergence the fixed SC decides by its rules             |
+|     |          | (sc_cntrl.sv:327-345: they differ, |sum| below the       |
+|     |          | threshold over a weak or medium TAGE, SC wins); 3.3M SC  |
+|     |          | answers re-derived, 0 deviations. Was: OPEN, MPKI and    |
+|     |          | mis_sc rose on some traces after BP-150.                 |
+| 210 | perf     | CLOSED by PERF-004 (2d1e330), session-086, for           |
+|     |          | acceptance (R1, R2). Every build writes a stamp (sha,    |
+|     |          | dirty mark, input digest over every build input) and the |
+|     |          | binary depends on it; every row carries it;              |
+|     |          | tools/perf_study.py gathers only rows of one digest;     |
+|     |          | make -C perf digest prints it (perf_decisions.md PF-9).  |
+|     |          | Was: OPEN, PROVENANCE, the build's sha could be stale.   |
 
 | 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
 |    | missing trx_type   | Add trx_type input port (logic type) to          |

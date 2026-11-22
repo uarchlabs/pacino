@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-20
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -68,13 +68,13 @@ names. Do not use numeric literals for stack depths, pointer
 widths, or counter widths.
 
   RAS_SPEC_ENTRIES    -- speculative stack depth (16)
-  RAS_COMMIT_ENTRIES  -- commit stack depth (32)
+  RAS_COMMIT_ENTRIES  -- commit stack depth (64, BP-153 RC10)
   RAS_RCTR_WIDTH      -- recursion counter width (4)
   RAS_PTR_BITS        -- speculative pointer width
                          $clog2(RAS_SPEC_ENTRIES) = 4b
                          Already present in bp_defines_pkg.sv.
   RAS_COMMIT_PTR_BITS -- commit pointer width
-                         $clog2(RAS_COMMIT_ENTRIES) = 5b
+                         $clog2(RAS_COMMIT_ENTRIES) = 6b
   RAS_ADDR_WIDTH      -- return address width = VA_WIDTH
 
 ---
@@ -250,8 +250,8 @@ With RAS_PTR_BITS=4, RAS_RCTR_WIDTH=4, RAS_DEPTH_BITS=8 and
 RAS_TAG_BITS=4: total 28b per snapshot (16b before BP-152).
 BP-153, for acceptance, adds push (1b), pmode (RAS_PMODE_BITS, 2b),
 ptosr (RAS_PTR_BITS) and ptag (RAS_TAG_BITS): the block's push and
-the pop record (ras_decisions.md 4.1). 41b at RAS_SPEC_ENTRIES 32;
-39b at 16, after BP-154 reverts RC11.
+the pop record (ras_decisions.md 4.1). 39b at RAS_SPEC_ENTRIES 16
+(BP-154; 41b at BP-153's 32).
 rctr is TD#194 option A, ruled session-084 (ras_decisions.md 4.1),
 built by BP-142; the snapshot was 12b, the three pointers.
 Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos,
@@ -309,17 +309,6 @@ ras_tos_valid_p0[s] = 1 -- ras_tos_addr_p0[s] holds the
                            Valid before FTB result at p2.
 ras_tos_valid_p0[s] = 0 -- speculative and commit stacks
                            both empty.
-
-  2026-11-18  session-086, after BP-151. IC-RAS-07: the commit top
-              does not reflect uncommitted pops. 11: RI-4 opened.
-
-  2026-11-19  session-086, after BP-152, for acceptance. 4: the C1
-              and undo ports. 5: the 28-bit snapshot (dep, tag).
-              IC-RAS-07: the fallback at the speculative depth. RI-4.
-
-  2026-11-20  session-086, after BP-153, for acceptance. 4: the pop
-              undo, the peek, the p3 snapshot ports. 5: push and the
-              pop record. RI-4 closed.
 ```
 
 Both slots may have ras_pred_val_p2 asserted in the same
@@ -830,3 +819,18 @@ While rstn is low (active low, synchronous):
 
   2026-11-12  session-085, after BP-145. 2: RAS_ADDR_WIDTH is VA_WIDTH,
               named, not its value.
+  2026-11-18  session-086, after BP-151. IC-RAS-07: the commit top
+              does not reflect uncommitted pops. 11: RI-4 opened.
+
+  2026-11-19  session-086, after BP-152, for acceptance. 4: the C1
+              and undo ports. 5: the 28-bit snapshot (dep, tag).
+              IC-RAS-07: the fallback at the speculative depth. RI-4.
+
+  2026-11-20  session-086, after BP-153, for acceptance. 4: the pop
+              undo, the peek, the p3 snapshot ports. 5: push and the
+              pop record. RI-4 closed.
+
+  2026-11-22  session-086, after BP-154. 2: RAS_COMMIT_ENTRIES 64 and
+              RAS_COMMIT_PTR_BITS 6b (both stale since BP-153). 5: the
+              39-bit snapshot. The three history entries above were
+              misplaced inside 6's Semantics block; moved here.

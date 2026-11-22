@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-11-20
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -624,16 +624,13 @@ The p1 snapshot carries no push and pmode NONE: it is the block
 ahead's state (BP-153). ras_pd_snapshot carries the C1 or backend
 pop's record, else NONE.
 
-BUILT BY BP-153, FOR ACCEPTANCE: 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1 = 41b at
-RAS_SPEC_ENTRIES 32 (RAS_PTR_BITS 5, RAS_TAG_BITS 3). RC11 (32
-entries) was REJECTED session-086 (Jeff): BP-154 returns the stack to
-16 entries, RAS_PTR_BITS 4 and RAS_TAG_BITS 4, so 39b. The paragraph
-below is the BP-152 figure.
+4 * RAS_PTR_BITS + RAS_RCTR_WIDTH + RAS_DEPTH_BITS + 2 *
+RAS_TAG_BITS + RAS_PMODE_BITS + 1 = 39b per FTQ entry at
+RAS_SPEC_ENTRIES 16 (RAS_PTR_BITS 4, RAS_TAG_BITS 4; $bits, BP-154).
+It was 41b at BP-153's 32 entries (RC11, rejected session-086,
+reverted by BP-154), 28b after BP-152, 16b before it.
 
 RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = $clog2(16) = 4b.
-Total snapshot width = 3 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
-RAS_DEPTH_BITS + RAS_TAG_BITS = 28b per FTQ entry (16b before BP-152).
 RAS_DEPTH_BITS = $clog2(FTQ_DEPTH) + 2 = 8 (dcm - dsp lies in
 -FTQ_DEPTH .. +FTQ_DEPTH); RAS_TAG_BITS = $clog2(FTQ_DEPTH /
 (RAS_SPEC_ENTRIES - 1) + 1) + 1 = 4 (a snapshot's TOSR entry is
@@ -1154,8 +1151,9 @@ bp_structs_pkg.sv, which holds types only
 
 bp_ras_snapshot_t uses RAS_PTR_BITS for tosr, tosw, bos, and
 RAS_RCTR_WIDTH for rctr (4.1, TD#194 option A, BP-142).
-Total snapshot width: 4.1 (41b as built by BP-153, 39b after
-BP-154; 28b after BP-152, 16b before it, 12b before session-084).
+Total snapshot width: 4.1 (39b at 16 speculative entries, BP-154;
+41b as BP-153 built it at 32; 28b after BP-152, 16b before it, 12b
+before session-084).
 
 Commit stack pointer width:
   RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES) = 6b (5b before
@@ -1175,8 +1173,27 @@ Commit stack pointer width:
 
   RAS-2: Stack depth. RESOLVED session-050: 16 speculative + 32
          commit. Session-086 (Jeff): commit 64 (BP-153 RC10);
-         speculative 32 (RC11) rejected, 16 again by BP-154, which
-         measures the wrap at long resolve to commit. See section 3.
+         speculative 32 (RC11) rejected, 16 again (BP-154). CLOSED
+         session-086: 16 stands. See section 3.
+         MEASURED by BP-154 over the six p5 traces at resolve to
+         commit 50, 100 and 200 cycles (every block): wrap +
+         fb_uncommitted + bos_rewind 22, 859 and 6,860 returns at 16
+         entries, 2, 9 and 79 at 32; mispred_return 11,711, 12,554
+         and 18,571 at 16 against 11,712, 11,719 and 11,816 at 32;
+         cycles at 16 within 0.146% of 32 (3,187 fewer at 50; 3,381
+         and 11,649 more at 100 and 200), because the FTQ is full
+         3,361,993 of 7,990,755 cycles at 200. The allocations in
+         flight reach 37, never the FTQ's 64.
+         KNOWN LIMITATION (not scheduled): THE BOS JUMP. A committing
+         return sets BOS to its snapshot's TOSR with no generation
+         check; at long resolve to commit that index can be one the
+         allocator has reached again, which puts live, uncommitted
+         entries below BOS, and their returns read the empty stack.
+         It is the cause of the 90 returns left at 32 entries and of
+         the 16-entry fb_uncommitted (compress_1 (5, 5), cycle
+         665999); more entries make it rarer, not absent. A change
+         would protect the indices live snapshots name, or allocate
+         from a free list (BP-154 Deferred Work 1).
 
   RAS-3: Recovery on flush. CLOSED 2026-08-20 -- and it was
          ALREADY ANSWERED by section 4.4 long before that date;
@@ -1202,8 +1219,8 @@ Commit stack pointer width:
          CLOSED by BP-153 (for acceptance): every RAS cause 0 over the
          25 runs; the 1,059 left are ref_unmatched (1,009, returns to
          targets no committed call linked) and unwound (50, returns
-         that skip frames). The wrap returns with RC11's revert
-         (BP-154).
+         that skip frames). BP-154, at 16 entries again: 1,063 =
+         ref_unmatched 1,005, unwound 50, wrap 7, fb_uncommitted 1.
 
 ---
 
@@ -1518,13 +1535,15 @@ IV2  PO7 holds for every slot, in repair cycles too, and a fallback
 
 ### 12.13 Parameters (9; RI 2)
 PM1  No literal depths or widths. The boundaries are derived from
-     RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES and RAS_RCTR_WIDTH: 15
-     usable entries, saturation at 2^RAS_RCTR_WIDTH - 1, a commit
-     count to RAS_COMMIT_ENTRIES.
+     RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES and RAS_RCTR_WIDTH:
+     RAS_SPEC_ENTRIES - 1 usable entries (15 at 16), saturation at
+     2^RAS_RCTR_WIDTH - 1, a commit count to RAS_COMMIT_ENTRIES.
+     Tests state their outcome from the parameter (tb_ras TC-18,
+     TC-64, TC-82; BP-154).
 PM2  The snapshot is 4 * RAS_PTR_BITS + RAS_RCTR_WIDTH +
      RAS_DEPTH_BITS + 2 * RAS_TAG_BITS + RAS_PMODE_BITS + 1 bits
-     (4.1, BP-153: 41 at 32 speculative entries, 39 at 16; 28 after
-     BP-152, 16 before it).
+     (4.1: 39 at 16 speculative entries, BP-154; 41 at BP-153's 32;
+     28 after BP-152, 16 before it).
 
 ### 12.14 Cluster obligations (2, 4.2, 4.3, 8; RI IC-RAS-12, 8)
 CB1  ras_pred_val_p2 is gated on a valid FTB result, and
@@ -1555,6 +1574,15 @@ CB9  Classification follows the JALR hint table and the compressed
      rs1 = x5 is a RETURN_CALL.
 CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
      slot.
+CB11 On an FTB miss, a taken return or return-call of the p1 view
+     that the RAS pops at p2 (CB1, BP-153 RC9) redirects at p2 to its
+     pop address when that differs from its p1 successor. The
+     block's p2 slot write carries the p1 view's slots, the
+     redirecting slot's target the pop and pred_src RAS, and its
+     rollback bundle is the p1 view's branches up to the first taken
+     one. Otherwise the p1 prediction stands. (BP-154 R2, committed
+     as built session-086; tb_bp_cluster CB12 fails 3 with it off,
+     at both slot counts.)
 
 ---
 
@@ -1729,4 +1757,11 @@ CB10 The registered ras_tos_addr_p0 is the target of a p1 RETURN
               the peek (RAS-1 closed); 9 commit 64 (RC10 accepted),
               speculative 32 (RC11 rejected, BP-154); 10 RAS-2, RAS-4
               closed; 12 RE10, RE11, PM2, CB1, CB2.
+
+  2026-11-22  session-086, after BP-154 (e7002b7): 4.1, 9, PM2 the
+              39-bit snapshot at 16 speculative entries (RC11
+              reverted); PM1 tests from the parameter; 10 RAS-2
+              closed at 16, with BP-154's long-lag measurement and
+              the BOS jump as a known limitation; RAS-4 the 16-entry
+              residuals; 12.14 CB11 (BP-154 R2).
 ```

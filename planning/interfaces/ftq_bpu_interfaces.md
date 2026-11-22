@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -295,7 +295,11 @@ Same type as `bpu_pred_slot_p1`. The FTQ overwrites the slot
 description of the named entry with the latest group received.
 
 `bpu_slot_val_p2` is `r_val_p2 & ftb_valid_p2`: the cluster has a
-corrected view only when the FTB answered. `bpu_slot_val_p3` is
+corrected view only when the FTB answered. SINCE BP-154 (R2;
+ras_decisions.md CB11) it is also raised on an FTB miss whose p1-view
+return the RAS pops at p2 to an address other than its p1 successor:
+the block redirects at p2, and the slots are then the p1 view's, the
+redirecting slot's target the pop. `bpu_slot_val_p3` is
 `r_val_p3 & r_ftb_ans_p3`: gated the same way, on the FTB having
 answered that block at p2.
 
@@ -375,7 +379,8 @@ p2 write as built.
 
 `bpu_blk_val_p2` is `r_val_p2`: EVERY valid p2 block, whether or not
 the FTB answered and whether or not the block operated on the RAS. It
-is not `bpu_slot_val_p2`, which also requires `ftb_valid_p2`.
+is not `bpu_slot_val_p2`, which also requires `ftb_valid_p2` (but for
+the FTB-miss return of 4a, BP-154).
 
 `bpu_blk_ras_p2` is `ras_snapshot_p2[NUM_PRED_SLOTS-1]`, the pointer
 state after both slots' operations (ras_interfaces.md IC-RAS-08). A
@@ -1435,4 +1440,8 @@ match it and to match this specification.
   2026-11-12  session-085, after BP-145. 5.2: the ITTAGE target is
               VA[VA_WIDTH-1:1]. Item 15: the entry width is stated in
               ftq_entry_formats.md 1 only.
+
+  2026-11-22  session-086, after BP-154. 4a: bpu_slot_val_p2 is also
+              raised for an FTB-miss return redirected at p2 (BP-154
+              R2, ras_decisions.md CB11).
 ```

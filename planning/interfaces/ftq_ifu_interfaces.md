@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-11-19
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -526,7 +526,7 @@ On `ifu_ftq_mis_val`, the FTQ:
       (section 3). It was a lossy shift until the position field
       was widened on 2026-08-19.
   W3  re-derives the block successor across the slots
-      (fe_decisions.md 2.4) and drives ftq_ifu_flush_val with this
+      (fe_decisions.md 2.4), except under M2 (W3M), and drives ftq_ifu_flush_val with this
       entry's index, so fetch restarts from the corrected successor.
       THE INDEX DEPENDS ON THE ARM. For a p2 or p3 redirect it is
       K: K is not yet fetched and including it is required, since
@@ -570,6 +570,23 @@ On `ifu_ftq_mis_val`, the FTQ:
       slot killed); W2 writes pos = mis_pos; the flush index is
       K+1; ftq_ifu forms the successor (w_corr_succ in
       predecode_correct) and ftq_npc selects it on arm 2.
+  W3M UNDER M2 THE BLOCK ENDS WHERE FETCH CUT IT. When the writeback
+      leaves no taken slot (the predicted taken position holds no
+      control transfer, or is not an instruction start) and has no
+      fault, the successor of W3 is the end of the last instruction
+      start at or before mis_pos (start + 2 * i + its length, 2 or
+      4), not pft_addr, and the entry's pft_addr is written with the
+      same value. The IFU delivered the block only up to mis_pos
+      (IFU-15, IB-2; ifu_f3.sv), so a successor at pft_addr stepped
+      over the rest: PERF-004 found it as 260 wrong committed PCs on
+      infra_6 at full length (entry 15 at 6b02c4, an aliased
+      conditional slot at the ALU instruction 6b02cc; 6b02d0 to
+      6b02e0 never delivered). A faulting block traps (M4) and is
+      left as it was. Built by PERF-004 (ftq_ifu.sv
+      predecode_correct, w_m2_cut, w_cut_end), FOR ACCEPTANCE
+      (PERF-004 R11); tb_ftq_ifu D18, D18a and D18b fail when it is ignored (238/3
+      at two slots, 223/3 at one); D18c and D18d check the fault
+      case.
 ```
 
 NO PREDICTOR UPDATE IS FORMED FROM PREDECODE. Updates remain
@@ -850,4 +867,7 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 
   2026-11-19  session-086, after BP-152, for acceptance. 7 W1: the
               pft_addr write and the C1 push with a taken jump.
+
+  2026-11-22  session-086, after PERF-004, for acceptance. 7 W3M: an
+              M2 block ends where fetch cut it (an RTL defect fixed).
 ```

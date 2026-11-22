@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-11-20
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -36,10 +36,10 @@ update. The two are separated so the every-cycle read does not carry
 the width of the update-only metadata.
 
 ```
-  fast path   bp_ftq_entry_t   329b   x 64 entries        21,056b
+  fast path   bp_ftq_entry_t   327b   x 64 entries        20,928b
   slow path   bp_ftq_meta_t    461b   x 2 slots x 64      59,008b
                                                           -------
-                                                          80,064b
+                                                          79,936b
 ```
 
 These are the widths as built at the VA_WIDTH of fe_decisions.md
@@ -47,9 +47,9 @@ FE-19, measured by BP-145 ($bits); this section is their one
 statement. BP-152 (for acceptance) widened the fast path by 12 bits,
 the RAS snapshot's dep and tag: 304b -> 316b at two slots, 229b ->
 241b at one ($bits). BP-153 (for acceptance) widened the snapshot to
-41b: 316b -> 329b at two slots, 241b -> 254b at one. BP-154's revert
-of RC11 (16 speculative entries) takes the snapshot to 39b and the
-entry to 327b and 252b.
+41b: 316b -> 329b at two slots, 241b -> 254b at one. BP-154 reverted
+RC11 (16 speculative entries): the snapshot is 39b and the entry 327b
+at two slots and 252b at one ($bits).
 VA_WIDTH reaches pc, pft_addr and the two slot targets of
 the fast path, and the two ITTAGE targets of each slot's metadata.
 
@@ -95,10 +95,11 @@ missed return-calls predicted not taken (TD#161).
 Block scalar fields, one per entry:
 
 ```
-pc            41     prediction block start PC, VA_WIDTH
-pft_addr      41     block fall-through address, VA_WIDTH
+pc            59     prediction block start PC, VA_WIDTH
+pft_addr      59     block fall-through address, VA_WIDTH
 branch_id      6     FTQ entry index, FTQ_IDX_BITS
-ras           41     bp_ras_snapshot_t (BP-153; 39 after BP-154;
+ras           39     bp_ras_snapshot_t (BP-153, at 16 speculative
+                     entries since BP-154; 41 as BP-153 built it;
                      ras_decisions.md 4.1). Before BP-153, 28:
                      bp_ras_snapshot_t: TOSR, TOSW, BOS and the
                      TOSR entry's recursion count, 4 bits each
@@ -114,7 +115,7 @@ Per-slot fields, `bp_ftq_slot_t[NUM_PRED_SLOTS-1:0]`:
 
 ```
 slot_valid     1     this slot carries a predicted branch
-target        41     predicted target for this slot, VA_WIDTH
+target        59     predicted target for this slot, VA_WIDTH
 br_type        3     bp_br_type_e
 taken          1     predicted direction
 pos            4     in-block branch position, FTB_BR_POS_BITS,
@@ -676,4 +677,10 @@ path touches none of those.
 
   2026-11-20  session-086, after BP-153, for acceptance. 1, 2: the
               fast path 329b (ras 41b); 327b after BP-154.
+
+  2026-11-22  session-086, after BP-154. 1: the fast path 327b, the
+              array 20,928b, the total 79,936b (ras 39b). 2: ras 39;
+              pc, pft_addr and target 59, the VA_WIDTH of FE-19 (they
+              read 41, the width before session-085; the totals of 1
+              were already at 59).
 ```

@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-20
+ UPDATED: 2026-11-22
  CONTACT: Jeff Nye
 ```
 
@@ -281,8 +281,18 @@ PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
          both rules (mispred_trap_after, 0 to 9 per 2e6 run). RULED
          session-086 (Jeff): the branch is judged on its own outcome,
          and the trap is a separate RC_TRAP redirect, as for a
-         non-branch. To be built by PERF-004; orc_slot_trap goes with
-         it.
+         non-branch. BUILT by PERF-004, for acceptance (R4): the
+         branch is judged on its own outcome (its target taken, pc + 2
+         or 4 not taken) and the trap is a separate RC_TRAP redirect in
+         the branch's resolve cycle; trap_after_branch counts the cases;
+         mispred_trap_after and orc_slot_trap are removed.
+       - THE FTQ-FULL WORKAROUND IS REMOVED (PERF-004, for acceptance,
+         R3; TD#206 closed): the eager close keeps only idle >=
+         EAGER_IDLE (32). The FTQ-full term closed entries and decided
+         branches earlier than the design does (st200: 67,843 to
+         115,549 decisions per run). There is no RTL stall: tb_fe_top
+         ftq_full fills the FTQ with commit held and every entry is
+         still translated, fetched and delivered, at both slot counts.
 
 PF-19  THE I-CACHE SWITCH (PF-U6 as written): a run parameter selects
        a real, a preloaded or a perfect I-cache, so that predictor
@@ -315,6 +325,14 @@ PF-21  WHAT PERF-002 BUILT: the trace tools (perf/src); the changed
        (PF-18); the oracle (PF-11); the backend sweep,
        perf/studies/perf003_p6_sweep_table.csv. The take-time slot
        reading (pq_*) and err_predict are removed.
+       WHAT PERF-004 BUILT (for acceptance, R1 to R13): the build stamp
+       and the digest rule (PF-9); the trap ruling and the FTQ-full
+       workaround removed (PF-18); the oracle's peek and p1-return
+       forces, its early-exit alignment, the kind-alias and
+       class-conflict counts (PF-11); the configuration probes cf_*
+       (PF-5); PERF_EVLOG (PF-6); perf_rerun.py's bin_sha256 and the
+       full reference rerun (PF-15); the baseline (PF-9). And an RTL
+       defect fixed: W3M (ftq_ifu_interfaces.md 7).
 
 PF-22  THE PERF TOOLS USE AT MOST 75% OF THE MACHINE'S HARDWARE THREADS
        BY DEFAULT, with -j to use fewer or more (Jeff, session-086:
@@ -357,6 +375,12 @@ PF-5   A measured configuration is named by a release tag, <tag>, for
        2^18 holds until TD#197, the investigation of the aging and
        epoch design, closes; the intervals are to become parameters
        (Jeff, session-084).
+       CHECKED BY PERF-004: every key reaches the design at both slot
+       counts, read from the design's own state (columns cf_*): each
+       enable off zeroes its count; each interval 1 moves the epoch
+       advances from 2 to 396,484 (TAGE, int_6, 2e6, two slots). A key
+       can reach the design and move no result (int_6 has no ITTAGE
+       mispredict). PERF-002's "no count changed" does not reproduce.
 
 ## 4. Measurement
 
@@ -367,8 +391,16 @@ PF-6   The metrics are MPKI overall and MPKI per predictor (Jeff,
        read through the wrapper (PF-3).
        No RTL change is made for measurement. Signals are observed at
        ports, the wrapper's included. Counts are kept in memory and a
-       summary is written at the end of a run; there is no per-event
-       file output.
+       summary is written at the end of a run. There is no per-event
+       file output by default; PERF_EVLOG=<file> writes one line per
+       event (C commit, W write, E close, D decision, T trap, S SC
+       answer) for first-divergence studies (PERF-004, R7).
+       Columns added since PERF-003: rc_max_inflight and rc_cyc_lap
+       (BP-154: the speculative allocations not yet passed by a
+       commit, unwrapped, and the cycles at RAS_SPEC_ENTRIES - 1 or
+       more); dirty and input_digest (PF-9); trap_after_branch (PF-18);
+       orc_slot_kind_alias and conflict_unspec_repair (PF-11); cf_*
+       (PF-5).
 
 PF-7   A run warms up and then measures, by the method CBP uses
        where it can be matched, so that results compare with the
@@ -406,6 +438,45 @@ PF-9   A result is keyed by its configuration name (PF-5) and the
        parameter-set files and study CSVs live in perf/studies/
        (PF-2). A study gates no push. Proposed by PERF-002; PF-20
        and PERF-002 used the term undefined.
+       THE BUILD STAMP (PERF-004, for acceptance, R1 and R2; TD#210
+       closed). Each build writes its sha, a dirty mark (rtl, perf)
+       and an INPUT DIGEST, the SHA-256 over every build input: the
+       harness sources, the RTL file list and its files, the Makefile
+       and its included files, the make variables that reach the build
+       (SLOTS, RAS_SPEC, RAS_COMMIT, the flags) and the Verilator and
+       compiler versions (perf/src/stamp.py; 83 files, 6 variables, 2
+       tools). The binary depends on it, and every row carries sha,
+       dirty and input_digest. The digest says what was measured: two
+       rows with one digest ran the same harness, on any machine with
+       the same tools. make -C perf digest prints the stamp of the
+       tree as it stands, without building. tools/perf_study.py
+       gathers rows only when their digests agree, unless the
+       parameter-set file names more than one build.
+       THE BASELINE (PERF-004): perf/studies/baseline.sets (baseline
+       and baseline_oracle) over perf/studies/baseline.traces (the 105
+       traces), full length, head_s2, the PF-5 configuration, the
+       immediate backend, the fetch rule, the real I-cache;
+       perf/studies/baseline.csv, 210 rows, every PF-11 check passing,
+       digest
+       0c66fed0ad2584216a27e4a2fac2f31b95d8dc297f48abf9883f6914e383a6dc,
+       committed as 2d1e330. 2.8 hours on 24
+       workers for both sets; 34,705 instructions per second over the
+       baseline set (28,342 web to 56,155 media).
+       HOW TO RUN A STUDY AGAINST THE BASELINE:
+         make -C perf harness
+         make -C perf digest
+         python3 tools/perf_study.py --traces perf/studies/baseline.traces
+           --sets perf/studies/baseline.sets --out <new>.csv
+       If the digest is the baseline's, the rows are the baseline's and
+       nothing need run. A study of a parameter adds a set to a copy of
+       baseline.sets that differs from baseline in that parameter; a
+       study of an RTL change runs baseline.sets on the changed tree.
+       The oracle set need run only when the harness changes. Rows
+       compare by study_set and trace; every column but the stamp and
+       the timing columns is exact. A comparison tool is not built.
+       A RUN WITH --max-instr IS NOT A PREFIX OF THE FULL RUN: the code
+       image is built from the records read (supply.cc:37). Runs
+       compare only at equal length.
 
 ## 5. Comparison
 
@@ -439,6 +510,27 @@ PF-10  Three are compared (Jeff, session-084):
        pacino's gap to R is steady across the trace groups; each
        result that uses it states that assumption. MPKI to IPC needs
        pacino's mispredict penalty and a backend model, a later step.
+       MEASURED BY PERF-004 (the baseline against the full rerun):
+       pacino / TAGE192 conditional MPKI, the mean of the per-trace
+       values, 50Perc: compress 1.55, fp 1.91, infra 2.75, int 2.39,
+       media 4.62, web 3.08, all 2.48 (8.4173 against 3.3992; full
+       trace 8.5072 against 3.4958, 2.43); per trace 1.12 to 24.22.
+       THE GAP IS NOT STEADY ACROSS THE GROUPS, so the extrapolation to
+       SPEC does not hold on these numbers. The ratio is largest where
+       TAGE192's MPKI is smallest.
+       READING IT (PA, session-086). Two parts of the gap are not
+       TAGE192's layout. (1) The FTB: R is handed every conditional
+       branch, while pacino predicts a branch the FTB does not hold as
+       falling through. The oracle rows bound it: of pacino's 9.1253
+       MPKI (all branches, totals over 105 traces), 1.3677 remain with
+       every slot-held branch forced, so 7.7576 are errors on branches
+       the FTB held. (2) The FTB's base counter: by source, ftb 4.0420,
+       tage 2.0694, sc 1.2519, loop 0.0889 MPKI. The base counter
+       decides more mispredicts than TAGE and SC together, most of all
+       on traces R predicts nearly perfectly (int_31 88% of 10.12
+       MPKI, fp_6 76% of 11.46, infra_7 72% of 8.32, infra_1 79% of
+       4.39). That points first at how TAGE takes over from the base
+       prediction, not at its size. Not yet investigated.
 
 ## 6. Checking the harness
 
@@ -475,17 +567,34 @@ PF-11  The harness is checked three ways, and a result is not used
          predictor outputs to the trace's direction and target: at p1
          the uBTB prediction, the loop predictor and the RAS top of
          stack; at p2 the loop predictor, TAGE, the FTB direction, the
-         conditional and jump targets, the RAS pop and ITTAGE's targets;
-         at p3 SC. Each force is a mux of the trace's value with the
-         predictor's own, of a whole variable or element.
+         conditional and jump targets, the RAS pop and peek, the p1
+         return held at p2 on an FTB miss (PERF-004, R5) and ITTAGE's
+         targets; at p3 SC. Each force is a mux of the trace's value
+         with the predictor's own, of a whole variable or element.
          perf/sv/perf.vlt keeps loop_pred, ftb, tage, ittage, sc and ras
          out of inlining so that their ports read unforced; this applies
          to every harness run, and the counts are unchanged. No file
          under rtl/ changes.
          MEASURED (six traces, 2e6 instructions, 18 runs): 0 mispredicts
          on slot-held branches, apart from a branch whose next trace
-         record is an exception entry (orc_slot_trap, 0 to 8 per run;
-         PF-18). Misses are conditional, indirect and return; direct
+         record is an exception entry (orc_slot_trap, removed by
+         PERF-004; PF-18). The check then lapsed: BP-153 made an
+         FTB-held return's p2 target the RAS peek, which the oracle did
+         not force, and BP-153 and BP-154 did not run it (52, 93 and 70
+         on compress_1, infra_1 and web_11; found by PERF-004).
+         PERF-004, for acceptance: an entry is also on the path when the
+         trace leaves its predecessor's block early by a taken branch to
+         the predicted successor itself (R10; 101 oracle rows moved). A
+         slot whose type at the fetch request is not the trace's kind
+         (conditional or not) is a KIND ALIAS: its mispredict is counted
+         apart (orc_slot_kind_alias) and is not a failure, since the
+         oracle forces direction and target, not type (R12). A repair
+         after a class-conflict PC is counted apart
+         (conflict_unspec_repair, R13). err_orc_slot_mispred is an error
+         only on oracle rows. MEASURED (the baseline, 105 traces, full
+         length): every check passes on every run; kind aliases 1 on
+         the oracle rows (infra_6), class-conflict repairs 2 (web_11).
+         Misses are conditional, indirect and return; direct
          misses are 0, since predecode corrects every jal. THE CEILING
          IS DIRECTION AND TARGET PERFECT, NOT A PERFECT FRONT END: slot
          presence stays the predictors' own, so it still includes the
@@ -560,6 +669,16 @@ PF-15  Changing a trace invalidates the published reference results,
        only under Sv57; none needs more than Sv57
        (pc_noncanon_sv57_static is 0 in every trace). Pacino supports
        Sv57 (mmu_decisions.md MMU-20).
+       THE FULL PLAN, RUN BY PERF-004: 1,155 rows (11 predictors x 105
+       traces), 8.3 hours, perf/cbp2025_rv_rerun.csv, each row with its
+       predictor binary's SHA-256 (R8). Ten predictors pass on every
+       trace; mose fails on every trace, as in the published results
+       (PF-1). On the 5 unchanged traces every result equals the
+       published one exactly. On the 100 changed traces, TAGE192's MPKI
+       minus the published: mean -0.0214, -0.1090 to +0.1631. cai and
+       jimenez in tools/cbp2025 are one binary (the same SHA-256, equal
+       MispBr on every trace, in the published results too): the field
+       is ten predictors under eleven names.
 
 PF-16  REMOVED, session-086 (Jeff). It read "the traces run unchanged,
        under Sv57", which does not account for the reach of RISC-V
@@ -700,4 +819,13 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
   2026-11-20  session-086, after BP-153. PF-18: the near-perfect
               default retired; the immediate backend is the default
               (Jeff).
+  2026-11-22  session-086, after BP-154 and PERF-004 (2d1e330), for
+              acceptance. PF-5 the configuration check; PF-6 PERF_EVLOG
+              and the new columns; PF-9 the build stamp, the baseline,
+              how to run a study, the prefix note; PF-10 the measured
+              gap and the PA's reading; PF-11 the forces, the lapse, the
+              alignment, the kind-alias and class-conflict counts, the
+              baseline's checks; PF-15 the full plan; PF-18 the trap
+              ruling built, the FTQ-full workaround removed; PF-21 what
+              PERF-004 built.
 ```
