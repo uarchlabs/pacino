@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="760" height="486" viewBox="0 0 760 486" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
-  <title>Figure 1 - RAS position in the BP prediction pipeline</title>
+  <title>RAS position in the BP prediction pipeline</title>
   <rect x="0" y="0" width="760" height="486" fill="#ffffff"/>
   <defs>
     <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2563eb"/></marker>
