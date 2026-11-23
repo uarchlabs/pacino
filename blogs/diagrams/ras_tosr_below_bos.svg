@@ -1,0 +1,141 @@
+<svg viewBox="0 0 780 440" xmlns="http://www.w3.org/2000/svg" style="background:#fff">
+
+  <!--
+    TOSR below BOS (ras_top_v4.md, Section 3.2). Speculative stack
+    indices 0..4, index 0 at the bottom. Reset: TOSR = TOSW = BOS = 0.
+      push A -> index 1 (sentinel skip), link 0, TOSW 2
+      push B -> index 2, link 1, TOSW 3
+      pop B  -> TOSR 1
+      push C -> index 3, link 1, TOSW 4
+    Panel 1: TOSR 3, TOSW 4, BOS 0.
+    Panel 2: commits of push A, push B: BOS 1 then 2. TOSR stays 3.
+    Panel 3: pop of C follows its link: TOSR 1, below BOS 2. Not empty
+             because TOSR != BOS.
+    Cell for index i: y = 280 - 40 * i, height 34. Cell x = panel + 50,
+    width 90. Links on the left of the cells, pointers on the right.
+  -->
+
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="390" y="20" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">TOSR below BOS is not a fault</text>
+  <text x="390" y="36" text-anchor="middle" font-family="monospace" font-size="10" fill="#666">speculative stack, indices 0 to 4; arrows are nos links</text>
+
+  <!-- ================= Panel 1: x0 = 20 ================= -->
+  <text x="115" y="70" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#111">1. push A, push B,</text>
+  <text x="115" y="84" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#111">pop B, push C</text>
+
+  <!-- index labels -->
+  <text x="34" y="142" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">4</text>
+  <text x="34" y="182" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">3</text>
+  <text x="34" y="222" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">2</text>
+  <text x="34" y="262" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">1</text>
+  <text x="34" y="302" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">0</text>
+
+  <!-- cells -->
+  <rect x="70" y="120" width="90" height="34" fill="#fff" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="70" y="160" width="90" height="34" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="115" y="181" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#1e40af">C</text>
+  <rect x="70" y="200" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="115" y="221" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#6b7280">B</text>
+  <rect x="70" y="240" width="90" height="34" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="115" y="261" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#1e40af">A</text>
+  <rect x="70" y="280" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="115" y="301" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7280">sentinel</text>
+
+  <!-- links: B(2)->1 gray, C(3)->1 blue, A(1)->0 blue -->
+  <path d="M70,217 C52,217 52,257 70,257" fill="none" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ag)"/>
+  <path d="M70,177 C38,177 38,257 70,257" fill="none" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah)"/>
+  <path d="M70,257 C52,257 52,297 70,297" fill="none" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- pointers -->
+  <text x="166" y="141" font-family="monospace" font-size="10" fill="#111">&lt;- TOSW</text>
+  <text x="166" y="181" font-family="monospace" font-size="10" font-weight="bold" fill="#1e40af">&lt;- TOSR</text>
+  <text x="166" y="301" font-family="monospace" font-size="10" font-weight="bold" fill="#b91c1c">&lt;- BOS</text>
+
+  <!-- note -->
+  <text x="115" y="340" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">B is popped but its</text>
+  <text x="115" y="353" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">data is still there.</text>
+  <text x="115" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">C links to A.</text>
+
+  <!-- ================= Panel 2: x0 = 270 ================= -->
+  <text x="365" y="70" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#111">2. push A and push B</text>
+  <text x="365" y="84" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#111">commit</text>
+
+  <text x="284" y="142" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">4</text>
+  <text x="284" y="182" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">3</text>
+  <text x="284" y="222" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">2</text>
+  <text x="284" y="262" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">1</text>
+  <text x="284" y="302" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">0</text>
+
+  <rect x="320" y="120" width="90" height="34" fill="#fff" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="320" y="160" width="90" height="34" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="365" y="181" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#1e40af">C</text>
+  <rect x="320" y="200" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="365" y="221" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#6b7280">B</text>
+  <rect x="320" y="240" width="90" height="34" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="365" y="261" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#1e40af">A</text>
+  <rect x="320" y="280" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="365" y="301" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7280">sentinel</text>
+
+  <path d="M320,217 C302,217 302,257 320,257" fill="none" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ag)"/>
+  <path d="M320,177 C288,177 288,257 320,257" fill="none" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah)"/>
+  <path d="M320,257 C302,257 302,297 320,297" fill="none" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <text x="416" y="141" font-family="monospace" font-size="10" fill="#111">&lt;- TOSW</text>
+  <text x="416" y="181" font-family="monospace" font-size="10" font-weight="bold" fill="#1e40af">&lt;- TOSR</text>
+  <text x="416" y="221" font-family="monospace" font-size="10" font-weight="bold" fill="#b91c1c">&lt;- BOS</text>
+
+  <text x="365" y="340" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">Each commit moves BOS to</text>
+  <text x="365" y="353" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">its push: 1, then 2.</text>
+  <text x="365" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">Pop B has not committed.</text>
+
+  <!-- ================= Panel 3: x0 = 520 ================= -->
+  <text x="615" y="70" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#111">3. pop C</text>
+
+  <text x="534" y="142" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">4</text>
+  <text x="534" y="182" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">3</text>
+  <text x="534" y="222" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">2</text>
+  <text x="534" y="262" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">1</text>
+  <text x="534" y="302" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">0</text>
+
+  <rect x="570" y="120" width="90" height="34" fill="#fff" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="570" y="160" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="615" y="181" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#6b7280">C</text>
+  <rect x="570" y="200" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="615" y="221" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#6b7280">B</text>
+  <rect x="570" y="240" width="90" height="34" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="615" y="261" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#1e40af">A</text>
+  <rect x="570" y="280" width="90" height="34" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="615" y="301" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7280">sentinel</text>
+
+  <path d="M570,217 C552,217 552,257 570,257" fill="none" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ag)"/>
+  <path d="M570,177 C538,177 538,257 570,257" fill="none" stroke="#9ca3af" stroke-width="1.2" marker-end="url(#ag)"/>
+  <path d="M570,257 C552,257 552,297 570,297" fill="none" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <text x="666" y="141" font-family="monospace" font-size="10" fill="#111">&lt;- TOSW</text>
+  <text x="666" y="221" font-family="monospace" font-size="10" font-weight="bold" fill="#b91c1c">&lt;- BOS</text>
+  <text x="666" y="261" font-family="monospace" font-size="10" font-weight="bold" fill="#1e40af">&lt;- TOSR</text>
+
+  <text x="615" y="340" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">The pop follows C's link.</text>
+  <text x="615" y="353" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">TOSR is below BOS, but</text>
+  <text x="615" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">TOSR != BOS: not empty.</text>
+  <text x="615" y="379" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">A's pop returns A.</text>
+
+  <!-- ================= Legend ================= -->
+  <line x1="20" y1="396" x2="760" y2="396" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="60" y="410" width="16" height="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="82" y="420" font-family="monospace" font-size="9" fill="#333">on the chain from TOSR</text>
+  <rect x="260" y="410" width="16" height="12" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="282" y="420" font-family="monospace" font-size="9" fill="#333">not on the chain (data still resident)</text>
+  <rect x="540" y="410" width="16" height="12" fill="#fff" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="562" y="420" font-family="monospace" font-size="9" fill="#333">free</text>
+
+</svg>

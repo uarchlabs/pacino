@@ -67,8 +67,10 @@ check_pkgs() {
   fi
   local p
   for p in $(pkgs_for "$1"); do
-    if [ "$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null)" \
-         = installed ]; then
+    # A multiarch package (e.g. zlib1g amd64 + i386) prints one status per
+    # architecture, so test each line rather than the whole output.
+    if dpkg-query -W -f='${db:Status-Status}\n' "$p" 2>/dev/null \
+         | grep -qx installed; then
       echo "OK      pkg:    $p"
     else
       echo "MISSING pkg:    $p"
