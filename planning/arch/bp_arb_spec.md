@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-29
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -87,7 +87,9 @@ not a redirect source; the initial prediction is formed at p1.
 ### 3.1  Stage definitions
 
   p0   Inputs presented to RAMs (flopped).  PC hash, folded
-       history available.
+       history available, including the bundle the p1 block
+       writes in the same cycle (bp_history folded_byp; none in a
+       rollback cycle; PERF-005 R6, built, for acceptance).
   p1   RAM outputs available.  Tag match, hit processing.
   p2   Result formation.  Provider selection, meta capture.
   p3   Statistical corrector threshold decision.
@@ -1016,3 +1018,6 @@ task file, not here.
   2026-10-29  session-082, after DOC-011. 7.2: the snapshot is
               written for every valid p2 block; the commit updates the
               commit stack and BOS.
+
+  2026-11-27  session-087, after PERF-005, for acceptance. 3.1: p0 reads
+              the folds with the p1 bundle (R6).

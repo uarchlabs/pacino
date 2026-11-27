@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-22
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -381,6 +381,19 @@ PF-5   A measured configuration is named by a release tag, <tag>, for
        advances from 2 to 396,484 (TAGE, int_6, 2e6, two slots). A key
        can reach the design and move no result (int_6 has no ITTAGE
        mispredict). PERF-002's "no count changed" does not reproduce.
+       THE FAST PATH, MEASURED BY PERF-005 (Phase 2, the RTL before its rule
+       changes; perf/studies/perf005_p2_fpoff.sets, --cfg
+       ftb_fastpath_en=0): MPKI 9.1253 -> 8.4459; 50Perc conditional, the
+       mean of the traces, 8.4173 -> 7.8038; cycles +0.574%. Better in every
+       group, web least (-0.0169); 71 traces better and 34 worse (int_16
+       +1.92, web_20 +1.86 conditional). The fast path decides 453,510,726
+       conditionals and mispredicts 17,527,029, 44% of all mispredicts; 51%
+       of its mispredicts come within 4 resolutions of its conf leaving
+       saturation, and TAGE's unused answer was right on 53.3% of them. Its
+       rule checks (fp_chk_*, fu_chk_*; PF-11) are 0: it mispredicts by its
+       rule, not by a defect. The default stays ftb_fastpath_en 1 until Jeff
+       rules. The study has not run on the tree with PERF-005's rule changes
+       (PA).
 
 ## 4. Measurement
 
@@ -401,6 +414,23 @@ PF-6   The metrics are MPKI overall and MPKI per predictor (Jeff,
        more); dirty and input_digest (PF-9); trap_after_branch (PF-18);
        orc_slot_kind_alias and conflict_unspec_repair (PF-11); cf_*
        (PF-5).
+       Columns added by PERF-005, each family after the earlier columns:
+       rs_<reason> and rm_<reason>, THE REASON each committed branch was
+       decided, decisions and mispredicts (perf_fe.cc classify()), whose
+       reasons sum to a source's pred_ and mis_ columns (rs_sum_err, PF-11);
+       fp_*, fu_*, fs_*, fpc_*, the fast path's reads, firings, updates and
+       the conf histogram at its mispredicts; th_*, the history check (per
+       table index, tag and fold mismatches; th_bad by class: queued,
+       rollback, obs_ok, other; th_lag; the bundle classes); tr_*, every
+       TAGE RAM read against the harness's shadow; tu_*, every TAGE update
+       and allocation re-derived, with the counted outcomes (allocations,
+       the refusals by reason, duplicates, gone and stale entries, the
+       providers); sp_* and su_*, SC's answers and updates re-derived, the
+       corner choices and sc_thr_max. stderr prints the first cases of a
+       class (TGDEV, THAB, THNW, TGNOTE, RSNOTE, FPDEV): 20 of a deviation,
+       2 of a counted outcome. PERF_TH_LAG_OLD=1 runs the history check with
+       the model before R6. A decision probe reads the cluster's own signal
+       where an oracle force reaches the decision (w_ras_peek_valid_p2).
 
 PF-7   A run warms up and then measures, by the method CBP uses
        where it can be matched, so that results compare with the
@@ -462,6 +492,21 @@ PF-9   A result is keyed by its configuration name (PF-5) and the
        committed as 2d1e330. 2.8 hours on 24
        workers for both sets; 34,705 instructions per second over the
        baseline set (28,342 web to 56,155 media).
+       THE BASELINE (PERF-005, FOR ACCEPTANCE with its rule changes R1, R2,
+       R4, R5, R6 and R7): perf/studies/perf005_baseline.sets (baseline and
+       baseline_oracle) over perf/studies/baseline.traces, full length, the
+       tree build (tree_s2), the PF-5 configuration, the immediate backend,
+       the fetch rule, the real I-cache; perf/studies/perf005_baseline.csv,
+       210 rows, every PF-11 check passing (the PERF-005 rule checks
+       included), digest
+       ef1fbde4ad4cb3e68d06f1c612d99b71e35390901def00e17c97c9eb97327842,
+       built on the uncommitted tree that became 6f06483. 3.3 hours on 24
+       workers for both sets. Against PERF-004's: 50Perc conditional MPKI
+       8.4173 -> 7.7283, cycles +1.033%, oracle cycles +3.378%. PERF-004's
+       baseline.csv stays the record of the RTL before these changes. A
+       study against the new baseline uses perf005_baseline.sets in place of
+       baseline.sets below. If a change is rejected, the baseline is rerun
+       on the tree without it (PA).
        HOW TO RUN A STUDY AGAINST THE BASELINE:
          make -C perf harness
          make -C perf digest
@@ -531,6 +576,26 @@ PF-10  Three are compared (Jeff, session-084):
        MPKI, fp_6 76% of 11.46, infra_7 72% of 8.32, infra_1 79% of
        4.39). That points first at how TAGE takes over from the base
        prediction, not at its size. Not yet investigated.
+       INVESTIGATED BY PERF-005 (TD#218 closed). THE DECOMPOSITION, 50Perc
+       conditional MPKI, the mean of the traces, all 105: TAGE192 3.3992;
+       the twin (pacino's TAGE alone, its tables, hashes and rules, R4
+       included, in the CBP framework with CBP's immediate update) 5.3802;
+       pacino with the fast path off (the old RTL) 7.8038; pacino at the new
+       baseline 7.7283; pacino at the old 8.4173. The steps:
+         twin - TAGE192     1.9810  TAGE's size, layout and rules
+         fp off - twin      2.4236  what pacino adds around TAGE,
+                                    old RTL: the FTB's misses, the
+                                    loop and SC, training at
+                                    resolve, the pipelined history
+         new - fp off      -0.0755  two trees, not additive: the
+                                    fast path on (+0.6136, old RTL)
+                                    and the rule changes (-0.6890)
+         old - new          0.6890  R1, R2, R4, R5, R6, R7
+       Of the new baseline's gap to TAGE192 (4.3291), 1.9810 is TAGE itself
+       and 2.3481 the rest of the front end. Per group in PERF-005's Results
+       Capture. The gap is still not steady across the groups (web 5.5558,
+       media 2.4228), so the extrapolation to SPEC still does not hold. No
+       RTL defect was found in TAGE or SC; the losses were in the rules.
 
 ## 6. Checking the harness
 
@@ -608,6 +673,26 @@ PF-11  The harness is checked three ways, and a result is not used
          one applies, with no warning; a comment line in a .vlt file
          that starts with a pragma word is read as the pragma.
        - every committed PC equals the trace's next PC.
+       - THE RULE CHECKS (PERF-005): columns 0 on every row of a study
+         before it is used. rs_sum_err (every committed branch has a named
+         reason, oracle rows included); fp_chk_conf, fp_chk_noshadow,
+         fp_chk_41, fp_chk_use, fu_chk_rdconf, fu_chk_wrconf, fu_chk_keep,
+         fu_chk_noshadow (the fast path, ftb_confidence_override_rules.md
+         3.2, 3.4, 4.1); tr_chk_read; tu_chk, tu_chk_we, tu_chk_addr,
+         tu_chk_ctr, tu_chk_use, tu_chk_alc, tu_chk_uaon (TAGE's update, by
+         its ctr, use, alloc and uaon rule files); sp_chk_sum, sp_chk_dec,
+         su_chk_wr, su_chk_wd, su_chk_glob (SC, sc_decisions.md); th_chk_pc,
+         th_nolookup, th_bad_other, th_bad_obs_ok, th_bad_rollback_nored,
+         th_lag, th_bundle_a_ne_b (the history, tage_table_hash_rules.md and
+         bp_history_decisions.md). th_bad equals th_bad_rollback: the only
+         mismatched lookups are in a recompute cycle
+         (bp_history_decisions.md 5). A check models the rules as the tree
+         has them, so a rule change changes its check (R2 su_chk_glob, R4
+         tu_chk_alc, R6 th_lag). MEASURED on the new baseline, 210 rows:
+         every one 0.
+       - THE TWIN CHECK: every twin run passes in the CBP framework, and its
+         instruction and branch counts equal cbp2025_rv_counts.csv
+         (perf/studies/perf005_twin.csv, 105 rows).
        The reference results are a yardstick for pacino's MPKI, not a
        check of it: one predictor's mispredictions are not checked
        against another's.
@@ -829,4 +914,8 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               ruling built, the FTQ-full workaround removed; PF-21 what
               PERF-004 built.
   2026-11-22  session-086 (Jeff): PERF-004 R1 to R13 accepted.
+  2026-11-27  session-087, after PERF-005 (6f06483), for acceptance. PF-5
+              the fast-path study; PF-6 the PERF-005 columns; PF-9 the new
+              baseline; PF-10 the decomposition; PF-11 the rule checks and
+              the twin check.
 ```

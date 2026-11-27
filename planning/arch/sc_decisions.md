@@ -6,7 +6,7 @@
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -542,9 +542,16 @@ if (do_update) {
        = sat_sc(sc_upd_inp.sc_pred_meta.sc_upd_ctr[4],incr);
 }
 
-// Train the chooser: only the counter that was consulted
+// Train the chooser: only the counter that was consulted.
+// PERF-005 R2 (built, for acceptance): the chooser learns which
+// side was right, so it matches SC's own sum direction,
+// sc_lcl_pred_tkn. It read sc_pred_tkn, the final direction,
+// which in a corner the chooser itself picked: a correct TAGE
+// counted as SC right. cbp2016_tage_sc_l.h 1295-1311 trains its
+// corner counters only when SC and TAGE differ. Measured alone:
+// 50Perc conditional MPKI -0.1394, cycles -0.403%.
 
-logic sc_pred_match = sc_upd_inp.sc_pred_meta.sc_pred_tkn
+logic sc_pred_match = sc_upd_inp.sc_pred_meta.sc_lcl_pred_tkn
                           == sc_upd_inp.resolved_taken;
 
 logic tg_pred_match = sc_upd_inp.sc_pred_meta.sc_tage_pred_tkn
@@ -847,3 +854,5 @@ the number of index bits or number of entries in this table instance.
   2026-11-11  session-084, after BP-141. Parameter meaning:
               SC_TBL_FH is the fold width, the index width (9);
               SC_TBL_HIST the history folded into it. SC_MAX_FH 9.
+  2026-11-27  session-087, after PERF-005, for acceptance. 10: the
+              chooser trains on sc_lcl_pred_tkn (R2).

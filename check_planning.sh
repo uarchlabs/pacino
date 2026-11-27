@@ -267,6 +267,12 @@
 # updated to say so. 73 files.
 # Updated at the end of session-086 (PROJECT_STATUS.md: the AREA
 # withdrawn).
+# Updated after PERF-005, session-087 (PROJECT_STATUS.md,
+# CLOSED_TECH_DEBT.md, perf_decisions.md, ftq_decisions.md,
+# fe_decisions.md, bp_arb_spec.md, sc_decisions.md,
+# tage_cntrl_alloc_rules.md, sc_table_hash_rules.md,
+# sc_table_interfaces.md, bp_history_decisions.md,
+# bp_history_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -310,21 +316,21 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   7f8b5a2413fc
-PLAN  PROJECT_STATUS.md                 66bc0cef5ebb
-PLAN  CLOSED_TECH_DEBT.md               5a0bd8d4c133
+PLAN  PROJECT_STATUS.md                 04fff24de501
+PLAN  CLOSED_TECH_DEBT.md               f50c5e4dd1dc
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
 UNKN  CLAUDE.md                         f272df29b804
 
-ARCH  bp_arb_spec.md                    e948ad56ba7e
+ARCH  bp_arb_spec.md                    0ea0cf31f868
 ARCH  bp_cluster.md                     20a0101a7f3f
-ARCH  bp_history_decisions.md           eed6cb8d60a7
+ARCH  bp_history_decisions.md           145f3369a8fa
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  csr_decisions.md                  484fe6279bb8
 ARCH  dcd_decisions.md                  8232e5fdf27f
-ARCH  fe_decisions.md                   af2411c071bc
+ARCH  fe_decisions.md                   4e91131e4e37
 ARCH  ftb_decisions.md            d2ca8ed5f2be
-ARCH  ftq_decisions.md            3b8d6cb673dd
+ARCH  ftq_decisions.md            d4ce8fb9f9d7
 ARCH  ftq_entry_formats.md        147e74fc7e26
 ARCH  ibuf_decisions.md                 36a96982352e
 ARCH  icache_decisions.md               0e18fe32a823
@@ -334,11 +340,11 @@ ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  be6a0ceaa8f5
 ARCH  ras_decisions.md                  9cd318e6980e
-ARCH  sc_decisions.md                   667f9510517a
-ARCH  sc_table_hash_rules.md            ad6ddcde00a8
+ARCH  sc_decisions.md                   99b3cbfead3d
+ARCH  sc_table_hash_rules.md            6d616d96f6f8
 ARCH  sram_init.md                      d6cefefe7fc5
 ARCH  tage_cntrl_uaon_update_rules.md   cbc6672c5f25
-ARCH  tage_cntrl_alloc_rules.md         3a22df5e85f3
+ARCH  tage_cntrl_alloc_rules.md         75d9a6d9c606
 ARCH  tage_cntrl_decisions.md           e75047b88350
 ARCH  tage_table_entry_formats.md       bfd6ee8f1d3d
 ARCH  tage_table_hash_rules.md          d829daf22e1c
@@ -363,7 +369,7 @@ VERF  tage_coverage_plan.md             497bc9a790a3
 
 INTF  ittage_table_interfaces.md        e185fef23e38
 INTF  tage_table_interfaces.md          44e1ccc8e73b
-INTF  bp_history_interfaces.md          622e9a8b2eee
+INTF  bp_history_interfaces.md          9549f8dbab51
 INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           c13ff7e4368c
 INTF  ftq_backend_interfaces.md   1093eafd5bb3
@@ -378,7 +384,7 @@ INTF  l1i_ifu_interfaces.md       5267cfdffe1c
 INTF  loop_pred_interfaces.md     f700641358ec
 INTF  ras_interfaces.md           a74884b33209
 INTF  sc_interfaces.md            7936cbf21f43
-INTF  sc_table_interfaces.md      3e31f095e2e8
+INTF  sc_table_interfaces.md      237b6bfa82cc
 INTF  tage_interfaces.md          80e89e517207
 INTF  ubtb_interfaces.md          a8e591bbeda2
 
@@ -387,7 +393,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               f372565ef7ee
+PERF  perf_decisions.md               eae7ecd93a14
 
 EOF
 

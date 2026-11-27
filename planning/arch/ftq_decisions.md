@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-11-19
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -915,6 +915,18 @@ resolve of that branch trains it.
       ftq_bkend_rsv_rdy for that channel and the backend holds it.
 ```
 
+BUILT, FOR ACCEPTANCE (PERF-005 R1): no FTB update is dropped. S5 and S6
+read, as built: "No update is dropped. A channel whose update would fall
+outside the capacity deasserts ftq_bkend_rsv_rdy, LOW or HIGH, and the
+backend holds it." (ftq_ftb_sched.sv; drop_val is unreachable.) The
+reason given: ftb_confidence_override_rules.md 3.2 trains the FTB conf
+at every resolution, and S5 dropped 30,224,390 of 570,601,974
+conditional resolutions (5.30%) over the 105 traces. Measured alone:
+50Perc conditional MPKI +0.0129, cycles +1.771%. Accepted, it withdraws
+FE-5a (fe_decisions.md) and the paragraph below. The alternative it
+rejected keeps S5 and S6 and states 3.2 as every resolution the
+scheduler issues.
+
 S6 is what keeps this narrow. Backpressure survives only for
 allocations and mispredict corrections, and a sustained two-per-cycle
 rate of those is self-limiting: a mispredict causes a redirect, which
@@ -1617,4 +1629,7 @@ Section 1 counts six, since session-074.
   2026-11-19  session-086, after BP-152, for acceptance. 5.4: the
               positional end clear and the backend redirect clear
               built (TD#211 closed).
+
+  2026-11-27  session-087, after PERF-005, for acceptance. 5.7.3: R1, no
+              FTB update dropped, built.
 ```

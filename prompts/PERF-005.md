@@ -229,6 +229,225 @@ PERF-005 investigated TD#218: why pacino's branch predictor mispredicts so much 
 
 ## Claude.ai Assessment
 
+Task: prompts/PERF-005.md, committed as 6f06483 (on f88a61b). Status as
+delivered: COMPLETE. tools/regress.sh: 303 targets, 0 new failures,
+RESULT: PASS (dirty tree, pass not recorded).
+
+## 1. Verdict
+
+**Complete. Accept the work. Accept R2, R4, R5, R6 and R7. Reject R1.
+Agree with the IA that R3 stays out.**
+
+What the investigation found:
+- The FTB base counter's mispredicts are the fast path's. They follow
+  its rule: every fast-path check is 0.
+- TAGE and SC have no RTL defect. Every event follows its written rule.
+- The losses were in the rules. Six changes take conditional MPKI at
+  50Perc from 8.4173 to 7.7283, with cycles up 1.033%.
+- The twin puts 1.9810 of the remaining 4.3291 gap on TAGE itself and
+  2.3481 on the front end around it.
+
+R1 is the one I would not take. It reverses FE-5a, which was written to
+keep FTB training from stalling the backend. It makes accuracy slightly
+worse and costs 1.77% in cycles. Its Block 1 entry does not quote FE-5a
+as the rule it replaces (section 5).
+
+## 2. Arithmetic, checked against the CSVs
+
+I recomputed every headline table from perf/studies/*.csv and
+perf/cbp2025_rv_rerun.csv at 6f06483. "50Perc" is the mean of the
+per-trace 50PercMpkiCond, as PF-10 defines it.
+
+| Item | Source | Result |
+|---|---|---|
+| Old baseline, per group and all | baseline.csv | equal to every figure quoted |
+| New baseline, per group, cycles % | perf005_baseline.csv | equal; digest ef1fbde4, all rows ok |
+| Oracle cycles +3.378% | both baselines, oracle set | equal |
+| Fast path off, per group | perf005_p2_fpoff.csv | equal (-0.6136 all) |
+| p3 equals baseline | perf005_rc.csv p3 | 0 cells differ (cycles, instr, mispred, mispred_cond, 50PercMispCond) |
+| R1 to R7, each alone | perf005_r1, perf005_rc, perf005_r7b | every MPKI, delta, cycles % and fewer/more count equal |
+| Interaction | the seven CSVs | -1,408,984 combined, -1,494,702 alone, 85,718 (5.73%): equal |
+| Cycles, combined against alone | same | +19,864,900 against +17,909,077: equal |
+| Rows moved | new baseline | 105 moved, 102 fewer: equal |
+| Twin and TAGE192 means | perf005_twin.csv, cbp2025_rv_rerun.csv | equal; 105 twin rows, all Pass |
+| Decomposition, per group | all of the above | equal to the 4th decimal; three cells differ by 0.0001 (fp 0.3142, int 2.7430, all -0.0754), rounding of rounded inputs |
+
+Checked by sum, from the Results Capture:
+- the Phase 2 histogram totals 17.04M, equal to the "left" count of
+  17,037,082;
+- TAGE right plus TAGE wrong at fast-path mispredicts is
+  9,348,826 + 8,178,203 = 17,527,029, equal to the fast-path mispredicts;
+- the fast path is 44.05% of all mispredicts.
+
+Not rechecked: the Phase 1 reason tables, the Phase 3 check-column
+totals and the history classes. They are columns past baseline.csv's
+223. The Results Capture reports them as summed by the harness, and the
+rs_sum_err = 0 and *_other = 0 claims are the harness's own checks.
+
+## 3. Phases against their requirements
+
+| Phase | Required | Delivered | Met |
+|---|---|---|---|
+| 0 | digest 0c66fed0; false Background facts | digest equal; none false; ubtb source missing from the PA's Background | yes |
+| 1 | every reason, sums exact, shared columns unchanged, tables | 215 shared columns, 0 cells differ; rs_sum_err 0; group and top-10 tables | yes |
+| 2 | rule checks, histogram, fast-path-off study | checks 0; S5 conflict found (5.30%); histogram; study | yes |
+| 3 | history, response, update/alloc, SC on every event; SC against cbp2016 | all checks 0 after two check defects were fixed; SC comparison table; R2 to R7 | yes |
+| 4 | twin, CBP Pass, counts equal, MPKI | 105 Pass, counts equal, per-trace table | yes |
+| 5 | new baseline, PF-11, every moved row | 210 rows, all checks 0; probe defect fixed and the run repeated; moves by first divergence | yes, with the note in 6.4 |
+| 6 | decomposition, regress once, planning text | all three; regress ran twice (the first failed on the AREA); the IA proposed text | yes |
+
+## 4. Fail-before and pass-after, by change
+
+| Change | Test | Before | After | Both slot counts |
+|---|---|---|---|---|
+| R1 | tb_ftq_ftb_sched D1, ftq_ftb_sched_assert P6 | D1 2 checks, P6 fires | 68/0 | yes |
+| R2 | tb_sc_cntrl TC7 | 4 R2 checks + saturation | 102/0 | yes |
+| R4 | tb_tage upd_alloc_tst both ways, 14 allocation checks | 33 FAIL lines | 109/0, 105/0 | yes |
+| R5 | tb_sc TC3, pred_idx reference; tb_bp_cluster SC FOLD | fail | 144/0, 108/0 | yes |
+| R6 | tb_bp_history TC20; tb_bp_cluster FOLD monitor | no build; monitor fails | 45939/0, 26839/0 | yes |
+| R7 | tb_bp_cluster E2e (p2 and p3 arms), I1 | 6 FAIL | 2163/0, 1580/0 | yes |
+| sc_nored | requires the R7 redirect | base RTL fails | 20/0 | yes |
+| t0_uaon | seeded counter, directed B | unseeded and T0-write mutation fail | 20/0 | yes |
+| probe dp2_pkv | rs_sum_err on a full oracle run | 136 / 34 | 0 / 0 | yes |
+
+I checked that each named test is in the tree at 6f06483. I did not
+rerun any of them.
+
+## 5. Recommendation per rule change
+
+| Change | 50Perc d | Cycles d | Recommend | Reason |
+|---|---:|---:|---|---|
+| R1 no FTB update dropped | +0.0129 | +1.771% | **reject** | see below |
+| R2 chooser on SC's own sum | -0.1394 | -0.403% | accept | removes a circular counter; 104 of 105 better; cbp2016 does this |
+| R3 UAON gate on primary | +0.0049 | +0.008% | reject (IA agrees) | worse; not in the tree |
+| R4 allocate weak toward resolved | -0.0733 | -0.111% | accept | 94 of 105 better; cbp2016 does this |
+| R5 SC index with TAGE's direction | -0.3373 | -0.891% | accept | the largest win; the direction is TAGE's flopped p2 meta, so the path to the SC RAM address is an XOR (see 6.2) |
+| R6 p0 fold bypass | -0.0538 | -0.098% | accept, with a timing TD | see 6.2 |
+| R7 history-only redirect, p2 and p3 | -0.1396 | +0.663% | accept | p2 redirects 142.1M -> 164.4M; the cost is measured and the history check is exact afterward |
+
+**R1.** FE-5 and FE-5a (fe_decisions.md 729-745) allow a low-value FTB
+update to be dropped. They say why: "without this the FTB training rate
+would stall the backend." R1 removes the drop, so a LOW update now
+deasserts ftq_bkend_rsv_rdy. The measured cost is that stall: +1.77% in
+cycles, with no accuracy gain (+0.0129). Its Block 1 entry quotes
+ftq_decisions.md 5.7.3 S5/S6 as the rule it replaces. It does not quote
+FE-5a, the rule it reverses, or name the change on the backend
+interface.
+
+The IA's own rejected alternative is the better rule: amend
+ftb_confidence_override_rules.md 3.2 to "at every resolution the
+scheduler issues". That keeps FE-5a and costs nothing.
+
+If you reject R1, the tree needs R1 reverted. perf005_baseline.csv then
+needs a rerun (about 3.3 hours), because the new baseline includes R1.
+The oracle ceiling's +3.378% is also partly R1's.
+
+A small point: ftq_ftb_sched.sv's comment says S5 dropped 1.7%. That is
+int_6's figure; over all 105 traces it is 5.30%.
+
+## 6. Findings for the record
+
+### 6.1 The fast-path default (PF-5) is Jeff's, and is not measured on the new tree
+The fast-path-off study ran on the old RTL only, where it saves 0.6136.
+34 of 105 rows were worse (int_16 +1.92, web_20 +1.86). The six changes
+move the same mispredicts: R2 and R5 change what SC does to TAGE slots,
+and R4 and R6 change TAGE. The 0.61 may not hold on the new tree.
+
+The decomposition's "new - fp off" step (-0.0755) mixes two trees for
+the same reason, as the IA says. One run of the baseline set with
+ftb_fastpath_en=0 on the accepted tree (about 1.4 hours) answers both.
+**I recommend that run before you rule on PF-5.**
+
+### 6.2 Timing (physical design, not measured)
+- **R6:** the bundle bp_history takes from the p1 prediction goes
+  through fold_all_step for each of NUM_PRED_SLOTS branches, then the
+  TAGE and ITTAGE index hash, then the RAM address. All of that is in
+  one cycle (bp_history.sv byp_comb, bp_cluster.sv folded_hist). This
+  joins the uBTB's p1 output to the p0 RAM address. It is a likely
+  critical path. Proposed TD#219.
+- **R5:** tage_pred_meta_p2 is registered (tage_cntrl.sv meta_p2_ff) and
+  reaches sc.sv through the TAGE arbiter. The added path is one bit into
+  the index XOR. If it is ever too long, the fallback is to read the
+  index pair and choose at p3. No TD.
+- **R7:** adds no logic of note on a path. Its cost is the measured
+  refetch.
+
+### 6.3 A cost the task left unmeasured: the stale rollback cycle
+bp_history_decisions.md 5 allows one stale fold cycle after a rollback.
+That class grew from 33,032,368 lookups (R7 alone) to 59,484,908 on the
+new baseline. That is 7.9% of checked lookups, and most of the growth
+is R6's bypass being off in the rollback cycle. Under the task's own
+definition this is "a rule followed that costs accuracy". Its cost
+should be measured and a change proposed. It was reported, not
+measured. Not a reason to hold the task; proposed TD#220.
+
+### 6.4 The oracle ceiling moved +3.378% and is not split by change
+It is attributed to R1 and R7, but each change alone ran on the baseline
+set only. Rejecting R1 changes this figure. The rerun in section 5
+settles it.
+
+### 6.5 The twin allocates by R4
+The twin includes R4 (PACINO_TWIN_ALLOC_100=1 restores 100). The "old"
+pacino column does not. So "twin - TAGE192" is TAGE's size and rules
+with R4 in them. That is the right reading for the new baseline; it is
+stated here so the step is not read against the old RTL.
+
+### 6.6 TD#205's guard is no longer reached
+Under R7, every p3 direction change on a reached slot raises a redirect.
+So no program reaches the TD#205 write-through case. The write-through
+is a correctness guard on a path that is now unreachable by stimulus,
+not a check. I recommend keeping the RTL, recording the case as
+unreachable under R7, and keeping sc_nored as the R7 test it now is. A
+dedicated program is not possible while R7 stands.
+
+## 7. The DONE checklist
+
+| Item | Holds |
+|---|---|
+| every phase ended | yes |
+| every count accounted for (OTHER 0, unexplained 0) | yes, by the harness's own columns |
+| every class defined, with an example | yes |
+| every side effect traced | yes, except the oracle ceiling by change (6.4) |
+| every fix fails before and passes after at both slot counts | yes |
+| every rule change in Block 1 form | yes, except R1's missing FE-5a quote (5) |
+| tools/regress.sh once at the end, summary whole | yes (the second run; the first was before the AREA was withdrawn) |
+| Summary first line agrees with the header Status | yes |
+
+## 8. Process
+
+- **CLAUDE.md slips, disclosed, no effect on a result:**
+  - heredocs (three);
+  - shell variables and a for loop in a command;
+  - two redirects;
+  - a cd;
+  - a sed read;
+  - grep, cat, ls and find through Bash, because the Grep tool was
+    missing.
+- **Permission prompts: none recorded.** This run gives no data for the
+  allow list (handoff 087, pending item 2). It needs your capture from a
+  run that does prompt.
+- **Time:** 3h43m active, 33h43m wall, 8 compactions.
+- **The regression pass was not recorded:** f88a61b, dirty. 6f06483 was
+  pushed, so the pre-push hook passed on the committed tree. Please
+  confirm, and confirm that `make -C perf digest` at 6f06483 prints
+  ef1fbde4. The PF-9 text depends on that.
+- **PA errors (session-086):**
+  - the task carried "Within the AREA" in Jeff's quoted ruling (already
+    recorded);
+  - its Background left out the ubtb source (23,664 decisions), so the
+    named sources did not sum to the total. The IA reported it.
+
+## 9. For Jeff
+
+1. Accept or reject each of R1, R2, R4, R5, R6, R7. The PA recommends
+   accepting all but R1.
+2. If R1 is rejected: a task to revert it, amend 3.2, rerun the baseline
+   and run the fast-path-off study on the accepted tree. One task.
+3. The fast-path default (PF-5), after that study.
+4. TD#219 (R6 timing) and TD#220 (the stale rollback cycle): open as
+   proposed?
+5. Confirm the digest at 6f06483 and the recorded regression pass.
+
 ## Follow-on Actions
 - [ ] As needed document here
 

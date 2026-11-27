@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -108,6 +108,8 @@ bp_defines_pkg.sv.
 
   -- Folded history output (consumed by TAGE, ITTAGE, SC)
   folded       : output bp_folded_hist_t
+  folded_byp   : output bp_folded_hist_t  (PERF-005 R6, for
+                 acceptance; Timing below)
 
 Note: ghist_ptr / phist_ptr are OUTPUTS. The pointer is owned and
 advanced inside bp_history (module-owned pointer,
@@ -404,6 +406,13 @@ only advance, rollback by index, FTQ visibility vs ownership).
   fold outputs hold their prior (pre-rollback) values -- see
   staleness note below.
 
+  folded_byp (PERF-005 R6, built, for acceptance) is combinational: the
+  registered folds with this cycle's prediction bundle applied by the
+  same fold steps as the update, so it equals the next cycle's folded.
+  In a rollback cycle it equals folded (no bypass). Read by the TAGE and
+  ITTAGE p0 lookups and by bp_cluster's p1 staging of the SC folds and
+  the PHR. Its timing is TD#219.
+
 ### Semantics
 
   folded is a bp_folded_hist_t packed struct. Every fold is
@@ -596,4 +605,7 @@ and the module-owned pointer decision.
   2026-11-11  session-084, after BP-141. Semantics: tage_phr is the
               PHR in age order, read by SC ST4. SC folds: 9 bits
               each, H 4, 16 and 64 (they were 4, 16 and 64 wide).
+
+  2026-11-27  session-087, after PERF-005, for acceptance. Port List and
+              Timing: folded_byp (R6).
 ```

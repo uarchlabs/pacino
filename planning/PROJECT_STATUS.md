@@ -16,6 +16,85 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-087: PERF-005 recorded.
+
+PERF-005 COMPLETE (6f06483). regress.sh: 303 targets, 0 new failures,
+RESULT: PASS (run on the dirty tree, pass not recorded there). TD#218 is
+answered and closed.
+
+- THE FAST PATH. The FTB base counter's mispredicts are the fast path's,
+  by its rule: every fast-path check 0. It decides 453,510,726
+  conditionals and mispredicts 17,527,029, 44% of all mispredicts. Off,
+  on the old RTL: 50Perc conditional MPKI 8.4173 -> 7.8038, cycles
+  +0.574%, 34 of 105 traces worse (perf_decisions.md PF-5). The default
+  stays on.
+- TAGE AND SC. Every lookup, RAM read, update, allocation and SC answer
+  re-derived from its rules on every event of the 105 traces: no RTL
+  defect. SC set against cbp2016's TAGE-SC-L, item by item.
+- THE TWIN. Pacino's TAGE alone in the CBP framework: 5.3802 against
+  TAGE192's 3.3992 (PF-10).
+- BUILT, FOR ACCEPTANCE, each measured alone (50Perc conditional MPKI,
+  cycles): R1 the FTB scheduler drops no update, +0.0129, +1.771%; R2
+  the SC chooser trains on SC's own sum, -0.1394, -0.403%; R4 a TAGE
+  allocation starts weak toward the resolved direction, -0.0733,
+  -0.111%; R5 SC ST0-ST3 indexed with TAGE's direction, -0.3373,
+  -0.891%; R6 the p0 lookup reads the folds with the p1 bundle, -0.0538,
+  -0.098%; R7 a history-only redirect when the p2 or p3 bundle differs,
+  -0.1396, +0.663%. R3 (the use_alt_on_na gate on the primary) measured
+  +0.0049 and is not built. The text is recorded in each rule document,
+  marked for acceptance.
+- THE NEW BASELINE, all six: perf/studies/perf005_baseline.csv, 210
+  rows, every PF-11 check passing, digest ef1fbde4. 50Perc conditional
+  MPKI 8.4173 -> 7.7283, cycles +1.033%, oracle cycles +3.378%. Gap to
+  TAGE192 4.3291: TAGE itself 1.9810, the rest of the front end 2.3481;
+  still not steady across the groups (web 5.5558, media 2.4228), so the
+  SPEC extrapolation does not hold (PF-9, PF-10).
+- Found and fixed on the way, in the harness: the history check read a
+  recycled FTQ entry; the oracle rows' RAS-peek decision probe read the
+  unforced port (rs_sum_err 846 on 40 oracle rows, then 0).
+- tb_fe_top: sc_nored expects the R7 p3 redirect; t0_uaon is a directed
+  stimulus with the use_alt_on_na counter seeded, no LFSR. Each fails
+  before and passes after at both slot counts. Under R7 no program
+  reaches TD#205's case (every p3 direction change on a reached slot
+  redirects); the write-through stays.
+
+PA ASSESSMENT (session-087): complete; every headline figure reproduces
+from the study CSVs. Recommended: accept R2, R4, R5, R6 and R7; reject
+R1. R1 reverses FE-5a, which lets a LOW FTB update drop so that FTB
+training does not stall the backend; the measured cost is that stall,
++1.771% cycles, for no accuracy, and R1's entry did not quote FE-5a. The
+IA's rejected alternative, 3.2 trained at every resolution the scheduler
+issues, keeps FE-5a. Rejecting R1 needs a revert and a baseline rerun.
+The fast-path-off study ran on the old RTL only: run it on the accepted
+tree before ruling PF-5. Process: CLAUDE.md slips disclosed (heredocs,
+shell variables, a loop, redirects, a cd); no permission prompt
+recorded, so no data for the allow list; 3h43m active, 33h43m wall, 8
+compactions. PA ERRORS (session-086): the task's quoted ruling carried
+"Within the AREA"; its Background left out the ubtb source.
+
+FOR JEFF: accept or reject R1, R2, R4, R5, R6 and R7; the fast-path
+default (PF-5); confirm that make -C perf digest prints ef1fbde4 at
+6f06483.
+
+Module Status: ftq_ftb_sched.sv, sc.sv, sc_cntrl.sv, tage_cntrl.sv,
+bp_history.sv, bp_cluster.sv and the frontend top gain PERF-005; the
+perf harness row is rewritten (it listed TD#206, 207, 208 and 210 open).
+
+TECHNICAL DEBT. Closed: TD#218, moved to CLOSED_TECH_DEBT.md. Opened:
+TD#219 (R6's bypass timing), TD#220 (the stale fold cycle after a
+rollback).
+
+Documents changed, every one in check_planning.sh with its new checksum:
+PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, perf_decisions.md,
+ftq_decisions.md, fe_decisions.md, bp_arb_spec.md, sc_decisions.md,
+tage_cntrl_alloc_rules.md, sc_table_hash_rules.md,
+sc_table_interfaces.md, bp_history_decisions.md,
+bp_history_interfaces.md.
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-006,
+TD#221.
+
+---
 ## Session-086, end: PERF-005 run; the AREA withdrawn.
 
 PERF-005 RAN (days of runs) and ended IN-PROGRESS: two testbench
@@ -5468,6 +5547,15 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | into 9 bits; TC18, TC19.         |
 |                         |             |                   | sim_history 45442/0, 26590/0 at  |
 |                         |             |                   | 1.                               |
+|                         |             |                   | PERF-005 R6, built, for          |
+|                         |             |                   | acceptance: folded_byp, the      |
+|                         |             |                   | folds with this cycle's bundle   |
+|                         |             |                   | applied, none in a rollback      |
+|                         |             |                   | cycle                            |
+|                         |             |                   | (bp_history_interfaces.md);      |
+|                         |             |                   | TC20. sim_history 45939/0,       |
+|                         |             |                   | 26839/0 at 1 slot. Timing:       |
+|                         |             |                   | TD#219.                          |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -5688,6 +5776,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | tage_extd_ctr read a T0 provider |
 |                         |             |                   | as {ctr[1], ctr[0], ctr[0]}      |
 |                         |             |                   | (TD#182). sim_tage 109/0.        |
+|                         |             |                   | PERF-005 R4, built, for          |
+|                         |             |                   | acceptance: an allocated entry's |
+|                         |             |                   | CTR is 3'b100 for a taken        |
+|                         |             |                   | resolution and 3'b011 for a      |
+|                         |             |                   | not-taken one                    |
+|                         |             |                   | (tage_cntrl_alloc_rules.md).     |
+|                         |             |                   | sim_tage 109/0, 105/0 at 1 slot. |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | Session-060 BP-081: FIFOs retyped|
 |                         |             |                   | off cond_pred_*.                 |
@@ -5984,6 +6079,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | change was needed.               |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | PERF-005 R2, built, for          |
+|                         |             |                   | acceptance: the chooser trains   |
+|                         |             |                   | on sc_lcl_pred_tkn               |
+|                         |             |                   | (sc_decisions.md 10); TC7.       |
+|                         |             |                   | sim_sc_cntrl 102/0.              |
 | sc.sv                   | Complete    | tb_sc             | sim_sc 55/0, sim_sc_fast 52/0.   |
 |                         |             |                   | Arb ports stubbed at unit level; |
 |                         |             |                   | the real credit arbiter now lives|
@@ -6000,6 +6100,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | sim_sc_fast 140/0.               |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | PERF-005 R5, built, for          |
+|                         |             |                   | acceptance: ST0-ST3 take         |
+|                         |             |                   | inp_pc_p2 = {PC[VA_WIDTH-2:1],   |
+|                         |             |                   | the slot's TAGE direction}       |
+|                         |             |                   | (sc_table_hash_rules.md). sim_sc |
+|                         |             |                   | 144/0, 108/0 at 1 slot.          |
 | sc_interfaces.md        | Complete    | --                | Written session-058. Session-061:|
 |                         |             |                   | Arbitration Model corrected.     |
 |                         |             |                   | Session-079: branch_range and    |
@@ -6107,6 +6213,18 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 1 slot; 184 s since BP-144       |
 |                         |             |                   | (ras_assert's walk, not          |
 |                         |             |                   | investigated).                   |
+|                         |             |                   | PERF-005, built, for acceptance: |
+|                         |             |                   | R6, the TAGE and ITTAGE p0       |
+|                         |             |                   | lookups and the p1 SC fold and   |
+|                         |             |                   | PHR staging read folded_byp; R7, |
+|                         |             |                   | a slot-0 history-only redirect   |
+|                         |             |                   | at p2 (hdiff_p2) and at p3 when  |
+|                         |             |                   | the stage's bundle differs from  |
+|                         |             |                   | the one the block wrote, with    |
+|                         |             |                   | the successor unchanged          |
+|                         |             |                   | (bp_history_decisions.md 3.5);   |
+|                         |             |                   | E2e, I1. sim_bp_cluster 2163/0,  |
+|                         |             |                   | 1580/0 at 1 slot.                |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
 |                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
@@ -6324,6 +6442,15 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | and 670 checks as of BP-107.     |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | PERF-005 R1, built, for          |
+|                         |             |                   | acceptance: no update is         |
+|                         |             |                   | dropped; a channel that would    |
+|                         |             |                   | fall outside the capacity        |
+|                         |             |                   | deasserts its ready, LOW or HIGH |
+|                         |             |                   | (ftq_decisions.md 5.7.3). P6     |
+|                         |             |                   | a_ftb_never_dropped.             |
+|                         |             |                   | sim_ftq_ftb_sched 68/0 at both   |
+|                         |             |                   | slot counts.                     |
 | ftq.sv                  | Complete    | tb_ftq            | BP-107. Structural top, 7.1 and  |
 |                         |             |                   | 7.3. No state, no always block.  |
 |                         |             |                   | Three assigns, none of them      |
@@ -6836,6 +6963,15 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | monitor removed. sim_fe_top       |
 |                         |             |                   | 736/0, 734/0 at 1 slot;           |
 |                         |             |                   | assert_labels 168, 160.           |
+|                         |             |                   | PERF-005: sc_nored expects the R7 |
+|                         |             |                   | p3 redirect; t0_uaon is a         |
+|                         |             |                   | directed stimulus with the        |
+|                         |             |                   | use_alt_on_na counter seeded for  |
+|                         |             |                   | one cycle, no LFSR (+TU_SEED      |
+|                         |             |                   | removed). TD#205's case is not    |
+|                         |             |                   | reached under R7. sim_fe_top      |
+|                         |             |                   | 1006/0, 1003/0 at 1 slot;         |
+|                         |             |                   | assert_labels 173, 165.           |
 | perf harness            | Working     | perf studies      | Built PERF-002 (767eab8) and      |
 |                         |             |                   | PERF-003 (a6bcf8d):               |
 |                         |             |                   | perf/sv/perf_top.sv around fe_top |
@@ -6844,20 +6980,26 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | perf/src, tools/perf_traces.py,   |
 |                         |             |                   | perf_rerun.py, perf_study.py;     |
 |                         |             |                   | make -C perf. Not in regress.sh   |
-|                         |             |                   | (PF-9). A measuring instrument    |
-|                         |             |                   | since PERF-003: the fetch rule    |
-|                         |             |                   | decides mispredicts (PF-18), the  |
-|                         |             |                   | stream is a check, the PF-11      |
-|                         |             |                   | oracle is built, every hard check |
-|                         |             |                   | 0. Backend: four stages and       |
-|                         |             |                   | resolve to commit; the default is |
-|                         |             |                   | immediate (Jeff), the             |
-|                         |             |                   | near-perfect default waits on     |
-|                         |             |                   | TD#207. Tools default to 75% of   |
-|                         |             |                   | the threads (PF-22). Open:        |
-|                         |             |                   | TD#206, 207, 208, 210; a trap     |
-|                         |             |                   | after a branch to be judged apart |
-|                         |             |                   | (PERF-004).                       |
+|                         |             |                   | (PF-9). The fetch rule decides    |
+|                         |             |                   | mispredicts (PF-18); the PF-11    |
+|                         |             |                   | oracle is built; every hard check |
+|                         |             |                   | 0. The default backend is         |
+|                         |             |                   | immediate (Jeff, PF-18). Tools    |
+|                         |             |                   | default to 75% of the threads     |
+|                         |             |                   | (PF-22). PERF-004 (2d1e330): the  |
+|                         |             |                   | build stamp and digest, the       |
+|                         |             |                   | baseline 0c66fed0 (PF-9).         |
+|                         |             |                   | PERF-005 (6f06483): the decision  |
+|                         |             |                   | reasons and the rule-check        |
+|                         |             |                   | columns (PF-6, PF-11), the TAGE   |
+|                         |             |                   | twin in perf/src/twin, the        |
+|                         |             |                   | baseline ef1fbde4, for acceptance |
+|                         |             |                   | (PF-9). This row listed TD#206,   |
+|                         |             |                   | 207, 208 and 210 open and the     |
+|                         |             |                   | near-perfect default waiting on   |
+|                         |             |                   | TD#207; all four closed with      |
+|                         |             |                   | PERF-004, and PF-18 retired that  |
+|                         |             |                   | default.                          |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -7517,19 +7659,26 @@ moves there in the planning update that closes it.
 |     |          | study_set and trace, every column exact but the stamp    |
 |     |          | and timing (perf_decisions.md PF-9). Proposed by         |
 |     |          | PERF-004. Opened session-086 (PA).                       |
-| 218 | bpu      | OPEN, PERFORMANCE, INVESTIGATE. THE FTB'S BASE COUNTER   |
-|     |          | DECIDES MORE MISPREDICTS THAN TAGE AND SC TOGETHER (the  |
-|     |          | baseline: ftb 4.0420, tage 2.0694, sc 1.2519 MPKI), most |
-|     |          | on traces TAGE192 predicts nearly perfectly (int_31 88%  |
-|     |          | of 10.12 MPKI, fp_6 76%, infra_7 72%, infra_1 79%).      |
-|     |          | Suspected: how TAGE takes over from the base prediction  |
-|     |          | (allocation on a base mispredict, the tag and index      |
-|     |          | history, the p2 and p3 override, training at commit).    |
-|     |          | Proposed: count per base-counter mispredict whether a    |
-|     |          | tagged table hit and whether its last mispredict         |
-|     |          | allocated, and a software twin of pacino's TAGE in the   |
-|     |          | CBP framework (perf_decisions.md PF-10). Before any      |
-|     |          | table or history enlargement. Opened session-086 (PA).   |
+| 219 | bpu      | OPEN, PHYSICAL DESIGN. R6'S p0 FOLD BYPASS (PERF-005,    |
+|     |          | for acceptance). bp_history's folded_byp applies the p1  |
+|     |          | block's bundle by fold_all_step for each of              |
+|     |          | NUM_PRED_SLOTS branches, combinationally, ahead of the   |
+|     |          | TAGE and ITTAGE p0 index hash and the RAM address        |
+|     |          | (bp_history.sv byp_comb; bp_cluster.sv folded_hist). The |
+|     |          | uBTB's p1 prediction now reaches the p0 RAM address in   |
+|     |          | one cycle. No timing number exists. Measure when         |
+|     |          | synthesis is available; the fallbacks are the registered |
+|     |          | folds (R6 off: +0.0538 50Perc conditional MPKI) or a     |
+|     |          | bypass of fewer folds. Opened session-087 (PA).          |
+| 220 | bpu      | OPEN, PERFORMANCE, MEASURE. THE STALE FOLD CYCLE AFTER A |
+|     |          | ROLLBACK. bp_history_decisions.md 5 lets a lookup in the |
+|     |          | recompute cycle read stale folds, and R6's bypass is off |
+|     |          | in that cycle. On the PERF-005 baseline 59,484,908 of    |
+|     |          | 748,921,009 checked lookups (7.9%) do (th_bad_rollback;  |
+|     |          | 33,032,368 under R7 alone). 5.4 asked for its accuracy   |
+|     |          | cost; it is not measured. Measure it (the harness's      |
+|     |          | history model gives the correct folds) and propose a     |
+|     |          | change if it pays. Opened session-087 (PA).              |
 ---
 
 ## Open Items

@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -101,7 +101,10 @@ the front end top as a sibling of the IFU, per L1I-2.
 
 ```
   p0   Indices and addresses presented to the RAMs. PC hash and
-       folded history available. RAS top of stack read.
+       folded history available, including the bundle the p1
+       block writes in the same cycle (bp_history folded_byp;
+       none in a rollback cycle; PERF-005 R6, built, for
+       acceptance). RAS top of stack read.
   p1   RAM outputs available. The initial prediction is formed. The
        FTQ allocates an entry and issues a fetch.
   p2   FTB result valid; branch type available. TAGE final. ITTAGE.
@@ -743,6 +746,8 @@ Proposed numbering. Stated here for the first time; not carried from
          Applies to the FTB path alone. Every other predictor takes
          one update per slot per cycle and keeps FE-5 unqualified.
          ftq_decisions.md 5.7, IC-FTB-09.
+         PERF-005 R1, BUILT, FOR ACCEPTANCE, drops no FTB update;
+         accepted, it withdraws this amendment (ftq_decisions.md 5.7.3).
 
   FE-6   Updates reach a predictor in resolution order. The update
          queue is a FIFO and is not reordered.
@@ -1854,4 +1859,8 @@ create one.
               stated once, there, and named everywhere else; the
               physical bound is PA_WIDTH. TD-FE-3 and FE-U11: stated
               by VA_WIDTH.
+
+  2026-11-27  session-087, after PERF-005, for acceptance. 1: p0 reads
+              the folds with the p1 bundle (R6). FE-5a: R1 would
+              withdraw it.
 ```

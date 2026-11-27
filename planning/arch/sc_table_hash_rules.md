@@ -6,7 +6,7 @@
  FILE:    sc_table_hash_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-12
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -59,6 +59,8 @@ inp_pc_p2[s]      the staged prediction BLOCK START PC, [VA_WIDTH-1:1]
                   both slots carry the same value; the slots are
                   separated by their own RAMs (sc_decisions.md 6).
                   This read "staged branch PC". Session-077.
+                  Since PERF-005 R5 (for acceptance) bit 1 is the
+                  slot's TAGE direction, so the slots differ.
 fh_idx_ext        the per-table index fold, [SC_MAX_FH-1:0], selected
                   by THIS_TABLE.
 ```
@@ -87,6 +89,12 @@ defensive.
 ```
 logic [THIS_INDEX_BITS-1:0] hashed_index =
   THIS_INDEX_BITS'(inp_pc_p2[s] ^ fh_idx_ext);
+
+// PERF-005 R5 (built, for acceptance): sc.sv drives ST0-ST3 with
+//   inp_pc_p2[s] = {pc_p2[s][VA_WIDTH-2:1],
+//                   tage_pred_meta_p2[s].tage_pred_tkn}
+// so index bit 0 is the slot's TAGE direction and the PC term is
+// PC[8:1] for a 9-bit index. ST4 keeps the PC.
 ```
 
 The index drops only the instruction offset. With the C extension
@@ -110,6 +118,13 @@ retiring exactly. Mispredicts: hist 27 -> 22, lp 10 -> 8, misp_call
 hist and lp gain from blocks no longer sharing on bits 2:1; ftbonly,
 whose copies sit 2 KiB apart, now shares ST0 entries in groups of up
 to 9 through the 1 KiB alias.
+
+PERF-005 R5, BUILT, FOR ACCEPTANCE: ST0-ST3 are indexed with TAGE's
+direction, as cbp2016's bias and GEHL tables are (cbp2016_tage_sc_l.h
+1016-1029, 1073), so a branch keeps separate counters for the two TAGE
+outcomes. The PC term above (PC[9:1]) is the rule before R5. SC's
+overrides were wrong 54.53% of the time; under R5 alone, 48.40%.
+Measured alone: 50Perc conditional MPKI -0.3373, cycles -0.891%.
 
 ---
 ## get_br_imli_idx (ST4, sc_brimli)
@@ -178,3 +193,5 @@ No hash on update. upd_index_u0[s] carries the predict-time index
 from sc_pred_meta.sc_upd_idx[THIS_TABLE] (sc_decisions.md section
 10, sc_table_interfaces.md).
 
+  2026-11-27  session-087, after PERF-005, for acceptance. sc_idx_hash:
+              ST0-ST3 index bit 0 is the slot's TAGE direction (R5).

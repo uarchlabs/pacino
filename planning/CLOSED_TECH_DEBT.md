@@ -1581,6 +1581,30 @@
 |     |          | tools/perf_study.py gathers only rows of one digest;     |
 |     |          | make -C perf digest prints it (perf_decisions.md PF-9).  |
 |     |          | Was: OPEN, PROVENANCE, the build's sha could be stale.   |
+| 218 | bpu      | CLOSED by PERF-005 (6f06483), session-087. The base      |
+|     |          | counter's mispredicts are the fast path's, by its rule:  |
+|     |          | every fast-path check 0. Off, on the old RTL, it saves   |
+|     |          | 0.6136 of 8.4173 50Perc conditional MPKI                 |
+|     |          | (perf_decisions.md PF-5). A software twin of pacino's    |
+|     |          | TAGE gives 5.3802 against TAGE192's 3.3992; of the new   |
+|     |          | baseline's 4.3291 gap, 1.9810 is TAGE itself and 2.3481  |
+|     |          | the front end around it (PF-10). No RTL defect in TAGE   |
+|     |          | or SC. Six rule changes, R1, R2, R4, R5, R6 and R7,      |
+|     |          | built for acceptance, take the baseline from 8.4173 to   |
+|     |          | 7.7283 (PF-9). Was: OPEN, PERFORMANCE, INVESTIGATE. THE  |
+|     |          | FTB'S BASE COUNTER DECIDES MORE MISPREDICTS THAN TAGE    |
+|     |          | AND SC TOGETHER (the baseline: ftb 4.0420, tage 2.0694,  |
+|     |          | sc 1.2519 MPKI), most on traces TAGE192 predicts nearly  |
+|     |          | perfectly (int_31 88% of 10.12 MPKI, fp_6 76%, infra_7   |
+|     |          | 72%, infra_1 79%). Suspected: how TAGE takes over from   |
+|     |          | the base prediction (allocation on a base mispredict,    |
+|     |          | the tag and index history, the p2 and p3 override,       |
+|     |          | training at commit). Proposed: count per base-counter    |
+|     |          | mispredict whether a tagged table hit and whether its    |
+|     |          | last mispredict allocated, and a software twin of        |
+|     |          | pacino's TAGE in the CBP framework (perf_decisions.md    |
+|     |          | PF-10). Before any table or history enlargement. Opened  |
+|     |          | session-086 (PA).                                        |
 
 | 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
 |    | missing trx_type   | Add trx_type input port (logic type) to          |

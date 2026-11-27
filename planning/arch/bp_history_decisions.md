@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -298,6 +298,16 @@ This reverses the decision recorded here from session-069 to
 session-075, that the restored history was imprecise and accepted
 as such.
 
+BUILT, FOR ACCEPTANCE (PERF-005 R7): the history is also corrected when
+the bundle a block's p2 view (FTB, TAGE) or p3 view (SC) forms differs
+from the bundle it wrote at p1 while its successor is unchanged. The
+stage raises a slot-0 redirect to the block's own successor, so the
+rollback writes that stage's bundle and the younger block is fetched
+again (bp_cluster.sv hdiff_p2 and the p3 arm). Without it, 275,147,385
+lookups over the 105 traces, 37% of those checked, held an uncorrected
+bundle in their 119-bit window. Measured alone: 50Perc conditional MPKI
+-0.1396, cycles +0.663%.
+
 THE RULE. The rollback carries a correction with the index. On
 rollback bp_history restores the pointer to the FIRST bit of the
 named bundle rather than past its last, writes the corrected bits,
@@ -464,6 +474,11 @@ cost, taken to avoid the control complexity a block would add.
 Action item, detailed performance analysis: quantify how often a
 prediction lands in the recompute cycle and its accuracy cost.
 Revisit only if it is material.
+
+MEASURED, HOW OFTEN (PERF-005, its baseline): 59,484,908 of 748,921,009
+checked lookups (7.9%) are in a recompute cycle; 33,032,368 under R7
+alone, more with R6 since its bypass is off in that cycle. The accuracy
+cost is not measured: TD#220.
 
 ---
 
@@ -970,3 +985,7 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               Jeff). 3.2: folded.tage_phr, the PHR in age order, read
               by SC ST4. 6.4, 6.5: the SC folds are H into W 9, the
               ST3 anchor 0x180. 9: HI2 notes tage_phr.
+
+  2026-11-27  session-087, after PERF-005, for acceptance. 3.5: the
+              history-only redirect at p2 and p3 (R7). 5.4: how often a
+              lookup reads stale folds, measured (TD#220).

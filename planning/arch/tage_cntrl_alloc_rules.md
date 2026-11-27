@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_alloc_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -79,11 +79,20 @@ Useful bit decrement on failed allocation is not implemented.
 
 ## Initialization of Allocated Entry
 
-CTR   = 3'b100  (weakest taken)
+CTR   = resolved_taken ? 3'b100 : 3'b011  (weak toward the
+        resolved direction)
 USE   = 2'b00   (null useful)
 EPC   = current lcl_epoch value for the slot
 TAG   = tage_alloc_tag from meta
 VALID = 1'b1
+
+PERF-005 R4, BUILT, FOR ACCEPTANCE (tage_cntrl.sv alc_upd_comb). CTR
+read 3'b100 (weakest taken) whatever the branch did, so an entry
+allocated for a not-taken branch predicted taken on its first use;
+14,110,629 of 26,871,877 allocations over the 105 traces (52.5%) were
+for a not-taken resolution. cbp2016 allocates weak toward the outcome
+(cbp2016_tage_sc_l.h 1460, 1505). Measured alone: 50Perc conditional
+MPKI -0.0733, cycles -0.111%.
 
 ---
 
@@ -127,3 +136,6 @@ See tage_cntrl_use_update_rules.md for aging rules. This named
 tage_cntrl_useful_update_rules.md, which does not exist.
 Session-072.
 
+  2026-11-27  session-087, after PERF-005, for acceptance.
+              Initialization: CTR weak toward the resolved direction
+              (R4).
