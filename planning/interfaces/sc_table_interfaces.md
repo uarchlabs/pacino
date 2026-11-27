@@ -298,9 +298,10 @@ inp_pc_p2[s]       staged prediction block start PC, the same on
                    derive the index hash via sc_idx_hash
                    (sc_table_hash_rules.md). Produced by the BP
                    cluster staging path (sc_interfaces.md).
-                   Since PERF-005 R5 (for acceptance) sc.sv drives
-                   {PC[VA_WIDTH-2:1], the slot's TAGE direction}:
-                   bit 1 is the direction, and the slots differ.
+                   Since PERF-005 R5 (accepted, session-087)
+                   sc.sv drives {PC[VA_WIDTH-2:1], the slot's
+                   TAGE direction}: bit 1 is the direction, and
+                   the slots differ.
 idx_fh_p2          the per-table index fold, staged to p2. For ST0
                    this port is tied to constant zero at the ST0
                    instance in sc.sv (SC_TBL_FH[0]=0, PC slice only);
@@ -413,6 +414,6 @@ contain. Session-071.
 |          | redirect. sc_table needs no flush port  | FE-14.         |
 |          | and none is added.                      |                |
 
-  2026-11-27  session-087, after PERF-005, for acceptance. sc_table
+  2026-11-27  session-087, after PERF-005; accepted (Jeff). sc_table
               Semantics: inp_pc_p2 carries the slot's TAGE direction in
               bit 1 (R5).

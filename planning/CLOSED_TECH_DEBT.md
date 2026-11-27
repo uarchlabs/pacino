@@ -1589,9 +1589,10 @@
 |     |          | TAGE gives 5.3802 against TAGE192's 3.3992; of the new   |
 |     |          | baseline's 4.3291 gap, 1.9810 is TAGE itself and 2.3481  |
 |     |          | the front end around it (PF-10). No RTL defect in TAGE   |
-|     |          | or SC. Six rule changes, R1, R2, R4, R5, R6 and R7,      |
-|     |          | built for acceptance, take the baseline from 8.4173 to   |
-|     |          | 7.7283 (PF-9). Was: OPEN, PERFORMANCE, INVESTIGATE. THE  |
+|     |          | or SC. Six rule changes, R1, R2, R4, R5, R6 and R7, take |
+|     |          | the baseline from 8.4173 to 7.7283 (PF-9); R1 rejected   |
+|     |          | and reverted by PERF-006, the others accepted (Jeff,     |
+|     |          | session-087). Was: OPEN, PERFORMANCE, INVESTIGATE. THE   |
 |     |          | FTB'S BASE COUNTER DECIDES MORE MISPREDICTS THAN TAGE    |
 |     |          | AND SC TOGETHER (the baseline: ftb 4.0420, tage 2.0694,  |
 |     |          | sc 1.2519 MPKI), most on traces TAGE192 predicts nearly  |

@@ -915,7 +915,9 @@ resolve of that branch trains it.
       ftq_bkend_rsv_rdy for that channel and the backend holds it.
 ```
 
-BUILT, FOR ACCEPTANCE (PERF-005 R1): no FTB update is dropped. S5 and S6
+REJECTED (Jeff, session-087); PERF-006 reverts it, and S5 and S6
+stand as written above. Was: BUILT, FOR ACCEPTANCE (PERF-005 R1): no
+FTB update is dropped. S5 and S6
 read, as built: "No update is dropped. A channel whose update would fall
 outside the capacity deasserts ftq_bkend_rsv_rdy, LOW or HIGH, and the
 backend holds it." (ftq_ftb_sched.sv; drop_val is unreachable.) The
@@ -1632,4 +1634,7 @@ Section 1 counts six, since session-074.
 
   2026-11-27  session-087, after PERF-005, for acceptance. 5.7.3: R1, no
               FTB update dropped, built.
+
+  2026-11-27  session-087 (Jeff): R1 rejected; PERF-006 reverts it.
+              5.7.3 stands.
 ```

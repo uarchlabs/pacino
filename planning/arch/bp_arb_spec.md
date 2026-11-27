@@ -89,7 +89,7 @@ not a redirect source; the initial prediction is formed at p1.
   p0   Inputs presented to RAMs (flopped).  PC hash, folded
        history available, including the bundle the p1 block
        writes in the same cycle (bp_history folded_byp; none in a
-       rollback cycle; PERF-005 R6, built, for acceptance).
+       rollback cycle; PERF-005 R6, accepted, session-087).
   p1   RAM outputs available.  Tag match, hit processing.
   p2   Result formation.  Provider selection, meta capture.
   p3   Statistical corrector threshold decision.
@@ -1019,5 +1019,5 @@ task file, not here.
               written for every valid p2 block; the commit updates the
               commit stack and BOS.
 
-  2026-11-27  session-087, after PERF-005, for acceptance. 3.1: p0 reads
-              the folds with the p1 bundle (R6).
+  2026-11-27  session-087, after PERF-005; accepted (Jeff). 3.1: p0
+              reads the folds with the p1 bundle (R6).

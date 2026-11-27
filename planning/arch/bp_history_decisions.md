@@ -298,10 +298,10 @@ This reverses the decision recorded here from session-069 to
 session-075, that the restored history was imprecise and accepted
 as such.
 
-BUILT, FOR ACCEPTANCE (PERF-005 R7): the history is also corrected when
-the bundle a block's p2 view (FTB, TAGE) or p3 view (SC) forms differs
-from the bundle it wrote at p1 while its successor is unchanged. The
-stage raises a slot-0 redirect to the block's own successor, so the
+PERF-005 R7, ACCEPTED (Jeff, session-087): the history is also corrected
+when the bundle a block's p2 view (FTB, TAGE) or p3 view (SC) forms
+differs from the bundle it wrote at p1 while its successor is unchanged.
+The stage raises a slot-0 redirect to the block's own successor, so the
 rollback writes that stage's bundle and the younger block is fetched
 again (bp_cluster.sv hdiff_p2 and the p3 arm). Without it, 275,147,385
 lookups over the 105 traces, 37% of those checked, held an uncorrected
@@ -986,6 +986,6 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               by SC ST4. 6.4, 6.5: the SC folds are H into W 9, the
               ST3 anchor 0x180. 9: HI2 notes tage_phr.
 
-  2026-11-27  session-087, after PERF-005, for acceptance. 3.5: the
+  2026-11-27  session-087, after PERF-005; accepted (Jeff). 3.5: the
               history-only redirect at p2 and p3 (R7). 5.4: how often a
               lookup reads stale folds, measured (TD#220).

@@ -108,8 +108,8 @@ bp_defines_pkg.sv.
 
   -- Folded history output (consumed by TAGE, ITTAGE, SC)
   folded       : output bp_folded_hist_t
-  folded_byp   : output bp_folded_hist_t  (PERF-005 R6, for
-                 acceptance; Timing below)
+  folded_byp   : output bp_folded_hist_t  (PERF-005 R6,
+                 accepted; Timing below)
 
 Note: ghist_ptr / phist_ptr are OUTPUTS. The pointer is owned and
 advanced inside bp_history (module-owned pointer,
@@ -406,7 +406,7 @@ only advance, rollback by index, FTQ visibility vs ownership).
   fold outputs hold their prior (pre-rollback) values -- see
   staleness note below.
 
-  folded_byp (PERF-005 R6, built, for acceptance) is combinational: the
+  folded_byp (PERF-005 R6, accepted, session-087) is combinational: the
   registered folds with this cycle's prediction bundle applied by the
   same fold steps as the update, so it equals the next cycle's folded.
   In a rollback cycle it equals folded (no bypass). Read by the TAGE and
@@ -606,6 +606,6 @@ and the module-owned pointer decision.
               PHR in age order, read by SC ST4. SC folds: 9 bits
               each, H 4, 16 and 64 (they were 4, 16 and 64 wide).
 
-  2026-11-27  session-087, after PERF-005, for acceptance. Port List and
-              Timing: folded_byp (R6).
+  2026-11-27  session-087, after PERF-005; accepted (Jeff). Port List
+              and Timing: folded_byp (R6).
 ```

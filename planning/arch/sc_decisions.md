@@ -543,8 +543,8 @@ if (do_update) {
 }
 
 // Train the chooser: only the counter that was consulted.
-// PERF-005 R2 (built, for acceptance): the chooser learns which
-// side was right, so it matches SC's own sum direction,
+// PERF-005 R2 (accepted, Jeff, session-087): the chooser learns
+// which side was right, so it matches SC's own sum direction,
 // sc_lcl_pred_tkn. It read sc_pred_tkn, the final direction,
 // which in a corner the chooser itself picked: a correct TAGE
 // counted as SC right. cbp2016_tage_sc_l.h 1295-1311 trains its
@@ -854,5 +854,5 @@ the number of index bits or number of entries in this table instance.
   2026-11-11  session-084, after BP-141. Parameter meaning:
               SC_TBL_FH is the fold width, the index width (9);
               SC_TBL_HIST the history folded into it. SC_MAX_FH 9.
-  2026-11-27  session-087, after PERF-005, for acceptance. 10: the
+  2026-11-27  session-087, after PERF-005; accepted (Jeff). 10: the
               chooser trains on sc_lcl_pred_tkn (R2).

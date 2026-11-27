@@ -316,21 +316,21 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   7f8b5a2413fc
-PLAN  PROJECT_STATUS.md                 04fff24de501
-PLAN  CLOSED_TECH_DEBT.md               f50c5e4dd1dc
+PLAN  PROJECT_STATUS.md                 59eb5f673cc6
+PLAN  CLOSED_TECH_DEBT.md               217465133dc3
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
 UNKN  CLAUDE.md                         f272df29b804
 
-ARCH  bp_arb_spec.md                    0ea0cf31f868
+ARCH  bp_arb_spec.md                    eed064d7ddef
 ARCH  bp_cluster.md                     20a0101a7f3f
-ARCH  bp_history_decisions.md           145f3369a8fa
+ARCH  bp_history_decisions.md           d35d31b94594
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  csr_decisions.md                  484fe6279bb8
 ARCH  dcd_decisions.md                  8232e5fdf27f
-ARCH  fe_decisions.md                   4e91131e4e37
+ARCH  fe_decisions.md                   c6ed389d5570
 ARCH  ftb_decisions.md            d2ca8ed5f2be
-ARCH  ftq_decisions.md            d4ce8fb9f9d7
+ARCH  ftq_decisions.md            4850412ed8f6
 ARCH  ftq_entry_formats.md        147e74fc7e26
 ARCH  ibuf_decisions.md                 36a96982352e
 ARCH  icache_decisions.md               0e18fe32a823
@@ -340,11 +340,11 @@ ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  be6a0ceaa8f5
 ARCH  ras_decisions.md                  9cd318e6980e
-ARCH  sc_decisions.md                   99b3cbfead3d
-ARCH  sc_table_hash_rules.md            6d616d96f6f8
+ARCH  sc_decisions.md                   3fc3b07814c1
+ARCH  sc_table_hash_rules.md            9e3048dae100
 ARCH  sram_init.md                      d6cefefe7fc5
 ARCH  tage_cntrl_uaon_update_rules.md   cbc6672c5f25
-ARCH  tage_cntrl_alloc_rules.md         75d9a6d9c606
+ARCH  tage_cntrl_alloc_rules.md         b732df4a378e
 ARCH  tage_cntrl_decisions.md           e75047b88350
 ARCH  tage_table_entry_formats.md       bfd6ee8f1d3d
 ARCH  tage_table_hash_rules.md          d829daf22e1c
@@ -369,7 +369,7 @@ VERF  tage_coverage_plan.md             497bc9a790a3
 
 INTF  ittage_table_interfaces.md        e185fef23e38
 INTF  tage_table_interfaces.md          44e1ccc8e73b
-INTF  bp_history_interfaces.md          9549f8dbab51
+INTF  bp_history_interfaces.md          ac78825fd5be
 INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           c13ff7e4368c
 INTF  ftq_backend_interfaces.md   1093eafd5bb3
@@ -384,7 +384,7 @@ INTF  l1i_ifu_interfaces.md       5267cfdffe1c
 INTF  loop_pred_interfaces.md     f700641358ec
 INTF  ras_interfaces.md           a74884b33209
 INTF  sc_interfaces.md            7936cbf21f43
-INTF  sc_table_interfaces.md      237b6bfa82cc
+INTF  sc_table_interfaces.md      046c807dd24c
 INTF  tage_interfaces.md          80e89e517207
 INTF  ubtb_interfaces.md          a8e591bbeda2
 
@@ -393,7 +393,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               eae7ecd93a14
+PERF  perf_decisions.md               3b08d0db992a
 
 EOF
 

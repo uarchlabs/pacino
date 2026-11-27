@@ -394,6 +394,12 @@ PF-5   A measured configuration is named by a release tag, <tag>, for
        rule, not by a defect. The default stays ftb_fastpath_en 1 until Jeff
        rules. The study has not run on the tree with PERF-005's rule changes
        (PA).
+       RULED (Jeff, session-087): the fast path stays as it is,
+       ftb_fastpath_en 1 in the PF-5 configuration. "lets leave the design
+       as is." "I believe this might be an abberation of the model/and
+       somewhat contrived environment. We will address this once we have a
+       standalone performance model and can correlate the designs."
+       Revisited with the standalone model (PF-U9); TD#221.
 
 ## 4. Measurement
 
@@ -492,21 +498,21 @@ PF-9   A result is keyed by its configuration name (PF-5) and the
        committed as 2d1e330. 2.8 hours on 24
        workers for both sets; 34,705 instructions per second over the
        baseline set (28,342 web to 56,155 media).
-       THE BASELINE (PERF-005, FOR ACCEPTANCE with its rule changes R1, R2,
-       R4, R5, R6 and R7): perf/studies/perf005_baseline.sets (baseline and
-       baseline_oracle) over perf/studies/baseline.traces, full length, the
-       tree build (tree_s2), the PF-5 configuration, the immediate backend,
-       the fetch rule, the real I-cache; perf/studies/perf005_baseline.csv,
-       210 rows, every PF-11 check passing (the PERF-005 rule checks
-       included), digest
+       THE BASELINE (PERF-005, the tree with R1, R2, R4, R5, R6 and R7):
+       perf/studies/perf005_baseline.sets (baseline and baseline_oracle)
+       over perf/studies/baseline.traces, full length, the tree build
+       (tree_s2), the PF-5 configuration, the immediate backend, the fetch
+       rule, the real I-cache; perf/studies/perf005_baseline.csv, 210 rows,
+       every PF-11 check passing (the PERF-005 rule checks included), digest
        ef1fbde4ad4cb3e68d06f1c612d99b71e35390901def00e17c97c9eb97327842,
-       built on the uncommitted tree that became 6f06483. 3.3 hours on 24
-       workers for both sets. Against PERF-004's: 50Perc conditional MPKI
-       8.4173 -> 7.7283, cycles +1.033%, oracle cycles +3.378%. PERF-004's
-       baseline.csv stays the record of the RTL before these changes. A
-       study against the new baseline uses perf005_baseline.sets in place of
-       baseline.sets below. If a change is rejected, the baseline is rerun
-       on the tree without it (PA).
+       confirmed at 6f06483, clean (Jeff, session-087: 84 files, 6
+       variables, 2 tools). 3.3 hours on 24 workers for both sets. Against
+       PERF-004's: 50Perc conditional MPKI 8.4173 -> 7.7283, cycles +1.033%,
+       oracle cycles +3.378%. PERF-004's baseline.csv stays the record of
+       the RTL before these changes. A study against the new baseline uses
+       perf005_baseline.sets in place of baseline.sets below. R1 is rejected
+       (Jeff, session-087): PERF-006 reverts it, and its baseline replaces
+       this one.
        HOW TO RUN A STUDY AGAINST THE BASELINE:
          make -C perf harness
          make -C perf digest
@@ -914,8 +920,10 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               ruling built, the FTQ-full workaround removed; PF-21 what
               PERF-004 built.
   2026-11-22  session-086 (Jeff): PERF-004 R1 to R13 accepted.
-  2026-11-27  session-087, after PERF-005 (6f06483), for acceptance. PF-5
-              the fast-path study; PF-6 the PERF-005 columns; PF-9 the new
-              baseline; PF-10 the decomposition; PF-11 the rule checks and
-              the twin check.
+  2026-11-27  session-087, after PERF-005 (6f06483); R2, R4 to R7 accepted
+              (Jeff). PF-5 the fast-path study; PF-6 the PERF-005 columns;
+              PF-9 the new baseline; PF-10 the decomposition; PF-11 the rule
+              checks and the twin check.
+  2026-11-27  session-087 (Jeff): PF-5, the fast path stays as it is until
+              the standalone model (TD#221).
 ```
