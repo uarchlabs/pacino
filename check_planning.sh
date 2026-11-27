@@ -259,6 +259,14 @@
 # (PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, ras_decisions.md,
 # ras_interfaces.md, ftq_entry_formats.md, ftq_bpu_interfaces.md,
 # ftq_ifu_interfaces.md, perf_decisions.md).
+# Updated for PERF-004's acceptance, PERF-005 written, session-086
+# (PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, perf_decisions.md,
+# ftq_ifu_interfaces.md).
+# misc/ras_theory_of_operation.md removed from the list: Jeff replaced
+# it with blogs/BLOG_bpu_23_ras_theory_of_op.md (7de430c); PROJECT_CORE.md
+# updated to say so. 73 files.
+# Updated at the end of session-086 (PROJECT_STATUS.md: the AREA
+# withdrawn).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -301,9 +309,9 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   5c101e88a24c
-PLAN  PROJECT_STATUS.md                 d1f4c54b5d07
-PLAN  CLOSED_TECH_DEBT.md               a4e832ae9fd2
+PLAN  PROJECT_CORE.md                   7f8b5a2413fc
+PLAN  PROJECT_STATUS.md                 66bc0cef5ebb
+PLAN  CLOSED_TECH_DEBT.md               5a0bd8d4c133
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
 UNKN  CLAUDE.md                         f272df29b804
@@ -360,7 +368,7 @@ INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           c13ff7e4368c
 INTF  ftq_backend_interfaces.md   1093eafd5bb3
 INTF  ftq_bpu_interfaces.md       46e2b5194120
-INTF  ftq_ifu_interfaces.md       9c04f68afc9d
+INTF  ftq_ifu_interfaces.md       aa96db087a90
 INTF  ifu_ibuf_interfaces.md      b2843b8060e2
 INTF  itlb_ifu_interfaces.md      32dc29fae399
 INTF  itlb_l2tlb_interfaces.md    11a4dbe0981d
@@ -379,9 +387,8 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               7bc552c0716b
+PERF  perf_decisions.md               f372565ef7ee
 
-MISC  ras_theory_of_operation.md      75158ae995ed
 EOF
 
 match=0; differ=0; missing=0; bad=0; total=0

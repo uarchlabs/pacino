@@ -73,7 +73,11 @@ module bp_history
   output logic [PHR_WIDTH-1:0]         phr_buf,
 
   // -- Folded history outputs
-  output bp_folded_hist_t              folded
+  output bp_folded_hist_t              folded,
+  // PERF-005 R6: the folds with this cycle's prediction bundle applied
+  // (the value folded takes next cycle); the registered folds on a
+  // rollback cycle (section 5, stale)
+  output bp_folded_hist_t              folded_byp
 );
 
   // ----------------------------------------------------------------
@@ -544,5 +548,26 @@ module bp_history
   assign ghr_buf   = ghr_mem;
   assign phr_buf   = phr_mem;
   assign folded    = fh_r;
+
+  // PERF-005 R6 (a RULE CHANGE FOR ACCEPTANCE; bp_arb_spec.md 3.1/3.2
+  // and fe_decisions.md 1 have the p0 lookup read the registered folds,
+  // which lack the bundle the p1 block writes in the same cycle). The
+  // bypass takes the same fold steps as the normal update (seq_main
+  // nrm), from the same buffer, so folded_byp equals the folded of the
+  // next cycle whenever no rollback is applied. Reads fh_r and ghr_mem
+  // (FFs), so it re-evaluates (stl_sequent rule).
+  bp_folded_hist_t fh_byp;
+  always_comb begin : byp_comb
+    fh_byp = fh_r;
+    if (!rollback_valid) begin
+      for (int b = 0; b < NUM_PRED_SLOTS; b++) begin
+        if ((int'(num_branches) > b) &&
+            ((b == 0) || (int'(num_branches) <= NUM_PRED_SLOTS)))
+          fh_byp = fold_all_step(fh_byp, pred_taken[b], path_bit[b],
+                                 ghr_mem, int'(ghist_ptr_r) + b);
+      end
+    end
+  end
+  assign folded_byp = fh_byp;
 
 endmodule : bp_history

@@ -111,6 +111,7 @@
 #include "ras_class.h"
 #include "rv_encode.h"
 #include "supply.h"
+#include "tage_hash.h"
 
 // THE BUILD STAMP (PERF-004, TD#210): the sha, the dirty mark and the
 // input digest, written by perf/src/stamp.py into the build directory
@@ -271,6 +272,9 @@ class Memory {
   std::unordered_map<uint64_t, std::unique_ptr<uint8_t[]>> pages_;
 };
 
+// PERF-005 Phase 2: the fast-path cost histogram's bucket count (FH_NAME).
+static const int FH_N = 12;
+
 // ---- the backend's instruction -----------------------------------------
 struct Ent;
 struct Ro {
@@ -305,6 +309,13 @@ struct Ro {
   uint64_t own_next = 0;
   bool     orc_forced = false;   // its entry was allocated on the path
   uint8_t  src = SRC_NONE;
+  uint8_t  rsn = 255;            // PERF-005: the reason (classify())
+  int      xp = -1;              // and the SC partition
+  // PERF-005 Phase 2: from the slot's decision (Dec): TAGE's response
+  // for this entry and its direction, and the FTB field's shadow state.
+  bool     dv = false, d_thit = false, d_ttk = false;
+  bool     d_fsh = false, d_fleft = false;
+  uint32_t d_fres = 0;
   int64_t  take_c, res_c, commit_c;
   bool     res_sent = false, res_done = false;
   Ent*     ent;
@@ -354,8 +365,186 @@ struct Counts {
   uint64_t cf_tg_dec[4] = {}, cf_it_dec[5] = {};
   uint8_t  tg_ep_last[2] = {}, it_ep_last[2] = {};
   uint64_t miss[4] = {}, miss_mis[4] = {};
+  // PERF-005 Phase 1: the committed branches and their mispredicts by
+  // reason, and the SC partition (XP_NAME); sized in main (R_N).
+  std::vector<uint64_t> rsn_n, rsn_m;
+  uint64_t xp_n[4] = {}, xp_m[4] = {};
+  // PERF-005 Phase 2, from cycle 0. The checks (0 expected): the p2 read
+  // conf against the shadow (fp_chk_rd), a p2 field the shadow lacks
+  // (fp_chk_nosh), ftb_fastpath_p2 against 4.1 (fp_chk_41), the
+  // cluster's use against ftb_fastpath_p2 and the loop (fp_chk_use); at
+  // the update: the read conf (fu_chk_rd), the trained or allocated conf
+  // (fu_chk_wr), the fields it does not train (fu_chk_keep), a hit or an
+  // in-place without a shadow (fu_chk_nosh). The flow: conditional
+  // resolutions accepted, the scheduler's accepted and dropped ones, and
+  // the issued updates by outcome.
+  uint64_t fp_rd = 0, fp_fire = 0, fp_chk_rd = 0, fp_chk_nosh = 0;
+  uint64_t fp_chk_41 = 0, fp_chk_use = 0;
+  uint64_t fu_chk_rd = 0, fu_chk_wr = 0, fu_chk_keep = 0, fu_chk_nosh = 0;
+  uint64_t res_cond = 0, fs_acc = 0, fs_drop = 0;
+  uint64_t fu_br = 0, fu_inpl = 0, fu_alloc = 0, fu_past = 0, fu_split = 0;
+  uint64_t fu_leave = 0, fu_resat = 0;
+  // The cost, per committed fast-path mispredict: the histogram of res
+  // (after leaving saturation, and since the allocation), TAGE's unused
+  // response right, wrong or absent; and over the correct fast-path
+  // decisions, TAGE's response wrong.
+  uint64_t fh_left[FH_N] = {}, fh_alloc[FH_N] = {}, fh_nosh = 0;
+  uint64_t fpm_tg_right = 0, fpm_tg_wrong = 0, fpm_tg_none = 0;
+  uint64_t fpc_tg_wrong = 0, fpc_tg_none = 0;
+  // PERF-005 Phase 3, THE TAGE CHECKS. The history: committed entries
+  // checked, without a lookup, the PC, and per table (T0-T4) the index
+  // and tag against the rule model (A) and the folds (T1-T4); lookups
+  // with any mismatch by cause: queued, in a rollback cycle, matching
+  // the observed bundles (B), other. Bundles A against B per entry.
+  uint64_t th_n = 0, th_nolk = 0, th_pc = 0, th_idx[5] = {}, th_tag[5] = {};
+  uint64_t th_fold[5] = {}, th_bad = 0, th_bad_q = 0, th_bad_rb = 0;
+  uint64_t th_bad_b = 0, th_bad_other = 0, th_hb_ab = 0;
+  uint64_t th_lag = 0;   // lookups that the block before them was not in
+  uint64_t th_ab_p1only = 0;
+  // A != B bundles that are not p1only: the RTL corrected the bundle by a
+  // rollback and it still differs (corr), or neither (other)
+  uint64_t th_ab_corr = 0, th_ab_other = 0;
+  // obs_ok split: an uncorrected A != B bundle in the window (n), only
+  // corrected ones (c), none (nowin: unexplained, 0 expected)
+  uint64_t th_bad_b_n = 0, th_bad_b_c = 0, th_bad_b_nowin = 0;
+  // rollback-cycle lookups whose window holds an uncorrected A != B bundle
+  uint64_t th_bad_rb_n = 0;
+  uint64_t th_idxB[5] = {}, th_tagB[5] = {};
+  // The read (p1) against the RAM shadow, and reads that shared a cycle
+  // with a write of their RAM.
+  uint64_t tr_n = 0, tr_bad = 0, tr_coll = 0;
+  // The update: updates, deviations from the rules (we, address, field)
+  // and their kinds; the entry trained no longer the one read (tag or
+  // valid), its counter moved since the read; allocations made, refused
+  // (longest provider, useful), other, and duplicates.
+  uint64_t tu_n = 0, tu_mis = 0, tu_chk = 0, tu_chk_we = 0, tu_chk_addr = 0;
+  uint64_t tu_chk_ctr = 0, tu_chk_use = 0, tu_chk_alc = 0;
+  uint64_t tu_chk_uaon = 0;   // use_alt_on_na counter != its re-derivation
+  uint64_t tu_gone_p = 0, tu_gone_a = 0, tu_stale_p = 0, tu_stale_a = 0;
+  uint64_t tu_alc = 0, tu_alc_long = 0, tu_alc_use = 0, tu_alc_other = 0;
+  uint64_t tu_alc_dup = 0, tu_alc_ntk = 0;
+  uint64_t tu_rows[4] = {};       // provider prm, alt tagged, alt T0, T0
+  // THE SC, re-derived (sc_decisions.md 9, 10): answers, the sum, the
+  // decision (local and final direction, override, corner); updates, the
+  // counter write enable and data, the global next state; the corners
+  // consulted by the choice made; the largest threshold seen.
+  uint64_t sp_n = 0, sp_chk_sum = 0, sp_chk_dec = 0;
+  uint64_t su_n = 0, su_chk_wr = 0, su_chk_wd = 0, su_chk_glob = 0;
+  uint64_t sp_hi_sc = 0, sp_hi_tg = 0, sp_med_sc = 0, sp_med_tg = 0;
+  uint64_t sc_thr_max = 0;
   std::vector<uint64_t> ep_instr, ep_numbr, ep_mis_cond, ep_mis;
 };
+
+// ---- THE DECISION (PERF-005 Phase 1) ---------------------------------
+// Why a slot's direction or target came from its source: the p2 and p3
+// decision probes (perf_top dp2_*, dp3_*) of the entry's last
+// allocation, by FTQ index and slot, copied into the fetch record at the
+// request (the p3 write of the request's own cycle included, as the
+// fetch read port carries it).
+struct Dec {
+  bool    p2 = false;           // a p2 pass of this allocation was seen
+  bool    ftb = false, p1ret = false;
+  bool    cond = false, lp = false, fp = false, trdy = false, thit = false;
+  bool    usep = false, irdy = false, ibid = false, ihit = false;
+  bool    pkv = false;
+  uint8_t prm = 0, alt = 0;
+  bool    p3 = false;           // a p3 pass of this allocation was seen
+  bool    p3cond = false, schit = false, hold = false, p2tk = false;
+  bool    sctk = false, lcl = false;
+  uint8_t chs = 0;
+  // PERF-005 Phase 2: TAGE's p2 direction (dp2_ttk), and the FTB field
+  // the slot read as the conf shadow (FShE) held it at p2: found, its
+  // trains since conf last left saturation, and whether it left (false:
+  // since the allocation).
+  bool     ttk = false;
+  bool     fsh = false, fleft = false;
+  uint32_t fres = 0;
+};
+
+// ---- THE FTB CONF SHADOW (PERF-005 Phase 2) ---------------------------
+// The conf of every FTB field as the update wrote it (ftb_cntrl upd_new,
+// probes fu_*), by set, way and position. It is the harness's own
+// account of the array: the p2 read (fq_conf) and the update's read
+// (fu_oconf) are checked against it, and the write against conf section
+// 3.2 / 3.4 / 7 applied to it. res counts the in-place trains since conf
+// last left saturation (left) or since the allocation (!left).
+struct FShF {
+  bool     v = false, left = false;
+  uint8_t  pos = 0, conf = 0;
+  uint32_t res = 0;
+};
+struct FShE { bool w = false; FShF f[2]; };
+// ---- THE TAGE CHECKS (PERF-005 Phase 3) -------------------------------
+// The index and tag are tage_hash.h's, the twin's code (Phase 4).
+// The lookup of an FTQ index as the tables saw it (tl_*), the last one.
+struct TLk {
+  bool     v = false, q = false, rb = false;
+  int64_t  cyc = 0;
+  uint64_t pc = 0;
+  uint16_t idx[5][2] = {}, tag[5][2] = {}, fh[12] = {};
+};
+// A history bundle: n bits, bit 0 the older; wc the cycle the history
+// took it (observed bundles only: the hw_ write or the rollback's).
+struct THb { uint8_t n = 0, tkn = 0; int64_t wc = -1; bool corr = false; };
+// A committed-path global history (tage_hash.h).
+typedef tg::Gh TGh;
+
+// The fast-path cost histogram buckets (res at the mispredicting
+// prediction).
+static const char* const FH_NAME[FH_N] = {
+  "0", "1", "2", "3", "4", "5_8", "9_16", "17_32", "33_64", "65_256",
+  "257_1024", "gt1024"};
+static int fh_bucket(uint32_t r) {
+  if (r <= 4) return int(r);
+  if (r <= 8) return 5;
+  if (r <= 16) return 6;
+  if (r <= 32) return 7;
+  if (r <= 64) return 8;
+  if (r <= 256) return 9;
+  if (r <= 1024) return 10;
+  return 11;
+}
+// THE REASONS. Each committed branch gets exactly one, from its kind
+// (conditional, direct jump, return, indirect), the source its record's
+// slot carries (pred_src) and the decision above; every reason belongs
+// to one source, so the reasons of a source sum to its pred_ and mis_
+// columns (rs_sum_err, 0 expected). A *_other reason is a case no rule
+// below names (0 expected).
+enum Rsn : uint8_t {
+  R_C_LOOP_P2, R_C_LOOP_P1, R_C_FP, R_C_FTB_NORDY, R_C_FTB_BID,
+  R_C_TG_P1, R_C_TG_P2, R_C_TG_P3, R_C_TG_P4, R_C_TG_A0, R_C_TG_A1,
+  R_C_TG_A2, R_C_TG_A3, R_C_TG_T0, R_C_SC_TG_GEN, R_C_SC_TG_HI,
+  R_C_SC_TG_MED, R_C_SC_FTB, R_C_UBTB, R_C_NONE_MISS, R_C_NONE_PD,
+  R_C_OTHER,
+  R_J_FTB, R_J_UBTB, R_J_NONE_MISS, R_J_NONE_PD, R_J_OTHER,
+  R_R_RAS_P2, R_R_RAS_P1, R_R_RAS_P1RET, R_R_FTB_NOPEEK, R_R_UBTB,
+  R_R_NONE_MISS, R_R_NONE_PD, R_R_OTHER,
+  R_I_ITTAGE, R_I_FTB_NORDY, R_I_FTB_BID, R_I_FTB_NOHIT, R_I_UBTB,
+  R_I_NONE_MISS, R_I_NONE_PD, R_I_OTHER,
+  R_N
+};
+const char* RSN_NAME[R_N] = {
+  "c_loop_p2", "c_loop_p1", "c_fastpath", "c_ftb_tage_nordy",
+  "c_ftb_tage_bid", "c_tage_prm_t1", "c_tage_prm_t2", "c_tage_prm_t3",
+  "c_tage_prm_t4", "c_tage_alt_t0", "c_tage_alt_t1", "c_tage_alt_t2",
+  "c_tage_alt_t3", "c_tage_t0", "c_sc_tage_gen", "c_sc_tage_hi",
+  "c_sc_tage_med", "c_sc_ftb", "c_ubtb", "c_none_miss", "c_none_pd",
+  "c_other",
+  "j_ftb", "j_ubtb", "j_none_miss", "j_none_pd", "j_other",
+  "r_ras_p2", "r_ras_p1", "r_ras_p1ret", "r_ftb_nopeek", "r_ubtb",
+  "r_none_miss", "r_none_pd", "r_other",
+  "i_ittage", "i_ftb_it_nordy", "i_ftb_it_bid", "i_ftb_it_nohit",
+  "i_ubtb", "i_none_miss", "i_none_pd", "i_other"};
+// The source each reason belongs to (bp_pred_src_e); *_other carries
+// the source the branch had, counted apart (rsn_src_other).
+constexpr uint8_t S_UB = 0, S_LP = 1, S_FT = 2, S_TG = 3, S_SC = 4,
+                  S_IT = 5, S_RS = 6, S_NO = 7, S_ANY = 8;
+const uint8_t RSN_SRC[R_N] = {
+  S_LP, S_LP, S_FT, S_FT, S_FT, S_TG, S_TG, S_TG, S_TG, S_TG, S_TG,
+  S_TG, S_TG, S_TG, S_SC, S_SC, S_SC, S_SC, S_UB, S_NO, S_NO, S_ANY,
+  S_FT, S_UB, S_NO, S_NO, S_ANY,
+  S_RS, S_RS, S_RS, S_FT, S_UB, S_NO, S_NO, S_ANY,
+  S_IT, S_FT, S_FT, S_FT, S_UB, S_NO, S_NO, S_ANY};
 
 // ---- THE RECORD (PERF-003, PF-18) ------------------------------------
 // The prediction fetch used, by FTQ index: written at each accepted fetch
@@ -371,6 +560,10 @@ struct FSlot {
   // does not change: what the predictors gave (orc_slot_kind_alias).
   bool     rq_val = false;
   uint8_t  rq_pos = 0, rq_type = 0;
+  // PERF-005: the decision behind the slot, as the request carried it;
+  // dv is cleared when a predecode correction rewrites the slot.
+  Dec      d;
+  bool     dv = false;
 };
 struct FRec {
   bool     valid = false;
@@ -396,9 +589,10 @@ struct FVerdict {
   // PERF-004: a slot of the request was at pos, and its branch type
   bool     rq_at_pos;
   uint8_t  rq_type;
+  int      slot;          // PERF-005: the record's slot at pos, or -1
 };
 FVerdict fr_verdict(const FRec& e, uint8_t pos, uint64_t pc) {
-  FVerdict v{(pc + 4) & VA_MASK, SRC_NONE, false, false, false, 0};
+  FVerdict v{(pc + 4) & VA_MASK, SRC_NONE, false, false, false, 0, -1};
   for (int s = 0; s < NPS; s++)
     if (e.s[s].rq_val && e.s[s].rq_pos == pos) {
       v.rq_at_pos = true;
@@ -409,6 +603,7 @@ FVerdict fr_verdict(const FRec& e, uint8_t pos, uint64_t pc) {
     if (e.s[s].val && e.s[s].pos == pos) {
       v.src = e.s[s].src;
       v.in_slot = true;
+      v.slot = s;
       break;
     }
   if (e.taken_val && pos == e.taken_pos) {
@@ -422,6 +617,105 @@ FVerdict fr_verdict(const FRec& e, uint8_t pos, uint64_t pc) {
   }
   return v;
 }
+
+// THE REASON of a branch of trace class cls, from its verdict (PERF-005
+// Phase 1). The rules, by kind and the slot's source:
+//   conditional  LOOP: at p2 when the FTB answered and w_lp_use_p2 (p2),
+//                else the p1 loop slot (p1). FTB: the fast path
+//                (w_fp_use_p2), else TAGE's response absent
+//                (w_tage_pred_rdy_p2 low) or for another entry
+//                (branch_id mismatch); bp_cluster.sv 1068-1098, 1238-1242.
+//                TAGE: the table that supplied the direction, the
+//                primary (tage_prm_comp, T0 when 0) or the alternate
+//                (tage_alt_comp) by tage_using_primary. SC: an override
+//                at p3 (sc_pred_tkn differs from the p2 direction,
+//                1465-1470) of TAGE's direction by corner (sc_chooser),
+//                or of the FTB direction. UBTB: the p1 slot, the FTB
+//                not answering. NONE: no slot at the position (a miss),
+//                or a slot predecode rewrote (ftq_ifu.sv W1).
+//   jump         FTB at p2; UBTB at p1; NONE as above
+//   return       RAS at p2 (the peek, 1251-1256), at p1 (the TOS, 878-
+//                883) or by the p1 return redirect (1311-1324, 1363-
+//                1368); FTB at p2 with no peek; UBTB at p1 with no TOS
+//   indirect     ITTAGE at p2; FTB at p2 by ITTAGE's response absent,
+//                for another entry or a miss (1227-1229, 1258-1261);
+//                UBTB at p1; NONE as above
+// extra: a second partition of the TAGE and FTB-direction conditionals,
+// by SC agreeing (an SC answer equal to the p2 direction) or not
+// answering; -1 for every other branch.
+uint8_t classify(const FRec& e, const FVerdict& v, uint8_t cls, int& extra) {
+  extra = -1;
+  int kind = cls == cbp::C_COND ? 0
+           : (cls == cbp::C_JMP_DIR || cls == cbp::C_CALL_DIR) ? 1
+           : cls == cbp::C_RET ? 2 : 3;
+  static const uint8_t MISS[4] = {R_C_NONE_MISS, R_J_NONE_MISS,
+                                  R_R_NONE_MISS, R_I_NONE_MISS};
+  static const uint8_t PD[4] = {R_C_NONE_PD, R_J_NONE_PD, R_R_NONE_PD,
+                                R_I_NONE_PD};
+  static const uint8_t OTH[4] = {R_C_OTHER, R_J_OTHER, R_R_OTHER,
+                                 R_I_OTHER};
+  if (v.slot < 0) return v.src == S_NO ? MISS[kind] : OTH[kind];
+  const FSlot& fs = e.s[v.slot];
+  if (!fs.dv) return v.src == S_NO ? PD[kind] : OTH[kind];
+  const Dec& d = fs.d;
+  bool f2 = d.p2 && d.ftb;           // the FTB answered at p2
+  if (v.src == S_NO) return OTH[kind];
+  if (kind == 0) {
+    if (v.src == S_LP) return f2 ? (d.lp ? R_C_LOOP_P2 : R_C_OTHER)
+                                 : R_C_LOOP_P1;
+    if (v.src == S_UB) return f2 ? R_C_OTHER : R_C_UBTB;
+    if (!f2 || !d.cond || d.lp) return R_C_OTHER;
+    bool sc_ans = d.p3 && d.p3cond && d.schit && !d.hold;
+    if (v.src == S_FT) {
+      if (d.fp) return R_C_FP;
+      if (d.thit) return R_C_OTHER;
+      extra = sc_ans ? 2 : 3;
+      return d.trdy ? R_C_FTB_BID : R_C_FTB_NORDY;
+    }
+    if (v.src == S_TG) {
+      if (d.fp || !d.thit) return R_C_OTHER;
+      extra = sc_ans ? 0 : 1;
+      if (d.usep) {
+        if (d.prm == 0) return R_C_TG_T0;
+        return d.prm <= 4 ? uint8_t(R_C_TG_P1 + d.prm - 1) : R_C_OTHER;
+      }
+      return d.alt <= 3 ? uint8_t(R_C_TG_A0 + d.alt) : R_C_OTHER;
+    }
+    if (v.src == S_SC) {
+      if (!sc_ans || d.fp || d.sctk == d.p2tk) return R_C_OTHER;
+      if (!d.thit) return R_C_SC_FTB;
+      return d.chs == 0 ? R_C_SC_TG_GEN : d.chs == 2 ? R_C_SC_TG_HI
+           : d.chs == 1 ? R_C_SC_TG_MED : R_C_OTHER;
+    }
+    return R_C_OTHER;
+  }
+  if (kind == 1) {
+    if (v.src == S_FT) return f2 ? R_J_FTB : R_J_OTHER;
+    if (v.src == S_UB) return f2 ? R_J_OTHER : R_J_UBTB;
+    return R_J_OTHER;
+  }
+  if (kind == 2) {
+    if (v.src == S_RS) {
+      if (f2) return d.pkv ? R_R_RAS_P2 : R_R_OTHER;
+      return (d.p2 && d.p1ret) ? R_R_RAS_P1RET : R_R_RAS_P1;
+    }
+    if (v.src == S_FT) return (f2 && !d.pkv) ? R_R_FTB_NOPEEK : R_R_OTHER;
+    if (v.src == S_UB) return f2 ? R_R_OTHER : R_R_UBTB;
+    return R_R_OTHER;
+  }
+  if (v.src == S_IT) return f2 ? R_I_ITTAGE : R_I_OTHER;
+  if (v.src == S_FT) {
+    if (!f2) return R_I_OTHER;
+    if (!d.irdy) return R_I_FTB_NORDY;
+    if (!d.ibid) return R_I_FTB_BID;
+    if (!d.ihit) return R_I_FTB_NOHIT;
+    return R_I_OTHER;
+  }
+  if (v.src == S_UB) return f2 ? R_I_OTHER : R_I_UBTB;
+  return R_I_OTHER;
+}
+const char* XP_NAME[4] = {"c_tage_sc_agree", "c_tage_sc_none",
+                          "c_ftbdir_sc_agree", "c_ftbdir_sc_none"};
 
 // The 50Perc rule (bp.cc), as cbp::Counts: the trailing epochs whose
 // records first exceed half.
@@ -646,7 +940,54 @@ int main(int argc, char** argv) {
   if (!ic.ok(ic_err)) die(ic_err);
 
   Counts c;
+  c.rsn_n.assign(R_N, 0);
+  c.rsn_m.assign(R_N, 0);
   std::vector<FRec> frec(64);          // THE RECORD, by FTQ index
+  // PERF-005: THE DECISION of each index's last allocation, by slot.
+  std::vector<std::vector<Dec>> dec(64, std::vector<Dec>(NPS));
+  // PERF-005 Phase 2: THE FTB CONF SHADOW, by set * 4 + way (FTB_WAYS 4,
+  // FTB_IDX_BITS up to 10; checked at the first probe).
+  std::vector<FShE> fsh(4096);
+  int n_fdev = 0;                      // deviations printed (20 at most)
+  // PERF-005 Phase 3: THE TAGE CHECKS. The last lookup of each FTQ index;
+  // the bundles, by the rule model (A: the request's slots, a backend
+  // mispredict's correction) and as observed (B: hw_*, hr_*); the
+  // committed-path histories; the RAM shadow [table][slot][index] (the
+  // harness's +TAGE_FAST_INIT: T0 2'b10, T1-T4 0), the last cycle's
+  // writes by RAM.
+  std::vector<TLk> tlk(64);
+  std::vector<THb> hbA(64), hbB(64);
+  TGh ghA, ghB;
+  int64_t th_last = -1;                // the FTQ pointer last committed
+  uint8_t th_last_idx = 0;
+  // The last committed entry's bundles, taken at each of its commits: its
+  // FTQ slot can be allocated again before the next entry's first commit
+  // (the FTQ wraps while that commit waits), and the new entry's p1 write
+  // then replaces hbA/hbB at that index. An entry's bundle is final at its
+  // last commit (no rollback names a committed entry).
+  THb th_snapA, th_snapB;
+  // The bits pushed into ghA / ghB since the last A != B bundle, kept
+  // apart for the bundles a rollback corrected (C) and the rest (N): an
+  // obs_ok lookup is explained only while such a bundle is inside the
+  // longest history (tg::HIST[4]) of either model.
+  uint64_t th_sNA = 1u << 30, th_sNB = 1u << 30;
+  uint64_t th_sCA = 1u << 30, th_sCB = 1u << 30;
+  uint64_t th_pnA = 0, th_pnB = 0;   // the previous bundle's bits
+  std::vector<uint16_t> tsh(size_t(5) * 2 * 2048, 0);
+  for (int s = 0; s < 2; s++)
+    for (int i = 0; i < 2048; i++) tsh[size_t(s) * 2048 + size_t(i)] = 2;
+  auto TS = [&](int t, int s, int i) -> uint16_t& {
+    return tsh[(size_t(t) * 2 + size_t(s)) * 2048 + size_t(i & 2047)];
+  };
+  uint32_t tw_prev = 0;
+  int uaon_m[4] = {};   // the use_alt_on_na model, per slot (reset 0)
+  int n_tdev = 0;
+  // The first 2 of each counted update outcome (gone, stale, alloc_dup),
+  // to stderr as TGNOTE: an example per class (PERF-005 Block 2).
+  int n_tnote[3] = {};
+  int n_rsnote = 0;          // RSNOTE prints, the *_other reasons
+  const char* lov = std::getenv("PERF_TH_LAG_OLD");
+  const bool th_lag_old = lov && lov[0] == '1';
   // THE RAS CLASSIFICATION (BP-151): observation only. RC_DUMP=n prints
   // the first n returns of each cause to stderr.
   rcls::RasClass rcl;
@@ -950,6 +1291,13 @@ int main(int argc, char** argv) {
       e.taken_val = false;
       e.taken_pos = 0;
       for (int s = NPS - 1; s >= 0; s--) {
+        // PERF-005: a slot predecode rewrote (ftq_ifu.sv W1, PRED_NONE)
+        // or killed loses its decision; a slot kept as it was keeps it.
+        if (!(((top->pc_s_val >> s) & 1) == e.s[s].val &&
+              top->pc_s_pos[s] == e.s[s].pos &&
+              top->pc_s_src[s] == e.s[s].src &&
+              top->pc_s_type[s] == e.s[s].type))
+          e.s[s].dv = false;
         e.s[s].val = (top->pc_s_val >> s) & 1;
         e.s[s].taken = (top->pc_s_taken >> s) & 1;
         e.s[s].pos = top->pc_s_pos[s];
@@ -1195,6 +1543,28 @@ int main(int argc, char** argv) {
       b->fr_src = v.src;
       // pred_src comes from the record under either rule (PF-6).
       b->src = v.src;
+      b->rsn = classify(fe, v, b->in.cls, b->xp);
+      // the first 2 of each *_other reason, the cases no rule names
+      if (RSN_SRC[b->rsn] == S_ANY && n_rsnote < 2) {
+        n_rsnote++;
+        const bool dv = v.slot >= 0 && fe.s[v.slot].dv;
+        const Dec dd = dv ? fe.s[v.slot].d : Dec{};
+        std::fprintf(stderr, "RSNOTE %s cyc %" PRId64 " k %" PRIu64
+                     " pc %" PRIx64 " idx %d pos %d slot %d src %d dv %d"
+                     " p2 %d ftb %d pkv %d p1ret %d\n", RSN_NAME[b->rsn],
+                     cyc, b->k, b->in.pc, int(b->idx), int(b->pos),
+                     v.slot, int(v.src), int(dv), int(dd.p2), int(dd.ftb),
+                     int(dd.pkv), int(dd.p1ret));
+      }
+      if (v.slot >= 0 && fe.s[v.slot].dv) {
+        const Dec& d = fe.s[v.slot].d;
+        b->dv = true;
+        b->d_thit = d.thit;
+        b->d_ttk = d.ttk;
+        b->d_fsh = d.fsh;
+        b->d_fleft = d.fleft;
+        b->d_fres = d.fres;
+      }
       b->in_slot = v.in_slot;
       b->kind_alias = v.in_slot && v.rq_at_pos &&
                       ((v.rq_type == rv::BT_COND) !=
@@ -1260,6 +1630,19 @@ int main(int argc, char** argv) {
       // BP-153: the named instruction's resolved type rides with the
       // redirect (ftq_backend_interfaces.md 5, _type), from its class.
       top->redir_type = rd.ty;
+      // PERF-005 Phase 3: a backend mispredict's corrected bundle, the
+      // rule model's (A): at most one not-taken bit, for the earliest
+      // slot before the named position, then the resolved bit
+      // (bp_history_decisions.md 3.5; RB_CORR_BITS 2).
+      if (rd.cause == 0 && !rd.self) {
+        const FRec& fe = frec[rd.idx];
+        THb hb;
+        for (int s = 0; s < NPS; s++)
+          if (fe.s[s].val && fe.s[s].pos < rd.pos) { hb.n = 1; break; }
+        if (rd.taken) hb.tkn |= uint8_t(1u << hb.n);
+        hb.n++;
+        hbA[rd.idx & 63] = hb;
+      }
       logf("REDIRECT cause %d idx %d pos %d pc %" PRIx64, rd.cause, rd.idx,
            rd.pos, rd.pc);
     }
@@ -1390,6 +1773,539 @@ int main(int argc, char** argv) {
       if (top->ew_p3_val && frec[top->ew_p3_idx].valid) c.late_write++;
       // A new use of the index: its record is gone.
       if (top->ew_alloc_val) frec[top->ew_alloc_idx].valid = false;
+      // PERF-005: THE DECISION, this allocation's, at p2 and p3.
+      if (top->ew_alloc_val)
+        for (int s = 0; s < NPS; s++) dec[top->ew_alloc_idx][s] = Dec{};
+      if (top->dp2_val)
+        for (int s = 0; s < NPS; s++) {
+          Dec& d = dec[top->dp2_idx][s];
+          d.p2 = true;
+          d.ftb = top->dp2_ftb;
+          d.p1ret = top->dp2_p1ret;
+          d.cond = (top->dp2_cond >> s) & 1;
+          d.lp = (top->dp2_lp >> s) & 1;
+          d.fp = (top->dp2_fp >> s) & 1;
+          d.trdy = (top->dp2_trdy >> s) & 1;
+          d.thit = (top->dp2_thit >> s) & 1;
+          d.prm = top->dp2_prm[s];
+          d.alt = top->dp2_alt[s];
+          d.usep = (top->dp2_usep >> s) & 1;
+          d.irdy = (top->dp2_irdy >> s) & 1;
+          d.ibid = (top->dp2_ibid >> s) & 1;
+          d.ihit = (top->dp2_ihit >> s) & 1;
+          d.pkv = (top->dp2_pkv >> s) & 1;
+        }
+      if (top->dp3_val)
+        for (int s = 0; s < NPS; s++) {
+          Dec& d = dec[top->dp3_idx][s];
+          d.p3 = true;
+          d.p3cond = (top->dp3_cond >> s) & 1;
+          d.schit = (top->dp3_schit >> s) & 1;
+          d.hold = (top->dp3_hold >> s) & 1;
+          d.p2tk = (top->dp3_p2tk >> s) & 1;
+          d.sctk = (top->dp3_sctk >> s) & 1;
+          d.lcl = (top->dp3_lcl >> s) & 1;
+          d.chs = top->dp3_chs[s];
+        }
+      // PERF-005 Phase 2: THE FAST PATH, every p2 read and every update,
+      // from cycle 0. The p2 read is checked before this cycle's update
+      // is applied: the update writes at this edge, and no p1 read
+      // shares a cycle with an update (pred_grant_p1).
+      auto fdev = [&](const char* what, uint32_t key, int i, int got,
+                      int want) {
+        if (n_fdev >= 20) return;
+        n_fdev++;
+        std::fprintf(stderr, "FPDEV %s cyc %" PRId64 " set %u way %u fld %d"
+                     " got %d want %d\n", what, cyc, key >> 2, key & 3, i,
+                     got, want);
+      };
+      auto sat = [](uint8_t cf) { return cf == 0 || cf == 7; };
+      if (top->fq_val) {
+        uint32_t key = (uint32_t(top->fq_set) << 2) | top->fq_way;
+        if (key >= fsh.size()) die("FTB set index beyond the shadow");
+        const FShE& E = fsh[key];
+        for (int i = 0; i < 2; i++) {
+          bool bv = (top->fq_bv >> i) & 1;
+          bool fp = (top->fq_fp >> i) & 1;
+          int sh = -1;
+          if (bv) {
+            c.fp_rd++;
+            for (int j = 0; j < 2; j++)
+              if (E.w && E.f[j].v && E.f[j].pos == top->fq_pos[i]) sh = j;
+            if (sh < 0) {
+              c.fp_chk_nosh++;
+              fdev("p2_nosh", key, i, top->fq_pos[i], -1);
+            } else if (E.f[sh].conf != top->fq_conf[i]) {
+              c.fp_chk_rd++;
+              fdev("p2_conf", key, i, top->fq_conf[i], E.f[sh].conf);
+            }
+          }
+          // 4.1: valid, the field valid, the enable, saturated (the
+          // shadow's conf, the RTL's when the shadow lacks the field).
+          uint8_t cf = sh >= 0 ? E.f[sh].conf : uint8_t(top->fq_conf[i]);
+          bool want = bv && top->fq_en && sat(cf);
+          if (fp != want) {
+            c.fp_chk_41++;
+            fdev("p2_41", key, i, fp, want);
+          }
+          if (fp) c.fp_fire++;
+          if (i < NPS && top->dp2_val) {
+            Dec& d = dec[top->dp2_idx][i];
+            d.ttk = (top->dp2_ttk >> i) & 1;
+            d.fsh = bv && sh >= 0;
+            if (d.fsh) { d.fres = E.f[sh].res; d.fleft = E.f[sh].left; }
+            bool cnd = (top->dp2_cond >> i) & 1;
+            bool lp = (top->dp2_lp >> i) & 1;
+            bool use = (top->dp2_fp >> i) & 1;
+            if (use != (cnd && fp && !lp)) {
+              c.fp_chk_use++;
+              fdev("p2_use", key, i, use, cnd && fp && !lp);
+            }
+          }
+        }
+      } else {
+        if (top->fq_fp != 0) {
+          c.fp_chk_41++;
+          fdev("p2_41_noval", 0, -1, top->fq_fp, 0);
+        }
+        if (top->dp2_val)
+          for (int s = 0; s < NPS; s++) {
+            dec[top->dp2_idx][s].ttk = (top->dp2_ttk >> s) & 1;
+            if ((top->dp2_fp >> s) & 1) {
+              c.fp_chk_use++;
+              fdev("p2_use_noval", 0, s, 1, 0);
+            }
+          }
+      }
+      if (top->fu_val) {
+        uint32_t key = (uint32_t(top->fu_set) << 2) | top->fu_way;
+        if (key >= fsh.size()) die("FTB set index beyond the shadow");
+        FShE& E = fsh[key];
+        FShE O = E;
+        // The entry the update builds on: the old one on a hit, else
+        // empty (ftb_cntrl upd_cur).
+        if (top->fu_hit && !O.w) {
+          c.fu_chk_nosh++;
+          fdev("u_hit_nosh", key, -1, 1, 0);
+        }
+        if (!top->fu_hit) O = FShE{};
+        bool isb = top->fu_isbr && !top->fu_past;
+        int oj = -1;
+        for (int j = 0; j < 2; j++)
+          if (O.f[j].v && O.f[j].pos == top->fu_pos) oj = j;
+        uint8_t want = 0;
+        if (top->fu_isbr) c.fu_br++;
+        if (top->fu_isbr && top->fu_past) c.fu_past++;
+        if (isb) {
+          if (bool(top->fu_inpl) != (oj >= 0)) {
+            c.fu_chk_nosh++;
+            fdev("u_inplace", key, -1, top->fu_inpl, oj >= 0);
+          }
+          if (oj >= 0) {
+            c.fu_inpl++;
+            if (top->fu_oconf != O.f[oj].conf) {
+              c.fu_chk_rd++;
+              fdev("u_rd", key, oj, top->fu_oconf, O.f[oj].conf);
+            }
+            uint8_t o = O.f[oj].conf;
+            // 3.2: the saturating bimodal step toward the outcome.
+            want = top->fu_tkn ? (o == 7 ? 7 : o + 1) : (o == 0 ? 0 : o - 1);
+          } else {
+            c.fu_alloc++;
+            want = top->fu_tkn ? 4 : 3;      // 7: FTB_CONF_INIT_TKN / _NTK
+          }
+        }
+        FShE N;
+        N.w = true;
+        bool wrote = false;
+        for (int i = 0; i < 2; i++) {
+          if (!((top->fu_nv >> i) & 1)) continue;
+          FShF& f = N.f[i];
+          f.v = true;
+          f.pos = top->fu_npos[i];
+          f.conf = top->fu_nconf[i];
+          if (isb && f.pos == top->fu_pos) {
+            wrote = true;
+            if (f.conf != want) {
+              c.fu_chk_wr++;
+              fdev("u_wr", key, i, f.conf, want);
+            }
+            if (oj >= 0) {
+              bool l = sat(O.f[oj].conf) && !sat(f.conf);
+              if (l) c.fu_leave++;
+              if (!sat(O.f[oj].conf) && sat(f.conf)) c.fu_resat++;
+              f.res = l ? 0 : O.f[oj].res + 1;
+              f.left = l ? true : O.f[oj].left;
+            }
+          } else {
+            int k = -1;
+            for (int j = 0; j < 2; j++)
+              if (O.f[j].v && O.f[j].pos == f.pos) k = j;
+            if (k < 0 || O.f[k].conf != f.conf) {
+              c.fu_chk_keep++;
+              fdev("u_keep", key, i, f.conf, k < 0 ? -1 : O.f[k].conf);
+            }
+            if (k >= 0) { f.res = O.f[k].res; f.left = O.f[k].left; }
+          }
+        }
+        if (isb && !wrote) c.fu_split++;
+        E = N;
+      }
+      for (int ch = 0; ch < NRP; ch++) {
+        if ((top->fs_acc >> ch) & 1) c.fs_acc++;
+        if ((top->fs_drop >> ch) & 1) c.fs_drop++;
+      }
+      // PERF-005 Phase 3: THE TAGE CHECKS, from cycle 0.
+      auto tdev = [&](const char* what, int t, int s, uint64_t got,
+                      uint64_t want, uint64_t a) {
+        if (n_tdev >= 20) return;
+        n_tdev++;
+        std::fprintf(stderr, "TGDEV %s cyc %" PRId64 " t %d s %d got %" PRIx64
+                     " want %" PRIx64 " at %" PRIx64 "\n", what, cyc, t, s,
+                     got, want, a);
+      };
+      // The lookup.
+      if (top->tl_val & 1) {
+        TLk& L = tlk[top->tl_bid[0] & 63];
+        L.v = true;
+        L.q = top->tl_q;
+        L.rb = top->tl_rb;
+        L.cyc = cyc;
+        L.pc = uint64_t(top->tl_pc[0]) & VA_MASK;
+        for (int t = 0; t < 5; t++)
+          for (int s = 0; s < NPS; s++) {
+            L.idx[t][s] = top->tl_idx[t * NPS + s];
+            L.tag[t][s] = top->tl_tag[t * NPS + s];
+          }
+        for (int k = 0; k < 12; k++) L.fh[k] = top->tl_fh[k];
+      }
+      // The observed bundles: a rollback outranks the p1 write
+      // (bp_history_decisions.md 4); a corrected one rewrites the entry.
+      if (top->hr_val)
+        logf("HROLL idx %d corr %d n %d tkn %d", int(top->hr_idx),
+             int(top->hr_corr), int(top->hr_n), int(top->hr_tkn));
+      else if (top->hw_val)
+        logf("HWRITE idx %d n %d tkn %d", int(top->hw_idx), int(top->hw_n),
+             int(top->hw_tkn));
+      if (top->hr_val || top->hw_val)
+        logf("HPTR ptr %d win %04x (as registered, before this cycle's "
+             "write)", int(top->hp_ptr), unsigned(top->hp_win));
+      if (top->hr_val) {
+        if (top->hr_corr)
+          hbB[top->hr_idx & 63] =
+              THb{top->hr_n, top->hr_tkn, int64_t(cyc), true};
+      } else if (top->hw_val) {
+        hbB[top->hw_idx & 63] =
+            THb{top->hw_n, top->hw_tkn, int64_t(cyc), false};
+      }
+      // The p1 read against the shadow.
+      for (int s = 0; s < NPS; s++) {
+        if (!((top->tp_val >> s) & 1)) continue;
+        for (int t = 0; t < 5; t++) {
+          int k = t * NPS + s;
+          c.tr_n++;
+          if ((tw_prev >> k) & 1) { c.tr_coll++; continue; }
+          uint16_t e = TS(t, s, top->tp_idx[k]);
+          bool bad;
+          if (t == 0) {
+            // tage.sv 208-209: T0's cntrl bits are {5'b0, ctr[1:0], 1'b1}.
+            bad = ((top->tp_cb[k] >> 1) & 3) != (e & 3) ||
+                  !(top->tp_cb[k] & 1);
+          } else {
+            bool hit = (e & 1) && ((e >> 8) & 0xff) == (top->tp_tag[k] & 0xff);
+            bad = hit != bool((top->tp_hit >> k) & 1) ||
+                  (top->tp_cb[k] & 0xff) != (e & 0xff);
+          }
+          if (bad) {
+            c.tr_bad++;
+            tdev("p1_read", t, s, top->tp_cb[k], e, top->tp_idx[k]);
+          }
+        }
+      }
+      // The use_alt_on_na counter of each slot against its re-derivation
+      // (tage_cntrl_uaon_update_rules.md 75-77, 138): with both providers
+      // tagged and the final provider counter weak (011 or 100: the
+      // primary's when it was used, else the alternate's), INC when the
+      // primary was wrong and the alternate right, DEC the reverse, 4 bits
+      // saturating. The registered value is compared before this cycle's
+      // update is applied to the model.
+      for (int s = 0; s < NPS; s++) {
+        if (int(top->tu_uaon[s]) != uaon_m[s]) {
+          c.tu_chk_uaon++;
+          if (c.tu_chk_uaon <= 20)
+            std::fprintf(stderr, "TUAON cyc %" PRIu64 " slot %d rtl %d "
+                         "model %d\n", uint64_t(cyc), s,
+                         int(top->tu_uaon[s]), uaon_m[s]);
+          uaon_m[s] = int(top->tu_uaon[s]);   // resync: count each once
+        }
+        if (!((top->tu_val >> s) & 1)) continue;
+        int pc_ = top->tu_pcmp[s], ac = top->tu_acmp[s];
+        if (pc_ == 0 || ac == 0) continue;
+        bool up = (top->tu_up >> s) & 1, res = (top->tu_res >> s) & 1;
+        int post = up ? int(top->tu_pctr[s]) : int(top->tu_actr[s]);
+        if (post != 3 && post != 4) continue;
+        bool pok = (((top->tu_ptk >> s) & 1) != 0) == res;
+        bool aok = (((top->tu_atk >> s) & 1) != 0) == res;
+        if (!pok && aok && uaon_m[s] < 15) uaon_m[s]++;
+        else if (pok && !aok && uaon_m[s] > 0) uaon_m[s]--;
+      }
+      // The update, re-derived from its probed state (the metadata) by
+      // tage_cntrl_ctr_update_rules.md, _use_update_rules.md and
+      // _alloc_rules.md, against the RAM writes of this cycle.
+      for (int s = 0; s < NPS; s++) {
+        if (!((top->tu_val >> s) & 1)) continue;
+        c.tu_n++;
+        int pc_ = top->tu_pcmp[s], ac = top->tu_acmp[s], cc = top->tu_ccmp[s];
+        uint16_t pi = top->tu_pidx[s] & 2047, ai = top->tu_aidx[s] & 2047;
+        uint16_t ci = top->tu_cidx[s] & 2047;
+        int pct = top->tu_pctr[s], act = top->tu_actr[s];
+        int pu = top->tu_puse[s], au = top->tu_ause[s];
+        bool ptk = (top->tu_ptk >> s) & 1, atk = (top->tu_atk >> s) & 1;
+        bool up = (top->tu_up >> s) & 1, res = (top->tu_res >> s) & 1;
+        bool mis = (top->tu_mis >> s) & 1;
+        int ep = top->tu_ep[s];
+        if (mis) c.tu_mis++;
+        bool both0 = pc_ == 0 && ac == 0, diff = ptk != atk;
+        bool pok = ptk == res, aok = atk == res;
+        auto st3 = [](int v, bool tk) {
+          return tk ? (v == 7 ? 7 : v + 1) : (v == 0 ? 0 : v - 1);
+        };
+        auto st2 = [](int v, bool tk) {
+          v &= 3;
+          return tk ? (v == 3 ? 3 : v + 1) : (v == 0 ? 0 : v - 1);
+        };
+        // The expected write of each table: enable, address, the fields
+        // written (mask) and their value.
+        bool xw[5] = {};
+        uint16_t xa[5] = {}, xm[5] = {}, xv[5] = {};
+        auto put = [&](int t, uint16_t a, uint16_t m, uint16_t v) {
+          if (xw[t] && xa[t] != a) a = 0xffff;        // two addresses
+          xw[t] = true;
+          xa[t] = a;
+          xm[t] |= m;
+          xv[t] = uint16_t((xv[t] & ~m) | (v & m));
+        };
+        const uint16_t MC = 0x000e, MU = 0x0030, ME = 0x00c0;
+        if (both0) {
+          c.tu_rows[3]++;
+          put(0, pi, 0x3, uint16_t(st2(pct, res)));        // rows 13a-d
+        } else {
+          c.tu_rows[up ? 0 : (ac ? 1 : 2)]++;
+          if (pc_ && (up || (diff && pok)))
+            put(pc_, pi, MC, uint16_t(st3(pct, res) << 1));
+          if (!ac && !up)
+            put(0, ai, 0x3, uint16_t(st2(act, res)));      // rows 19.x
+          if (ac && (!up || (diff && aok)))
+            put(ac, ai, MC, uint16_t(st3(act, res) << 1));
+          if (diff) {                                       // Table 7
+            int uc = up ? pc_ : ac;
+            uint16_t ui = up ? pi : ai;
+            int u = up ? pu : au;
+            int nu = !mis ? (u == 3 ? 3 : u + 1) : (u == 0 ? 0 : u - 1);
+            if (uc)
+              put(uc, ui, MU | ME, uint16_t((nu << 4) | (ep << 6)));
+          }
+        }
+        if (mis) {
+          if (pc_ >= 4) c.tu_alc_long++;
+          else if (cc == 0) c.tu_alc_use++;
+          else {
+            // PERF-005 R4: the new entry's CTR is weak toward the
+            // resolved direction, 100 taken, 011 not taken (it was 100
+            // for both; tage_cntrl_alloc_rules.md).
+            put(cc, ci, 0xffff, uint16_t(((top->tu_ctag[s] & 0xff) << 8) |
+                                         (ep << 6) | ((res ? 4 : 3) << 1) |
+                                         1));
+          }
+        }
+        bool any = false;
+        for (int t = 0; t < 5; t++) {
+          int k = t * NPS + s;
+          bool ow = (top->tw_we >> k) & 1;
+          uint16_t om = uint16_t(~top->tw_bweb[k]);
+          if (t == 0) om &= 3;
+          if (ow != xw[t]) {
+            c.tu_chk_we++; any = true;
+            tdev("u_we", t, s, ow, xw[t], top->tw_addr[k]);
+            continue;
+          }
+          if (!ow) continue;
+          if ((top->tw_addr[k] & 2047) != xa[t]) {
+            c.tu_chk_addr++; any = true;
+            tdev("u_addr", t, s, top->tw_addr[k], xa[t], 0);
+            continue;
+          }
+          if (om != xm[t] || (top->tw_din[k] & om) != (xv[t] & xm[t])) {
+            any = true;
+            if (xm[t] == 0xffff) c.tu_chk_alc++;
+            else if (xm[t] & (MU | ME)) c.tu_chk_use++;
+            else c.tu_chk_ctr++;
+            tdev("u_field", t, s, (uint64_t(om) << 16) | top->tw_din[k],
+                 (uint64_t(xm[t]) << 16) | xv[t], xa[t]);
+          }
+        }
+        if (any) c.tu_chk++;
+        // The entry trained is the one the prediction read: the lookup's
+        // tag, still valid; and its counter as the metadata has it.
+        const TLk& L = tlk[top->tu_bid[s] & 63];
+        // An example of each class: the class, the update's cycle, table,
+        // slot and index, the lookup's PC and cycle, the tag and CTR the
+        // prediction read and the entry as it now stands.
+        auto tnote = [&](int k, const char* what, int t, uint16_t i,
+                         uint32_t rtag, int rctr, uint16_t e) {
+          if (n_tnote[k] >= 2) return;
+          n_tnote[k]++;
+          std::fprintf(stderr, "TGNOTE %s cyc %" PRId64 " t %d s %d idx %x "
+                       "lk_pc %" PRIx64 " lk_cyc %" PRId64 " read tag %x "
+                       "ctr %d now %04x\n", what, cyc, t, s, i, L.pc, L.cyc,
+                       rtag, rctr, e);
+        };
+        if (pc_ && xw[pc_] && (xm[pc_] & MC)) {
+          uint16_t e = TS(pc_, s, pi);
+          if (!(e & 1) || ((e >> 8) & 0xff) != (L.tag[pc_][s] & 0xff)) {
+            c.tu_gone_p++;
+            tnote(0, "gone_prm", pc_, pi, L.tag[pc_][s] & 0xff, pct, e);
+          } else if (((e >> 1) & 7) != pct) {
+            c.tu_stale_p++;
+            tnote(1, "stale_prm", pc_, pi, L.tag[pc_][s] & 0xff, pct, e);
+          }
+        }
+        if (ac && xw[ac] && (xm[ac] & MC)) {
+          uint16_t e = TS(ac, s, ai);
+          if (!(e & 1) || ((e >> 8) & 0xff) != (L.tag[ac][s] & 0xff))
+            c.tu_gone_a++;
+          else if (((e >> 1) & 7) != act)
+            c.tu_stale_a++;
+        }
+        if (mis && pc_ < 4 && cc != 0) {
+          bool ow = (top->tw_we >> (cc * NPS + s)) & 1;
+          if (!ow) c.tu_alc_other++;
+          else {
+            c.tu_alc++;
+            if (!res) c.tu_alc_ntk++;
+            uint16_t e = TS(cc, s, ci);
+            if ((e & 1) && ((e >> 8) & 0xff) == (top->tu_ctag[s] & 0xff)) {
+              c.tu_alc_dup++;
+              tnote(2, "alloc_dup", cc, ci, top->tu_ctag[s] & 0xff, -1, e);
+            }
+          }
+        }
+      }
+      // THE SC, re-derived from the probed counters, TAGE's extended
+      // counter and confidence, the threshold and the choosers (sc_cntrl
+      // sc_decisions.md 9), and at the update from the metadata (10).
+      if (top->sd_thr > c.sc_thr_max) c.sc_thr_max = top->sd_thr;
+      for (int s = 0; s < NPS; s++) {
+        if (!((top->sd_hit >> s) & 1)) continue;
+        c.sp_n++;
+        int sum = int(int8_t(top->sd_ext[s]));
+        for (int t = 0; t < 5; t++)
+          sum += 2 * int(int8_t(top->sd_ctr[t * NPS + s])) + 1;
+        int s10 = ((sum + 512) & 1023) - 512;
+        if (s10 != int(int16_t(top->sd_sum[s]))) {
+          c.sp_chk_sum++;
+          tdev("sc_sum", 0, s, uint64_t(int16_t(top->sd_sum[s])),
+               uint64_t(s10), 0);
+        }
+        bool lcl = s10 >= 0;
+        int ab = s10 < 0 ? -s10 : s10;
+        int thr = top->sd_thr;
+        bool vlo = ab < (thr >> 1), vvlo = ab < (thr >> 2);
+        bool ttk = (top->sd_ttkn >> s) & 1, thi = (top->sd_thi >> s) & 1;
+        bool tmed = (top->sd_tmed >> s) & 1;
+        bool fin, ovr;
+        int chs;
+        if (lcl == ttk) { fin = lcl; ovr = false; chs = 0; }
+        else if (thi && vlo) {
+          bool sc = int8_t(top->sd_chi) >= 0;
+          fin = sc ? lcl : ttk; ovr = sc; chs = 2;
+          if (sc) c.sp_hi_sc++; else c.sp_hi_tg++;
+        } else if (tmed && vvlo) {
+          bool sc = int8_t(top->sd_cmed) >= 0;
+          fin = sc ? lcl : ttk; ovr = sc; chs = 1;
+          if (sc) c.sp_med_sc++; else c.sp_med_tg++;
+        } else { fin = lcl; ovr = true; chs = 0; }
+        if (fin != bool((top->sd_final >> s) & 1) ||
+            lcl != bool((top->sd_lcl >> s) & 1) ||
+            ovr != bool((top->sd_ovr >> s) & 1) || chs != top->sd_chs[s]) {
+          c.sp_chk_dec++;
+          tdev("sc_dec", 0, s, (top->sd_final >> s) & 1, fin, uint64_t(s10));
+        }
+      }
+      {
+        auto satc = [](int v, int d, int lo, int hi) {
+          return (v == lo && d < 0) || (v == hi && d > 0) ? v : v + d;
+        };
+        int thr = top->su_thr, tc = int(int8_t(top->su_tc));
+        int chi = int(int8_t(top->sd_chi)), cmed = int(int8_t(top->sd_cmed));
+        int w = -1;
+        for (int s = NPS - 1; s >= 0; s--)
+          if ((top->su_val >> s) & 1) w = s;
+        for (int s = 0; s < NPS; s++) {
+          if (!((top->su_val >> s) & 1)) continue;
+          c.su_n++;
+          bool res = (top->su_res >> s) & 1;
+          bool wrong = bool((top->su_lcl >> s) & 1) != res;
+          bool lo = top->su_abs[s] < thr;
+          bool du = wrong || lo;
+          if (du != bool((top->su_wr >> s) & 1)) {
+            c.su_chk_wr++;
+            tdev("sc_upd_wr", 0, s, (top->su_wr >> s) & 1, du, 0);
+          }
+          for (int t = 0; t < 5; t++) {
+            int o = int(int8_t(top->su_ctr[t * NPS + s]));
+            int x = satc(o, res ? 1 : -1, -32, 31);
+            if (x != int(int8_t(top->su_wd[t * NPS + s]))) {
+              c.su_chk_wd++;
+              tdev("sc_upd_wd", t, s, uint64_t(int8_t(top->su_wd[t * NPS + s])),
+                   uint64_t(x), 0);
+            }
+          }
+        }
+        if (w >= 0) {
+          bool res = (top->su_res >> w) & 1;
+          bool wrong = bool((top->su_lcl >> w) & 1) != res;
+          bool lo = top->su_abs[w] < thr;
+          int ti = wrong ? satc(tc, 1, -64, 63) : lo ? satc(tc, -1, -64, 63)
+                                                     : tc;
+          int tcd = ti, thd = thr;
+          if (ti == 63) { tcd = 0; thd = (thr == 0 /*THR_MAX_U*/) ? thr
+                                                                  : thr + 1; }
+          else if (ti == -64) { tcd = 0; thd = thr == 1 ? thr : thr - 1; }
+          thd &= 1023;
+          // PERF-005 R2: the chooser matches SC's own prediction (it was
+          // the final one, su_fin; sc_decisions.md 10).
+          bool scm = bool((top->su_lcl >> w) & 1) == res;
+          bool tgm = bool((top->su_ttk >> w) & 1) == res;
+          int nchi = chi, ncmed = cmed;
+          if (top->su_chs[w] == 2) {
+            if (scm) nchi = satc(chi, 1, -32, 31);
+            else if (tgm) nchi = satc(chi, -1, -32, 31);
+          } else if (top->su_chs[w] == 1) {
+            if (scm) ncmed = satc(cmed, 1, -32, 31);
+            else if (tgm) ncmed = satc(cmed, -1, -32, 31);
+          }
+          if (tcd != int(int8_t(top->su_tc_d)) || thd != top->su_thr_d ||
+              nchi != int(int8_t(top->su_chi_d)) ||
+              ncmed != int(int8_t(top->su_cmed_d)) || top->su_wsel != w) {
+            c.su_chk_glob++;
+            tdev("sc_upd_glob", 0, w, (uint64_t(top->su_thr_d) << 8) |
+                 uint8_t(top->su_tc_d), (uint64_t(thd) << 8) | uint8_t(tcd), 0);
+          }
+        }
+      }
+      // The RAM writes, into the shadow, after the checks of this cycle.
+      tw_prev = 0;
+      for (int t = 0; t < 5; t++)
+        for (int s = 0; s < NPS; s++) {
+          int k = t * NPS + s;
+          if (!((top->tw_we >> k) & 1)) continue;
+          tw_prev |= 1u << k;
+          uint16_t m = uint16_t(~top->tw_bweb[k]);
+          if (t == 0) m &= 3;
+          uint16_t& e = TS(t, s, top->tw_addr[k]);
+          e = uint16_t((e & ~m) | (top->tw_din[k] & m));
+        }
       // THE ORACLE: the allocation, forced (on the path) or not.
       if (o.oracle && top->ew_alloc_val) {
         OEnt& e = oent[top->ew_alloc_idx];
@@ -1423,6 +2339,21 @@ int main(int argc, char** argv) {
           e.s[s].rq_val = e.s[s].val;
           e.s[s].rq_pos = e.s[s].pos;
           e.s[s].rq_type = e.s[s].type;
+          e.s[s].d = dec[top->fr_idx][s];
+          e.s[s].dv = true;
+        }
+        // PERF-005 Phase 3: the rule model's bundle (A), the request's
+        // slots in order up to and including the first taken one
+        // (bp_history_decisions.md 3.2, 3.5 D16; bp_cluster.sv p1 write).
+        {
+          THb hb;
+          for (int s = 0; s < NPS && hb.n < NPS; s++) {
+            if (!e.s[s].val) continue;
+            if (e.s[s].taken) hb.tkn |= uint8_t(1u << hb.n);
+            hb.n++;
+            if (e.s[s].taken) break;
+          }
+          hbA[top->fr_idx & 63] = hb;
         }
         e.seq++;
         e.req_seq++;
@@ -1450,6 +2381,7 @@ int main(int argc, char** argv) {
         if (!acc) { keep.push_back(r); continue; }
         r->res_done = true;
         r->ent->n_res--;
+        if (r->in.cls == cbp::C_COND) c.res_cond++;   // PERF-005 Phase 2
         logf("RESOLVE k %" PRIu64 " idx %d pos %d mis %d", r->k, r->idx,
              r->pos, r->mis);
       }
@@ -1777,6 +2709,171 @@ int main(int argc, char** argv) {
         c.ep_mis_cond.resize(e + 1, 0);
         c.ep_mis.resize(e + 1, 0);
       }
+      // PERF-005 Phase 3: THE HISTORY CHECK, at the first instruction of
+      // each committed entry: the previous entry's bundle joins the
+      // committed-path history, and this entry's lookup is recomputed
+      // from it by tage_table_hash_rules.md.
+      if (int64_t(r.ptr) != th_last) {
+        // The stage model (bp_arb_spec.md 3.1-3.2, fe_decisions.md 1):
+        // a block's p0 lookup reads the folds as registered, and a block
+        // writes its bundle at p1 (bp_cluster.sv 954-978), so the block
+        // just before it is in the lookup's history only when its bundle
+        // was taken in an earlier cycle than the lookup. lagA/lagB are
+        // the histories without it; ghA/ghB with it.
+        bool have_prev = th_last >= 0;
+        int64_t prev_wc = -1;
+        TGh lagA = ghA, lagB = ghB;
+        if (have_prev) {
+          const THb& a = th_snapA;
+          const THb& b = th_snapB;
+          prev_wc = b.wc;
+          for (int i = 0; i < a.n; i++) ghA.push((a.tkn >> i) & 1);
+          for (int i = 0; i < b.n; i++) ghB.push((b.tkn >> i) & 1);
+          th_sNA += a.n; th_sNB += b.n; th_sCA += a.n; th_sCB += b.n;
+          th_pnA = a.n; th_pnB = b.n;
+          if (a.n != b.n || (a.tkn & ((1u << a.n) - 1)) !=
+                                (b.tkn & ((1u << b.n) - 1))) {
+            c.th_hb_ab++;
+            if (b.corr) th_sCA = th_sCB = 0;
+            else th_sNA = th_sNB = 0;
+            // p1only: the history holds the p1 write, never corrected,
+            // and the request (A) has more branches: the p2/p3 view
+            // added a branch without a redirect (bp_history_decisions.md
+            // 3.5 corrects only on a redirect).
+            bool p1only = !b.corr && b.n < a.n;
+            if (p1only) c.th_ab_p1only++;
+            else if (b.corr) c.th_ab_corr++;
+            else c.th_ab_other++;
+            // the first 20 that are not p1only (the p1only class is
+            // defined above; these are the cases still to be defined)
+            if (!p1only && !b.corr && c.th_ab_other <= 20) {
+              const FRec& fe = frec[th_last_idx];
+              std::fprintf(stderr, "THAB k %" PRIu64 " idx %d start %" PRIx64
+                           " A %d/%x B %d/%x Bcorr %d wc %" PRId64
+                           " s0 %d/%d/%d ty %d src %d s1 %d/%d/%d ty %d src %d"
+                           " seq-req %d\n", r.k,
+                           int(th_last_idx), fe.start_pc, int(a.n),
+                           unsigned(a.tkn), int(b.n), unsigned(b.tkn),
+                           int(b.corr), b.wc,
+                           int(fe.s[0].val), int(fe.s[0].taken),
+                           int(fe.s[0].pos), int(fe.s[0].type),
+                           int(fe.s[0].src),
+                           int(NPS > 1 && fe.s[1].val),
+                           int(NPS > 1 && fe.s[1].taken),
+                           int(NPS > 1 ? fe.s[1].pos : 0),
+                           int(NPS > 1 ? fe.s[1].type : 0),
+                           int(NPS > 1 ? fe.s[1].src : 0),
+                           int(fe.seq - fe.req_seq));
+            }
+          }
+        }
+        th_last = int64_t(r.ptr);
+        th_last_idx = r.idx & 63;
+        c.th_n++;
+        const TLk& L = tlk[th_last_idx];
+        // PERF-005 R6: the p0 lookup reads the folds with the bundle
+        // written in its own cycle (the bypass), so a block written in
+        // the lookup's cycle is in it (it was prev_wc < L.cyc).
+        // PERF_TH_LAG_OLD=1 keeps the model before R6 (prev_wc < L.cyc),
+        // for a harness built on an RTL without the bypass.
+        bool incl = !have_prev ||
+                    (th_lag_old ? prev_wc < L.cyc : prev_wc <= L.cyc);
+        if (L.v && !incl) c.th_lag++;
+        const TGh& gA = incl ? ghA : lagA;
+        const TGh& gB = incl ? ghB : lagB;
+        if (!L.v) {
+          c.th_nolk++;
+        } else {
+          uint64_t pc = frec[th_last_idx].start_pc & VA_MASK;
+          bool bad = false, badB = false;
+          unsigned mA = 0, mB = 0;   // the tables that deviate, A and B
+          if (L.pc != pc) { c.th_pc++; bad = true; badB = true; }
+          for (int t = 0; t < 5; t++) {
+            uint32_t fa[3] = {}, fb[3] = {};
+            uint32_t xt = 0, yt = 0;
+            if (t != 0) {
+              tg::folds(t, gA, fa);
+              tg::folds(t, gB, fb);
+              xt = tg::tag(t, pc, fa);
+              yt = tg::tag(t, pc, fb);
+              if (L.fh[(t - 1) * 3] != fa[0] ||
+                  L.fh[(t - 1) * 3 + 1] != fa[1] ||
+                  L.fh[(t - 1) * 3 + 2] != fa[2])
+                c.th_fold[t]++;
+            }
+            uint32_t xi = tg::index(t, pc, fa), yi = tg::index(t, pc, fb);
+            for (int s = 0; s < NPS; s++) {
+              bool ia = L.idx[t][s] != xi, ta = t && L.tag[t][s] != xt;
+              bool ib = L.idx[t][s] != yi, tb = t && L.tag[t][s] != yt;
+              if (ia) c.th_idx[t]++;
+              if (ta) c.th_tag[t]++;
+              if (ib) c.th_idxB[t]++;
+              if (tb) c.th_tagB[t]++;
+              if (ia || ta) { bad = true; mA |= 1u << t; }
+              if (ib || tb) { badB = true; mB |= 1u << t; }
+            }
+          }
+          if (bad) {
+            c.th_bad++;
+            if (L.q) c.th_bad_q++;
+            else if (L.rb) {
+              c.th_bad_rb++;
+              // the part with an uncorrected A != B bundle in its window
+              // (it would mismatch outside a rollback cycle too)
+              const uint64_t H = uint64_t(tg::HIST[4]);
+              if (th_sNA < H + (incl ? 0 : th_pnA) ||
+                  th_sNB < H + (incl ? 0 : th_pnB))
+                c.th_bad_rb_n++;
+            } else if (!badB) {
+              c.th_bad_b++;
+              // a lookup that lags reads the window without the previous
+              // bundle, whose bits the counts already hold
+              const uint64_t H = uint64_t(tg::HIST[4]);
+              const uint64_t HA = H + (incl ? 0 : th_pnA);
+              const uint64_t HB = H + (incl ? 0 : th_pnB);
+              if (th_sNA < HA || th_sNB < HB) c.th_bad_b_n++;
+              else if (th_sCA < HA || th_sCB < HB) c.th_bad_b_c++;
+              else {
+                c.th_bad_b_nowin++;
+                if (c.th_bad_b_nowin <= 20)
+                  std::fprintf(stderr, "THNW k %" PRIu64 " idx %d lkcyc %"
+                               PRId64 " sNA %" PRIu64 " sNB %" PRIu64
+                               " sCA %" PRIu64 " sCB %" PRIu64 " incl %d "
+                               "tbl A %x B %x\n", r.k,
+                               int(th_last_idx), L.cyc, th_sNA, th_sNB,
+                               th_sCA, th_sCB, int(incl), mA, mB);
+              }
+            }
+            else c.th_bad_other++;
+            // the first 20 of the class still to be defined: neither the
+            // request bundles (A) nor the observed bundles (B) give the
+            // RTL's index or tag, and the lookup was not on a rollback
+            if (!L.q && !L.rb && badB && c.th_bad_other <= 20) {
+              uint32_t f1a[3] = {}, f1b[3] = {};
+              tg::folds(1, gA, f1a);
+              tg::folds(1, gB, f1b);
+              unsigned ha = 0, hb = 0;
+              for (int i = 0; i < 16; i++) {
+                ha |= unsigned(gA.at(i)) << i;
+                hb |= unsigned(gB.at(i)) << i;
+              }
+              std::fprintf(stderr, "THDEV k %" PRIu64 " idx %d pc %" PRIx64
+                           " lkpc %" PRIx64 " lkcyc %" PRId64 " q %d rb %d "
+                           "B %d t1fh rtl %x A %x B %x hist16 A %04x B %04x "
+                           "prev_wc %" PRId64 " incl %d "
+                           "bundle A %d/%x B %d/%x tbl A %x B %x\n", r.k,
+                           int(th_last_idx),
+                           pc, L.pc, L.cyc, int(L.q), int(L.rb), int(!badB),
+                           unsigned(L.fh[0]), f1a[0], f1b[0], ha, hb,
+                           prev_wc, int(incl), int(hbA[th_last_idx].n), unsigned(hbA[th_last_idx].tkn),
+                           int(hbB[th_last_idx].n), unsigned(hbB[th_last_idx].tkn),
+                           mA, mB);
+            }
+          }
+        }
+      }
+      th_snapA = hbA[r.idx & 63];
+      th_snapB = hbB[r.idx & 63];
       c.instr++;
       c.ep_instr[e]++;
       if (r.in.cls == cbp::C_COND) {
@@ -1795,6 +2892,32 @@ int main(int argc, char** argv) {
         else c.mis_ind++;
       }
       if (r.is_br) c.pred_src[r.src]++;
+      if (r.is_br && r.rsn < R_N) {
+        c.rsn_n[r.rsn]++;
+        if (r.mis) c.rsn_m[r.rsn]++;
+        if (r.xp >= 0) {
+          c.xp_n[r.xp]++;
+          if (r.mis) c.xp_m[r.xp]++;
+        }
+      }
+      // PERF-005 Phase 2: THE COST of the fast path. TAGE's response is
+      // present when it is for this entry (w_tage_hit_p2); right when its
+      // direction is the outcome.
+      if (r.is_br && r.rsn == R_C_FP && r.dv) {
+        bool tg = r.d_thit;
+        bool tg_ok = tg && r.d_ttk == r.in.taken;
+        if (r.mis) {
+          if (!r.d_fsh) c.fh_nosh++;
+          else if (r.d_fleft) c.fh_left[fh_bucket(r.d_fres)]++;
+          else c.fh_alloc[fh_bucket(r.d_fres)]++;
+          if (!tg) c.fpm_tg_none++;
+          else if (tg_ok) c.fpm_tg_right++;
+          else c.fpm_tg_wrong++;
+        } else {
+          if (!tg) c.fpc_tg_none++;
+          else if (!tg_ok) c.fpc_tg_wrong++;
+        }
+      }
       if (r.is_br) {
         // The slot-held branches, and the misses by class (PF-11).
         int mc = r.in.cls == cbp::C_COND ? 0
@@ -2150,6 +3273,141 @@ int main(int argc, char** argv) {
   for (int t = 0; t < 5; t++)
     row.push_back({"cf_ittage_decay_t" + std::to_string(t + 1),
                    std::to_string(c.cf_it_dec[t])});
+  // PERF-005 Phase 1: THE REASONS, last, so the columns before them keep
+  // their order: rs_<reason> the committed branches, rm_<reason> their
+  // mispredicts; then the SC partition; then rs_sum_err, the distance of
+  // each source's reasons (the *_other ones apart) from its pred_ and
+  // mis_ columns, summed over the sources (0 when every *_other is 0).
+  for (int r = 0; r < R_N; r++) {
+    row.push_back({std::string("rs_") + RSN_NAME[r],
+                   std::to_string(c.rsn_n[r])});
+    row.push_back({std::string("rm_") + RSN_NAME[r],
+                   std::to_string(c.rsn_m[r])});
+  }
+  for (int x = 0; x < 4; x++) {
+    row.push_back({std::string("rs_") + XP_NAME[x],
+                   std::to_string(c.xp_n[x])});
+    row.push_back({std::string("rm_") + XP_NAME[x],
+                   std::to_string(c.xp_m[x])});
+  }
+  {
+    uint64_t err = 0;
+    for (int s = 0; s < 8; s++) {
+      uint64_t n = 0, m = 0;
+      for (int r = 0; r < R_N; r++)
+        if (RSN_SRC[r] == s) { n += c.rsn_n[r]; m += c.rsn_m[r]; }
+      err += (n > c.pred_src[s] ? n - c.pred_src[s] : c.pred_src[s] - n);
+      err += (m > c.mis_src[s] ? m - c.mis_src[s] : c.mis_src[s] - m);
+    }
+    row.push_back({"rs_sum_err", std::to_string(err)});
+  }
+  // PERF-005 Phase 2: THE FAST PATH, last. fp_chk_* and fu_chk_* are
+  // checks (0 expected); the rest are counts.
+  {
+    auto P = [&](const char* k, uint64_t v) {
+      row.push_back({k, std::to_string(v)});
+    };
+    P("fp_reads", c.fp_rd);
+    P("fp_fired", c.fp_fire);
+    P("fp_chk_conf", c.fp_chk_rd);
+    P("fp_chk_noshadow", c.fp_chk_nosh);
+    P("fp_chk_41", c.fp_chk_41);
+    P("fp_chk_use", c.fp_chk_use);
+    P("fu_chk_rdconf", c.fu_chk_rd);
+    P("fu_chk_wrconf", c.fu_chk_wr);
+    P("fu_chk_keep", c.fu_chk_keep);
+    P("fu_chk_noshadow", c.fu_chk_nosh);
+    P("ftb_res_cond", c.res_cond);
+    P("ftb_sched_acc_br", c.fs_acc);
+    P("ftb_sched_drop_br", c.fs_drop);
+    P("ftb_upd_br", c.fu_br);
+    P("ftb_upd_inplace", c.fu_inpl);
+    P("ftb_upd_alloc", c.fu_alloc);
+    P("ftb_upd_past", c.fu_past);
+    P("ftb_upd_split", c.fu_split);
+    P("ftb_upd_leave_sat", c.fu_leave);
+    P("ftb_upd_resat", c.fu_resat);
+    for (int b = 0; b < FH_N; b++)
+      row.push_back({std::string("fpm_left_") + FH_NAME[b],
+                     std::to_string(c.fh_left[b])});
+    for (int b = 0; b < FH_N; b++)
+      row.push_back({std::string("fpm_alloc_") + FH_NAME[b],
+                     std::to_string(c.fh_alloc[b])});
+    P("fpm_noshadow", c.fh_nosh);
+    P("fpm_tage_right", c.fpm_tg_right);
+    P("fpm_tage_wrong", c.fpm_tg_wrong);
+    P("fpm_tage_none", c.fpm_tg_none);
+    P("fpc_tage_wrong", c.fpc_tg_wrong);
+    P("fpc_tage_none", c.fpc_tg_none);
+    // PERF-005 Phase 3: THE TAGE CHECKS, last. th_chk_* and the read and
+    // update tu_chk_* are checks (0 expected); the rest are counts.
+    P("th_entries", c.th_n);
+    P("th_nolookup", c.th_nolk);
+    P("th_lag", c.th_lag);
+    P("th_chk_pc", c.th_pc);
+    for (int t = 0; t < 5; t++) {
+      std::string n = std::to_string(t);
+      P(("th_chk_idx_t" + n).c_str(), c.th_idx[t]);
+      if (t) P(("th_chk_tag_t" + n).c_str(), c.th_tag[t]);
+      if (t) P(("th_fold_t" + n).c_str(), c.th_fold[t]);
+    }
+    for (int t = 0; t < 5; t++) {
+      std::string n = std::to_string(t);
+      P(("th_obs_idx_t" + n).c_str(), c.th_idxB[t]);
+      if (t) P(("th_obs_tag_t" + n).c_str(), c.th_tagB[t]);
+    }
+    P("th_bad", c.th_bad);
+    P("th_bad_queued", c.th_bad_q);
+    P("th_bad_rollback", c.th_bad_rb);
+    P("th_bad_rollback_nored", c.th_bad_rb_n);
+    P("th_bad_obs_ok", c.th_bad_b);
+    P("th_bad_obs_nored", c.th_bad_b_n);
+    P("th_bad_obs_corr", c.th_bad_b_c);
+    P("th_bad_obs_nowin", c.th_bad_b_nowin);
+    P("th_bad_other", c.th_bad_other);
+    P("th_bundle_a_ne_b", c.th_hb_ab);
+    P("th_bundle_p1only", c.th_ab_p1only);
+    P("th_bundle_corr", c.th_ab_corr);
+    P("th_bundle_other", c.th_ab_other);
+    P("tr_reads", c.tr_n);
+    P("tr_chk_read", c.tr_bad);
+    P("tr_collide", c.tr_coll);
+    P("tu_updates", c.tu_n);
+    P("tu_mispredicts", c.tu_mis);
+    P("tu_chk", c.tu_chk);
+    P("tu_chk_we", c.tu_chk_we);
+    P("tu_chk_addr", c.tu_chk_addr);
+    P("tu_chk_ctr", c.tu_chk_ctr);
+    P("tu_chk_use", c.tu_chk_use);
+    P("tu_chk_alc", c.tu_chk_alc);
+    P("tu_chk_uaon", c.tu_chk_uaon);
+    P("tu_gone_prm", c.tu_gone_p);
+    P("tu_gone_alt", c.tu_gone_a);
+    P("tu_stale_prm", c.tu_stale_p);
+    P("tu_stale_alt", c.tu_stale_a);
+    P("tu_alloc", c.tu_alc);
+    P("tu_alloc_ntk", c.tu_alc_ntk);
+    P("tu_alloc_dup", c.tu_alc_dup);
+    P("tu_alloc_ref_longest", c.tu_alc_long);
+    P("tu_alloc_ref_useful", c.tu_alc_use);
+    P("tu_alloc_ref_other", c.tu_alc_other);
+    P("tu_prov_prm", c.tu_rows[0]);
+    P("tu_prov_alt", c.tu_rows[1]);
+    P("tu_prov_alt_t0", c.tu_rows[2]);
+    P("tu_prov_t0", c.tu_rows[3]);
+    P("sp_answers", c.sp_n);
+    P("sp_chk_sum", c.sp_chk_sum);
+    P("sp_chk_dec", c.sp_chk_dec);
+    P("su_updates", c.su_n);
+    P("su_chk_wr", c.su_chk_wr);
+    P("su_chk_wd", c.su_chk_wd);
+    P("su_chk_glob", c.su_chk_glob);
+    P("sp_hi_chose_sc", c.sp_hi_sc);
+    P("sp_hi_chose_tage", c.sp_hi_tg);
+    P("sp_med_chose_sc", c.sp_med_sc);
+    P("sp_med_chose_tage", c.sp_med_tg);
+    P("sc_thr_max", c.sc_thr_max);
+  }
   for (auto& kv : row)
     std::printf("%-22s %s\n", kv.first.c_str(), kv.second.c_str());
   if (!o.out.empty()) {

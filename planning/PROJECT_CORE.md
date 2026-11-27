@@ -385,8 +385,10 @@ Claude Code proposes (subject to Jeff review):
                   stubs; generated documentation
   examples/       demonstration testbenches: fe_demo/, run by
                   tools/regress_demo.sh, not tools/regress.sh
-  misc/           notes outside the planning record:
-                  ras_theory_of_operation.md
+  misc/           notes outside the planning record. The RAS
+                  theory of operation is now
+                  blogs/BLOG_bpu_23_ras_theory_of_op.md (Blog 23,
+                  7de430c), outside the planning record.
   perf/           performance data and harness, PERF tasks (PF-2):
                   the trace checksum list and scan results; perf
                   scripts are in tools/

@@ -1182,8 +1182,9 @@ module tb;
   //         prm_tkn=1 alt_tkn=1 (pred_diff=0) using_primary=1
   //         resolved_taken=0 mispredict=1.
   // Alloc fires: mispredict AND prm_comp=1 < T4 AND alc_comp!=0.
-  // alc_wd = {alc_tag,lcl_epoch,2b00,3b100,1b1} = 16'hAA09.
-  // Expected: T2 s0 mem[0][11] = 16'hAA09 (full alloc write).
+  // PERF-005 R4: CTR weak toward the resolved direction, resolved not
+  // taken -> 011. alc_wd = {alc_tag,lcl_epoch,2b00,3b011,1b1} = 16'hAA07.
+  // Expected: T2 s0 mem[0][11] = 16'hAA07 (full alloc write).
   // ----------------------------------------------------------------
   task automatic upd_alloc_tst(int verbose);
     int              local_fails;
@@ -1207,7 +1208,7 @@ module tb;
     end
 
     // mispredict=1 prm_comp=1 < TAGE_MAX_TBL=4 alc_comp=2 !=0.
-    // alc_wd={8hAA, 2b00, 2b00, 3b100, 1b1} = 16hAA09.
+    // alc_wd={8hAA, 2b00, 2b00, 3b011, 1b1} = 16hAA07 (R4).
     meta                    = '0;
     meta.tage_prm_idx       = 11'h001;
     meta.tage_alt_idx       = 11'h001;
@@ -1237,15 +1238,63 @@ module tb;
     rd_val =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][11];
 
-    if (rd_val !== 16'hAA09) begin
+    if (rd_val !== 16'hAA07) begin
       local_fails++;
       if (verbose != 0)
         $display(
-          "[FAIL] upd_alloc_tst: T2 mem[0][11]=0x%04h exp=AA09",
+          "[FAIL] upd_alloc_tst: T2 mem[0][11]=0x%04h exp=AA07",
           rd_val);
     end else if (verbose != 0) begin
       $display(
         "[INFO] upd_alloc_tst: T2 mem[0][11]=0x%04h OK",
+        rd_val);
+    end
+
+    // R4, the other direction: resolved taken -> CTR 100. T2 s0 row
+    // 12 pre-loaded 16'hBEEF; prm T1 row 2 (16'h0007, not taken) and
+    // alt T0 predict not taken, so the mispredict allocates in T2.
+    // alc_wd = {8hBB, 2b00, 2b00, 3b100, 1b1} = 16'hBB09.
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][12]
+      = 16'hBEEF;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][2]
+      = 16'h0007;
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h002;
+    meta.tage_alt_idx       = 11'h002;
+    meta.tage_alc_idx       = 11'h00C;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd0;
+    meta.tage_alc_comp      = 3'd2;
+    meta.tage_prm_ctr       = 3'b011;
+    meta.tage_alt_ctr       = 3'b000;
+    meta.tage_alc_tag       = 8'hBB;
+    meta.tage_prm_tkn       = 1'b0;
+    meta.tage_alt_tkn       = 1'b0;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b1;
+    upd_inp.cond_mispredict = 1'b1;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    clk_step();
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    clk_step();
+
+    rd_val =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][12];
+    if (rd_val !== 16'hBB09) begin
+      local_fails++;
+      if (verbose != 0)
+        $display(
+          "[FAIL] upd_alloc_tst: T2 mem[0][12]=0x%04h exp=BB09",
+          rd_val);
+    end else if (verbose != 0) begin
+      $display(
+        "[INFO] upd_alloc_tst: T2 mem[0][12]=0x%04h OK",
         rd_val);
     end
 
@@ -3205,11 +3254,12 @@ module tb;
         "[FAIL] rt_mispredict_alloc_tst: T1 CTR=%03b exp=011",
         rd_t1[3:1]);
     end
-    // T2 allocated: TAG=0x0A EPC=0 USE=00 CTR=100 VALID=1=0x0A09.
-    if (rd_t2 !== 16'h0A09) begin
+    // T2 allocated: TAG=0x0A EPC=0 USE=00 VALID=1, CTR=011 weak toward
+    // the resolved not-taken (PERF-005 R4) = 0x0A07.
+    if (rd_t2 !== 16'h0A07) begin
       local_fails++;
       $display(
-        "[FAIL] rt_mispredict_alloc_tst: T2=0x%04h exp=0A09",
+        "[FAIL] rt_mispredict_alloc_tst: T2=0x%04h exp=0A07",
         rd_t2);
     end
 
@@ -6005,7 +6055,7 @@ module tb;
   //   RTL debt #34: pred_crt=0 -> subtract 1: 2'b10->2'b01.
   // PC=0xD00: idx=832 bank=0 row=832 tag=0x01.
   // T1 alloc target bank=0 row=832:
-  //   entry={tag=0x01, 8'h09}=0x0109.
+  //   entry={tag=0x01, 8'h07}=0x0107 (CTR 011, PERF-005 R4).
   // T2-T4 bank=0 row=832: unchanged (zero from FAST_INIT).
   // ----------------------------------------------------------------
   task automatic alloc_t0_provider_tst(int verbose);
@@ -6094,7 +6144,7 @@ module tb;
 
     // Step 4: Update: resolved_taken=0, cond_mispredict=1.
     // Row 13c: T0 DEC 10->01 (RTL debt #34: pred_crt=0).
-    // Alloc: T1 bank=0 row=832 written with 0x0109.
+    // Alloc: T1 bank=0 row=832 written with 0x0107 (R4).
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta1;
     upd_inp.resolved_taken  = 1'b0;
@@ -6107,7 +6157,7 @@ module tb;
     clk_step();
 
     // Step 5: Verify RAM.
-    // T1: allocated {tag=0x01, 8'h09}=0x0109.
+    // T1: allocated {tag=0x01, 8'h07}=0x0107.
     // T0: CTR 10->01 (DEC, row 13c, RTL debt #34).
     // T2-T4: unchanged (zero from FAST_INIT).
     rd_t1 =
@@ -6137,10 +6187,11 @@ module tb;
         "[INFO] alloc_t0_provider_tst: T4[0][832]=0x%04h",
         rd_t4);
     end
-    if (rd_t1 !== 16'h0109) begin
+    // PERF-005 R4: resolved not taken -> CTR 011, {tag 0x01, 8'h07}.
+    if (rd_t1 !== 16'h0107) begin
       local_fails++;
       $display(
-        "[FAIL] alloc_t0_provider_tst: T1=0x%04h exp=0109",
+        "[FAIL] alloc_t0_provider_tst: T1=0x%04h exp=0107",
         rd_t1);
     end
     if (rd_bim !== 2'b01) begin
@@ -6169,7 +6220,7 @@ module tb;
     end
 
     // Step 6: Re-predict. T1 now valid, tag=0x01 matches.
-    // prm_comp=1, prm_ctr=3'b100.
+    // prm_comp=1, prm_ctr=3'b011 (R4).
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     clk_step();
@@ -6192,10 +6243,10 @@ module tb;
         "[FAIL] alloc_t0_provider_tst: repred prm=%0d exp=1",
         meta2.tage_prm_comp);
     end
-    if (meta2.tage_prm_ctr !== 3'b100) begin
+    if (meta2.tage_prm_ctr !== 3'b011) begin
       local_fails++;
       $display(
-        "[FAIL] alloc_t0_provider_tst: repred ctr=%03b exp=100",
+        "[FAIL] alloc_t0_provider_tst: repred ctr=%03b exp=011",
         meta2.tage_prm_ctr);
     end
 
@@ -6225,7 +6276,7 @@ module tb;
   //   T1 CTR[2]=1, T0 CTR[1]=1 (pre-loaded 2'b10): diff=0.
   // PC=0x1100: idx=1088 bank=1 row=64 tag=0x02.
   // T2 alloc target bank=1 row=64:
-  //   entry={tag=0x02, 8'h09}=0x0209.
+  //   entry={tag=0x02, 8'h07}=0x0207 (CTR 011, PERF-005 R4).
   // T1 bank=1 row=64: CTR 101->100 -> 0x0209 (USE unchanged).
   // T3 bank=1 row=64: unchanged (zero, consecutive guard).
   // T4 bank=1 row=64: unchanged (zero, not reached).
@@ -6333,7 +6384,7 @@ module tb;
     // Step 4: Update: resolved_taken=0, cond_mispredict=1.
     // Row 14: T1 prm wrong, DEC CTR 101->100.
     // Table 7 row 1: pred_diff=0 -> no USE update.
-    // Alloc: T2 bank=1 row=64 written with 0x0209.
+    // Alloc: T2 bank=1 row=64 written with 0x0207 (R4).
     // Consecutive guard: T3 not written.
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta1;
@@ -6347,7 +6398,7 @@ module tb;
     clk_step();
 
     // Step 5: Verify RAM.
-    // T2: allocated {tag=0x02, 8'h09}=0x0209.
+    // T2: allocated {tag=0x02, 8'h07}=0x0207 (R4, CTR 011).
     // T1: CTR 101->100 USE unchanged -> 0x0209.
     // T3: unchanged (zero, consecutive guard confirmed).
     // T4: unchanged (zero, not reached).
@@ -6374,10 +6425,11 @@ module tb;
         "[INFO] alloc_no_consecutive_tst: T4[1][64]=0x%04h",
         rd_t4);
     end
-    if (rd_t2 !== 16'h0209) begin
+    // PERF-005 R4: resolved not taken -> CTR 011, {tag 0x02, 8'h07}.
+    if (rd_t2 !== 16'h0207) begin
       local_fails++;
       $display(
-        "[FAIL] alloc_no_consecutive_tst: T2=0x%04h exp=0209",
+        "[FAIL] alloc_no_consecutive_tst: T2=0x%04h exp=0207",
         rd_t2);
     end
     if (rd_t1 !== 16'h0209) begin
@@ -6400,7 +6452,7 @@ module tb;
     end
 
     // Step 6: Re-predict. T2 valid and tag hits (tag=0x02).
-    // T1 also hits but T2 longer history: prm_comp=2 ctr=100.
+    // T1 also hits but T2 longer history: prm_comp=2 ctr=011 (R4).
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     clk_step();
@@ -6423,10 +6475,10 @@ module tb;
         "[FAIL] alloc_no_consecutive_tst: repred prm=%0d exp=2",
         meta2.tage_prm_comp);
     end
-    if (meta2.tage_prm_ctr !== 3'b100) begin
+    if (meta2.tage_prm_ctr !== 3'b011) begin
       local_fails++;
       $display(
-        "[FAIL] alloc_no_consecutive_tst: repred ctr=%03b exp=100",
+        "[FAIL] alloc_no_consecutive_tst: repred ctr=%03b exp=011",
         meta2.tage_prm_ctr);
     end
 
@@ -6571,7 +6623,7 @@ module tb;
     // Step 5: Update: resolved_taken=0, cond_mispredict=1.
     // Row 14: T1 CTR DEC 101->100.
     // Table 7 row 4: DEC prm USE (00 sat 00). EPC=lcl_epoch=1.
-    // Alloc: T3 bank=1 row=192 -> 0x0249.
+    // Alloc: T3 bank=1 row=192 -> 0x0247 (R4, CTR 011).
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta1;
     upd_inp.resolved_taken  = 1'b0;
@@ -6587,7 +6639,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
 
     // Step 6: Verify RAM.
-    // T3: allocated 0x0249 (EPC=01 from lcl_epoch).
+    // T3: allocated 0x0247 (EPC=01 from lcl_epoch, CTR 011 R4).
     // T1: CTR 101->100 USE DEC(00)=00 EPC=01 -> 0x0249.
     // T2: unchanged 0x0020 (not candidate, u_eff=01).
     // T4: unchanged 0x0000 (not reached, T3 selected first).
@@ -6614,10 +6666,11 @@ module tb;
         "[INFO] aging_age1_not_candidate_tst: T4[1][192]=0x%04h",
         rd_t4);
     end
-    if (rd_t3 !== 16'h0249) begin
+    // PERF-005 R4: resolved not taken -> alloc CTR 011 -> 0x0247.
+    if (rd_t3 !== 16'h0247) begin
       local_fails++;
       $display(
-        "[FAIL] aging_age1_not_candidate_tst: T3=0x%04h exp=0249",
+        "[FAIL] aging_age1_not_candidate_tst: T3=0x%04h exp=0247",
         rd_t3);
     end
     if (rd_t1 !== 16'h0249) begin
@@ -6639,7 +6692,7 @@ module tb;
         rd_t4);
     end
 
-    // Step 7: Re-predict. T3 valid tag hits: prm_comp=3 ctr=100.
+    // Step 7: Re-predict. T3 valid tag hits: prm_comp=3 ctr=011 (R4).
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     clk_step();
@@ -6662,10 +6715,10 @@ module tb;
         "[FAIL] aging_age1_not_candidate_tst: repred prm=%0d exp=3",
         meta2.tage_prm_comp);
     end
-    if (meta2.tage_prm_ctr !== 3'b100) begin
+    if (meta2.tage_prm_ctr !== 3'b011) begin
       local_fails++;
       $display(
-        "[FAIL] aging_age1_not_candidate_tst: repred ctr=%03b exp=100",
+        "[FAIL] aging_age1_not_candidate_tst: repred ctr=%03b exp=011",
         meta2.tage_prm_ctr);
     end
 
@@ -6700,7 +6753,8 @@ module tb;
   //   T1 lower byte after: {EPC=10,USE=00,CTR=100,VALID=1}=0x89.
   // PC=0x1500: idx=1344 bank=1 row=320 tag=0x02.
   // T2 alloc target bank=1 row=320:
-  //   entry={tag=0x02,EPC=10,USE=00,CTR=100,VALID=1}=0x0289.
+  //   entry={tag=0x02,EPC=10,USE=00,CTR=011,VALID=1}=0x0287
+  //   (CTR 011 weak toward the resolved not taken, PERF-005 R4).
   // T1 bank=1 row=320: 0x0289 (CTR 101->100, EPC=10).
   // T3 bank=1 row=320: unchanged 0x0000 (T2 selected first).
   // T4 bank=1 row=320: unchanged 0x0000 (not reached).
@@ -6812,7 +6866,7 @@ module tb;
     // Step 5: Update: resolved_taken=0, cond_mispredict=1.
     // Row 14: T1 CTR DEC 101->100.
     // Table 7 row 4: DEC prm USE (u_prm_use=0 sat 0). EPC=2.
-    // Alloc: T2 bank=1 row=320 -> 0x0289 (EPC=10 from epoch).
+    // Alloc: T2 bank=1 row=320 -> 0x0287 (EPC=10 from epoch, R4).
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta1;
     upd_inp.resolved_taken  = 1'b0;
@@ -6828,7 +6882,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
 
     // Step 6: Verify RAM.
-    // T2: allocated 0x0289 (EPC=10 from lcl_epoch=2).
+    // T2: allocated 0x0287 (EPC=10 from lcl_epoch=2, CTR 011 R4).
     // T1: CTR 101->100 USE DEC(00)=00 EPC=10 -> 0x0289.
     // T3: unchanged 0x0000 (T2 selected, scan stopped).
     // T4: unchanged 0x0000 (not reached).
@@ -6855,10 +6909,10 @@ module tb;
         "[INFO] aging_age2_is_candidate_tst: T4[1][320]=0x%04h",
         rd_t4);
     end
-    if (rd_t2 !== 16'h0289) begin
+    if (rd_t2 !== 16'h0287) begin
       local_fails++;
       $display(
-        "[FAIL] aging_age2_is_candidate_tst: T2=0x%04h exp=0289",
+        "[FAIL] aging_age2_is_candidate_tst: T2=0x%04h exp=0287",
         rd_t2);
     end
     if (rd_t1 !== 16'h0289) begin
@@ -6880,7 +6934,7 @@ module tb;
         rd_t4);
     end
 
-    // Step 7: Re-predict. T2 valid tag hits: prm_comp=2 ctr=100.
+    // Step 7: Re-predict. T2 valid tag hits: prm_comp=2 ctr=011 (R4).
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     clk_step();
@@ -6903,10 +6957,10 @@ module tb;
         "[FAIL] aging_age2_is_candidate_tst: repred prm=%0d exp=2",
         meta2.tage_prm_comp);
     end
-    if (meta2.tage_prm_ctr !== 3'b100) begin
+    if (meta2.tage_prm_ctr !== 3'b011) begin
       local_fails++;
       $display(
-        "[FAIL] aging_age2_is_candidate_tst: repred ctr=%03b exp=100",
+        "[FAIL] aging_age2_is_candidate_tst: repred ctr=%03b exp=011",
         meta2.tage_prm_ctr);
     end
 
@@ -8882,7 +8936,8 @@ module tb;
   // Pre-load T0[0][976]=2b10 (taken). T1-T4[0][976]=0x0000
   // (VAL=0 miss -> ueff=0 -> T1 is first allocation candidate).
   // Prediction: prm=T0 alc_comp=T1 alc_tag=0x01.
-  // Mispredict update: alc_we_s0 fires in T1. Allocate 0x0109.
+  // Mispredict update: alc_we_s0 fires in T1. Allocate 0x0107 (CTR
+  // 011 toward the resolved not taken, PERF-005 R4).
   // ----------------------------------------------------------------
   task automatic alc_end_to_end_tst(int verbose);
     int              local_fails;
@@ -8986,10 +9041,10 @@ module tb;
       $display(
         "[FAIL] alc_end_to_end_tst: alc_wr_seen=0 exp=1");
     end
-    if (rd_t1 !== 16'h0109) begin
+    if (rd_t1 !== 16'h0107) begin
       local_fails++;
       $display(
-        "[FAIL] alc_end_to_end_tst: T1[0][976]=0x%04h exp=0109",
+        "[FAIL] alc_end_to_end_tst: T1[0][976]=0x%04h exp=0107",
         rd_t1);
     end
 
@@ -11326,7 +11381,7 @@ module tb;
   // PC=0x828: idx=0x20A=522 bank=0 row=522 tag=0x01.
   // T1[0][522]=0x0000 (VAL=0, USE=0 -> alloc candidate).
   // T2-T4[0][522]=0x0000. T0 prm. prm_comp=0 < TAGE_MAX_TBL=4.
-  // Sub-test A: cond_mispredict=1 -> alloc fires -> T1 = 0x0109.
+  // Sub-test A: cond_mispredict=1 -> alloc fires -> T1 = 0x0107 (R4).
   // Sub-test B: cond_mispredict=0 -> alloc suppressed -> T1=0x0000.
   // Sub-test C: prm_comp=T4=4 (longest table) ->
   //   prm_comp < TAGE_MAX_TBL fails -> alloc suppressed.
@@ -11378,10 +11433,11 @@ module tb;
       $display(
         "[INFO] alc_trigger_gating_tst A: T1[0][522]=0x%04h",
         rd_t1);
-    if (rd_t1 !== 16'h0109) begin
+    // PERF-005 R4: resolved not taken -> CTR 011 -> 0x0107.
+    if (rd_t1 !== 16'h0107) begin
       local_fails++;
       $display(
-        "[FAIL] alc_trig_gating_tst A: T1[0][522]=0x%04h exp=0x0109",
+        "[FAIL] alc_trig_gating_tst A: T1[0][522]=0x%04h exp=0x0107",
         rd_t1);
     end
     clk_step();
@@ -11470,7 +11526,7 @@ module tb;
   // T2[0][40]=0x0000: VAL=0 USE=0 -> first allocatable above T0.
   // T3-T4[0][40]=0x0000. prm=T0 (T1-T4 miss).
   // Alloc scan: T1 ueff=USE=3 skip; T2 ueff=0 select -> alc=2.
-  // After mispredict: T2 row=40 = 0x0409. T1 row=40 unchanged.
+  // After mispredict: T2 row=40 = 0x0407. T1 row=40 unchanged.
   // Confirms T0 never selected; shortest eligible (T2) wins.
   // ---------------------------------------------------------------
   task automatic alc_which_table_tst(int verbose);
@@ -11544,10 +11600,10 @@ module tb;
         "[FAIL] alc_which_table_tst: T1 chgd 0x%04h exp=0x0039",
         rd_t1);
     end
-    if (rd_t2 !== 16'h0409) begin
+    if (rd_t2 !== 16'h0407) begin
       local_fails++;
       $display(
-        "[FAIL] alc_which_table_tst: T2[0][40]=0x%04h exp=0x0409",
+        "[FAIL] alc_which_table_tst: T2[0][40]=0x%04h exp=0x0407",
         rd_t2);
     end
     if (local_fails == 0)
@@ -11567,7 +11623,7 @@ module tb;
   // T3[1][582]=0x000E: USE=0 VAL=0 CTR=3b111 (non-zero distinct).
   //   Would be next candidate but T2 selected -> alc_comp becomes
   //   non-zero -> T3 scan is blocked (alc_comp==0 guard fails).
-  // After mispredict: T2 allocated 0x0709. T3 unchanged 0x000E.
+  // After mispredict: T2 allocated 0x0707. T3 unchanged 0x000E.
   // Rule: alloc scan stops at first t > prm with u_eff=0 (RTL
   //   alc_comp==0 guard in gen_alloc_comb).
   // ---------------------------------------------------------------
@@ -11629,10 +11685,10 @@ module tb;
       $display(
         "[INFO] alc_consec_skip_tst: T3[1][582]=0x%04h",rd_t3);
     end
-    if (rd_t2 !== 16'h0709) begin
+    if (rd_t2 !== 16'h0707) begin
       local_fails++;
       $display(
-        "[FAIL] alc_consec_skip_tst: T2[1][582]=0x%04h exp=0x0709",
+        "[FAIL] alc_consec_skip_tst: T2[1][582]=0x%04h exp=0x0707",
         rd_t2);
     end
     if (rd_t3 !== 16'h000E) begin
@@ -11744,7 +11800,7 @@ module tb;
   // T1[0][81]=0x003F: decoy row (TAG=00 EPC=00 USE=3 CTR=7 VAL=1).
   //   Adjacent row seeded to non-zero to detect off-by-one.
   // Predict -> capture meta (alc_idx must be 0x050=80).
-  // Mispredict -> T1[0][80]=0x0809. T1[0][81] unchanged (0x003F).
+  // Mispredict -> T1[0][80]=0x0807. T1[0][81] unchanged (0x003F).
   // Rule: alc_idx from prediction-time hash; write lands at row=80.
   // ---------------------------------------------------------------
   task automatic alc_pre_hashed_idx_tst(int verbose);
@@ -11815,10 +11871,10 @@ module tb;
         "[INFO] alc_pre_hashed_idx_tst: T1[0][81]=0x%04h",
         rd_t1_dec);
     end
-    if (rd_t1_tgt !== 16'h0809) begin
+    if (rd_t1_tgt !== 16'h0807) begin
       local_fails++;
       $display(
-        "[FAIL] alc_pre_hashed_idx_tst: T1[0][80]=0x%04h exp=0x0809",
+        "[FAIL] alc_pre_hashed_idx_tst: T1[0][80]=0x%04h exp=0x0807",
         rd_t1_tgt);
     end
     if (rd_t1_dec !== 16'h003F) begin
@@ -11838,13 +11894,14 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-93  alc_contents_tst: allocated-entry field decode.
+  // PERF-005 R4: resolved not taken -> alloc CTR 011.
   // PC=0x1878: idx=0x61E=1566 bank=1 row=542 tag=0x03.
   // T1[1][542]=0x0000 (alloc target). T2-T4[1][542]=0x0039.
   // Sub-test A: epoch=0 -> alloc = {TAG=03,EPC=00,USE=00,
-  //   CTR=100,VAL=1} = 0x0309.
-  //   Decode: VAL=1 CTR=100 USE=00 EPC=00 TAG=0x03.
-  // Sub-test B: epoch=2 -> EPC=10 -> alloc = 0x0389.
-  //   Decode: VAL=1 CTR=100 USE=00 EPC=10 TAG=0x03.
+  //   CTR=011,VAL=1} = 0x0307.
+  //   Decode: VAL=1 CTR=011 USE=00 EPC=00 TAG=0x03.
+  // Sub-test B: epoch=2 -> EPC=10 -> alloc = 0x0387.
+  //   Decode: VAL=1 CTR=011 USE=00 EPC=10 TAG=0x03.
   // Confirms: write-data field order matches entry format doc.
   // Rule: init = {alc_tag, lcl_epoch, 2b00, 3b100, 1b1}.
   // ---------------------------------------------------------------
@@ -11892,10 +11949,10 @@ module tb;
       $display(
         "[INFO] alc_contents_tst A (ep=0): T1[1][542]=0x%04h",
         rd_t1);
-    if (rd_t1 !== 16'h0309) begin
+    if (rd_t1 !== 16'h0307) begin
       local_fails++;
       $display(
-        "[FAIL] alc_contents_tst A: T1[1][542]=0x%04h exp=0x0309",
+        "[FAIL] alc_contents_tst A: T1[1][542]=0x%04h exp=0x0307",
         rd_t1);
     end
     clk_step();
@@ -11929,10 +11986,10 @@ module tb;
       $display(
         "[INFO] alc_contents_tst B (ep=2): T1[1][542]=0x%04h",
         rd_t1);
-    if (rd_t1 !== 16'h0389) begin
+    if (rd_t1 !== 16'h0387) begin
       local_fails++;
       $display(
-        "[FAIL] alc_contents_tst B: T1[1][542]=0x%04h exp=0x0389",
+        "[FAIL] alc_contents_tst B: T1[1][542]=0x%04h exp=0x0387",
         rd_t1);
     end
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
@@ -12094,7 +12151,7 @@ module tb;
   //   Seeded to a distinctive non-zero value to detect spurious
   //   writes: if T2 is written the mismatch is visible.
   // T3-T4[0][562]=0x0039. prm=T0 (all T1-T4 miss: TAG=0 != 0x05).
-  // After mispredict: T1[0][562]=0x0509 (allocated). T2 unchanged.
+  // After mispredict: T1[0][562]=0x0507 (allocated). T2 unchanged.
   // Rule: only alc_comp table written; all others unchanged.
   // ---------------------------------------------------------------
   task automatic alc_ram_isolate_tst(int verbose);
@@ -12161,10 +12218,10 @@ module tb;
       $display(
         "[INFO] alc_ram_isolate_tst: T2[0][562]=0x%04h",rd_t2);
     end
-    if (rd_t1 !== 16'h0509) begin
+    if (rd_t1 !== 16'h0507) begin
       local_fails++;
       $display(
-        "[FAIL] alc_ram_isolate_tst: T1[0][562]=0x%04h exp=0x0509",
+        "[FAIL] alc_ram_isolate_tst: T1[0][562]=0x%04h exp=0x0507",
         rd_t1);
     end
     if (rd_t2 !== 16'h003F) begin

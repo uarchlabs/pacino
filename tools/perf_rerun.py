@@ -38,8 +38,12 @@ perf/cbp2025_rv_rerun.csv, one row per predictor and trace:
 
 Usage, from the repository root:
   python3 tools/perf_rerun.py [-j N] [--plan full|fallback] [--only P]
-                              [--dry-run]
+                              [--dry-run] [--cbp-bin DIR --out CSV
+                              --logs DIR]
 -j defaults to 75% of the hardware threads, at least 1 (PF-22).
+--cbp-bin, --out and --logs (PERF-005) run a predictor built elsewhere,
+the twin of perf/src/twin, the same way: its binaries' directory, the
+table it writes and the root of its runner logs.
 Setup notes: README.md, section Performance analysis.
 """
 
@@ -93,14 +97,13 @@ def read_list(path):
 
 def run_one(job):
     """One predictor on one trace through the submodule's runner."""
-    pred, tset, group, trace, path, outdir = job
+    pred, tset, group, trace, path, outdir, binp = job
     os.makedirs(outdir, exist_ok=True)
     lst = os.path.join(outdir, "trace_list.txt")
     with open(lst, "w") as f:
         f.write(path + "\n")
     t0 = time.time()
-    p = subprocess.run([sys.executable, RUNNER, "--cbp_path",
-                        os.path.join(CBP, "bin", "cbp." + pred),
+    p = subprocess.run([sys.executable, RUNNER, "--cbp_path", binp,
                         "--trace_list", lst, "--results_dir", outdir,
                         "--jobs", "1"], capture_output=True, text=True,
                        cwd=CBP)
@@ -138,15 +141,27 @@ def main():
                     default="fallback")
     ap.add_argument("--only", help="predictors, comma separated")
     ap.add_argument("--dry-run", action="store_true")
+    # PERF-005: a predictor built elsewhere (the twin, perf/build), run
+    # the same way: its binaries' directory, the table it writes and the
+    # root of its runner logs. The defaults are the reference's.
+    ap.add_argument("--cbp-bin", help="directory of the cbp.<P> binaries "
+                    "(default tools/cbp2025/bin); with it --only may name "
+                    "any predictor built there")
+    ap.add_argument("--out", default=OUT, help="the table (default %s)"
+                    % os.path.relpath(OUT, REPO_ROOT))
+    ap.add_argument("--logs", help="the root of the runner logs (default "
+                    "CBP_TRACES_RV/rerun)")
     args = ap.parse_args()
 
+    bin_dir = os.path.abspath(args.cbp_bin) if args.cbp_bin else \
+        os.path.join(CBP, "bin")
     preds = PREDICTORS if not args.only else args.only.split(",")
     for p in preds:
-        if p not in PREDICTORS:
+        if p not in PREDICTORS and not args.cbp_bin:
             fail("unknown predictor %s" % p)
-        if not os.access(os.path.join(CBP, "bin", "cbp." + p), os.X_OK):
-            fail("tools/cbp2025/bin/cbp.%s not built; run make -C "
-                 "tools/cbp2025 all" % p)
+        if not os.access(os.path.join(bin_dir, "cbp." + p), os.X_OK):
+            fail("%s/cbp.%s not built; run make -C tools/cbp2025 all"
+                 % (bin_dir, p))
     rv_root = os.path.abspath(os.environ.get(
         "CBP_TRACES_RV", os.path.join(REPO_ROOT, "..", "cbp_traces_rv")))
     tr_root = os.path.abspath(os.environ.get(
@@ -170,13 +185,15 @@ def main():
         if k[0] not in short or n < int(ven[short[k[0]]]["new_records"]):
             short[k[0]] = k
 
+    log_root = os.path.abspath(args.logs) if args.logs else \
+        os.path.join(rv_root, "rerun")
     jobs = []
 
     def add(pred, tset, k):
         rel = "training_traces/%s/%s.gz" % k
         root, lst = (rv_root, rv_list) if tset == "rv" else (tr_root, tr_list)
         jobs.append((pred, tset, k[0], k[1], os.path.join(root, rel),
-                     os.path.join(rv_root, "rerun", pred, tset, k[0], k[1]),
+                     os.path.join(log_root, pred, tset, k[0], k[1]),
                      rel, lst.get(rel)))
 
     for pred in preds:
@@ -217,7 +234,9 @@ def main():
     t0 = time.time()
     results = []
     with multiprocessing.Pool(args.jobs) as pool:
-        for r in pool.imap_unordered(run_one, [j[:6] for j in order]):
+        for r in pool.imap_unordered(run_one, [
+                j[:6] + (os.path.join(bin_dir, "cbp." + j[0]),)
+                for j in order]):
             pred, tset, group, trace, rc, row, sec = r
             st = row["Status"] if row else "no result"
             print("  %s %s %s/%s %s MPKI %s %.0f s" % (
@@ -230,7 +249,7 @@ def main():
     gold = {}
     rows = []
     bad_equal = 0
-    bin_sha = {p: sha256_of(os.path.join(CBP, "bin", "cbp." + p))
+    bin_sha = {p: sha256_of(os.path.join(bin_dir, "cbp." + p))
                for p in preds}
     for pred, tset, group, trace, rc, row, sec in sorted(results):
         g = gold.setdefault((pred, group), golden(pred, group)).get(trace)
@@ -260,7 +279,7 @@ def main():
         "ExecTime", "golden_Instr", "golden_NumBr", "golden_MPKI",
         "golden_50PercMPKI", "MPKI_minus_golden", "golden_equal",
         "bin_sha256"]
-    with open(OUT, "w", newline="") as f:
+    with open(args.out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols, lineterminator="\n")
         w.writeheader()
         for r in rows:
@@ -268,7 +287,7 @@ def main():
     core_s = sum(r[6] for r in results)
     print("wrote %s, %d rows; %d unchanged-trace rows differ from the "
           "golden results; wall %.0f s, %.1f core-hours" %
-          (OUT, len(rows), bad_equal, wall, core_s / 3600))
+          (args.out, len(rows), bad_equal, wall, core_s / 3600))
     return 0
 
 

@@ -1,0 +1,7 @@
+# PERF-005 Phase 2: the fast-path rule checks. The baseline set of
+# perf/studies/baseline.sets, unchanged, on the harness with the
+# fast-path probes (perf_top fq_*, fu_*, fs_*) and the FTB conf shadow:
+# fp_chk_* and fu_chk_* are 0 expected, and every column baseline.csv
+# has must equal it, row for row, apart from the stamp and timing
+# columns.
+baseline        --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch

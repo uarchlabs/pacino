@@ -1,0 +1,6 @@
+# PERF-005 Phase 2: the fast path off. The baseline set of
+# perf/studies/baseline.sets with ftb_fastpath_en = 0 (--cfg): every
+# conditional waits for TAGE and SC (ftb_confidence_override_rules.md 5).
+# Compared with baseline.csv per trace and group: MPKI, conditional MPKI
+# and cycles. The default stays PF-5's (ftb_fastpath_en = 1).
+fpoff           --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch --config head/fp_off --cfg ftb_fastpath_en=0

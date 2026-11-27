@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-22
+ UPDATED: 2026-11-27
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,67 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-086, end: PERF-005 run; the AREA withdrawn.
+
+PERF-005 RAN (days of runs) and ended IN-PROGRESS: two testbench
+fixes fell outside its AREA (prompts/PERF-005.md:358-366,
+rtl/core/frontend/bpu and ftq only). Its results are not yet recorded;
+session-087 assesses them.
+
+PA ERROR, THE AREA. Jeff ruled that the IA fixes what it finds, named
+in the task or not. The PA wrote "Within the AREA" into that ruling's
+quoted text, attributed it to Jeff, and gave every task since BP-152
+an AREA of its own; a narrow AREA then cancelled the ruling task by
+task. The qualifier was the PA's, never Jeff's.
+RULED (Jeff, session-086): there is no AREA. The IA may change any
+file in the repository except planning files (text is proposed),
+CLAUDE.md, examples/ (FDT-2a), tools/known_failures.txt and
+tools/cbp2025. The PA standing task text (the claude.ai project,
+claude/pa_standing_task_text.md) is corrected: Block 1 without the
+qualifier, Block 4 with the exclusions, no AREA in any task file.
+PERF-005's AREA is withdrawn; the IA finishes the two testbench fixes
+and the regression in its own session.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md.
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-006,
+TD#219.
+
+---
+## Session-086, continued: PERF-004 accepted; PERF-005 written.
+
+RULED (Jeff, session-086): PERF-004 R1 to R13 ACCEPTED. The "for
+acceptance" marks are removed from perf_decisions.md,
+ftq_ifu_interfaces.md W3M and CLOSED_TECH_DEBT.md TD#210. Jeff captures the IA's permission
+prompts on the next run; the PA writes the allow list from them.
+
+PA, from baseline.csv (the 105 baseline rows), decisions and the share
+wrong: ftb 542,337,218 (3.250%), tage 71,005,607 (12.708%), sc
+10,010,619 (54.530%), none 20,492,128 (32.328%). The FTB direction
+decides most conditionals (the fast path, PF-5's ftb_fastpath_en 1),
+and SC's overrides are wrong more often than right. PERF-004 Phase 5
+checked the SC against its own RTL only, not against sc_decisions.md
+or a reference: TD#208's closing stands as written, and PERF-005 Phase
+3 checks the rules themselves.
+
+PERF-005 WRITTEN (TD#218): every mispredict split by the reason its
+predictor decided; the fast path's rules and a study with it off; the
+TAGE history, lookup, update and allocation and the SC re-derived on
+every event of the 105 traces; a software twin of pacino's TAGE in the
+CBP framework; each fix measured alone; a new baseline if anything
+changed; the gap decomposed.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, CLOSED_TECH_DEBT.md, perf_decisions.md,
+ftq_ifu_interfaces.md, PROJECT_CORE.md. misc/ras_theory_of_operation.md
+leaves the list (73 files): Jeff replaced it with Blog 23,
+blogs/BLOG_bpu_23_ras_theory_of_op.md (7de430c).
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-006,
+TD#219.
 
 ---
 ## Session-086, continued: BP-154 and PERF-004 recorded.

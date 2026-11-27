@@ -855,7 +855,15 @@ module tage_cntrl #(
   // Fires when: cond_mispredict AND prm_comp < TAGE_MAX_TBL
   //             AND alc_comp != 0 (valid candidate from predict).
   // Entry layout: {TAG[7:0], EPC[1:0], USE[1:0], CTR[2:0], VAL}
-  //             = {alc_tag, lcl_epoch, 2'b00, 3'b100, 1'b1}
+  //             = {alc_tag, lcl_epoch, 2'b00, CTR, 1'b1}
+  // PERF-005 R4 (a RULE CHANGE FOR ACCEPTANCE; tage_cntrl_alloc_rules.md
+  // "Initialization of Allocated Entry" sets CTR = 3'b100, weakest
+  // taken, whatever the branch did): CTR starts weak toward the
+  // resolved direction, 3'b100 taken and 3'b011 not taken, as cbp2016
+  // does (entries/jimenez/cbp2016_tage_sc_l.h 1460, 1505: ctr =
+  // (resolveDir) ? 0 : -1). With
+  // 3'b100 a not-taken branch's new entry predicts taken until it
+  // trains once.
   // ----------------------------------------------------------------
 
   always_comb begin : alc_upd_comb
@@ -873,7 +881,7 @@ module tage_cntrl #(
           u_alc_tag[s],
           lcl_epoch[s],
           2'b00,
-          3'b100,
+          u_resolved[s] ? 3'b100 : 3'b011,
           1'b1
         };
       end

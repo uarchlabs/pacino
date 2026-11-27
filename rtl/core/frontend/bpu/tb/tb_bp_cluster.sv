@@ -2568,6 +2568,11 @@ module tb;
     //    still be valid and must name the p3 index. TAGE resolves the
     //    slot NOT taken, so the p2 successor is the FTB block end and
     //    equals the p1 view; SC then flips the direction at p3.
+    //    PERF-005 R7: the uBTB is trained with the same not-taken
+    //    conditional as the FTB (s_train, as group S), so the p1 and p2
+    //    bundles agree and no history-only p2 redirect fires. With the
+    //    uBTB cleared (as before R7) the p1 bundle is empty, the FTB's
+    //    has the branch, and R7 redirects at p2 (case E2e).
     do_reset();
     tage_bim_fill(2'b00);
     sc_fill(6'b011111);
@@ -2575,9 +2580,8 @@ module tb;
     pc   = VA_WIDTH'('h00_0430_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
-                   1'b0);
-    ubtb_clear_set(pc);             // p1 fall-through matches the FTB
+    ubtb_clear_set(pc);
+    s_train(pc, 4'd1, base + VA_WIDTH'('h300), 1'b0);
     lp_clear_both(pc);
     req(pc, 6'h3D);
     tick();
@@ -2591,6 +2595,57 @@ module tb;
         dut.w_rollback_valid === 1'b1);
     chk("E2c rollback takes the p3 index",
         dut.w_rollback_ckpt_idx === 6'h3D);
+
+    //    E2e (PERF-005 R7): the history-only redirects, p2 and p3 arms.
+    //    bp_history_decisions.md 3.5 corrects the history only on a
+    //    redirect; R7 raises a slot-0 redirect to the block's own
+    //    successor when the stage's bundle differs from the one the
+    //    history holds. One block: an FTB conditional at pos 1 whose
+    //    target IS the block end, the uBTB cleared (p1 bundle empty),
+    //    TAGE not taken (bimodal 00), SC taken (counters +31).
+    //    p2: the FTB bundle {NT} differs from the empty p1 bundle; both
+    //        successors are the block end. R7: slot 0 redirects to it
+    //        and the rollback carries the p2 bundle, n 1, bit 0.
+    //    p3: SC turns the branch taken; its target is the block end, so
+    //        the successor is unchanged. R7: slot 0 redirects to it and
+    //        the rollback carries the p3 bundle, n 1, bit 1.
+    //    Before R7 neither stage redirected: both checks fail.
+    do_reset();
+    tage_bim_fill(2'b00);
+    sc_fill(6'b011111);
+    cfg_sc_enable(1'b1);
+    pc   = VA_WIDTH'('h00_0450_0000);
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pft, 4'd1, pft, 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h3E);
+    tick();
+    norq();
+    tick();
+    chk("E2e p2: the FTB answers with the not-taken branch",
+        (dut.w_ftb_valid_p2 === 1'b1) && (dut.w_br_type_p2[0] === COND)
+     && (dut.w_taken_p2[0] === 1'b0));
+    chk_eq("E2e p2: the successor is the p1 one", dut.w_succ_p2[0],
+           dut.r_succ_p1_p2[0]);
+    chk("E2e p2: R7 slot 0 redirects", bpu_redir_p2[0].valid === 1'b1);
+    chk_eq("E2e p2: to the block's own successor",
+           bpu_redir_p2[0].target_pc, pft);
+    chk("E2e p2: the rollback carries the p2 bundle {NT}",
+        (dut.w_rollback_valid === 1'b1) && (dut.w_rb_corr === 1'b1)
+     && (dut.w_rb_n === RB_CNT_BITS'(1)) && (dut.w_rb_tkn[0] === 1'b0)
+     && (dut.w_rollback_ckpt_idx === 6'h3E));
+    tick();
+    chk("E2e p3: SC turned the branch taken", dut.w_taken_p3[0] === 1'b1);
+    chk_eq("E2e p3: the successor is unchanged", dut.w_succ_p3[0], pft);
+    chk("E2e p3: R7 slot 0 redirects", dut.w_redir_p3[0].valid === 1'b1);
+    chk_eq("E2e p3: to the block's own successor",
+           dut.w_redir_p3[0].target_pc, pft);
+    chk("E2e p3: the rollback carries the p3 bundle {T}",
+        (dut.w_rollback_valid === 1'b1) && (dut.w_rb_corr === 1'b1)
+     && (dut.w_rb_n === RB_CNT_BITS'(1)) && (dut.w_rb_tkn[0] === 1'b1)
+     && (dut.w_rollback_ckpt_idx === 6'h3E));
 
     //    E2b: a p2 redirect alone rolls back to the p2 index. Here
     //    the p2 and p3 indices DO differ, so the mux is discriminated
@@ -3051,8 +3106,14 @@ module tb;
     tick();
     chk("I1 the FTB found the branch at p2",
         dut.w_br_val_p2[0] === 1'b1);
-    chk("I1 NO redirect fires: both views end the block alike",
-        bpu_redir_p2[0].valid === 1'b0);
+    // PERF-005 R7: both views end the block alike, but the p2 view has
+    // a branch p1 lacked, so p2 redirects to the same successor to
+    // correct the history (whatever TAGE says: the branch count
+    // differs, 0 at p1 and 1 at p2).
+    chk("I1 the R7 history redirect fires at p2",
+        bpu_redir_p2[0].valid === 1'b1);
+    chk_eq("I1 the R7 redirect targets the unchanged successor",
+           bpu_redir_p2[0].target_pc, pft);
     chk("I1 the slot correction group is valid regardless",
         bpu_slot_val_p2 === 1'b1);
     chk("I1 it names the entry this request allocated",
@@ -3190,7 +3251,8 @@ module tb;
   // being built. Both the FTB branch target and the FTB block end
   // are the fall-through, so the p2 successor is that one address
   // whichever direction the predictors pick, and the uBTB block end
-  // is the same address, so p1 agrees with it (the I1 construction).
+  // is the same address, so p1 agrees with it. Under PERF-005 R7 the
+  // FTB entry must also hold the uBTB's branches (I1 no longer applies).
   // The pointer still advances by nbr: bp_cluster counts VALID p1
   // slots into num_branches, taken or not.
   task automatic j_alloc(input logic [VA_WIDTH-1:0] pc,
@@ -3202,6 +3264,12 @@ module tb;
     base = blk_base(pc);
     pft  = base + BLK_SZ;
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pft, 4'd1, pft, 1'b0);
+    // PERF-005 R7: the FTB entry carries the same branches as the
+    // uBTB entry, so the p1 and p2 history bundles agree and no
+    // history-only redirect fires either. At one slot the p1 bundle
+    // holds br0 only and the FTB entry keeps one field, as before.
+    if (nbr > 1 && NUM_PRED_SLOTS > 1)
+      ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, pft, 4'd2, pft, 1'b1);
     e       = '0;
     e.br0   = mk_cond(1'b1, 4'd1, pft, base, 1'b0);
     if (nbr > 1) begin
@@ -6698,6 +6766,10 @@ module tb;
       m_phr10_p2 = m_phr10_p1;
       m_v_p1  = dut.w_req_val_p0;
       m_pc_p1 = ftq_pred_pc_p0;
+      // PERF-005 R6: the p1 staging takes the history WITH this cycle's
+      // bundle (the bypass), except on a rollback cycle, which keeps the
+      // registered value. The pre-update value is taken here and
+      // replaced after the update below when no rollback.
       m_phr10_p1 = m_phr10(m_phr, m_pp);
       // The PHR model (BP-141), beside the GHR model below.
       if (dut.w_rollback_valid) begin
@@ -6724,6 +6796,7 @@ module tb;
           m_ckp_pp[dut.w_ckpt_wr_idx] = m_pp;
           m_ckp_nb[dut.w_ckpt_wr_idx] = int'(dut.w_hist_num_branches);
         end
+        m_phr10_p1 = m_phr10(m_phr, m_pp);       // R6 bypass
       end
       // BP-141 (ruled by Jeff): ST1-ST3 fold H = SC_TBL_HIST into the
       // index width W = SC_TBL_FH = 9. W read SC_TBL_HIST until BP-141.
@@ -6750,6 +6823,9 @@ module tb;
           m_ck_pre[dut.w_ckpt_wr_idx]  = pre;
           m_ck_post[dut.w_ckpt_wr_idx] = m_h;
         end
+        for (int t = 1; t <= 3; t++)               // R6 bypass
+          m_scfh_p1[t] = SC_MAX_FH'(m_fold(m_h, SC_TBL_HIST[t],
+                                           SC_TBL_FH[t]));
       end
     end
   end
@@ -6757,9 +6833,17 @@ module tb;
   // Comparison, mid-cycle, after every input has settled.
   always @(negedge clk) begin : mon_cmp
     logic [63:0] e, g, f0, f1, f2;
+    logic [MH_W-1:0] hb;
     bit          cmp;
     if (rstn) begin
       cmp = 1'b0;
+      // PERF-005 R6: the p0 lookup reads the history with this cycle's
+      // bundle shifted in (the bypass), except on a rollback cycle.
+      hb = m_h;
+      if (!dut.w_rollback_valid)
+        for (int b = 0; b < NUM_PRED_SLOTS; b++)
+          if (b < int'(dut.w_hist_num_branches))
+            hb = m_shift(hb, dut.w_hist_pred_taken[b]);
       // TAGE T1-T4: the table must be presented this request now (a
       // prediction is never delayed, bp_arb_spec.md 4.5).
       if (dut.w_req_val_p0) begin
@@ -6768,9 +6852,9 @@ module tb;
             (dut.u_tage.cntrl_pred_inp_p0[S1].pc === ftq_pred_pc_p0)) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
             for (int t = 1; t < TAGE_NUM_TABLES; t++) begin
-              f0 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH[t]);
-              f1 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH1[t]);
-              f2 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH2[t]);
+              f0 = m_fold(hb, TAGE_TBL_HIST[t], TAGE_TBL_FH[t]);
+              f1 = m_fold(hb, TAGE_TBL_HIST[t], TAGE_TBL_FH1[t]);
+              f2 = m_fold(hb, TAGE_TBL_HIST[t], TAGE_TBL_FH2[t]);
               e = m_idx(ftq_pred_pc_p0, f0, TAGE_TBL_IDX[t]);
               g = 64'(dut.u_tage.w_idx_p0[t][s]);
               if (g !== e)
@@ -6793,9 +6877,9 @@ module tb;
             (dut.u_ittage.cntrl_pred_inp_p0[S1].pc === ftq_pred_pc_p0)) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
             for (int t = 1; t < IT_NUM_TABLES; t++) begin
-              f0 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH[t]);
-              f1 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH1[t]);
-              f2 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH2[t]);
+              f0 = m_fold(hb, IT_TBL_HIST[t], IT_TBL_FH[t]);
+              f1 = m_fold(hb, IT_TBL_HIST[t], IT_TBL_FH1[t]);
+              f2 = m_fold(hb, IT_TBL_HIST[t], IT_TBL_FH2[t]);
               e = m_idx(ftq_pred_pc_p0, f0, IT_TBL_IDX[t]);
               g = 64'(dut.u_ittage.tbl_idx_hash_p0[t][s]);
               if (g !== e)
@@ -6815,11 +6899,15 @@ module tb;
       end
       // SC ST0-ST3 at p2, from the folds of the block's p0 cycle. The
       // PC term is inp_pc_p2 = PC[VA_WIDTH-1:1] unshifted (PD-17); ST0
-      // has no fold.
+      // has no fold. PERF-005 R5: the PC term's low bit is the slot's
+      // TAGE prediction, {PC[VA_WIDTH-2:1], tage_pred_tkn}. The TAGE
+      // prediction is taken from the SC input; the TAGE monitor above
+      // checks how TAGE forms it.
       if (m_v_p2) begin
         for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
           for (int t = 0; t <= 3; t++) begin
-            e = 64'(SC_MAX_FH'(m_pc_p2[VA_WIDTH-1:1]))
+            e = 64'(SC_MAX_FH'({m_pc_p2[VA_WIDTH-2:1],
+                     dut.u_sc.tage_pred_meta_p2[s].tage_pred_tkn}))
               ^ ((t == 0) ? 64'd0 : 64'(m_scfh_p2[t]));
             e = e & ((64'd1 << SC_TBL_IDX[t]) - 64'd1);
             g = 64'(dut.u_sc.w_idx_hash_p2[t][s]);

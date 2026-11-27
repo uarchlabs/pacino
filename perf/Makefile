@@ -81,7 +81,7 @@ CXXOPT  := -O2 -std=c++17 -Wall -Wextra
 PERFSRC := src
 
 .DEFAULT_GOAL := all
-.PHONY: all tools pt_gen harness digest clean FORCE
+.PHONY: all tools pt_gen harness twin digest clean FORCE
 
 all: tools pt_gen harness
 
@@ -187,6 +187,21 @@ $(HBIN): $(H_DEPS) $(STAMP_H)
 	  -CFLAGS "$(H_CFLAGS) -I$(abspath $(PERFSRC)) -I$(abspath $(HDIR))" \
 	  -LDFLAGS -lz $(H_SV) $(H_CXX) $(VSILENCE)
 	$(Q)$(HBIN) --stamp
+
+# ---- THE TWIN (PERF-005 Phase 4) --------------------------------------
+# pacino's TAGE alone as a CBP2025 predictor (perf/src/twin). Built from
+# a COPY of tools/cbp2025's framework (lib, scripts, Makefile, cbp.h) in
+# build/twin_cbp, never in the submodule: bin/cbp.pacino_twin there.
+TWIN_DIR := $(BUILD)/twin_cbp
+TWIN_CBP := $(RVA_ROOT)/tools/cbp2025
+twin:
+	@mkdir -p $(TWIN_DIR)/entries/pacino_twin
+	$(Q)rsync -a --exclude '*.o' --exclude '*.a' $(TWIN_CBP)/lib \
+	  $(TWIN_CBP)/scripts $(TWIN_CBP)/Makefile $(TWIN_CBP)/cbp.h $(TWIN_DIR)/
+	$(Q)cp $(PERFSRC)/twin/cond_branch_predictor_interface.cc \
+	  $(PERFSRC)/twin/sources.mk $(TWIN_DIR)/entries/pacino_twin/
+	$(Q)$(MAKE) -C $(TWIN_DIR) ENTRY=pacino_twin \
+	  TWIN_INC="-I$(abspath $(PERFSRC)/twin) -I$(abspath $(HSRC))"
 
 # The stamp of the trees as they stand, with no build (TD#210): compare
 # it with a baseline row's sha, dirty and input_digest.

@@ -323,6 +323,20 @@ module sc #(
   // parameters by index. Index-width adapters bridge the 9-bit table
   // ports and the 10-bit controller buses.
   // ================================================================
+  // PERF-005 R5 (a RULE CHANGE FOR ACCEPTANCE; the ST0-ST3 index is
+  // PC ^ fold, sc_table.sv, and TAGE enters the sum only as
+  // tage_extd_ctr): ST0-ST3 are indexed with TAGE's prediction, as the
+  // cbp2016 bias and GEHL tables are ((PC << 1) + pred_inter, tools/
+  // cbp2025/entries/jimenez/cbp2016_tage_sc_l.h 1016-1029, 1073). The
+  // PC moves up one bit and the TAGE direction takes index bit 0, so a
+  // branch keeps separate counters for the two TAGE outcomes. ST4
+  // (BrIMLI) keeps the PC.
+  logic [VA_WIDTH-1:1] w_tk_pc_p2[0:NUM_PRED_SLOTS-1];
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : gen_tk_pc
+    assign w_tk_pc_p2[s] = {w_inp_pc_p2[s][VA_WIDTH-2:1],
+                            tage_pred_meta_p2[s].tage_pred_tkn};
+  end
+
   genvar t;
   generate
     for (t = 0; t < ST4; t++) begin : gen_st
@@ -352,7 +366,7 @@ module sc #(
         .ctr_p3        (w_ctr_p3[t]),
         .idx_hash_p2   (st_idx_hash_p2),
         .sc_pred_val_p2(w_sc_pred_val_p2),
-        .inp_pc_p2     (w_inp_pc_p2),
+        .inp_pc_p2     (w_tk_pc_p2),
         .idx_fh_p2     (w_idx_fh_p2[t]),
         .sc_upd_val_u0 (w_sc_upd_val_u0[t]),
         .ctr_wd_u0     (w_ctr_wd_u0[t]),

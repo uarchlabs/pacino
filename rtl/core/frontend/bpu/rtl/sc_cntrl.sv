@@ -481,8 +481,16 @@ module sc_cntrl (
         threshold_d = threshold;
       end
 
-      // -- chooser training: only the corner that was consulted
-      sc_match = (win_meta.sc_pred_tkn      == win_resolved);
+      // -- chooser training: only the corner that was consulted.
+      //    PERF-005 R2 (a RULE CHANGE FOR ACCEPTANCE; sc_decisions.md 10
+      //    matches sc_pred_tkn, the final prediction): the chooser
+      //    learns which side was right, so it matches SC's own
+      //    prediction, as cbp2016 does (entries/jimenez/cbp2016_tage_
+      //    sc_l.h 1295-1311: when pred_inter != SCPRED, the counter
+      //    steps on pred_inter == resolveDir). A corner is consulted only
+      //    when SC and TAGE differ; on the final prediction the chooser
+      //    moved toward SC whenever TAGE was chosen and right.
+      sc_match = (win_meta.sc_lcl_pred_tkn  == win_resolved);
       tg_match = (win_meta.sc_tage_pred_tkn == win_resolved);
 
       if (win_meta.sc_chooser == CHOOSE_HIGH) begin

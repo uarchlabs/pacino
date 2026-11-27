@@ -281,12 +281,12 @@ PF-18  THE C++ BACKEND'S TIMING IS SET BY PARAMETERS (Jeff,
          both rules (mispred_trap_after, 0 to 9 per 2e6 run). RULED
          session-086 (Jeff): the branch is judged on its own outcome,
          and the trap is a separate RC_TRAP redirect, as for a
-         non-branch. BUILT by PERF-004, for acceptance (R4): the
+         non-branch. BUILT by PERF-004, accepted (Jeff, R4): the
          branch is judged on its own outcome (its target taken, pc + 2
          or 4 not taken) and the trap is a separate RC_TRAP redirect in
          the branch's resolve cycle; trap_after_branch counts the cases;
          mispred_trap_after and orc_slot_trap are removed.
-       - THE FTQ-FULL WORKAROUND IS REMOVED (PERF-004, for acceptance,
+       - THE FTQ-FULL WORKAROUND IS REMOVED (PERF-004, accepted (Jeff),
          R3; TD#206 closed): the eager close keeps only idle >=
          EAGER_IDLE (32). The FTQ-full term closed entries and decided
          branches earlier than the design does (st200: 67,843 to
@@ -325,10 +325,10 @@ PF-21  WHAT PERF-002 BUILT: the trace tools (perf/src); the changed
        (PF-18); the oracle (PF-11); the backend sweep,
        perf/studies/perf003_p6_sweep_table.csv. The take-time slot
        reading (pq_*) and err_predict are removed.
-       WHAT PERF-004 BUILT (for acceptance, R1 to R13): the build stamp
-       and the digest rule (PF-9); the trap ruling and the FTQ-full
-       workaround removed (PF-18); the oracle's peek and p1-return
-       forces, its early-exit alignment, the kind-alias and
+       WHAT PERF-004 BUILT (R1 to R13, accepted session-086, Jeff): the
+       build stamp and the digest rule (PF-9); the trap ruling and the
+       FTQ-full workaround removed (PF-18); the oracle's peek and
+       p1-return forces, its early-exit alignment, the kind-alias and
        class-conflict counts (PF-11); the configuration probes cf_*
        (PF-5); PERF_EVLOG (PF-6); perf_rerun.py's bin_sha256 and the
        full reference rerun (PF-15); the baseline (PF-9). And an RTL
@@ -438,7 +438,7 @@ PF-9   A result is keyed by its configuration name (PF-5) and the
        parameter-set files and study CSVs live in perf/studies/
        (PF-2). A study gates no push. Proposed by PERF-002; PF-20
        and PERF-002 used the term undefined.
-       THE BUILD STAMP (PERF-004, for acceptance, R1 and R2; TD#210
+       THE BUILD STAMP (PERF-004, accepted (Jeff), R1 and R2; TD#210
        closed). Each build writes its sha, a dirty mark (rtl, perf)
        and an INPUT DIGEST, the SHA-256 over every build input: the
        harness sources, the RTL file list and its files, the Makefile
@@ -582,7 +582,7 @@ PF-11  The harness is checked three ways, and a result is not used
          FTB-held return's p2 target the RAS peek, which the oracle did
          not force, and BP-153 and BP-154 did not run it (52, 93 and 70
          on compress_1, infra_1 and web_11; found by PERF-004).
-         PERF-004, for acceptance: an entry is also on the path when the
+         PERF-004, accepted (Jeff): an entry is also on the path when the
          trace leaves its predecessor's block early by a taken branch to
          the predicted successor itself (R10; 101 oracle rows moved). A
          slot whose type at the fetch request is not the trace's kind
@@ -828,4 +828,5 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               baseline's checks; PF-15 the full plan; PF-18 the trap
               ruling built, the FTQ-full workaround removed; PF-21 what
               PERF-004 built.
+  2026-11-22  session-086 (Jeff): PERF-004 R1 to R13 accepted.
 ```

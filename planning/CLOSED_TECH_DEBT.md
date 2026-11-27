@@ -1574,8 +1574,8 @@
 |     |          | threshold over a weak or medium TAGE, SC wins); 3.3M SC  |
 |     |          | answers re-derived, 0 deviations. Was: OPEN, MPKI and    |
 |     |          | mis_sc rose on some traces after BP-150.                 |
-| 210 | perf     | CLOSED by PERF-004 (2d1e330), session-086, for           |
-|     |          | acceptance (R1, R2). Every build writes a stamp (sha,    |
+| 210 | perf     | CLOSED by PERF-004 (2d1e330), session-086, R1 and R2     |
+|     |          | accepted (Jeff). Every build writes a stamp (sha,      |
 |     |          | dirty mark, input digest over every build input) and the |
 |     |          | binary depends on it; every row carries it;              |
 |     |          | tools/perf_study.py gathers only rows of one digest;     |

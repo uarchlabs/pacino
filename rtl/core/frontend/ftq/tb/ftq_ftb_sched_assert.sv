@@ -75,12 +75,20 @@ module ftq_ftb_sched_assert #(
       skid_val |=> (ftb_upd_valid_u0 && ftb_upd_from_skid);
   endproperty
 
-  // P5  Resolution is never stalled when every pending FTB update
-  //     is LOW. This is the throughput claim of 5.7.1: training
-  //     pressure must not reach the backend.
+  // P5  A channel is held only when it is beyond the capacity of
+  //     S2-S4: the skid occupied and more than one new FTB-bound
+  //     update presented (PERF-005 RULE CHANGE R1: nothing is
+  //     dropped, so a LOW update past the capacity is held too; this
+  //     read "Resolution is never stalled when every pending FTB
+  //     update is LOW", the throughput claim of 5.7.1).
   property p_ftb_no_stall_on_low;
     @(posedge clk) disable iff (!rstn)
-      (n_pend_ftb > 0 && !any_pend_high) |-> (&upd_rdy);
+      !(&upd_rdy) |-> (skid_val && n_pend_ftb > 2);
+  endproperty
+  // P6  Nothing is dropped (PERF-005 RULE CHANGE R1).
+  property p_ftb_never_dropped;
+    @(posedge clk) disable iff (!rstn)
+      !drop_val;
   endproperty
 
   a_ftb_lone_issues:       assert property (p_ftb_lone_issues)
@@ -92,7 +100,9 @@ module ftq_ftb_sched_assert #(
   a_ftb_skid_first:        assert property (p_ftb_skid_first)
     else $error("P4 an occupied skid did not issue next");
   a_ftb_no_stall_on_low:   assert property (p_ftb_no_stall_on_low)
-    else $error("P5 resolution stalled with no HIGH update pending");
+    else $error("P5 a channel was held within the capacity");
+  a_ftb_never_dropped:     assert property (p_ftb_never_dropped)
+    else $error("P6 an FTB update was dropped");
 
 endmodule : ftq_ftb_sched_assert
 

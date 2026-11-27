@@ -1,0 +1,22 @@
+# PERF-005 Phase 3: the check run and the rule changes, one study.
+#   p3  the Phase 3 checks on the baseline tree (perf/build/p3_s2 from
+#       the pristine copy of rtl/): th_*, tr_*, tu_*, sp_*, su_*; every
+#       column baseline.csv has must equal it, row for row, apart from
+#       the stamp and timing columns
+# Each rule change measured alone: a scratch build of the baseline tree
+# with that change only (perf/build/<name>_s2 from the scratch copy
+# rc_<name>), the baseline set unchanged; rows against baseline.csv.
+#   r2  SC chooser trains on SC's own prediction (sc_cntrl.sv global_next)
+#   r3  use_alt_on_na trains on the primary CTR weak (tage_cntrl.sv)
+#   r4  an allocated entry's CTR starts weak toward the resolved direction
+#   r5  SC ST0-ST3 indexed with TAGE's prediction (sc.sv)
+#   r6  the p0 lookups read the folds with the p1 bundle (bp_history.sv)
+#   r7  a p2 bundle that differs from the p1 one, with no redirect, raises
+#       a slot-0 redirect to the same successor (bp_cluster.sv hdiff_p2)
+p3              bin=perf/build/p3_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+r2              bin=perf/build/r2_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+r3              bin=perf/build/r3_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+r4              bin=perf/build/r4_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+r5              bin=perf/build/r5_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+r6              bin=perf/build/r6_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+r7              bin=perf/build/r7_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch

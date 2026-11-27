@@ -323,11 +323,12 @@ module tb;
   task automatic group_d();
     $display("---- GROUP D: S5 drop and S6 hold ----");
 
-    // -- D1. S5. The skid is occupied and two LOW updates arrive.
-    //    The skid issues (S3), the better new one is retained (S4),
-    //    and the remaining LOW one is DROPPED (S5). This is FE-5a
-    //    in one cycle: a routine conf step is lost rather than
-    //    stalling resolution.
+    // -- D1. The skid is occupied and two LOW updates arrive. The
+    //    skid issues (S3), the better new one is retained (S4), and
+    //    the remaining LOW one is HELD: its ready deasserts and
+    //    nothing is dropped (PERF-005 RULE CHANGE R1; before it S5
+    //    dropped it, FE-5a, and conf missed that resolution's step,
+    //    ftb_confidence_override_rules.md 3.2).
     do_reset();
     drive(0, VA_WIDTH'('h00_6000_0000), 1'b0, 1'b1);
     drive(1, VA_WIDTH'('h00_6100_0000), 1'b0, 1'b1);
@@ -337,10 +338,10 @@ module tb;
     drive(0, VA_WIDTH'('h00_6200_0000), 1'b0, 1'b1);   // LOW
     drive(1, VA_WIDTH'('h00_6300_0000), 1'b0, 1'b1);   // LOW
     #1;
-    chk("D1 both LOW channels stay ready", upd_rdy === 2'b11);
-    chk("D1 one of them is dropped", drop_val === 1'b1);
-    chk("D1 the dropped update is LOW, never HIGH",
-        drop_is_high === 1'b0);
+    chk("D1 channel 0 is accepted", upd_rdy[0] === 1'b1);
+    chk("D1 the LOW channel 1 is HELD rather than dropped",
+        upd_rdy[1] === 1'b0);
+    chk("D1 nothing is dropped", drop_val === 1'b0);
     chk("D1 the skid still issues this cycle",
         skid_issue === 1'b1);
     tick();
@@ -371,10 +372,10 @@ module tb;
     chk("D2 only one new update is accepted",
         n_acc_ftb === 'd1);
 
-    // -- D3. S6 is narrow. One HIGH and one LOW into an occupied
-    //    skid: the HIGH is retained and the LOW is dropped, so
-    //    NEITHER channel is held. A scheduler that held on any
-    //    collision would stall resolution here and fail P5's intent.
+    // -- D3. One HIGH and one LOW into an occupied skid: the HIGH is
+    //    retained and the LOW is HELD, not dropped (PERF-005 RULE
+    //    CHANGE R1; before it the LOW was dropped and neither channel
+    //    was held).
     do_reset();
     drive(0, VA_WIDTH'('h00_8000_0000), 1'b0, 1'b1);
     drive(1, VA_WIDTH'('h00_8100_0000), 1'b0, 1'b1);
@@ -383,9 +384,9 @@ module tb;
     drive(0, VA_WIDTH'('h00_8200_0000), 1'b0, 1'b1);   // LOW
     drive(1, VA_WIDTH'('h00_8300_0000), 1'b1, 1'b1);   // HIGH
     #1;
-    chk("D3 neither channel is held", upd_rdy === 2'b11);
-    chk("D3 the LOW update is dropped", drop_val === 1'b1);
-    chk("D3 the dropped one is not HIGH", drop_is_high === 1'b0);
+    chk("D3 the HIGH channel 1 is accepted", upd_rdy[1] === 1'b1);
+    chk("D3 the LOW channel 0 is HELD", upd_rdy[0] === 1'b0);
+    chk("D3 nothing is dropped", drop_val === 1'b0);
     tick();
     clr();
     chk_eq("D3 the HIGH update was the one retained",
@@ -396,13 +397,17 @@ module tb;
 
   task automatic group_e();
     int held;
+    int e1_drop;
+    e1_drop = 0;
 
     $display("---- GROUP E: steady state, P5 ----");
 
-    // -- E1. The throughput claim of 5.7.1. A sustained stream of
-    //    LOW updates on both channels must never deassert a ready:
-    //    training pressure must not reach the backend. Run it long
-    //    enough that the skid is occupied for most of the run.
+    // -- E1. A sustained stream of LOW updates on both channels
+    //    drops none of them (PERF-005 RULE CHANGE R1: every
+    //    resolution trains conf, ftb_confidence_override_rules.md
+    //    3.2); the backend is held instead. Before R1 this read "must
+    //    never deassert a ready" (the throughput claim of 5.7.1) and
+    //    dropped one in every cycle the skid was occupied.
     do_reset();
     held = 0;
     for (int i = 0; i < 64; i++) begin
@@ -410,11 +415,12 @@ module tb;
       drive(1, VA_WIDTH'('h00_9800_0000) + VA_WIDTH'(i << 8), 1'b0, 1'b1);
       #1;
       if (upd_rdy !== 2'b11) held++;
+      if (drop_val !== 1'b0) e1_drop++;
       tick();
     end
     clr();
-    chk("E1 a sustained all-LOW stream never held a channel",
-        held == 0);
+    chk("E1 a sustained all-LOW stream dropped nothing", e1_drop == 0);
+    chk("E1 and the backend was held instead", held > 0);
 
     // -- E2. The contrast. A sustained stream of HIGH updates on
     //    both channels DOES hold one channel, which is S6 working:

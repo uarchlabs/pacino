@@ -203,6 +203,183 @@ module perf_top (
   output logic [15:0]                 sd_thr,
   output logic [7:0]                  sd_chi,
   output logic [7:0]                  sd_cmed,
+  // PERF-005 Phase 1, THE DECISION PROBES: why each slot's direction or
+  // target came from its source, at p2 and p3, per slot (read only).
+  //   dp2_*  the p2 block (bp_cluster r_val_p2, r_idx_p2): the FTB
+  //          answered (w_ftb_valid_p2), the p1 return redirect
+  //          (w_p1ret_any_p2), and per slot: a conditional slot
+  //          (w_br_val_p2, COND), the loop and fast-path uses
+  //          (w_lp_use_p2, w_fp_use_p2), TAGE's response present
+  //          (w_tage_pred_rdy_p2) and for this entry (w_tage_hit_p2),
+  //          its provider and alternate tables and which supplied the
+  //          direction (tage_prm_comp, _alt_comp, _using_primary),
+  //          ITTAGE's response, its entry match and hit, the RAS peek
+  //          valid
+  //   dp3_*  the p3 block (r_val_p3, r_idx_p3): per slot, a conditional
+  //          slot (r_slot_p3), SC's answer for this entry (w_sc_hit_p3),
+  //          the loop or fast-path hold, the p2 and the SC direction,
+  //          SC's own direction and the corner (sc_chooser)
+  output logic                        dp2_val,
+  output logic [FTQ_IDX_BITS-1:0]     dp2_idx,
+  output logic                        dp2_ftb,
+  output logic                        dp2_p1ret,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_cond,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_lp,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_fp,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_trdy,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_thit,
+  output logic [2:0]                  dp2_prm [NUM_PRED_SLOTS],
+  output logic [2:0]                  dp2_alt [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_usep,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_irdy,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_ibid,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_ihit,
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_pkv,
+  output logic                        dp3_val,
+  output logic [FTQ_IDX_BITS-1:0]     dp3_idx,
+  output logic [NUM_PRED_SLOTS-1:0]   dp3_cond,
+  output logic [NUM_PRED_SLOTS-1:0]   dp3_schit,
+  output logic [NUM_PRED_SLOTS-1:0]   dp3_hold,
+  output logic [NUM_PRED_SLOTS-1:0]   dp3_p2tk,
+  output logic [NUM_PRED_SLOTS-1:0]   dp3_sctk,
+  output logic [NUM_PRED_SLOTS-1:0]   dp3_lcl,
+  output logic [1:0]                  dp3_chs [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   dp2_ttk,
+  // PERF-005 Phase 2, THE FAST-PATH PROBES (read only), on ftb_cntrl
+  // (dut.u_bpu.u_ftb.u_ftb_cntrl) and ftq_ftb_sched (dut.u_ftq.
+  // u_ftb_sched), field i = br0, br1:
+  //   fq_*  the p2 read: ftb_valid_p2, the set (pred_set_idx_p1 of the
+  //         cycle before) and way (q_way_p2), ftb_brI_valid_p2, the
+  //         position and conf (q_brI_pos, q_brI_conf), ftb_fastpath_p2,
+  //         ftb_fastpath_en
+  //   fu_*  the update (ftb_upd_valid_u0): set and way, upd_hit, is_br,
+  //         upd_past, inplace, the position and outcome, the read conf
+  //         (fld_old.conf), and the written fields (upd_new.brI valid,
+  //         pos, conf)
+  //   fs_*  the scheduler, per channel: an FTB-bound conditional
+  //         accepted (w_acc_ftb, upd[c].is_br), and dropped (S5)
+  output logic                        fq_val,
+  output logic [FTB_IDX_BITS-1:0]     fq_set,
+  output logic [FTB_WAY_BITS-1:0]     fq_way,
+  output logic [1:0]                  fq_bv,
+  output logic [FTB_BR_POS_BITS-1:0]  fq_pos [2],
+  output logic [FTB_CONF_WIDTH-1:0]   fq_conf [2],
+  output logic [1:0]                  fq_fp,
+  output logic                        fq_en,
+  output logic                        fu_val,
+  output logic [FTB_IDX_BITS-1:0]     fu_set,
+  output logic [FTB_WAY_BITS-1:0]     fu_way,
+  output logic                        fu_hit,
+  output logic                        fu_isbr,
+  output logic                        fu_past,
+  output logic                        fu_inpl,
+  output logic [FTB_BR_POS_BITS-1:0]  fu_pos,
+  output logic                        fu_tkn,
+  output logic [FTB_CONF_WIDTH-1:0]   fu_oconf,
+  output logic [1:0]                  fu_nv,
+  output logic [FTB_BR_POS_BITS-1:0]  fu_npos [2],
+  output logic [FTB_CONF_WIDTH-1:0]   fu_nconf [2],
+  output logic [NUM_RESOLVE_PORTS-1:0] fs_acc,
+  output logic [NUM_RESOLVE_PORTS-1:0] fs_drop,
+  // PERF-005 Phase 3, THE TAGE PROBES (read only), on dut.u_bpu.u_tage
+  // and the cluster's history ports; [t*NUM_PRED_SLOTS+s] is table t
+  // (0 = T0), slot s:
+  //   tl_*  the lookup as the tables see it, at the competing stage
+  //         (u_tage_arb cntrl_pred_val_p0, cntrl_pred_inp_p0 pc and
+  //         branch_id), its index and tag per table (w_idx_p0,
+  //         w_tag_p0), the folds (w_folded tage_tN_*), and whether it
+  //         came from the prediction queue (!pq_empty) or in a rollback
+  //         cycle (w_rollback_valid)
+  //   hw_*  the p1 history write (w_ckpt_wr_en, _idx,
+  //         w_hist_num_branches, w_hist_pred_taken); hr_* the rollback
+  //         (w_rollback_valid, _ckpt_idx, w_rb_corr, w_rb_n, w_rb_tkn)
+  //   tp_*  the p1 read (tage_cntrl pred_val_p1, t_idx_r1, w_hit_p1,
+  //         w_cntrl_bits_p1)
+  //   tu_*  the update at the competing stage (cntrl_upd_val_u0 and
+  //         the fields of cntrl_upd_inp_u0), lcl_epoch
+  //   tw_*  every RAM write of every table and slot (ram_wen_n low:
+  //         address, data, byte-write enables)
+  output logic [NUM_PRED_SLOTS-1:0]   tl_val,
+  output logic [FTQ_IDX_BITS-1:0]     tl_bid [NUM_PRED_SLOTS],
+  output logic [VA_WIDTH-1:0]         tl_pc [NUM_PRED_SLOTS],
+  output logic [15:0]                 tl_idx [5*NUM_PRED_SLOTS],
+  output logic [15:0]                 tl_tag [5*NUM_PRED_SLOTS],
+  output logic [15:0]                 tl_fh [12],
+  output logic                        tl_q,
+  output logic                        tl_rb,
+  output logic                        hw_val,
+  output logic [FTQ_IDX_BITS-1:0]     hw_idx,
+  output logic [1:0]                  hw_n,
+  output logic [1:0]                  hw_tkn,
+  output logic                        hr_val,
+  output logic [FTQ_IDX_BITS-1:0]     hr_idx,
+  output logic                        hr_corr,
+  output logic [1:0]                  hr_n,
+  output logic [1:0]                  hr_tkn,
+  // the history pointer and the 16 GHR bits behind it, newest first
+  // (PERF-005 Phase 3, the history check's logf only)
+  output logic [15:0]                 hp_ptr,
+  output logic [15:0]                 hp_win,
+  output logic [NUM_PRED_SLOTS-1:0]   tp_val,
+  output logic [15:0]                 tp_idx [5*NUM_PRED_SLOTS],
+  output logic [15:0]                 tp_tag [5*NUM_PRED_SLOTS],
+  output logic [5*NUM_PRED_SLOTS-1:0] tp_hit,
+  output logic [15:0]                 tp_cb [5*NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   tu_val,
+  output logic [FTQ_IDX_BITS-1:0]     tu_bid [NUM_PRED_SLOTS],
+  output logic [15:0]                 tu_pidx [NUM_PRED_SLOTS],
+  output logic [15:0]                 tu_aidx [NUM_PRED_SLOTS],
+  output logic [15:0]                 tu_cidx [NUM_PRED_SLOTS],
+  output logic [7:0]                  tu_ctag [NUM_PRED_SLOTS],
+  output logic [2:0]                  tu_pcmp [NUM_PRED_SLOTS],
+  output logic [2:0]                  tu_acmp [NUM_PRED_SLOTS],
+  output logic [2:0]                  tu_ccmp [NUM_PRED_SLOTS],
+  output logic [2:0]                  tu_pctr [NUM_PRED_SLOTS],
+  output logic [2:0]                  tu_actr [NUM_PRED_SLOTS],
+  output logic [1:0]                  tu_puse [NUM_PRED_SLOTS],
+  output logic [1:0]                  tu_ause [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   tu_ptk,
+  output logic [NUM_PRED_SLOTS-1:0]   tu_atk,
+  output logic [NUM_PRED_SLOTS-1:0]   tu_up,
+  output logic [NUM_PRED_SLOTS-1:0]   tu_tk,
+  output logic [NUM_PRED_SLOTS-1:0]   tu_res,
+  output logic [NUM_PRED_SLOTS-1:0]   tu_mis,
+  output logic [1:0]                  tu_ep [NUM_PRED_SLOTS],
+  // the use_alt_on_na counter of each slot, as registered (PERF-005
+  // Phase 3: the harness re-derives it, tu_chk_uaon)
+  output logic [3:0]                  tu_uaon [NUM_PRED_SLOTS],
+  // PERF-005 Phase 3, THE SC PROBES (read only, dut.u_bpu.u_sc.
+  // u_sc_cntrl): at p3 the five counters read (t_ctr_p3), TAGE's
+  // extended counter, the override and the corner; at the update the
+  // valid, the metadata (local, final and TAGE directions, |sum|, the
+  // corner, the counters read), the outcome, the counter write and its
+  // data, and the global state now and next (threshold, TC, the two
+  // choosers) with the winning slot (w_sel).
+  output logic [7:0]                  sd_ctr [5*NUM_PRED_SLOTS],
+  output logic [7:0]                  sd_ext [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   sd_ovr,
+  output logic [1:0]                  sd_chs [NUM_PRED_SLOTS],
+  output logic [NUM_PRED_SLOTS-1:0]   su_val,
+  output logic [NUM_PRED_SLOTS-1:0]   su_lcl,
+  output logic [NUM_PRED_SLOTS-1:0]   su_fin,
+  output logic [NUM_PRED_SLOTS-1:0]   su_ttk,
+  output logic [NUM_PRED_SLOTS-1:0]   su_res,
+  output logic [NUM_PRED_SLOTS-1:0]   su_wr,
+  output logic [15:0]                 su_abs [NUM_PRED_SLOTS],
+  output logic [1:0]                  su_chs [NUM_PRED_SLOTS],
+  output logic [7:0]                  su_ctr [5*NUM_PRED_SLOTS],
+  output logic [7:0]                  su_wd [5*NUM_PRED_SLOTS],
+  output logic [15:0]                 su_thr,
+  output logic [15:0]                 su_thr_d,
+  output logic [7:0]                  su_tc,
+  output logic [7:0]                  su_tc_d,
+  output logic [7:0]                  su_chi_d,
+  output logic [7:0]                  su_cmed_d,
+  output logic                        su_wsel,
+  output logic [5*NUM_PRED_SLOTS-1:0] tw_we,
+  output logic [15:0]                 tw_addr [5*NUM_PRED_SLOTS],
+  output logic [15:0]                 tw_din [5*NUM_PRED_SLOTS],
+  output logic [15:0]                 tw_bweb [5*NUM_PRED_SLOTS],
 
   // ---- the fetch record (PERF-003, PF-18), by hierarchical reference
   // The fetch request (dut.ftq_ifu_*, ftq_ifu.sv request) and the
@@ -625,6 +802,243 @@ module perf_top (
       sd_tmed[s]  = dut.u_bpu.u_sc.u_sc_cntrl.tage_meta_p3[s]
                       .tage_pred_medium;
       sd_sum[s]   = 16'(signed'(dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_sum));
+    end
+  end
+
+  // ---- PERF-005 Phase 1: the decision probes (read only) -----------
+  // The predictor modules' own outputs are read (perf.vlt keeps them out
+  // of inlining), so an oracle force does not reach these values; the
+  // cluster's own decisions (w_tage_hit_p2, w_fp_use_p2, w_sc_hit_p3)
+  // are read where it forms them, and so is the RAS peek valid, which
+  // selects the return's source.
+  always_comb begin : decision_probes
+    dp2_val   = dut.u_bpu.r_val_p2;
+    dp2_idx   = dut.u_bpu.r_idx_p2;
+    dp2_ftb   = dut.u_bpu.w_ftb_valid_p2;
+    dp2_p1ret = dut.u_bpu.w_p1ret_any_p2;
+    dp3_val   = dut.u_bpu.r_val_p3;
+    dp3_idx   = dut.u_bpu.r_idx_p3;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      dp2_cond[s] = dut.u_bpu.w_br_val_p2[s] &&
+                    (dut.u_bpu.w_br_type_p2[s] == COND);
+      dp2_lp[s]   = dut.u_bpu.w_lp_use_p2[s];
+      dp2_fp[s]   = dut.u_bpu.w_fp_use_p2[s];
+      dp2_trdy[s] = dut.u_bpu.w_tage_pred_rdy_p2[s];
+      dp2_thit[s] = dut.u_bpu.w_tage_hit_p2[s];
+      dp2_prm[s]  = 3'(dut.u_bpu.u_tage.tage_pred_meta_p2[s].tage_prm_comp);
+      dp2_alt[s]  = 3'(dut.u_bpu.u_tage.tage_pred_meta_p2[s].tage_alt_comp);
+      dp2_usep[s] = dut.u_bpu.u_tage.tage_pred_meta_p2[s].tage_using_primary;
+      dp2_irdy[s] = dut.u_bpu.w_ittage_pred_rdy_p2[s];
+      dp2_ibid[s] = dut.u_bpu.u_ittage.ittage_pred_meta_p2[s].branch_id ==
+                    dut.u_bpu.r_idx_p2;
+      dp2_ihit[s] = dut.u_bpu.u_ittage.ittage_pred_meta_p2[s].ittage_hit;
+      // PERF-005: the peek valid as the cluster reads it (bp_cluster
+      // p2 return source, 1293-1296), forced under the oracle: the RAS
+      // port read unforced made an oracle-forced RAS return r_other.
+      dp2_pkv[s]  = dut.u_bpu.w_ras_peek_valid_p2[s];
+      dp3_cond[s]  = dut.u_bpu.r_slot_p3[s].slot_valid &&
+                     (dut.u_bpu.r_slot_p3[s].br_type == COND);
+      dp3_schit[s] = dut.u_bpu.w_sc_hit_p3[s];
+      dp3_hold[s]  = dut.u_bpu.r_lp_use_p3[s] | dut.u_bpu.r_fp_use_p3[s];
+      dp3_p2tk[s]  = dut.u_bpu.r_slot_p3[s].taken;
+      dp3_sctk[s]  = dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_pred_tkn;
+      dp3_lcl[s]   = dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_lcl_pred_tkn;
+      dp3_chs[s]   = 2'(dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_chooser);
+      dp2_ttk[s]   = dut.u_bpu.w_tage_pred_meta_p2[s].tage_pred_tkn;
+    end
+  end
+
+  // PERF-005 Phase 3: the TAGE probes.
+  always_comb begin : tage_probes
+    tl_q  = !dut.u_bpu.u_tage.u_tage_arb.pq_empty;
+    tl_rb = dut.u_bpu.w_rollback_valid;
+    tl_fh[0]  = 16'(dut.u_bpu.w_folded.tage_t1_idx_fh);
+    tl_fh[1]  = 16'(dut.u_bpu.w_folded.tage_t1_tag_fh1);
+    tl_fh[2]  = 16'(dut.u_bpu.w_folded.tage_t1_tag_fh2);
+    tl_fh[3]  = 16'(dut.u_bpu.w_folded.tage_t2_idx_fh);
+    tl_fh[4]  = 16'(dut.u_bpu.w_folded.tage_t2_tag_fh1);
+    tl_fh[5]  = 16'(dut.u_bpu.w_folded.tage_t2_tag_fh2);
+    tl_fh[6]  = 16'(dut.u_bpu.w_folded.tage_t3_idx_fh);
+    tl_fh[7]  = 16'(dut.u_bpu.w_folded.tage_t3_tag_fh1);
+    tl_fh[8]  = 16'(dut.u_bpu.w_folded.tage_t3_tag_fh2);
+    tl_fh[9]  = 16'(dut.u_bpu.w_folded.tage_t4_idx_fh);
+    tl_fh[10] = 16'(dut.u_bpu.w_folded.tage_t4_tag_fh1);
+    tl_fh[11] = 16'(dut.u_bpu.w_folded.tage_t4_tag_fh2);
+    hw_val = dut.u_bpu.w_ckpt_wr_en;
+    hw_idx = dut.u_bpu.w_ckpt_wr_idx;
+    hw_n   = 2'(dut.u_bpu.w_hist_num_branches);
+    hw_tkn = 2'(dut.u_bpu.w_hist_pred_taken);
+    hr_val  = dut.u_bpu.w_rollback_valid;
+    hr_idx  = dut.u_bpu.w_rollback_ckpt_idx;
+    hr_corr = dut.u_bpu.w_rb_corr;
+    hr_n    = 2'(dut.u_bpu.w_rb_n);
+    hr_tkn  = 2'(dut.u_bpu.w_rb_tkn);
+    hp_ptr  = 16'(dut.u_bpu.u_bp_history.ghist_ptr_r);
+    for (int i = 0; i < 16; i++)
+      hp_win[i] = dut.u_bpu.u_bp_history.ghr_mem[
+        (int'(dut.u_bpu.u_bp_history.ghist_ptr_r) - 1 - i + GHR_WIDTH)
+        % GHR_WIDTH];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      tl_val[s] = dut.u_bpu.u_tage.u_tage_arb.cntrl_pred_val_p0[s];
+      tl_bid[s] = dut.u_bpu.u_tage.u_tage_arb.cntrl_pred_inp_p0[s].branch_id;
+      tl_pc[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_pred_inp_p0[s].pc;
+      tp_val[s] = dut.u_bpu.u_tage.u_tage_cntrl.pred_val_p1[s];
+      for (int t = 0; t < 5; t++) begin
+        tl_idx[t*NUM_PRED_SLOTS+s] = 16'(dut.u_bpu.u_tage.w_idx_p0[t][s]);
+        tl_tag[t*NUM_PRED_SLOTS+s] = 16'(dut.u_bpu.u_tage.w_tag_p0[t][s]);
+        tp_idx[t*NUM_PRED_SLOTS+s] =
+          16'(dut.u_bpu.u_tage.u_tage_cntrl.t_idx_r1[t][s]);
+        tp_tag[t*NUM_PRED_SLOTS+s] =
+          16'(dut.u_bpu.u_tage.u_tage_cntrl.t_tag_r1[t][s]);
+        tp_hit[t*NUM_PRED_SLOTS+s] = dut.u_bpu.u_tage.w_hit_p1[t][s];
+        tp_cb[t*NUM_PRED_SLOTS+s]  =
+          16'(dut.u_bpu.u_tage.w_cntrl_bits_p1[t][s]);
+      end
+      tu_uaon[s] = 4'(dut.u_bpu.u_tage.u_tage_cntrl.uaon[s]);
+      tu_val[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_val_u0[s] &
+                   dut.u_bpu.u_tage.u_tage_arb.trx_type;
+      tu_bid[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.branch_id;
+      tu_pidx[s] = 16'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_prm_idx);
+      tu_aidx[s] = 16'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alt_idx);
+      tu_cidx[s] = 16'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alc_idx);
+      tu_ctag[s] = 8'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alc_tag);
+      tu_pcmp[s] = 3'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_prm_comp);
+      tu_acmp[s] = 3'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alt_comp);
+      tu_ccmp[s] = 3'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alc_comp);
+      tu_pctr[s] = 3'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_prm_ctr);
+      tu_actr[s] = 3'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alt_ctr);
+      tu_puse[s] = 2'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_prm_useful);
+      tu_ause[s] = 2'(dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alt_useful);
+      tu_ptk[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_prm_tkn;
+      tu_atk[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_alt_tkn;
+      tu_up[s]   = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_using_primary;
+      tu_tk[s]   = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .tage_pred_meta.tage_pred_tkn;
+      tu_res[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .resolved_taken;
+      tu_mis[s]  = dut.u_bpu.u_tage.u_tage_arb.cntrl_upd_inp_u0[s]
+                     .cond_mispredict;
+      tu_ep[s]   = dut.u_bpu.u_tage.u_tage_cntrl.lcl_epoch[s];
+    end
+  end
+
+  // PERF-005 Phase 3: the SC update probes.
+  always_comb begin : sc_upd_probes
+    su_thr    = 16'(dut.u_bpu.u_sc.u_sc_cntrl.threshold);
+    su_thr_d  = 16'(dut.u_bpu.u_sc.u_sc_cntrl.threshold_d);
+    su_tc     = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.tc_reg));
+    su_tc_d   = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.tc_reg_d));
+    su_chi_d  = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.choose_hi_vlo_d));
+    su_cmed_d = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.choose_med_vvlo_d));
+    su_wsel   = 1'(dut.u_bpu.u_sc.u_sc_cntrl.w_sel);
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      sd_ext[s] = 8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.tage_meta_p3[s]
+                               .tage_extd_ctr));
+      sd_ovr[s] = dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_override;
+      sd_chs[s] = 2'(dut.u_bpu.u_sc.sc_pred_meta_p3[s].sc_chooser);
+      su_val[s] = dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_val_u0[s];
+      su_lcl[s] = dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].sc_pred_meta
+                    .sc_lcl_pred_tkn;
+      su_fin[s] = dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].sc_pred_meta
+                    .sc_pred_tkn;
+      su_ttk[s] = dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].sc_pred_meta
+                    .sc_tage_pred_tkn;
+      su_res[s] = dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].resolved_taken;
+      su_wr[s]  = dut.u_bpu.u_sc.u_sc_cntrl.t_ctr_wr_u0[0][s];
+      su_abs[s] = 16'(dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].sc_pred_meta
+                        .sc_abs_sum);
+      su_chs[s] = 2'(dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].sc_pred_meta
+                       .sc_chooser);
+      for (int t = 0; t < 5; t++) begin
+        sd_ctr[t*NUM_PRED_SLOTS+s] =
+          8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.t_ctr_p3[t][s]));
+        su_ctr[t*NUM_PRED_SLOTS+s] =
+          8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.sc_upd_inp_u0[s].sc_pred_meta
+                       .sc_upd_ctr[t]));
+        su_wd[t*NUM_PRED_SLOTS+s] =
+          8'(signed'(dut.u_bpu.u_sc.u_sc_cntrl.t_ctr_wd_u0[t][s]));
+      end
+    end
+  end
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_tw0
+    assign tw_we[s]   = ~dut.u_bpu.u_tage.u_tage_bim.g_slot[s].ram_wen_n;
+    assign tw_addr[s] = 16'(dut.u_bpu.u_tage.u_tage_bim.g_slot[s].ram_addr);
+    assign tw_din[s]  = 16'(dut.u_bpu.u_tage.u_tage_bim.g_slot[s].ram_din);
+    assign tw_bweb[s] =
+      16'(dut.u_bpu.u_tage.u_tage_bim.g_slot[s].ram_bweb_n);
+  end
+  for (genvar t = 1; t < 5; t++) begin : g_tw
+    for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_tws
+      assign tw_we[t*NUM_PRED_SLOTS+s] =
+        ~dut.u_bpu.u_tage.gen_tage_tbl[t].u_tage_tbl.g_slot[s].ram_wen_n;
+      assign tw_addr[t*NUM_PRED_SLOTS+s] =
+        16'(dut.u_bpu.u_tage.gen_tage_tbl[t].u_tage_tbl.g_slot[s].ram_addr);
+      assign tw_din[t*NUM_PRED_SLOTS+s] =
+        16'(dut.u_bpu.u_tage.gen_tage_tbl[t].u_tage_tbl.g_slot[s].ram_din);
+      assign tw_bweb[t*NUM_PRED_SLOTS+s] =
+        16'(dut.u_bpu.u_tage.gen_tage_tbl[t].u_tage_tbl.g_slot[s]
+            .ram_bweb_n);
+    end
+  end
+
+  // PERF-005 Phase 2: the fast-path probes. The p2 set is the p1 set of
+  // the cycle before (ftb_cntrl's p2 registers load every cycle).
+  logic [FTB_IDX_BITS-1:0] fq_set_r;
+  always_ff @(posedge clk) begin : fq_set_reg
+    fq_set_r <= dut.u_bpu.u_ftb.u_ftb_cntrl.pred_set_idx_p1;
+  end
+  always_comb begin : fastpath_probes
+    fq_val     = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_valid_p2;
+    fq_set     = fq_set_r;
+    fq_way     = dut.u_bpu.u_ftb.u_ftb_cntrl.q_way_p2;
+    fq_bv[0]   = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_br0_valid_p2;
+    fq_bv[1]   = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_br1_valid_p2;
+    fq_pos[0]  = dut.u_bpu.u_ftb.u_ftb_cntrl.q_br0_pos;
+    fq_pos[1]  = dut.u_bpu.u_ftb.u_ftb_cntrl.q_br1_pos;
+    fq_conf[0] = dut.u_bpu.u_ftb.u_ftb_cntrl.q_br0_conf;
+    fq_conf[1] = dut.u_bpu.u_ftb.u_ftb_cntrl.q_br1_conf;
+    fq_fp      = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_fastpath_p2;
+    fq_en      = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_fastpath_en;
+    fu_val     = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_valid_u0;
+    fu_set     = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_set_idx;
+    fu_way     = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_way_u0;
+    fu_hit     = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_hit;
+    fu_isbr    = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_is_br_u0;
+    fu_past    = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_past;
+    fu_inpl    = dut.u_bpu.u_ftb.u_ftb_cntrl.inplace;
+    fu_pos     = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_pos;
+    fu_tkn     = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_taken_u0;
+    fu_oconf   = dut.u_bpu.u_ftb.u_ftb_cntrl.fld_old.conf;
+    fu_nv[0]   = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_new.br0.valid;
+    fu_nv[1]   = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_new.br1.valid;
+    fu_npos[0] = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_new.br0.pos;
+    fu_npos[1] = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_new.br1.pos;
+    fu_nconf[0] = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_new.br0.conf;
+    fu_nconf[1] = dut.u_bpu.u_ftb.u_ftb_cntrl.upd_new.br1.conf;
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      fs_acc[c]  = dut.u_ftq.u_ftb_sched.w_acc_ftb[c] &&
+                   dut.u_ftq.u_ftb_sched.upd[c].is_br;
+      fs_drop[c] = fs_acc[c]
+        && !(!dut.u_ftq.u_ftb_sched.w_issue_from_skid
+             && dut.u_ftq.u_ftb_sched.w_best_new[c])
+        && !(dut.u_ftq.u_ftb_sched.skid_val
+             ? dut.u_ftq.u_ftb_sched.w_best_new[c]
+             : dut.u_ftq.u_ftb_sched.w_second_new[c]);
     end
   end
 

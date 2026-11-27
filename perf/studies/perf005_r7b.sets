@@ -1,0 +1,7 @@
+# PERF-005 Phase 3: R7 revised, measured alone (perf/build/r7_s2 from the
+# scratch copy rc_r7: the baseline tree with R7 only). R7 as first run
+# (perf005_rc.csv set r7) raised the history-only redirect at p2 only;
+# SC at p3 can turn a conditional whose target equals the block's
+# successor, with the same effect, so R7 now has a p3 arm too
+# (bp_cluster.sv p3_redir_comb). Rows against baseline.csv.
+r7b             bin=perf/build/r7_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch

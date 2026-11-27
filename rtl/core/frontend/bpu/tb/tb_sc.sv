@@ -235,13 +235,19 @@ module tb;
   // sc_cntrl; read it by hierarchical reference for ST4). The ST4 index
   // mode is now the sc SC_BR_IMLI_MODE parameter default (IDX_IMLI_PHR),
   // not a port; the reference passes that mode literal (BP-079).
+  // PERF-005 R5: ST0-ST3 take the PC moved up one bit with TAGE's
+  // prediction in bit 0, as the cbp2016 bias and GEHL tables do
+  // ((PC << 1) + pred_inter, entries/jimenez/cbp2016_tage_sc_l.h
+  // 1016-1029, 1073); ST4 keeps the PC. The meta must be driven before the index is derived.
   function automatic logic [SC_MAX_IDX_WIDTH-1:0] pred_idx(
       input int t, input int s);
+    logic [VA_WIDTH-1:1] tpc;
+    tpc = {inp_pc_p2[s][VA_WIDTH-2:1], tage_pred_meta_p2[s].tage_pred_tkn};
     if (t == ST4)
       pred_idx = calc_brimli_idx(inp_pc_p2[s], sc_phr_p2,
                                  u_dut.u_sc_cntrl.br_imli, IDX_IMLI_PHR);
     else
-      pred_idx = calc_sc_idx(t, inp_pc_p2[s], fold_for(t));
+      pred_idx = calc_sc_idx(t, tpc, fold_for(t));
   endfunction
 
   // ----------------------------------------------------------------
@@ -457,14 +463,8 @@ module tb;
     sc_t3_idx_fh_p2 = SC_MAX_FH'(3);
     sc_phr_p2       = 10'h055;
 
-    // Derive indices and seed +3 at each consulted entry.
-    for (int t = 0; t < NT; t++)
-      for (int s = 0; s < P_SLOTS; s++) begin
-        idx[t][s] = pred_idx(t, s);
-        tbl_seed(t, s, idx[t][s], 6'sd3);
-      end
-
-    // Present the prediction meta at p2.
+    // Present the prediction meta at p2 (before the indices: PERF-005
+    // R5 puts TAGE's prediction in the ST0-ST3 index).
     tage_pred_rdy_p2 = ALL_SLOTS;
     // slot 0: agree (tage_tkn = 1)
     tage_pred_meta_p2[0]                  = '0;
@@ -482,6 +482,20 @@ module tb;
       tage_pred_meta_p2[s].tage_pred_tkn    = 1'b0;
       tage_pred_meta_p2[s].branch_id        = 6'd21;
     end
+
+    // Derive indices and seed +3 at each consulted entry. PERF-005 R5:
+    // slot 0 (PC 0x044, TAGE taken) and slot 1 (PC 0x088, TAGE not
+    // taken) both index ST0-ST3 at a row the PC-only index does not
+    // (the PC moves up one bit), so the captured-index checks below
+    // fail on the PC-only rule; slot 0 also checks the TAGE bit.
+    for (int t = 0; t < NT; t++)
+      for (int s = 0; s < P_SLOTS; s++) begin
+        idx[t][s] = pred_idx(t, s);
+        tbl_seed(t, s, idx[t][s], 6'sd3);
+      end
+    // A check of the reference itself (tb values only), not of the RTL.
+    if (idx[0][0][0] !== 1'b1)
+      $fatal(1, "TC3 FAIL: R5 ST0 slot 0 index bit 0 is not TAGE taken");
 
     // p2 -> p3: clock once; the SC result forms combinationally at p3.
     @(posedge clk); #1;

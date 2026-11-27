@@ -344,6 +344,9 @@ module bp_cluster (
   // Internal nets: bp_history -> TAGE, ITTAGE, SC
   // ----------------------------------------------------------------
   bp_folded_hist_t            w_folded;
+  // PERF-005 R6: the folds with the p1 block's bundle applied, for the
+  // p0 consumers (TAGE, ITTAGE, the SC and PHR staging)
+  bp_folded_hist_t            w_folded_byp;
 
   // One entry per predicted branch (BP-129): NUM_PRED_SLOTS entries
   // and a count of 0 to NUM_PRED_SLOTS.
@@ -366,6 +369,9 @@ module bp_cluster (
   logic [RB_CORR_BITS-1:0]    w_rb_pbit;
   logic [PRED_CNT_BITS-1:0]   w_c2_n;
   logic [NUM_PRED_SLOTS-1:0]  w_c2_tkn;
+  // PERF-005 R7: the p2 FTB bundle differs from the bundle the block
+  // wrote at p1, with no redirect: a history-only correction
+  logic                       w_hdiff_p2;
   logic [NUM_PRED_SLOTS-1:0]  w_c2_pbit;
   logic [PRED_CNT_BITS-1:0]   w_c3_n;
   logic [NUM_PRED_SLOTS-1:0]  w_c3_tkn;
@@ -733,12 +739,12 @@ module bp_cluster (
       r_tv_p2        <= r_tv_p1;
       r_pc_p1        <= ftq_pred_pc_p0;
       r_idx_p1       <= ftq_pred_idx_p0;
-      r_phr_p1       <= w_folded.tage_phr[9:0];
+      r_phr_p1       <= w_folded_byp.tage_phr[9:0];
       r_ubtb_pred_p1 <= w_ubtb_pred_p1;
       r_ubtb_blk_p1  <= w_ubtb_blk_p1;
-      r_sc_t1_fh_p1  <= w_folded.sc_t1_idx_fh;
-      r_sc_t2_fh_p1  <= w_folded.sc_t2_idx_fh;
-      r_sc_t3_fh_p1  <= w_folded.sc_t3_idx_fh;
+      r_sc_t1_fh_p1  <= w_folded_byp.sc_t1_idx_fh;
+      r_sc_t2_fh_p1  <= w_folded_byp.sc_t2_idx_fh;
+      r_sc_t3_fh_p1  <= w_folded_byp.sc_t3_idx_fh;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_ras_tos_addr_p1[s] <= w_ras_tos_addr_p0[s];
         r_ras_tos_val_p1[s]  <= w_ras_tos_valid_p0[s];
@@ -1183,9 +1189,44 @@ module bp_cluster (
   //   conditional  direction from TAGE selects branch target or the
   //                fall-through address
   //   direct unc.  FTB jump target
+  // PERF-005 R7 (a RULE CHANGE FOR ACCEPTANCE; bp_history_decisions.md
+  // 3.5 corrects the history only on a redirect). The bundle the FTB
+  // view gives the block at p2 (the branches on the path, up to and
+  // including the first taken one, as rb_corr_p2 forms it) against the
+  // one the block wrote at p1 (from r_slot_p2, as the p1 write formed
+  // it). They differ, with the same successor, when the FTB holds a
+  // branch the uBTB did not (or the other way), or when TAGE turns a
+  // conditional whose target is the successor either way: no redirect
+  // is raised and the history keeps the p1 bundle. Here a difference
+  // raises a slot-0 redirect to the block's own successor, so the
+  // rollback writes the p2 bundle (rb_corr_mux, the p2 arm) and the
+  // younger block is fetched again on the corrected history.
+  always_comb begin : hdiff_p2
+    logic stop1, stop2;
+    int   n1, n2;
+    logic [NUM_PRED_SLOTS-1:0] t1, t2;
+    n1 = 0; n2 = 0; t1 = '0; t2 = '0;
+    stop1 = ~r_val_p2;
+    stop2 = ~r_val_p2;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (!stop1 && r_slot_p2[s].slot_valid && (n1 < NUM_PRED_SLOTS)) begin
+        t1[n1] = r_slot_p2[s].taken;
+        n1     = n1 + 1;
+        stop1  = r_slot_p2[s].taken;
+      end
+      if (!stop2 && w_br_val_p2[s] && (n2 < NUM_PRED_SLOTS)) begin
+        t2[n2] = w_taken_p2[s];
+        n2     = n2 + 1;
+        stop2  = w_taken_p2[s];
+      end
+    end
+    w_hdiff_p2 = r_val_p2 & w_ftb_valid_p2 & ((n1 != n2) || (t1 != t2));
+  end
+
   always_comb begin : p2_succ_comb
     logic [VA_WIDTH-1:0] it_tgt;
     logic                it_hit;
+    logic                hit_any;
     logic [VA_WIDTH-1:0] p1_succ;
     logic [VA_WIDTH-1:0] cut_pc;
 
@@ -1322,6 +1363,13 @@ module bp_cluster (
       w_redir_p2[s].target_pc = w_ftb_valid_p2 ? w_succ_p2[s]
                                                : w_ras_pop_addr_p2[s];
     end
+    // PERF-005 R7: the history-only correction (hdiff_p2). With no slot
+    // redirecting every slot's successor equals the p1 one, so slot 0's
+    // is the block's successor: fetch continues where it went.
+    hit_any = 1'b0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      hit_any = hit_any | w_redir_p2[s].valid;
+    if (w_hdiff_p2 && !hit_any) w_redir_p2[0].valid = 1'b1;
   end
 
   assign bpu_redir_idx_p2 = r_idx_p2;
@@ -1443,6 +1491,38 @@ module bp_cluster (
                               & (w_succ_p3[s] != p2_succ[s]);
       w_redir_p3[s].target_pc = w_succ_p3[s];
       reach                   = reach & ~w_taken_p3[s];
+    end
+
+    // PERF-005 R7, the p3 arm (as hdiff_p2): the bundle the SC
+    // directions give the block (rb_corr_p3) against the one it holds
+    // from p2 (r_taken_p3). They differ, with the same successor, when SC
+    // turns a conditional whose target equals the block's successor
+    // otherwise (both ways reach the same next PC). A difference with no
+    // slot redirecting raises a slot-0 redirect to the block's own
+    // successor, so the rollback writes the p3 bundle.
+    begin
+      logic stop2, stop3, hit3;
+      int   n2, n3;
+      logic [NUM_PRED_SLOTS-1:0] t2, t3;
+      n2 = 0; n3 = 0; t2 = '0; t3 = '0;
+      stop2 = ~r_val_p3;
+      stop3 = ~r_val_p3;
+      hit3  = 1'b0;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        if (!stop2 && r_brv_p3[s] && (n2 < NUM_PRED_SLOTS)) begin
+          t2[n2] = r_taken_p3[s];
+          n2     = n2 + 1;
+          stop2  = r_taken_p3[s];
+        end
+        if (!stop3 && r_brv_p3[s] && (n3 < NUM_PRED_SLOTS)) begin
+          t3[n3] = w_taken_p3[s];
+          n3     = n3 + 1;
+          stop3  = w_taken_p3[s];
+        end
+        hit3 = hit3 | w_redir_p3[s].valid;
+      end
+      if (r_val_p3 && !hit3 && ((n2 != n3) || (t2 != t3)))
+        w_redir_p3[0].valid = 1'b1;
     end
   end
 
@@ -1986,7 +2066,8 @@ module bp_cluster (
     .ckpt_phist_ptr    (ckpt_phist_ptr),
     .ghr_buf           (ghr_buf),
     .phr_buf           (phr_buf),
-    .folded            (w_folded)
+    .folded            (w_folded),
+    .folded_byp        (w_folded_byp)
   );
 
   // ----------------------------------------------------------------
@@ -2101,7 +2182,7 @@ module bp_cluster (
     .tage_enable_aging   (tage_enable_aging),
     .tage_aging_interval (tage_aging_interval),
     .consumer_ready      (w_tage_consumer_ready),
-    .folded_hist         (w_folded),
+    .folded_hist         (w_folded_byp),
     .tage_rdy            (tage_rdy)
   );
 
@@ -2123,7 +2204,7 @@ module bp_cluster (
     .ittage_uq_not_full    (ittage_upd_rdy),
     .ittage_enable_aging   (ittage_enable_aging),
     .ittage_aging_interval (ittage_aging_interval),
-    .folded_hist           (w_folded),
+    .folded_hist           (w_folded_byp),
     .ittage_rdy            (ittage_rdy)
   );
 

@@ -526,8 +526,9 @@ On `ifu_ftq_mis_val`, the FTQ:
       (section 3). It was a lossy shift until the position field
       was widened on 2026-08-19.
   W3  re-derives the block successor across the slots
-      (fe_decisions.md 2.4), except under M2 (W3M), and drives ftq_ifu_flush_val with this
-      entry's index, so fetch restarts from the corrected successor.
+      (fe_decisions.md 2.4), except under M2 (W3M), and drives
+      ftq_ifu_flush_val with this entry's index, so fetch restarts
+      from the corrected successor.
       THE INDEX DEPENDS ON THE ARM. For a p2 or p3 redirect it is
       K: K is not yet fetched and including it is required, since
       the correction changes taken_val and taken_pos, which is what
@@ -583,9 +584,10 @@ On `ifu_ftq_mis_val`, the FTQ:
       conditional slot at the ALU instruction 6b02cc; 6b02d0 to
       6b02e0 never delivered). A faulting block traps (M4) and is
       left as it was. Built by PERF-004 (ftq_ifu.sv
-      predecode_correct, w_m2_cut, w_cut_end), FOR ACCEPTANCE
-      (PERF-004 R11); tb_ftq_ifu D18, D18a and D18b fail when it is ignored (238/3
-      at two slots, 223/3 at one); D18c and D18d check the fault
+      predecode_correct, w_m2_cut, w_cut_end), ACCEPTED session-086
+      (Jeff, PERF-004 R11); tb_ftq_ifu D18, D18a and D18b fail when
+      it is ignored (238/3 at two slots, 223/3 at one); D18c and D18d
+      check the fault
       case.
 ```
 
@@ -868,6 +870,7 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
   2026-11-19  session-086, after BP-152, for acceptance. 7 W1: the
               pft_addr write and the C1 push with a taken jump.
 
-  2026-11-22  session-086, after PERF-004, for acceptance. 7 W3M: an
-              M2 block ends where fetch cut it (an RTL defect fixed).
+  2026-11-22  session-086, after PERF-004. 7 W3M: an M2 block ends
+              where fetch cut it (an RTL defect fixed); accepted
+              (Jeff, R11).
 ```

@@ -563,50 +563,87 @@ module tb;
 
   // ================================================================
   // TC7: chooser training. HIGH / MED arms, inc/dec, sat_ch bounds.
+  // A corner is consulted only when SC and TAGE differ, so every case
+  // drives u_lcl = !u_tage and u_final = the side the chooser's sign
+  // picks (>= 0 -> SC). PERF-005 R2: the chooser trains on which side
+  // was right, SC's own prediction (u_lcl) against TAGE's, not on the
+  // final prediction (entries/jimenez/cbp2016_tage_sc_l.h 1295-1311:
+  // pred_inter == resolveDir when pred_inter != SCPRED). The R2 cases
+  // below pick TAGE (chooser < 0).
   // ================================================================
   task automatic test_ch_train();
     clr_inputs();
     for (int t = 0; t < NT; t++) begin u_ctr[t]='0; u_idx[t]='0; end
     u_back=0; u_range='0; u_abs=10'd20;
 
-    // HIGH, sc_match -> +1 : chi 0 -> 1
+    // HIGH, SC chosen and right -> +1 : chi 0 -> 1
     set_state(10'd10, '0, '0, '0, '0, '0, '0);
     u_chooser=CHOOSE_HIGH; u_final=1; u_tage=0; u_resolved=1; u_lcl=1;
     clk_update(0);
     chkw("TC7 HIGH inc", SC_CHOOSER_BITS, u_dut.choose_hi_vlo, 1);
 
-    // HIGH, !sc_match & tg_match -> -1 : chi 5 -> 4
+    // HIGH, SC chosen and wrong, TAGE right -> -1 : chi 5 -> 4
     set_state(10'd10, '0, 6'sd5, '0, '0, '0, '0);
     u_chooser=CHOOSE_HIGH; u_final=0; u_tage=1; u_resolved=1; u_lcl=0;
     clk_update(0);
     chkw("TC7 HIGH dec", SC_CHOOSER_BITS, u_dut.choose_hi_vlo, 4);
 
-    // HIGH sat at MAX: chi=31, sc_match -> stays 31
+    // HIGH sat at MAX: chi=31, SC right -> stays 31
     set_state(10'd10, '0, 6'(SC_CHOOSER_MAX), '0, '0, '0, '0);
-    u_chooser=CHOOSE_HIGH; u_final=1; u_tage=0; u_resolved=1;
+    u_chooser=CHOOSE_HIGH; u_final=1; u_tage=0; u_resolved=1; u_lcl=1;
     clk_update(0);
     chkw("TC7 HIGH sat max", SC_CHOOSER_BITS,
          u_dut.choose_hi_vlo, SC_CHOOSER_MAX);
 
-    // HIGH sat at MIN: chi=-32, !sc_match & tg_match -> stays -32
+    // HIGH sat at MIN: chi=-32 (TAGE chosen), TAGE right -> stays -32
     set_state(10'd10, '0, 6'(SC_CHOOSER_MIN), '0, '0, '0, '0);
-    u_chooser=CHOOSE_HIGH; u_final=0; u_tage=1; u_resolved=1;
+    u_chooser=CHOOSE_HIGH; u_final=1; u_tage=1; u_resolved=1; u_lcl=0;
     clk_update(0);
     chkw("TC7 HIGH sat min", SC_CHOOSER_BITS,
          u_dut.choose_hi_vlo, SC_CHOOSER_MIN);
 
-    // MED, sc_match -> +1 : cmed 0 -> 1 (chi held)
+    // R2: HIGH, chi=-3 (TAGE chosen), TAGE right -> -1 : -3 -> -4
+    // (the final rule moved it +1, toward SC, when TAGE was right)
+    set_state(10'd10, '0, -6'sd3, '0, '0, '0, '0);
+    u_chooser=CHOOSE_HIGH; u_final=1; u_tage=1; u_resolved=1; u_lcl=0;
+    clk_update(0);
+    chkw("TC7 R2 HIGH tage right", SC_CHOOSER_BITS,
+         u_dut.choose_hi_vlo, -6'sd4);
+
+    // R2: HIGH, chi=-3 (TAGE chosen), TAGE wrong, SC right -> +1 : -2
+    // (the final rule did not move it: final and TAGE both wrong)
+    set_state(10'd10, '0, -6'sd3, '0, '0, '0, '0);
+    u_chooser=CHOOSE_HIGH; u_final=0; u_tage=0; u_resolved=1; u_lcl=1;
+    clk_update(0);
+    chkw("TC7 R2 HIGH tage wrong", SC_CHOOSER_BITS,
+         u_dut.choose_hi_vlo, -6'sd2);
+
+    // MED, SC chosen and right -> +1 : cmed 0 -> 1 (chi held)
     set_state(10'd10, '0, 6'sd7, '0, '0, '0, '0);
-    u_chooser=CHOOSE_MED; u_final=1; u_tage=0; u_resolved=1;
+    u_chooser=CHOOSE_MED; u_final=1; u_tage=0; u_resolved=1; u_lcl=1;
     clk_update(0);
     chkw("TC7 MED inc",   SC_CHOOSER_BITS, u_dut.choose_med_vvlo, 1);
     chkw("TC7 MED chi held", SC_CHOOSER_BITS, u_dut.choose_hi_vlo, 7);
 
-    // MED, !sc_match & tg_match -> -1 : cmed 3 -> 2
+    // MED, SC chosen and wrong, TAGE right -> -1 : cmed 3 -> 2
     set_state(10'd10, '0, '0, 6'sd3, '0, '0, '0);
-    u_chooser=CHOOSE_MED; u_final=0; u_tage=1; u_resolved=1;
+    u_chooser=CHOOSE_MED; u_final=0; u_tage=1; u_resolved=1; u_lcl=0;
     clk_update(0);
     chkw("TC7 MED dec",   SC_CHOOSER_BITS, u_dut.choose_med_vvlo, 2);
+
+    // R2: MED, cmed=-1 (TAGE chosen), TAGE right -> -1 : -1 -> -2
+    set_state(10'd10, '0, '0, -6'sd1, '0, '0, '0);
+    u_chooser=CHOOSE_MED; u_final=0; u_tage=0; u_resolved=0; u_lcl=1;
+    clk_update(0);
+    chkw("TC7 R2 MED tage right", SC_CHOOSER_BITS,
+         u_dut.choose_med_vvlo, -6'sd2);
+
+    // R2: MED, cmed=-1 (TAGE chosen), TAGE wrong, SC right -> +1 : 0
+    set_state(10'd10, '0, '0, -6'sd1, '0, '0, '0);
+    u_chooser=CHOOSE_MED; u_final=1; u_tage=1; u_resolved=0; u_lcl=0;
+    clk_update(0);
+    chkw("TC7 R2 MED tage wrong", SC_CHOOSER_BITS,
+         u_dut.choose_med_vvlo, 0);
   endtask
 
   // ================================================================

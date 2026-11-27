@@ -95,6 +95,8 @@ module tb;
   logic [GHR_WIDTH-1:0]        ghr_buf;
   logic [PHR_WIDTH-1:0]        phr_buf;
   bp_folded_hist_t             folded;
+  // PERF-005 R6: the folds with this cycle's bundle applied (TC20)
+  bp_folded_hist_t             folded_byp;
 
   // ----------------------------------------------------------------
   // DUT instantiation
@@ -119,7 +121,8 @@ module tb;
     .ckpt_phist_ptr    (ckpt_phist_ptr),
     .ghr_buf           (ghr_buf),
     .phr_buf           (phr_buf),
-    .folded            (folded)
+    .folded            (folded),
+    .folded_byp        (folded_byp)
   );
 
   // ----------------------------------------------------------------
@@ -1130,6 +1133,71 @@ module tb;
     end
     pass_count++;
     $display("TC19 pass (BP-141 SC ST2/ST3 folds see offsets 10 and up)");
+
+    // ---- TC20 (PERF-005 R6): the fold bypass, folded_byp -------------
+    // The p0 lookup of the next block reads the folds in the cycle the
+    // p1 block writes its bundle (bp_cluster.sv p1 write), so without a
+    // bypass it misses that bundle. folded_byp is the folds with the
+    // driven bundle applied: the value folded takes after the edge. For
+    // every bundle size 0..NUM_PRED_SLOTS and every taken pattern, the
+    // bundle is driven, folded_byp sampled before the edge, and after
+    // the edge folded (tied to fold_ref by check_all_folds) must equal
+    // it, all fields. A bundle that changes nothing (size 0) must leave
+    // folded_byp == folded. On a rollback cycle folded_byp is the
+    // registered folds (the rollback recomputes them a cycle later,
+    // bp_history_decisions.md 5). The fills first make the folds
+    // non-zero, so a bypass stuck at zero fails.
+    do_reset();
+    begin
+      bp_folded_hist_t pre, byp;
+      int              nchk;
+      nchk = 0;
+      for (int k = 0; k < 24; k++) upd(1, k[0] ^ k[2], 1'b0, '0, '0);
+      ckpt_wr_en = 1'b1; ckpt_wr_idx = FTQ_IDX_BITS'(5);
+      upd(1, 1'b1, 1'b0, '0, '0);
+      if (folded.tage_t4_idx_fh === '0 || folded.tage_t1_idx_fh === '0)
+        $fatal(1, "TC20 FAIL: the fills left a TAGE fold zero");
+      for (int nb = 0; nb <= NUM_PRED_SLOTS; nb++) begin
+        for (int pat = 0; pat < (1 << nb); pat++) begin
+          pred_taken = '0;
+          for (int b = 0; b < nb; b++) begin
+            pred_taken[b] = pat[b];
+            pred_pc[b]    = VA_WIDTH'(32'((b + pat + 1) << 2));
+          end
+          num_branches = PRED_CNT_BITS'(nb);
+          #1;
+          pre = folded;
+          byp = folded_byp;
+          if (nb == 0 && byp !== pre)
+            $fatal(1, "TC20 FAIL: empty bundle, folded_byp != folded");
+          tick();
+          drive_idle();
+          if (folded !== byp)
+            $fatal(1, "TC20 FAIL: nb %0d pat %0d byp t4 %0h folded t4 %0h",
+                   nb, pat, byp.tage_t4_idx_fh, folded.tage_t4_idx_fh);
+          check_all_folds($sformatf("TC20 nb %0d pat %0d", nb, pat));
+          nchk++;
+        end
+      end
+      // A rollback cycle with a bundle also driven: no bypass.
+      pred_taken    = '0;
+      pred_taken[0] = 1'b1;
+      num_branches  = PRED_CNT_BITS'(1);
+      rollback_valid    = 1'b1;
+      rollback_ckpt_idx = FTQ_IDX_BITS'(5);
+      #1;
+      if (folded_byp !== folded)
+        $fatal(1, "TC20 FAIL: rollback cycle, folded_byp != folded");
+      tick();
+      drive_idle();
+      tick();
+      check_all_folds("TC20 after rollback");
+      $display("TC20: %0d bundles checked against the next cycle's folds",
+               nchk);
+    end
+    pass_count++;
+    $display("TC20 pass (PERF-005 R6 fold bypass, %0d slot(s))",
+             NUM_PRED_SLOTS);
 
     $display("----------------------------------------------------");
     $display("BP-072: %0d directed test cases passed", pass_count);

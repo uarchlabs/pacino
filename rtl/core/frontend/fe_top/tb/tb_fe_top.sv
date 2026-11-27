@@ -125,7 +125,8 @@
 // BP-135. Program t0_uaon: T0 chosen as the TAGE provider by
 // use_alt_on_na over a tagged primary, and then updated (CTR rows
 // 19.1-19.8, BP-133). It counts those updates by row and checks each
-// T0 write.
+// T0 write. PERF-005: a directed B pattern and a seeded use_alt_on_na
+// counter replace the LFSR-seeded B.
 //
 // BP-137. Program init_walk: the loops stream run without the fast-init
 // plusargs (its own target), so the TAGE, ITTAGE and SC init walks run.
@@ -152,9 +153,10 @@
 // 0x100 and above).
 //
 // BP-150. Program sc_nored (TD#205): SC reverses a conditional to not
-// taken at p3 with no p3 redirect (its taken target is the block's
-// fall-through), by a testbench force of SC's p3 prediction, and the
-// instruction after the branch must still be delivered.
+// taken at p3 (its taken target is the block's fall-through), by a
+// testbench force of SC's p3 prediction, and the instruction after the
+// branch must still be delivered. PERF-005 R7: the reversal now raises
+// the p3 history-only redirect, which the program checks.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -410,11 +412,13 @@ module tb;
     end
   end
 
-  // BP-150 (TD#205), program sc_nored: an SC reversal at p3 that raises
-  // no p3 redirect. Block K holds one conditional B whose taken target
-  // is K's fall-through, so SC turning B not taken at p3 leaves the
-  // block successor unchanged and bp_cluster raises no redirect; only
-  // the p3 slot write changes the entry. The program reaches K on its
+  // BP-150 (TD#205), program sc_nored: an SC reversal at p3 that leaves
+  // the block successor unchanged. Block K holds one conditional B whose
+  // taken target is K's fall-through, so SC turning B not taken at p3
+  // does not change the successor. Before PERF-005 bp_cluster raised no
+  // redirect and only the p3 slot write changed the entry; under R7 the
+  // changed history bundle raises a slot-0 p3 redirect to K's own
+  // successor (bp_cluster, the p3 arm of R7). The program reaches K on its
   // last pass through a backend redirect to block P2, so fetch has
   // caught up with allocation and K's fetch request is presented in K's
   // p3 cycle.
@@ -595,6 +599,36 @@ module tb;
       end
     end
 `endif
+  end
+
+  // PERF-005: t0_uaon seeds each slot's use_alt_on_na counter. The
+  // counter steps only on an update with both providers tagged
+  // (tage_cntrl uaon_upd_ff), so a branch whose alternate is T0 cannot
+  // raise it; the program sets it explicitly instead of relying on
+  // other branches to. At the first falling edge after reset release
+  // (tu_dep) the counter of every slot is forced to all ones for one
+  // cycle and released; the variable keeps the value until tage_cntrl
+  // next steps it. uaon_min records the lowest value it takes after.
+  logic tu_dep;
+  logic tu_rel;
+  int   uaon_min [0:NUM_PRED_SLOTS-1];
+  always @(negedge clk) begin : t0_uaon_seed
+    if (rstn && tu_dep && !tu_rel) begin
+      force dut.u_bpu.u_tage.u_tage_cntrl.uaon[0] = '1;
+      force dut.u_bpu.u_tage.u_tage_cntrl.uaon[NUM_PRED_SLOTS-1] = '1;
+      tu_rel <= 1'b1;
+    end else if (tu_rel && tu_dep) begin
+      release dut.u_bpu.u_tage.u_tage_cntrl.uaon[0];
+      release dut.u_bpu.u_tage.u_tage_cntrl.uaon[NUM_PRED_SLOTS-1];
+      tu_dep <= 1'b0;
+    end
+  end
+  always @(posedge clk) begin : t0_uaon_min
+    if (rstn && tu_rel && !tu_dep) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++)
+        if (int'(dut.u_bpu.u_tage.u_tage_cntrl.uaon[s]) < uaon_min[s])
+          uaon_min[s] <= int'(dut.u_bpu.u_tage.u_tage_cntrl.uaon[s]);
+    end
   end
 
   // BP-122 (ruled by Jeff: the LP wins at p2 and p3): a slot whose p2
@@ -1369,7 +1403,10 @@ module tb;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       t0u_pend[s] = 1'b0;
       uaon_max[s] = 0;
+      uaon_min[s] = 1 << TAGE_UAON_WIDTH;
     end
+    tu_dep       = 1'b0;                      // PERF-005, t0_uaon
+    tu_rel       = 1'b0;
     n_rest_rep   = 0;
     n_own_ok     = 0;
     n_own_bad    = 0;
@@ -2344,47 +2381,57 @@ module tb;
   // -----------------------------------------------------------------
   // t0_uaon (BP-135): T0 as the TAGE provider through use_alt_on_na,
   // then updated (CTR rows 19.1-19.8, BP-133). One block per
-  // iteration: mixed(2), a conditional B taken with probability 1/8
-  // (three LFSR bits all set) that skips one instruction, mixed(1) and
-  // the loop branch. B is slot 0 of its block.
-  // How the case arises. A taken B mispredicts and allocates a tagged
-  // entry above its provider, at 100 (weakly taken). The next visit in
-  // the same history context is usually not taken: that entry is the
-  // primary, weak and wrong, with a tagged alternate that is right, so
-  // the slot's use_alt_on_na counter rises (tage_cntrl uaon_upd_ff).
-  // Once its MSB is set, a weak primary in T1, whose alternate is T0,
-  // hands the prediction to T0 (pred_logic), and the update of that
-  // prediction is the 19.x case.
-  // Seed and length from a sweep of eight seeds at 128 and 256
-  // iterations at both slot counts: at 256 every seed but two reached
-  // the case at two slots and six of eight at one; this seed gave the
-  // most at one slot.
-  // BP-141: re-chosen. On the BP-141 tree 16'hACE1 reached the case 0
-  // times at two slots (5 predictions, none updated). Of 16 seeds swept
-  // at two slots 12 reach it, and of the 13 of those swept at one slot
-  // 12 reach it; 16'h5a5a reaches it 27 times at two slots and 21 at
-  // one, the largest lower count of the two.
+  // iteration: mixed(2), a conditional B that skips one instruction,
+  // mixed(1) and the loop branch. B is slot 0 of its block.
+  // PERF-005: a directed stimulus; it replaces the LFSR-seeded B (seed
+  // 16'h5a5a, BP-141), which under R4 (allocation at 011 for a not-taken
+  // resolution) reached the case 0 times at two slots.
+  // B is taken on pass TU_PER-1 of every TU_PER and not taken on the
+  // others. The only other branch is the loop branch, taken but on the
+  // last pass, and mixed() holds no branch, so the outcomes are periodic
+  // and the history context of each phase of B repeats every TU_PER
+  // passes once the longest table history (TAGE_TBL_HIST[4], 119) no
+  // longer reaches the program's start.
+  // What the case needs, each item set or derived here:
+  //   - use_alt_on_na at or above TAGE_UAON_THRES (8) in B's slot: set
+  //     by t0_uaon_seed (all ones), since only an update with both
+  //     providers tagged steps the counter; uaon_min shows it held.
+  //   - T0 strongly not taken for B: T0 starts at
+  //     TAGE_T0_SRAM_INIT_VALUE (2'b10, tage_bim fast init) and B is not
+  //     taken on TU_PER-1 passes of TU_PER, so a taken B mispredicts.
+  //   - a tagged entry for B with T0 as its alternate: that mispredict
+  //     (provider T0) allocates one entry above T0 at 100 (taken; R4 and
+  //     the rule before it agree for a taken resolution).
+  //   - the entry hit while weak: at the next taken pass in the same
+  //     context it is the primary at 100 (weak), so with the counter set
+  //     the prediction goes to T0 (pred_logic) and its update is the 19.x
+  //     case, row 19.6 (pT 1, aT 0, RT 1).
+  // The entry then steps to 101 (prm right, pred_diff) and later passes
+  // use it; each new context, while the history window still reaches
+  // the start, gives the case again. A short-history entry (T1,
+  // TAGE_TBL_HIST[1] 8) also hits not-taken passes whose recent history
+  // matches the taken pass's: weak and wrong with T0 right, row 19.4
+  // (pT 1, aT 0, RT 0).
+  // Measured (PERF-005): 6 updates at two slots (19.4 4, 19.6 2) and 6
+  // at one (19.4 5, 19.6 1), every T0 write right; without the seed 0,
+  // and with tage_cntrl's T0 write off, a write not ok at both counts.
   // -----------------------------------------------------------------
   localparam int TU_ITERS = 256;
   localparam int TU_WARM  = 8;
+  localparam int TU_PER   = 8;
 
   task automatic p_t0_uaon();
     logic [VA_WIDTH-1:0] top;
     logic                tk;
     begin_prog("t0_uaon");
-    W.lfsr = 16'h5a5a;
-    // BP-141: +TU_SEED=<hex> overrides the seed, for a seed sweep.
-    begin
-      logic [15:0] sd;
-      if ($value$plusargs("TU_SEED=%h", sd)) W.lfsr = sd;
-    end
+    tu_dep = 1'b1;
     W.mixed(3);
     top = W.wp;
     for (int it = 0; it < TU_ITERS; it++) begin
       if (it == TU_WARM) warm_e = W.ne;
       W.wp = top;
       W.mixed(2);
-      tk = W.lfsr_bit() & W.lfsr_bit() & W.lfsr_bit();
+      tk = ((it % TU_PER) == TU_PER - 1);
       W.cskip(tk, 1);                         // B
       W.mixed(1);
       W.bcc(it != TU_ITERS - 1, top);
@@ -2392,9 +2439,11 @@ module tb;
     W.mixed(3);
     end_prog(200000);
     $display("%s", $sformatf({"   T0UAON %s predictions %0d, updates %0d, ",
-             "T0 write ok %0d not ok %0d; uaon max s0 %0d s%0d %0d"}, tname,
+             "T0 write ok %0d not ok %0d; uaon max s0 %0d s%0d %0d,",
+             " min after the seed s0 %0d s%0d %0d"}, tname,
              n_t0u_pred, n_t0u_upd, n_t0u_ok, n_t0u_bad, uaon_max[0],
-             NUM_PRED_SLOTS - 1, uaon_max[NUM_PRED_SLOTS-1]));
+             NUM_PRED_SLOTS - 1, uaon_max[NUM_PRED_SLOTS-1], uaon_min[0],
+             NUM_PRED_SLOTS - 1, uaon_min[NUM_PRED_SLOTS-1]));
     $display("%s", $sformatf({"   T0UAON %s rows 19.1 %0d 19.2 %0d 19.3 %0d ",
              "19.4 %0d 19.5 %0d 19.6 %0d 19.7 %0d 19.8 %0d"}, tname,
              n_t0u_row[1], n_t0u_row[2], n_t0u_row[3], n_t0u_row[4],
@@ -2730,13 +2779,19 @@ module tb;
 
   // -----------------------------------------------------------------
   // sc_nored (BP-150, TD#205): SC reverses at p3, to not taken, a
-  // conditional the entry holds taken at p2, and no p3 redirect fires
-  // because the branch's taken target is the block's fall-through. The
-  // p3 slot write changes the entry's taken position, which is what the
+  // conditional the entry holds taken at p2. The branch's taken target
+  // is the block's fall-through, so the successor is unchanged. The p3
+  // slot write changes the entry's taken position, which is what the
   // IFU truncates the block on, so a fetch request for the entry
   // presented in its p3 cycle must not carry the p2 view: if it does,
   // the instructions between the branch and the fall-through are never
-  // fetched. Layout:
+  // fetched.
+  // PERF-005 R7: the reversal changes the block's history bundle, so
+  // bp_cluster now raises a slot-0 p3 redirect to K's own successor
+  // and the younger fetch is restarted; the TD#205 case (a request for
+  // K accepted in K's p3 cycle carrying the p2 view) is not reached by
+  // an SC reversal any more (K fetch in the p3 cycle 0). The program
+  // checks the R7 redirect and that X is still delivered. Layout:
   //   top        mixed(1); C0 = bcc(last pass, P2); jal x0, K
   //   K          six addi (K .. K+20), 32-byte aligned
   //   K+24       B = bcc(not last pass, K+32): its target, K+32, is the
@@ -2752,9 +2807,10 @@ module tb;
   // taken at that p3, which is B's real direction there.
   // THE CHECK: the instruction written to the ibuf after B, from K, is
   // B + 4 (X). Preconditions checked with it: the force fired once, at
-  // a p3 that raised no redirect, with B taken in the p2 view and not
-  // taken in the p3 view. A testbench force of SC's prediction, allowed
-  // by BP-150; no program reaches the case by SC alone (BP-142).
+  // a p3 that raised the R7 redirect (PERF-005), with B taken in the p2
+  // view and not taken in the p3 view. A testbench force of SC's
+  // prediction, allowed by BP-150; no program reaches the case by SC
+  // alone (BP-142).
   // -----------------------------------------------------------------
   localparam int SCN_PASSES = 10;
 
@@ -2801,11 +2857,11 @@ module tb;
              " p2 taken %0d, p3 not taken %0d, K fetch in the p3 cycle %0d,",
              " after B %011h: %011h"}, tname, n_scn_force, n_scn_redir,
              n_scn_p2tkn, n_scn_p3ntk, n_scn_req, scn_b, scn_next));
-    chk($sformatf({"sc_nored: SC forced once, at a p3 of K with no p3",
-                   " redirect, B taken at p2 and not taken at p3",
-                   " (%0d, %0d, %0d, %0d)"}, n_scn_force, n_scn_redir,
-                  n_scn_p2tkn, n_scn_p3ntk),
-        (n_scn_force == 1) && (n_scn_redir == 0) && (n_scn_p2tkn == 1) &&
+    chk($sformatf({"sc_nored: SC forced once, at a p3 of K with the R7 p3",
+                   " history redirect (PERF-005), B taken at p2 and not",
+                   " taken at p3 (%0d, %0d, %0d, %0d)"}, n_scn_force,
+                  n_scn_redir, n_scn_p2tkn, n_scn_p3ntk),
+        (n_scn_force == 1) && (n_scn_redir == 1) && (n_scn_p2tkn == 1) &&
         (n_scn_p3ntk == 1));
     chk($sformatf({"sc_nored: stream after the reversed branch %011h:",
                    " got %011h exp %011h"}, scn_b, scn_next,

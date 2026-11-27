@@ -1,0 +1,7 @@
+# PERF-005 rule change R1 measured alone: the FTB update scheduler holds
+# a LOW conf-step update (upd_rdy 0) instead of dropping it, so every
+# resolution trains conf (ftb_confidence_override_rules.md 3.2). A
+# scratch build of the baseline tree with ftq_ftb_sched.sv changed only
+# (perf/build/r1_s2, SRC_ROOT the scratch copy rc_r1), the baseline set
+# unchanged; its rows against baseline.csv.
+r1              bin=perf/build/r1_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
