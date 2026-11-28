@@ -273,6 +273,11 @@
 # tage_cntrl_alloc_rules.md, sc_table_hash_rules.md,
 # sc_table_interfaces.md, bp_history_decisions.md,
 # bp_history_interfaces.md).
+# Updated for the PA-direct FTB conf rewording, session-087
+# (PROJECT_STATUS.md, ftb_confidence_override_rules.md).
+# Updated after PERF-006, session-087 (PROJECT_STATUS.md,
+# perf_decisions.md, ftq_decisions.md, fe_decisions.md,
+# ftb_confidence_override_rules.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [-v|--verbose] [root]
 #   root     the repo root, the directory that contains planning/;
@@ -316,7 +321,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC PERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   7f8b5a2413fc
-PLAN  PROJECT_STATUS.md                 59eb5f673cc6
+PLAN  PROJECT_STATUS.md                 6985af846152
 PLAN  CLOSED_TECH_DEBT.md               217465133dc3
 PLAN  BLOG_GENERATION_PROCESS.md        830739c19059
 
@@ -328,9 +333,9 @@ ARCH  bp_history_decisions.md           d35d31b94594
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  csr_decisions.md                  484fe6279bb8
 ARCH  dcd_decisions.md                  8232e5fdf27f
-ARCH  fe_decisions.md                   c6ed389d5570
+ARCH  fe_decisions.md                   c9d52cfc312c
 ARCH  ftb_decisions.md            d2ca8ed5f2be
-ARCH  ftq_decisions.md            4850412ed8f6
+ARCH  ftq_decisions.md            bba316f75a93
 ARCH  ftq_entry_formats.md        147e74fc7e26
 ARCH  ibuf_decisions.md                 36a96982352e
 ARCH  icache_decisions.md               0e18fe32a823
@@ -356,7 +361,7 @@ ARCH  ittage_cntrl_uaon_update_rules.md 562d1d5bd7a2
 ARCH  ittage_table_entry_formats.md  a073973b4f8b
 ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
-ARCH  ftb_confidence_override_rules.md  b9b96a5a6b38
+ARCH  ftb_confidence_override_rules.md  c8f67c73bec9
 ARCH  pacino_cache.md                   f90a7b3ce267
 ARCH  status_decisions.md               3451a10eeeaa
 ARCH  pacino_features.md                547bdf4c7d67
@@ -393,7 +398,7 @@ OBSV  new_user_decisions.md           77e5b27cdb2e
 SHOW  fe_demo_scenarios.md            575baed326ea
 SHOW  showcase_release_decisions.md   5aed9f2b3171
 
-PERF  perf_decisions.md               3b08d0db992a
+PERF  perf_decisions.md               c1f9a4d2ad69
 
 EOF
 

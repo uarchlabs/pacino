@@ -24,11 +24,6 @@
 //   S6  A HIGH update is NEVER dropped. If accepting one would
 //       force S5 to drop a HIGH, the ready deasserts instead.
 //
-// PERF-005 RULE CHANGE R1 (for acceptance): S5 and S6 become "no
-// update is dropped; a channel that would fall outside the capacity
-// deasserts its ready, LOW or HIGH". ftb_confidence_override_rules.md
-// 3.2 trains conf at every resolution; S5 dropped 1.7% of them.
-//
 // Value (5.7.2): HIGH when the update allocates (missed at predict)
 // or corrects (mispredicted). LOW is a routine conf step on a
 // branch that hit and predicted correctly. Dropping a LOW update
@@ -197,14 +192,13 @@ module ftq_ftb_sched #(
     w_n_new_allowed = skid_val ? 1 : 2;
 
     for (int c = 0; c < NUM_UPD_CHAN; c++) begin
-      // A channel is held when it is FTB-bound and would fall
-      // outside the capacity, LOW or HIGH (PERF-005 RULE CHANGE R1,
-      // for acceptance: ftb_confidence_override_rules.md 3.2 trains
-      // conf at every resolution, and FE-5a's S5 dropped a LOW one,
-      // 1.7% of the conditional resolutions of int_6). Nothing is
-      // dropped; drop_val is unreachable.
+      // A channel is held only when it is FTB-bound, would fall
+      // outside the capacity, and is HIGH. A LOW one in that
+      // position is accepted and dropped, which is the whole point
+      // of FE-5a.
       upd_rdy[c] = !(w_pres_ftb[c]
-                     && (w_rank[c] >= w_n_new_allowed));
+                     && (w_rank[c] >= w_n_new_allowed)
+                     && w_is_high[c]);
     end
   end
 

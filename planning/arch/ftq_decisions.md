@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-11-27
+ UPDATED: 2026-11-28
  CONTACT: Jeff Nye
 ```
 
@@ -880,22 +880,33 @@ throughput analysis was ever done. There was no trade to reopen.
 An FTB-bound update is HIGH value when it allocates or corrects:
 
 ```
-  HIGH   the FTB missed at predict (ftb_pred_meta_t.hit == 0), so
-         this update ALLOCATES the entry. Without it the branch is
-         never predicted at all.
+  HIGH   the FTB does not hold this branch at predict: the block
+         missed (ftb_pred_meta_t.hit == 0), or the hit entry has no
+         slot for the branch, or its slot was written by predecode
+         (pred_src PRED_NONE). This update ALLOCATES or INSERTS the
+         branch. Without it the branch is never predicted at all.
   HIGH   the branch mispredicted (ftq_resolve_t.mispredict), so
          this update CORRECTS the thing that was wrong.
   LOW    hit at predict and predicted correctly: a routine conf
          step on a counter already in the right direction.
 ```
 
-Both terms are available at update formation with no new state:
-`mispredict` arrives on the resolution channel, `hit` is read from
-the slow path with the rest of `bp_ftq_meta_t`.
+Every term is available at update formation with no new state:
+`mispredict` arrives on the resolution channel; the hold is the
+block's `hit` from `bp_ftq_meta_t`, the slot match ftq_resolve already
+computes for the write (rsv_nomap), and the slot's pred_src.
+ftq_resolve reports the hold to the scheduler as ftb_upd_hit;
+ftb_upd.hit stays the block's hit for ftb_cntrl (PERF-006 R8,
+accepted, Jeff, session-087; TD#223).
 
 A dropped LOW update is a DELAYED training step, not a lost entry.
-The FTB entry still exists with its previous counter, and the next
-resolve of that branch trains it.
+The FTB entry holds the branch with its previous counter, and the next
+resolve of that branch trains it. Before R8 this did not hold for a
+branch the hit entry did not hold: its update was LOW, and S5 could
+drop the insertion, so predecode corrected the block on every later
+fetch (PERF-006, LOST INSERTION: int_0 127,840 predecode redirects,
+6,988 with R8). The first HIGH row read: "the FTB missed at predict
+(ftb_pred_meta_t.hit == 0), so this update ALLOCATES the entry."
 
 #### 5.7.3 The rule
 
@@ -1637,4 +1648,9 @@ Section 1 counts six, since session-074.
 
   2026-11-27  session-087 (Jeff): R1 rejected; PERF-006 reverts it.
               5.7.3 stands.
+
+  2026-11-28  session-087, after PERF-006 (Jeff): R8 accepted. 5.7.2:
+              HIGH when the FTB does not hold the branch, not only when
+              the block missed; a dropped LOW update is never a lost
+              entry.
 ```

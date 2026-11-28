@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-27
+ UPDATED: 2026-11-28
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,80 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-087, continued: PERF-006 recorded.
+
+PERF-006 COMPLETE. regress.sh: 303 targets, 0 new failures, RESULT: PASS
+(dirty tree). R1 reverted: the three files restored from f88a61b, md5
+checked; sim_ftq_ftb_sched 67/0 at both slot counts.
+
+- THE REVERT (perf006_baseline.csv, 210 rows, every PF-11 check passing,
+  digest 11a6df0f): against PERF-005's, 50Perc conditional MPKI 7.7283
+  -> 7.7047, cycles -1.781%, oracle cycles -2.460%; ftb_sched_drop_br
+  29,949,473 in the baseline set. Every traced first divergence is an S5
+  drop where R1 held the update. On this tree R1 measures +1.814% cycles
+  for -0.0236 50Perc conditional MPKI.
+- LOST INSERTION (a Block 2 case): 5.7.2 called an update LOW when the
+  block hit, even if the hit entry did not hold the branch (no slot, or
+  a slot predecode wrote). S5 could then drop the update that inserts
+  the branch, and predecode corrected the block on every later fetch:
+  int_0's predecode redirects 7,043 with R1, 127,840 without. It broke
+  5.7.2's "a dropped LOW update is a DELAYED training step, not a lost
+  entry".
+- R8, ACCEPTED (Jeff, session-087: "R8 accepted."): ftq_resolve reports
+  the hit term as the FTB's hold on the branch, so such an update is
+  HIGH. The scheduler, S5 and S6 are unchanged; no port changes. E18-E23
+  fail before and pass after at both slot counts. Measured alone: 50Perc
+  conditional MPKI -0.0044, cycles -0.015%; int_0 6,988.
+- THE NEW BASELINE: perf006_r8.csv, 210 rows, every PF-11 check passing,
+  digest bb164193; 50Perc conditional MPKI 7.7003; the gap to TAGE192
+  4.3010 (perf_decisions.md PF-9, PF-10).
+
+PA ASSESSMENT (session-087): complete; the headline figures check from
+the Results Capture (the CSVs were not yet pushed). PA CORRECTION: the
+PERF-005 assessment said R1 bought no measured accuracy. That held on
+the old RTL; on the accepted tree R1 is 0.0236 better, partly from LOST
+INSERTION, which R8 fixes for -0.015% cycles. The remaining 0.0192 costs
+about 1.8% cycles, so rejecting R1 stands. Open: TD#223, whether R8's
+hit reaches the FTB's own write. Process: the same CLAUDE.md slips as
+PERF-005 (a cd, an empty python3 -, a sed -i, redirects, reads through
+Bash); no permission prompts; 34m50s active, 8h01m wall.
+
+FOR JEFF: TD#223; confirm that make -C perf digest prints bb164193 after
+the commit.
+
+Module Status: ftq_ftb_sched.sv (R1 reverted) and ftq_resolve.sv (R8)
+gain PERF-006. TECHNICAL DEBT. Opened: TD#223.
+
+Documents changed, every one in check_planning.sh with its new checksum:
+PROJECT_STATUS.md, perf_decisions.md, ftq_decisions.md, fe_decisions.md,
+ftb_confidence_override_rules.md.
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-007,
+TD#224.
+
+---
+## Session-087, continued: FTB conf training reworded (PA-direct).
+
+PA-DIRECT CORRECTION, session-087 (Jeff): with R1 rejected,
+ftb_confidence_override_rules.md 3.2 and 3.3 read that conf trains at
+every resolution, which S5 does not do. They now read every resolution
+the FTB update scheduler issues: a dropped LOW update does not train,
+and a mispredict, HIGH, is never dropped, so 3.4's self-correction holds
+(FE-5a; ftq_decisions.md 5.7.3).
+
+PERF-006 WRITTEN: R1's three files restored from f88a61b by Jeff before
+it is issued, checked by md5; the scheduler tests at both slot counts
+(67/0); the baseline and oracle sets on the tree without R1
+(perf006_baseline.csv), every PF-11 check, the moves to their first
+divergence; regress.sh at the end; the PF-9 and PF-10 text.
+
+Documents changed, every one in check_planning.sh with its new checksum:
+PROJECT_STATUS.md, ftb_confidence_override_rules.md.
+
+Next free: BP-155, SYS-003, DOC-017, INFRA-017, TOOLS-008, PERF-007,
+TD#223.
 
 ---
 ## Session-087: PERF-005 recorded.
@@ -6479,6 +6553,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | a_ftb_never_dropped.             |
 |                         |             |                   | sim_ftq_ftb_sched 68/0 at both   |
 |                         |             |                   | slot counts.                     |
+|                         |             |                   | PERF-006: R1 reverted, the file  |
+|                         |             |                   | and its tests restored from      |
+|                         |             |                   | f88a61b (S5 and S6 as written;   |
+|                         |             |                   | P6 gone). sim_ftq_ftb_sched 67/0 |
+|                         |             |                   | at both slot counts.             |
 | ftq.sv                  | Complete    | tb_ftq            | BP-107. Structural top, 7.1 and  |
 |                         |             |                   | 7.3. No state, no always block.  |
 |                         |             |                   | Three assigns, none of them      |
@@ -6644,6 +6723,18 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | sim_ftq_resolve 121/0. No        |
 |                         |             |                   | property added for these         |
 |                         |             |                   | (TD#170).                        |
+|                         |             |                   | PERF-006 R8, accepted (Jeff,     |
+|                         |             |                   | session-087): ftb_upd_hit is the |
+|                         |             |                   | FTB's hold on the branch, 0 when |
+|                         |             |                   | the block missed, no slot maps   |
+|                         |             |                   | the branch (rsv_nomap), or its   |
+|                         |             |                   | slot was written by predecode    |
+|                         |             |                   | (PRED_NONE); ftb_upd[c].hit      |
+|                         |             |                   | stays the block's hit            |
+|                         |             |                   | (ftq_decisions.md 5.7.2;         |
+|                         |             |                   | TD#223). E18-E23.                |
+|                         |             |                   | sim_ftq_resolve 152/0, 111/0 at  |
+|                         |             |                   | 1 slot.                          |
 | ftq_upd_conv.sv         | Complete    | tb_ftq_upd_conv   | BP-119, TD#151. Forms the        |
 |                         |             |                   | per-predictor update payloads    |
 |                         |             |                   | from bp_update_t, bp_ftq_meta_t  |
@@ -7729,6 +7820,17 @@ moves there in the planning update that closes it.
 |     |          | stop_hook_active prevents a loop. Not seen again since   |
 |     |          | BP-153 (Jeff, session-087): kept open, not tasked.       |
 |     |          | Opened session-087 (Jeff).                               |
+| 223 | ftq      | OPEN, VERIFY. R8 AND THE FTB'S OWN HIT. R8 (PERF-006,    |
+|     |          | accepted) changes ftb_upd_hit, the hit term ftq_resolve  |
+|     |          | gives the scheduler. PERF-006 states it feeds only the   |
+|     |          | scheduler, and that ftb_cntrl's in-place or allocate     |
+|     |          | write uses ftb_upd[c].hit, unchanged (E20, E23). The     |
+|     |          | scheduler also drives ftq's output ftb_upd_hit_u0. If    |
+|     |          | that carries upd_hit to the FTB, R8 also turns an        |
+|     |          | in-place update into an allocation for a block that hit. |
+|     |          | Check what drives and reads ftb_upd_hit_u0, and          |
+|     |          | ftb_upd_alloc and ftb_upd_inplace, perf006_baseline      |
+|     |          | against perf006_r8. Opened session-087 (PA).             |
 ---
 
 ## Open Items

@@ -6,7 +6,7 @@
  FILE:    perf_decisions.md
  SOURCE:  session-084
  STATUS:  DRAFT
- UPDATED: 2026-11-27
+ UPDATED: 2026-11-28
  CONTACT: Jeff Nye
 ```
 
@@ -509,10 +509,25 @@ PF-9   A result is keyed by its configuration name (PF-5) and the
        variables, 2 tools). 3.3 hours on 24 workers for both sets. Against
        PERF-004's: 50Perc conditional MPKI 8.4173 -> 7.7283, cycles +1.033%,
        oracle cycles +3.378%. PERF-004's baseline.csv stays the record of
-       the RTL before these changes. A study against the new baseline uses
-       perf005_baseline.sets in place of baseline.sets below. R1 is rejected
-       (Jeff, session-087): PERF-006 reverts it, and its baseline replaces
-       this one.
+       the RTL before these changes. R1 is rejected (Jeff, session-087):
+       PERF-006 reverted it, and its baseline below replaces this one, which
+       stays the record of the tree with R1.
+       THE BASELINE (PERF-006, CURRENT): the tree with R2, R4, R5, R6, R7
+       and R8 (R8 accepted, Jeff, session-087), R1 reverted. perf/studies/
+       perf006_r8.sets (baseline and baseline_oracle) over
+       perf/studies/baseline.traces, full length, the PF-5 configuration,
+       the immediate backend, the fetch rule, the real I-cache;
+       perf/studies/perf006_r8.csv, 210 rows, every PF-11 check passing (the
+       PERF-005 rule checks included), digest
+       bb16419307b47c9c1f00a3794196dd87d6cf79cce45f1d5c5097b8bcaf27ffa1,
+       measured at 0913cd0 with PERF-006's changes uncommitted. 3.2 hours
+       (11,695 s) on 24 workers for both sets. 50Perc conditional MPKI
+       7.7003, cycles 1,907,924,489, oracle cycles 1,649,831,349. Against
+       PERF-005's: 50Perc conditional MPKI 7.7283 -> 7.7003, cycles -1.797%,
+       oracle cycles -2.474%. perf/studies/perf006_baseline.csv (digest
+       11a6df0f) is the record of the tree without R8: 7.7047, cycles
+       1,908,220,205. A study against the baseline uses perf006_r8.sets in
+       place of baseline.sets below.
        HOW TO RUN A STUDY AGAINST THE BASELINE:
          make -C perf harness
          make -C perf digest
@@ -602,6 +617,16 @@ PF-10  Three are compared (Jeff, session-084):
        Capture. The gap is still not steady across the groups (web 5.5558,
        media 2.4228), so the extrapolation to SPEC still does not hold. No
        RTL defect was found in TAGE or SC; the losses were in the rules.
+       AT THE PERF-006 BASELINE (R1 reverted, R8 accepted): pacino 7.7003,
+       50Perc conditional MPKI, the mean of the traces, all 105. The gap to
+       TAGE192 is 4.3010 (ratio 2.27): TAGE itself 1.9810, the rest of the
+       front end 2.3200. Per group, pacino / gap to TAGE192: compress 4.0619
+       / 1.3390, fp 7.4917 / 3.3829, infra 5.8371 / 3.4746, int 9.1576 /
+       4.9948, media 3.2277 / 2.4162, web 8.6929 / 5.5180. The gap is still
+       not steady across the groups, so the extrapolation to SPEC still does
+       not hold. The steps above are on PERF-005's tree; R1 measured on
+       PERF-006's tree costs +1.814% cycles for -0.0236 50Perc conditional
+       MPKI.
 
 ## 6. Checking the harness
 
@@ -926,4 +951,7 @@ PF-U11 CLOSED session-086 (Jeff) by PF-15, veneers. It read: "Far
               checks and the twin check.
   2026-11-27  session-087 (Jeff): PF-5, the fast path stays as it is until
               the standalone model (TD#221).
+  2026-11-28  session-087, after PERF-006. PF-9: the PERF-006 baseline
+              (perf006_r8, R8 accepted); PERF-005's kept as the record of
+              the tree with R1. PF-10: the gap at the PERF-006 baseline.
 ```

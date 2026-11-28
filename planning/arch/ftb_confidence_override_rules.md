@@ -6,7 +6,7 @@
  FILE:    planning/arch/ftb_confidence_override_rules.md
  SOURCE:  session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-11-11
+ UPDATED: 2026-11-28
  CONTACT: Jeff Nye
 ```
 
@@ -76,10 +76,23 @@ This is FTB's submitted direction whether or not the fast-path fires.
 
 ### 3.2 Train at execute; bimodal toward the resolved outcome (C9)
 
-Training fires when a conditional branch resolves at execute, per field
-br0/br1 INDEPENDENTLY, each only when its own branch resolves. A field
-read in the prediction but not reached on the executed path does not
-train (control left the block first).
+Training fires when a conditional branch resolves at execute and the
+FTQ's FTB update scheduler issues its update, per field br0/br1
+INDEPENDENTLY, each only when its own branch resolves. A field read in
+the prediction but not reached on the executed path does not train
+(control left the block first).
+
+A resolution the scheduler drops does not train. The scheduler may drop
+a LOW update: a branch the hit FTB entry holds, predicted correctly
+(ftq_decisions.md 5.7.2, as PERF-006 R8 made it; 5.7.3 S5;
+fe_decisions.md FE-5a), so a dropped step is a routine one on a counter
+already in the right direction. A branch the entry does not hold, and a
+mispredict, are HIGH and never dropped (S6), so an insertion is never
+lost and 3.4 holds on every mispredict. PERF-005 measured 5.30% of
+conditional resolutions dropped over the 105 traces; R1, which trained
+every resolution by holding the backend instead, was rejected (Jeff,
+session-087). This read "Training fires when a conditional branch
+resolves at execute"; PA-direct correction, session-087.
 
 The update is the conventional bimodal counter step, driven by the
 RESOLVED OUTCOME (ftb_upd_taken_u0), saturating:
@@ -93,7 +106,8 @@ counter is a pure bimodal observer of the branch's direction history.
 
 ### 3.3 Training is independent of the fast-path and of TAGE/SC use
 
-conf trains on every resolution regardless of ftb_fastpath_en and
+conf trains on every resolution the scheduler issues (3.2),
+regardless of ftb_fastpath_en and
 regardless of whether the fast-path fired or TAGE/SC overrode. This is
 what makes the fast-path self-correcting (3.4).
 
@@ -333,3 +347,11 @@ Tests must cover:
   2026-11-11  session-084, after BP-141. 4.3: as built by BP-122 and
               BP-141. 10: the fast-path interaction built, the
               enable's source CSR 0x7C0 bit 1.
+
+  2026-11-27  session-087, PA-direct correction (Jeff). 3.2, 3.3: conf
+              trains at every resolution the FTB update scheduler
+              issues; a dropped LOW update does not train (FE-5a,
+              ftq_decisions.md 5.7.3 S5; R1 rejected).
+
+  2026-11-28  session-087, after PERF-006. 3.2: a LOW update is for a
+              branch the hit entry holds (R8, accepted).

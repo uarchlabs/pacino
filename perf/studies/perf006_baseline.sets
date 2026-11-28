@@ -1,0 +1,10 @@
+# PERF-006: THE NEW BASELINE. perf005_baseline.sets's two sets (baseline
+# and baseline_oracle, every value named as there) on the tree with
+# PERF-005's accepted changes (R2 sc_cntrl; R4 tage_cntrl; R5 sc.sv; R6
+# bp_history + bp_cluster; R7 bp_cluster p2 + p3) and R1 reverted
+# (ftq_ftb_sched and its tests restored from f88a61b: S5 drops a LOW
+# update again; not R1, not R3): perf/build/tree_s2, built from the repo
+# tree (NAME=tree make -C perf harness), NUM_PRED_SLOTS 2, the PF-5
+# configuration. Over perf/studies/baseline.traces (105).
+baseline        bin=perf/build/tree_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+baseline_oracle bin=perf/build/tree_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch --oracle

@@ -232,6 +232,12 @@ module ftq_resolve (
   // The scheduler takes the flat payload as one struct plus the two
   // value bits of 5.7.2. hit comes from the slow path, mispredict
   // from the resolution channel; neither needs new state.
+  // PERF-006 R8: ftb_upd_hit is the FTB's hold on THIS branch, not on
+  // its block: 0 when the block missed, and also when the branch maps
+  // to no slot (placed) or to a slot predecode wrote (pred_src
+  // PRED_NONE). The update then inserts the branch into the entry, so
+  // it is HIGH and S5 cannot drop it. ftb_upd[c].hit stays the block's
+  // hit, which ftb_cntrl's write needs.
   output logic [NUM_RESOLVE_PORTS-1:0] ftb_upd_val,
   output ftb_upd_t                 ftb_upd [0:NUM_RESOLVE_PORTS-1],
   output logic [NUM_RESOLVE_PORTS-1:0] ftb_upd_hit,
@@ -594,7 +600,13 @@ module ftq_resolve (
       ftb_upd_val[c]     = rsv_accept[c] &&
                            (bkend_rsv[c].br_type != NO_BRANCH) &&
                            !w_lose[c] && !w_ftb_done[c];
-      ftb_upd_hit[c]     = rsv_meta[c][rsv_slot[c]].ftb.hit;
+      // R8 (header): a branch the FTB entry does not hold is not a hit
+      // for 5.7.2, whatever the block's tag did. A placed slot also
+      // carries PRED_NONE (w_new_slot), so rsv_nomap is the same test.
+      ftb_upd_hit[c]     = rsv_meta[c][rsv_slot[c]].ftb.hit &&
+                           !rsv_nomap[c] &&
+                           (rsv_entry[c].slot[rsv_slot[c]].pred_src !=
+                            PRED_NONE);
       ftb_upd_mispred[c] = bkend_rsv[c].mispredict;
 
       ftb_upd[c]            = '0;

@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-11-27
+ UPDATED: 2026-11-28
  CONTACT: Jeff Nye
 ```
 
@@ -746,9 +746,11 @@ Proposed numbering. Stated here for the first time; not carried from
          Applies to the FTB path alone. Every other predictor takes
          one update per slot per cycle and keeps FE-5 unqualified.
          ftq_decisions.md 5.7, IC-FTB-09.
-         PERF-005 R1, REJECTED (Jeff, session-087; PERF-006 reverts
-         it), drops no FTB update;
-         accepted, it withdraws this amendment (ftq_decisions.md 5.7.3).
+         PERF-005 R1, which dropped no FTB update, was REJECTED (Jeff,
+         session-087; PERF-006 reverted it): this amendment stands.
+         PERF-006 R8, accepted, makes an update for a branch the hit
+         entry does not hold HIGH, so a dropped update is a routine
+         step, never a lost entry (ftq_decisions.md 5.7.2).
 
   FE-6   Updates reach a predictor in resolution order. The update
          queue is a FIFO and is not reordered.
@@ -1866,4 +1868,8 @@ create one.
               withdraw it.
 
   2026-11-27  session-087 (Jeff): R1 rejected; FE-5a stands.
+
+  2026-11-28  session-087, after PERF-006 (Jeff): FE-5a stands; R8
+              (ftq_decisions.md 5.7.2) keeps a drop from losing an
+              entry.
 ```

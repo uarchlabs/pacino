@@ -35,6 +35,10 @@
 // write rule that keeps an earlier occupant in its slot, at both slot
 // counts. C5, C5b, C5d, C5e and J2b change with it; each OLD note
 // gives the expectation before BP-139.
+//
+// PERF-006 adds E18 to E23 (R8): the 5.7.2 hit term is the FTB's hold
+// on the branch, so a branch in no slot or in a slot predecode wrote
+// is HIGH.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -199,6 +203,19 @@ module tb;
     s.pos        = ps;
     s.pred_src   = PRED_FTB;
     s.confidence = '0;
+    return s;
+  endfunction
+
+  // PERF-006 R8: a slot predecode wrote (ftq_ifu.sv W1), which carries
+  // PRED_NONE: the block hit, but the FTB entry does not hold this
+  // branch.
+  function automatic bp_ftq_slot_t mk_pd_slot(
+      input logic [VA_WIDTH-1:0]        tgt,
+      input bp_br_type_e                bt,
+      input logic [FTB_BR_POS_BITS-1:0] ps);
+    bp_ftq_slot_t s;
+    s          = mk_slot(1'b1, tgt, bt, ps);
+    s.pred_src = PRED_NONE;
     return s;
   endfunction
 
@@ -714,6 +731,40 @@ module tb;
             VA_WIDTH'('h0), 1'b0);
     settle();
     chk("E17 NO_BRANCH forms no FTB update", !ftb_upd_val[0]);
+
+    // PERF-006 R8. THE 5.7.2 HIT TERM IS THE FTB'S HOLD ON THE BRANCH,
+    // not on its block. Entry 18's block hit, and the FTB entry holds
+    // neither of the two branches below, so each update inserts one and
+    // is HIGH: S5 may not drop it. Before R8 both read as hits (LOW),
+    // and the scheduler dropped them when two collided with the skid
+    // full (PERF-006, int_0: the jump at fffff21fcc9c pos 14). The jump
+    // is in slot 0 and slot 1 is empty, the same entry at either slot
+    // count.
+    put_entry(18,
+      mk_pd_slot(VA_WIDTH'('h00_9200_0000), DIRECT_UNC,
+                 FTB_BR_POS_BITS'(13)),
+      mk_slot(1'b0, VA_WIDTH'('h0), NO_BRANCH, FTB_BR_POS_BITS'(0)),
+      1'b1, 1);
+    present(0, 18, FTB_BR_POS_BITS'(13), DIRECT_UNC, 1'b1,
+            VA_WIDTH'('h00_9200_0000), 1'b0);
+    settle();
+    chk("E18 a jump predecode wrote is presented, mapped",
+        ftb_upd_val[0] && ftb_upd[0].is_jmp && !rsv_nomap[0]);
+    chk("E19 it is no hit for 5.7.2, and not a mispredict (HIGH)",
+        !ftb_upd_hit[0] && !ftb_upd_mispred[0]);
+    chk("E20 the payload keeps the block's hit for ftb_cntrl",
+        ftb_upd[0].hit);
+
+    // A branch in no slot that was not mispredicted: a not-taken
+    // conditional the entry lacks. It is placed (PRED_NONE).
+    present(0, 18, FTB_BR_POS_BITS'(7), COND, 1'b0,
+            VA_WIDTH'('h00_9400_0000), 1'b0);
+    settle();
+    chk("E21 a branch in no slot is presented, unmapped",
+        ftb_upd_val[0] && rsv_nomap[0] && !ftb_upd_mispred[0]);
+    chk("E22 it is no hit for 5.7.2 (HIGH)", !ftb_upd_hit[0]);
+    chk("E23 the payload keeps the block's hit for ftb_cntrl",
+        ftb_upd[0].hit);
     clr();
   endtask
 

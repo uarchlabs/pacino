@@ -1,0 +1,9 @@
+# PERF-006 R8, measured alone against perf006_baseline.csv:
+# perf006_baseline.sets's two sets (every value named as there) on the
+# tree of perf006_baseline (R2, R4, R5, R6, R7; not R1) plus R8: ftq_resolve
+# reports the 5.7.2 hit term as the FTB's hold on the branch (a branch in no
+# slot, or in a slot predecode wrote, is HIGH). perf/build/r8_s2, built from
+# the repo tree (NAME=r8 make -C perf harness), NUM_PRED_SLOTS 2, the PF-5
+# configuration. Over perf/studies/baseline.traces (105).
+baseline        bin=perf/build/r8_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch
+baseline_oracle bin=perf/build/r8_s2/perf_fe --decode-lat fixed:0 --rename-lat fixed:0 --dispatch-lat fixed:0 --execute-lat fixed:0 --resolve-commit fixed:0 --take-rate fixed:8 --window 0 --icache real --mispredict-rule fetch --oracle
